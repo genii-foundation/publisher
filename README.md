@@ -9,7 +9,7 @@ Implementation has begun. The schema runtime, framework-neutral content compiler
 - The engine lives in this repository. A publication lives in a separate, thin host repository.
 - The default layout is canonical and deliberately opinionated.
 - A declared-layout mode is a fully supported escape hatch for established repositories.
-- Publications may override themes and add extensions without forking the engine.
+- Publications may override themes and add extensions through explicit capability grants without forking the engine.
 - Works and collections are first-class protocol concepts.
 - The initial renderer uses Next.js. The content protocol remains framework neutral.
 - Audio and Supabase synchronization belong to the 1.0 scope as optional capabilities.

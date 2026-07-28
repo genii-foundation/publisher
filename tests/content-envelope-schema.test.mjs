@@ -24,6 +24,7 @@ import {
   CONTENT_ARTIFACT_RELATIVE_PATH,
   CONTENT_ENVELOPE_SCHEMA_URL,
   CONTENT_SCHEMA_VERSION,
+  EXTENSION_CAPABILITIES,
   validateContentEnvelopeShape,
 } from "../schemas/dist/index.js";
 import {
@@ -252,6 +253,10 @@ test("content envelope schema URL, package export, and constants agree", async (
     packageManifest.exports["./content-envelope.schema.json"],
     "./content-envelope.schema.json",
   );
+  assert.deepEqual(
+    contentEnvelopeSchema.$defs.extensionCapability.enum,
+    EXTENSION_CAPABILITIES,
+  );
   assert.equal(typeof validateContentEnvelopeShape, "function");
 });
 
@@ -280,6 +285,68 @@ test("source authority and metric identity retain their exact fields", () => {
     code: "schema.required",
     path: "/works/0/source/metrics/profileVersion",
   });
+});
+
+test("compiled extensions retain only explicit nonempty capability grants", () => {
+  const accepted = createMinimalEnvelope();
+  accepted.extensions.push({
+    id: "reader-notes",
+    package: "@example/reader-notes",
+    version: "1.0.0",
+    capabilities: [...EXTENSION_CAPABILITIES],
+    payloadIds: [],
+  });
+  const acceptedResult = validateContentEnvelopeShape(accepted);
+  assert.equal(
+    acceptedResult.valid,
+    true,
+    JSON.stringify(acceptedResult.diagnostics, null, 2),
+  );
+
+  const cases = [
+    {
+      expected: {
+        code: "schema.required",
+        path: "/extensions/0/capabilities",
+      },
+      mutate(extension) {
+        delete extension.capabilities;
+      },
+    },
+    {
+      expected: {
+        code: "schema.min_items",
+        path: "/extensions/0/capabilities",
+      },
+      mutate(extension) {
+        extension.capabilities = [];
+      },
+    },
+    {
+      expected: {
+        code: "schema.unique_items",
+        path: "/extensions/0/capabilities",
+      },
+      mutate(extension) {
+        extension.capabilities = ["renderer.slot", "renderer.slot"];
+      },
+    },
+    {
+      expected: {
+        code: "schema.enum",
+        path: "/extensions/0/capabilities/0",
+      },
+      mutate(extension) {
+        extension.capabilities = ["renderer.unbounded"];
+      },
+    },
+  ];
+
+  for (const testCase of cases) {
+    const envelope = structuredClone(accepted);
+    testCase.mutate(envelope.extensions[0]);
+    assertInvalid(envelope, testCase.expected);
+  }
 });
 
 test("content envelope digests use lowercase SHA-256 syntax", () => {

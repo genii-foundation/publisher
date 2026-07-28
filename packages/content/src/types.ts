@@ -15,6 +15,7 @@ import type {
   ContentAddress,
   ContentContinuity,
   ContentLinkTarget,
+  ExtensionCapability,
   JSONValue,
   PublicationContentEnvelope,
   PublicationManifest,
@@ -109,6 +110,7 @@ export interface ResolvedExtensionInput {
   readonly id: string;
   readonly package: string;
   readonly version: string;
+  readonly capabilities: readonly ExtensionCapability[];
 }
 
 export interface ContentPayloadInput {

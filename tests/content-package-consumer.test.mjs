@@ -977,9 +977,11 @@ test("packed content freezes its runtime and proves production and development c
         serializePublicationContentEnvelope,
         validatePublicationContentEnvelope,
         type CompilePublicationContentInput,
+        type ResolvedExtensionInput,
         type SectionReaderLocationInput,
       } from "@genii-foundation/publisher-content";
       import type {
+        ExtensionCapability,
         PublicationContentEnvelope,
         ValidationResult,
       } from "@genii-foundation/publisher-schema";
@@ -987,13 +989,27 @@ test("packed content freezes its runtime and proves production and development c
       declare const input: CompilePublicationContentInput;
       declare const envelope: PublicationContentEnvelope;
       const readerLocation: SectionReaderLocationInput = { kind: "work" };
+      const capability: ExtensionCapability = "content.project";
+      const extension: ResolvedExtensionInput = {
+        id: "projection",
+        package: "@example/projection-extension",
+        version: "1.0.0",
+        capabilities: [capability],
+      };
       const compiled: ValidationResult<PublicationContentEnvelope> =
         compilePublicationContent(input);
       const validated: ValidationResult<PublicationContentEnvelope> =
         validatePublicationContentEnvelope(envelope);
       const serialized: string = serializePublicationContentEnvelope(envelope);
       const artifact = createPublicationContentArtifact(envelope);
-      void [compiled, validated, serialized, artifact, readerLocation];
+      void [
+        compiled,
+        validated,
+        serialized,
+        artifact,
+        readerLocation,
+        extension,
+      ];
     `;
     await Promise.all([
       writeFile(join(productionRoot, "consumer.ts"), typeConsumer, "utf8"),

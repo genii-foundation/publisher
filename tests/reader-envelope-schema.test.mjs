@@ -878,7 +878,7 @@ test("reader routes retain the exact canonical ASCII serialization", () => {
   }
 });
 
-test("reader projection omits source, extension, provider, and arbitrary metadata", () => {
+test("reader projection omits source, extension grants, provider, and arbitrary metadata", () => {
   const cases = [
     {
       path: "/publication/metadata",

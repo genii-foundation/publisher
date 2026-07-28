@@ -18,6 +18,10 @@ import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
+import {
+  EXTENSION_CAPABILITIES,
+} from "../schemas/dist/index.js";
+
 const repositoryRoot = new URL("../", import.meta.url);
 
 async function readJson(relativePath) {
@@ -443,6 +447,83 @@ test("catalog references cannot duplicate authoritative work metadata", () => {
   publication.works[0].title = "Duplicated title";
 
   assert.equal(validatePublication(publication), false);
+});
+
+test("extension capabilities use one closed, explicit grant vocabulary", () => {
+  assert.deepEqual(EXTENSION_CAPABILITIES, [
+    "content.project",
+    "renderer.slot",
+    "renderer.client",
+    "host.route",
+    "host.handler",
+  ]);
+  assert.deepEqual(
+    publicationSchema.$defs.extensionCapability.enum,
+    EXTENSION_CAPABILITIES,
+  );
+
+  const accepted = clone(canonicalPublication);
+  accepted.extensions = [
+    {
+      id: "complete-extension",
+      package: "@example/complete-extension",
+      capabilities: [...EXTENSION_CAPABILITIES],
+    },
+  ];
+  assert.equal(
+    validatePublication(accepted),
+    true,
+    validationMessage(validatePublication),
+  );
+
+  const cases = [
+    {
+      label: "missing",
+      expectedKeyword: "required",
+      expectedPath: "/extensions/0",
+      mutate(extension) {
+        delete extension.capabilities;
+      },
+    },
+    {
+      label: "empty",
+      expectedKeyword: "minItems",
+      expectedPath: "/extensions/0/capabilities",
+      mutate(extension) {
+        extension.capabilities = [];
+      },
+    },
+    {
+      label: "duplicate",
+      expectedKeyword: "uniqueItems",
+      expectedPath: "/extensions/0/capabilities",
+      mutate(extension) {
+        extension.capabilities = ["renderer.slot", "renderer.slot"];
+      },
+    },
+    {
+      label: "unknown",
+      expectedKeyword: "enum",
+      expectedPath: "/extensions/0/capabilities/0",
+      mutate(extension) {
+        extension.capabilities = ["renderer.everything"];
+      },
+    },
+  ];
+
+  for (const testCase of cases) {
+    const publication = clone(accepted);
+    testCase.mutate(publication.extensions[0]);
+    assert.equal(validatePublication(publication), false, testCase.label);
+    assert.ok(
+      validatePublication.errors?.some(
+        ({ instancePath, keyword }) =>
+          instancePath === testCase.expectedPath &&
+          keyword === testCase.expectedKeyword,
+      ),
+      `${testCase.label}: ${validationMessage(validatePublication)}`,
+    );
+  }
 });
 
 test("sync is opt in and preserves local fallback", () => {

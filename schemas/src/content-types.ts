@@ -13,6 +13,7 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import type {
   ContinuityRedirect,
+  ExtensionCapability,
   JSONValue,
   PublicationState,
   PublisherAttribution,
@@ -267,6 +268,7 @@ export interface CompiledExtension {
   readonly id: string;
   readonly package: string;
   readonly version: string;
+  readonly capabilities: readonly ExtensionCapability[];
   readonly config?: Readonly<Record<string, JSONValue>>;
   readonly payloadIds: readonly string[];
 }

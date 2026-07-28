@@ -34,6 +34,15 @@
       "accent": "slate"
     }
   },
+  "extensions": [
+    {
+      "id": "station-index",
+      "package": "@example/station-index-extension",
+      "capabilities": [
+        "content.project"
+      ]
+    }
+  ],
   "audio": {
     "adapter": {
       "package": "@example/audio-file-adapter",
