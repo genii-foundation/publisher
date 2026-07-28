@@ -19,3 +19,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Bounded exact SemVer and continuity validation and replaced repeated navigation scans with a linear first-position index.
 - Made public runtime object arguments fail closed when property descriptors, inheritance, symbols, or proxy traps make their meaning ambiguous.
 - Snapshotted the explicit projection audience and each public runtime argument record once so stateful accessors or proxies cannot compose one request from conflicting states.
+- Proved reader artifacts omit extension capability grants in both neutral fixture publications.

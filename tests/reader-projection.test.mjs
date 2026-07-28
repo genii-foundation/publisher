@@ -204,6 +204,7 @@ async function loadCompilationInput(directory, options = {}) {
       id: extension.id,
       package: extension.package,
       version: "1.0.0",
+      capabilities: extension.capabilities,
     })),
   };
 
@@ -441,10 +442,10 @@ test("both fixture publications project into deterministic public reader artifac
       workIds: ["rain-gauge"],
       collectionIds: ["weather-observations"],
       buildId:
-        "sha256:b844a68f785dd5eb70050c41c8a744f189d6587f268f7350b4dc8db24799c586",
+        "sha256:5a92aa459ca39bcb3b4b49c5b03b40a0f71ca03324e9b2cd06beb11d7de7e7e1",
       byteLength: 5991,
       artifactHash:
-        "sha256:23841dcb2f5c55c9e0e4d488b63573f51cd9e69a5b0f20cdfa991a2465fd331b",
+        "sha256:df17e06f9281722e9e27ffa9c30d7b9f647796578f0abbfe953c157a12f9429e",
     },
     {
       directory: "declared-night-dispatch",
@@ -452,16 +453,22 @@ test("both fixture publications project into deterministic public reader artifac
       workIds: ["signal-lantern", "platform-bell"],
       collectionIds: ["after-dark"],
       buildId:
-        "sha256:55dd559eaff8a6997d655d0871497f831335cd28d580cb4881da71c22b7e9af7",
+        "sha256:fbaaea5533b9fe437b2fa4596a8408f940a360e1ce99186c1838434c8b1bc2a4",
       byteLength: 8727,
       artifactHash:
-        "sha256:5adff7412fa971e098f9f7d378df7f95115f083965a76ef056a0283b9da9ed70",
+        "sha256:a0450b64535e51e5a3ac6d4fdbded70472617477caa2efcc1b6828b9facb9f51",
     },
   ];
 
   for (const fixture of cases) {
     const content = compile(
       await loadCompilationInput(fixture.directory),
+    );
+    assert.ok(content.extensions.length > 0);
+    assert.ok(
+      content.extensions.every(
+        (extension) => extension.capabilities.length > 0,
+      ),
     );
     const first = assertValid(
       projectPublicationReader(content, { audience: "public" }),
@@ -537,7 +544,10 @@ test("both fixture publications project into deterministic public reader artifac
     for (const forbidden of [
       "@example/audio-file-adapter",
       "@example/margin-notes-extension",
+      "@example/station-index-extension",
       "@example/sync-adapter",
+      "content.project",
+      "renderer.slot",
       "north-garden",
       "publication/works/",
       "archive/texts/",
@@ -549,6 +559,23 @@ test("both fixture publications project into deterministic public reader artifac
       );
     }
   }
+});
+
+test("reader projection remains valid when a publication declares no extensions", async () => {
+  const input = await loadCompilationInput("canonical-field-notes", {
+    transformPublication(publication) {
+      delete publication.extensions;
+      return publication;
+    },
+  });
+  assert.deepEqual(input.extensions, []);
+
+  const content = compile(input);
+  assert.deepEqual(content.extensions, []);
+  const reader = assertValid(
+    projectPublicationReader(content, { audience: "public" }),
+  );
+  assertProjectionOmitsAuthoringState(reader);
 });
 
 test("serialization and artifacts use one detached validated snapshot under stateful input", async () => {

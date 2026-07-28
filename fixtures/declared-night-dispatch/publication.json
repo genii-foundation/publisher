@@ -48,6 +48,10 @@
     {
       "id": "margin-notes",
       "package": "@example/margin-notes-extension",
+      "capabilities": [
+        "content.project",
+        "renderer.slot"
+      ],
       "config": {
         "placement": "after-work"
       }

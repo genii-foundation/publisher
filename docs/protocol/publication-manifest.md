@@ -106,7 +106,7 @@ Every ID is stable. Renaming a title, changing a domain, or moving a source file
 
 ## Version and engine compatibility
 
-`schemaVersion` versions each source contract. The current schemas accept exactly `1.0`, and that contract is frozen. A future incompatible protocol will ship as a distinct schema contract with an explicit migration. The prerelease JavaScript package API may still evolve, but it may not silently change the meaning of source schema version `1.0`.
+`schemaVersion` versions each source contract. The current schemas accept exactly `1.0`. That contract remains prerelease until the first public package release. After that release, an incompatible protocol will ship as a distinct schema contract with an explicit migration. The prerelease JavaScript package API may still evolve through documented changes, but a released source schema version cannot silently change meaning.
 
 `engine.compatibility` is a SemVer range evaluated by the engine validator. JSON Schema only checks that the range is present. The author repository must still pin an exact engine package version and commit its lockfile. Compatibility is a claim about which engines may read the source protocol. It is not a dependency resolver.
 
@@ -204,13 +204,25 @@ The protocol never authorizes an engine migration to revise manuscript prose. A 
 
 ## Themes and extensions
 
-`theme.package` names an installed theme package. Each `extensions` entry has a stable local ID, an installed package name, and package owned configuration. Manifest package references never include versions. Exact versions belong in the author repository package manifest and lockfile.
+`theme.package` names an installed theme package. Each `extensions` entry has a stable local ID, an installed package name, an explicit ordered capability grant list, and optional package owned configuration. Manifest package references never include versions. Exact versions belong in the author repository package manifest and lockfile.
+
+Every extension must declare a nonempty `capabilities` array with unique members from the closed initial vocabulary:
+
+- `content.project` permits a framework-neutral build-time projector over validated content. It emits separate artifacts and cannot mutate the canonical content envelope.
+- `renderer.slot` permits server-rendered output only in renderer-declared slots.
+- `renderer.client` permits explicitly authorized client code and browser data.
+- `host.route` permits declarative public page routes subject to canonical route and collision validation.
+- `host.handler` permits server request handlers through host-owned factories and validation.
+
+No grant implies another, and there is no wildcard. Package configuration, package exports, and installed metadata cannot widen the author-reviewed grant list. This protocol defines the grants but does not yet implement any of their invocation surfaces.
 
 Package configuration must contain JSON data only. Secrets do not belong in `publication.json`. Providers resolve private credentials from their runtime environment.
 
-Extension order is significant. An engine must reject duplicate extension IDs and packages that do not declare compatibility with the active engine protocol.
+Extension order is significant and governs extension resolution. Capability order is exact reviewed serialization and content identity, not precedence. An engine must reject duplicate extension IDs and packages that do not declare compatibility with the active engine protocol.
 
-The manifest records extension identity and configuration, not an installed version. Engine orchestration resolves exactly one installed ID, package, and exact semantic version for every declaration in manifest order. An extension may then contribute typed JSON payloads. Each payload declares a stable ID, its extension owner, an absolute credential-free schema URL, its author-source paths, and JSON data. The compiled envelope hashes the exact extension version, payload data, and source identities. Core compilation records the schema URL but does not fetch or execute it.
+The manifest records extension identity, capability grants, and configuration, not an installed version. Engine orchestration resolves exactly one installed ID, package, exact semantic version, and exact ordered grant list for every declaration in manifest order. Missing, extra, reordered, mismatched, unknown, or duplicate grants fail validation. An extension may then contribute typed JSON payloads. Each payload declares a stable ID, its extension owner, an absolute credential-free schema URL, its author-source paths, and JSON data. The compiled envelope retains and hashes the exact ordered grants, extension version, payload data, and source identities. Core compilation records the schema URL but does not fetch or execute it.
+
+Capability grants control which interfaces the engine invokes and which data it supplies. They do not sandbox package installation, module import, Node.js execution, filesystem access, network access, or process authority.
 
 Editorial packages are independent inputs, not engine internals. A foundation or publisher may release voice profiles, style rules, schemas, and supervised editorial commands as separately versioned packages. The author repository chooses and configures them.
 
@@ -220,7 +232,7 @@ The pure schema runtime validates package reference syntax and manifest relation
 
 The presence of `audio` enables an audio adapter. Its optional catalog is a repository relative source path. The adapter contract determines the catalog contents.
 
-The presence of `sync` enables an installed provider for the listed capabilities. Sync is always opt in and must preserve a local fallback. Absence of `sync` means reading progress and preferences remain local. The generic protocol contains no provider project IDs, database tables, credentials, or vendor specific policy.
+The presence of `sync` enables an installed provider for the listed capabilities. `sync.capabilities` is an independent provider feature list, not the closed `extensions[].capabilities` grant vocabulary. Sync is always opt in and must preserve a local fallback. Absence of `sync` means reading progress and preferences remain local. The generic protocol contains no provider project IDs, database tables, credentials, or vendor specific policy.
 
 ## Routes and continuity
 

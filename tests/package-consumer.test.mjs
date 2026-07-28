@@ -501,6 +501,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
     const consumerProof = `
       import assert from "node:assert/strict";
       import {
+        EXTENSION_CAPABILITIES,
         inspectCanonicalRoutePath,
         isCanonicalRoutePath,
         validateContentEnvelopeShape,
@@ -527,6 +528,13 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       );
       assert.equal(typeof validatePublicationShape, "function");
       assert.equal(typeof validateContentEnvelopeShape, "function");
+      assert.deepEqual(EXTENSION_CAPABILITIES, [
+        "content.project",
+        "renderer.slot",
+        "renderer.client",
+        "host.route",
+        "host.handler",
+      ]);
       assert.deepEqual(inspectCanonicalRoutePath("/caf%C3%A9/"), {
         valid: true,
         value: "/caf%C3%A9/",
@@ -661,6 +669,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         validatePublicationShape,
         validateReaderEnvelopeShape,
         type CanonicalRoutePathInspection,
+        type ExtensionCapability,
         type PublicationContentEnvelope,
         type PublicationManifest,
         type PublicationReaderEnvelope,
@@ -678,6 +687,8 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       } from "@genii-foundation/publisher-schema/reader";
 
       declare const publication: PublicationManifest;
+      const capability: ExtensionCapability = "renderer.slot";
+      void capability;
       const result: ValidationResult<PublicationManifest> =
         validatePublicationShape(publication);
       void result;

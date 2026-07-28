@@ -16,6 +16,7 @@ import {
   CONTENT_ARTIFACT_RELATIVE_PATH,
   CONTENT_ENVELOPE_SCHEMA_URL,
   CONTENT_SCHEMA_VERSION,
+  EXTENSION_CAPABILITIES,
   isPathWithinRoot,
   resolvePublicationSourcesForContentCompilation,
   validateContentEnvelopeShape,
@@ -31,6 +32,7 @@ import {
   type ContentLocation,
   type ContentRoute,
   type Diagnostic,
+  type ExtensionCapability,
   type JSONValue,
   type MarkdownContentBlock,
   type PublicationContentEnvelope,
@@ -107,6 +109,9 @@ const CORE_METRICS_IDENTITY = Object.freeze({
   profileVersion: CONTENT_UNICODE_VERSION,
 });
 const EMPTY_CONTENT_HASH = sha256(new Uint8Array());
+const EXTENSION_CAPABILITY_SET: ReadonlySet<string> = new Set(
+  EXTENSION_CAPABILITIES,
+);
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -2903,6 +2908,88 @@ function compilePublication(
   };
 }
 
+function isExtensionCapability(
+  value: unknown,
+): value is ExtensionCapability {
+  return (
+    typeof value === "string" &&
+    EXTENSION_CAPABILITY_SET.has(value)
+  );
+}
+
+function cloneResolvedExtensionCapabilities(
+  value: unknown,
+  pointer: string,
+  diagnostics: Diagnostic[],
+): readonly ExtensionCapability[] {
+  if (!Array.isArray(value)) {
+    diagnostics.push(
+      diagnostic(
+        "content.extension.capabilities_invalid",
+        pointer,
+        "Resolved extension capabilities must be an array.",
+        "type",
+        { expected: "array" },
+      ),
+    );
+    return [];
+  }
+
+  const capabilities: ExtensionCapability[] = [];
+  const firstIndexByCapability = new Map<string, number>();
+  value.forEach((capability, index) => {
+    const capabilityPointer = `${pointer}/${index}`;
+    if (!isExtensionCapability(capability)) {
+      diagnostics.push(
+        diagnostic(
+          "content.extension.capability_unknown",
+          capabilityPointer,
+          "Resolved extension capabilities must use the closed protocol vocabulary.",
+          "extensionCapability",
+          {
+            capability,
+            supported: EXTENSION_CAPABILITIES,
+          },
+        ),
+      );
+      return;
+    }
+
+    const firstIndex = firstIndexByCapability.get(capability);
+    if (firstIndex !== undefined) {
+      diagnostics.push(
+        diagnostic(
+          "content.extension.capability_duplicate",
+          capabilityPointer,
+          `Resolved extension capability "${capability}" appears more than once.`,
+          "uniqueItems",
+          { capability, firstIndex, duplicateIndex: index },
+        ),
+      );
+    } else {
+      firstIndexByCapability.set(capability, index);
+    }
+    capabilities.push(capability);
+  });
+  return capabilities;
+}
+
+function capabilityResolutionMismatchReason(
+  declared: readonly ExtensionCapability[],
+  resolved: readonly ExtensionCapability[],
+): "extra" | "mismatched" | "missing" | "reordered" {
+  if (resolved.length < declared.length) {
+    return "missing";
+  }
+  if (resolved.length > declared.length) {
+    return "extra";
+  }
+  const sameMembers =
+    declared.every((capability) => resolved.includes(capability)) &&
+    resolved.every((capability) => declared.includes(capability));
+  return sameMembers ? "reordered" : "mismatched";
+}
+
 function compileExtensionsAndPayloads(
   input: CompilePublicationContentInput,
   diagnostics: Diagnostic[],
@@ -2932,6 +3019,15 @@ function compileExtensionsAndPayloads(
   const extensions = declaredExtensions.map(
     (declared, index): CompiledExtension => {
       const resolved = resolvedExtensions[index];
+      const declaredCapabilities = Array.isArray(declared.capabilities)
+        ? declared.capabilities.filter(isExtensionCapability)
+        : [];
+      const resolvedCapabilities =
+        cloneResolvedExtensionCapabilities(
+          resolved?.capabilities,
+          `/extensions/${index}/capabilities`,
+          diagnostics,
+        );
       validateStableId(declared.id, `/extensions/${index}/id`, diagnostics);
       validatePackageName(
         declared.package,
@@ -2958,6 +3054,31 @@ function compileExtensionsAndPayloads(
           ),
         );
       }
+      const capabilitiesMatch =
+        declaredCapabilities.length === resolvedCapabilities.length &&
+        declaredCapabilities.every(
+          (capability, capabilityIndex) =>
+            capability === resolvedCapabilities[capabilityIndex],
+        );
+      if (!capabilitiesMatch) {
+        const reason = capabilityResolutionMismatchReason(
+          declaredCapabilities,
+          resolvedCapabilities,
+        );
+        diagnostics.push(
+          diagnostic(
+            "content.extension.capability_resolution_mismatch",
+            `/extensions/${index}/capabilities`,
+            `Resolved extension ${index + 1} capability grants do not exactly match the manifest.`,
+            "extensionCapabilityResolution",
+            {
+              reason,
+              declared: declaredCapabilities,
+              resolved: resolvedCapabilities,
+            },
+          ),
+        );
+      }
       const version = resolved?.version ?? "0.0.0-invalid";
       if (!EXACT_SEMVER.test(version)) {
         diagnostics.push(
@@ -2979,6 +3100,7 @@ function compileExtensionsAndPayloads(
         id: declared.id,
         package: declared.package,
         version,
+        capabilities: resolvedCapabilities,
         ...(config === undefined ? {} : { config }),
         payloadIds: [],
       };

@@ -267,6 +267,7 @@ async function loadCompilationInput(directory, options = {}) {
       id: extension.id,
       package: extension.package,
       version: "1.0.0",
+      capabilities: extension.capabilities,
     })),
   };
 
@@ -522,6 +523,7 @@ test("resolved extensions and source-backed payloads participate in identity", a
       id: "margin-notes",
       package: "@example/margin-notes-extension",
       version: "1.0.0",
+      capabilities: ["content.project", "renderer.slot"],
       config: {
         placement: "after-work",
       },
@@ -547,6 +549,29 @@ test("resolved extensions and source-backed payloads participate in identity", a
   assert.notEqual(versionChanged.hashes.content, envelope.hashes.content);
   assert.notEqual(versionChanged.buildId, envelope.buildId);
 
+  const reorderedGrantsInput = replacePublication(
+    extended,
+    (publication) => {
+      publication.extensions[0].capabilities.reverse();
+      return publication;
+    },
+  );
+  reorderedGrantsInput.extensions =
+    reorderedGrantsInput.extensions.map((extension) => ({
+      ...extension,
+      capabilities: [...extension.capabilities].reverse(),
+    }));
+  const reorderedGrants = compile(reorderedGrantsInput);
+  assert.deepEqual(reorderedGrants.extensions[0].capabilities, [
+    "renderer.slot",
+    "content.project",
+  ]);
+  assert.notEqual(
+    reorderedGrants.hashes.content,
+    envelope.hashes.content,
+  );
+  assert.notEqual(reorderedGrants.buildId, envelope.buildId);
+
   const forged = structuredClone(envelope);
   forged.payloads[0].data.register = "private";
   const validation = validatePublicationContentEnvelope(forged);
@@ -557,6 +582,77 @@ test("resolved extensions and source-backed payloads participate in identity", a
     ),
     validationMessage(validation),
   );
+});
+
+test("extension resolution rejects unknown, duplicate, and inexact capability grants", async () => {
+  const input = await loadCompilationInput("declared-night-dispatch");
+  const cases = [
+    {
+      label: "unknown",
+      capabilities: ["content.project", "renderer.everything"],
+      code: "content.extension.capability_unknown",
+      path: "/extensions/0/capabilities/1",
+    },
+    {
+      label: "duplicate",
+      capabilities: ["content.project", "content.project"],
+      code: "content.extension.capability_duplicate",
+      path: "/extensions/0/capabilities/1",
+    },
+    {
+      label: "missing",
+      capabilities: ["content.project"],
+      code: "content.extension.capability_resolution_mismatch",
+      path: "/extensions/0/capabilities",
+      reason: "missing",
+    },
+    {
+      label: "extra",
+      capabilities: [
+        "content.project",
+        "renderer.slot",
+        "host.route",
+      ],
+      code: "content.extension.capability_resolution_mismatch",
+      path: "/extensions/0/capabilities",
+      reason: "extra",
+    },
+    {
+      label: "reordered",
+      capabilities: ["renderer.slot", "content.project"],
+      code: "content.extension.capability_resolution_mismatch",
+      path: "/extensions/0/capabilities",
+      reason: "reordered",
+    },
+    {
+      label: "mismatched",
+      capabilities: ["content.project", "renderer.client"],
+      code: "content.extension.capability_resolution_mismatch",
+      path: "/extensions/0/capabilities",
+      reason: "mismatched",
+    },
+  ];
+
+  for (const testCase of cases) {
+    const result = compilePublicationContent({
+      ...input,
+      extensions: input.extensions.map((extension) => ({
+        ...extension,
+        capabilities: testCase.capabilities,
+      })),
+    });
+    assert.equal(result.valid, false, testCase.label);
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path, params }) =>
+          code === testCase.code &&
+          path === testCase.path &&
+          (testCase.reason === undefined ||
+            params.reason === testCase.reason),
+      ),
+      `${testCase.label}: ${validationMessage(result)}`,
+    );
+  }
 });
 
 test("custom metric producers preserve legacy counts and exact identity", async () => {

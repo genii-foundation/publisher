@@ -9,5 +9,6 @@ These records define the accepted foundation of GENII Publisher.
 5. [ADR 0005: Content envelope and compiler boundary](./0005-content-envelope-and-compiler-boundary.md)
 6. [ADR 0006: Canonical public route serialization](./0006-canonical-public-route-serialization.md)
 7. [ADR 0007: Reader projection and runtime boundary](./0007-reader-projection-and-runtime-boundary.md)
+8. [ADR 0008: Extension capability grants](./0008-extension-capability-grants.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

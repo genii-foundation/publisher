@@ -2,9 +2,9 @@
 
 These directories model two unrelated, invented publications. They exist to prove that GENII Publisher can ingest both its opinionated canonical layout and a declared legacy layout without relying on any particular title, catalog size, route shape, brand, or manuscript structure.
 
-`canonical-field-notes` uses the default roots and manifest names. It also enables a theme and an optional audio adapter.
+`canonical-field-notes` uses the default roots and manifest names. It also declares a theme, an optional audio adapter, and a `station-index` extension with the single `content.project` grant.
 
-`declared-night-dispatch` moves both catalog roots, changes both manifest templates, and gives one work an irregular repository-relative manifest path. It also enables an extension and opt-in sync with a local fallback.
+`declared-night-dispatch` moves both catalog roots, changes both manifest templates, and gives one work an irregular repository-relative manifest path. It also declares a `margin-notes` extension with ordered `content.project` and `renderer.slot` grants, plus opt-in sync with a local fallback.
 
 The JSON configuration and structural support files are GENII Publisher fixture code covered by `CPAL-1.0`. Each directory containing JSON has a `SOURCE-NOTICE` because JSON cannot carry the required Exhibit A notice.
 

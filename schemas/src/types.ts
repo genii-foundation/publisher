@@ -18,6 +18,17 @@ export type JSONValue =
   | { readonly [key: string]: JSONValue }
   | readonly JSONValue[];
 
+export const EXTENSION_CAPABILITIES = Object.freeze([
+  "content.project",
+  "renderer.slot",
+  "renderer.client",
+  "host.route",
+  "host.handler",
+] as const);
+
+export type ExtensionCapability =
+  (typeof EXTENSION_CAPABILITIES)[number];
+
 export type PublicationState =
   | "archived"
   | "draft"
@@ -84,6 +95,7 @@ export interface PackageReference {
 export interface ExtensionReference {
   readonly id: string;
   readonly package: string;
+  readonly capabilities: readonly ExtensionCapability[];
   readonly config?: Readonly<Record<string, JSONValue>>;
 }
 

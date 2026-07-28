@@ -9,6 +9,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 - `validatePublicationShape`, `validateWorkShape`, and `validateCollectionShape` apply the Draft 2020-12 JSON Schemas.
 - `validateContentEnvelopeShape` validates a compiled publication envelope before a renderer or other consumer accepts it.
 - `validateReaderEnvelopeShape` validates the strict, public reader projection shape. Full projection identity and relationship validation belongs to the reader package.
+- `EXTENSION_CAPABILITIES` and `ExtensionCapability` define the closed initial extension grant vocabulary.
 - `inspectCanonicalRoutePath` reports whether a concrete public route has the one canonical serialized form and returns a stable failure reason. `isCanonicalRoutePath` is its type-guard form.
 - `inspectCanonicalUrlFragment` validates a well-formed Unicode-scalar fragment and decodes it exactly once. Its successful result carries both the serialized value and the decoded browser ownership key. `isCanonicalUrlFragment` is its type-guard form.
 - `inspectAbsoluteHttpUrl` validates exact ASCII HTTP and HTTPS URI serialization with a usable host and no embedded credentials. It rejects whitespace, controls, raw Unicode, malformed percent escapes, backslashes, and other input a browser would silently repair. `isAbsoluteHttpUrl` is its type-guard form.
@@ -26,7 +27,7 @@ Browser runtimes may import the route primitives alone from `@genii-foundation/p
 
 The reader envelope is an audience-specific projection, not a second authoring source. It records its own reader build identity and the exact content-envelope identity it projects. Its fixed `textProfile` defines block-local Markdown offsets as unnormalized UTF-16 code units with exclusive end boundaries. Sections and blocks carry explicit nullable reader addresses and DOM IDs. Source-backed links use those block-local Markdown ranges rather than repository provenance.
 
-The reader schema excludes arbitrary metadata, repository paths, source provenance, extension configuration and payloads, provider state, credentials, progress, bookmarks, preferences, analytics, audio state, and sync state. Public assets retain only the identity, public href, media type, hash, and optional work owner that a reader needs. Every collection records its effective publication state rather than asking a browser to infer inheritance. A retained collection may have an empty `workIds` array after audience filtering removes draft works.
+The reader schema excludes arbitrary metadata, repository paths, source provenance, extension declarations, capability grants, configuration, payloads, provider state, credentials, progress, bookmarks, preferences, analytics, audio state, and sync state. Public assets retain only the identity, public href, media type, hash, and optional work owner that a reader needs. Every collection records its effective publication state rather than asking a browser to infer inheritance. A retained collection may have an empty `workIds` array after audience filtering removes draft works.
 
 Public envelope validation proves internal consistency and validates constraints over the byte lengths and normalized-text geometry declared in the envelope. It does not prove the original source bytes because the envelope does not contain them. Only compilation can perform the fatal UTF-8 comparison and compute source hashes from injected bytes.
 
@@ -48,7 +49,7 @@ Compiled `sourceAuthority` always records the canonical root manifest path as `p
 
 Exact package and artifact SemVer strings contain at most 256 characters and use a bounded grammar. Continuity group identity uniqueness is enforced by the semantic content and reader runtimes with linear sets rather than deep array comparison in the raw envelope schema.
 
-Theme, extension, audio, and sync package references are declarative inputs. The pure schema runtime does not inspect installed packages or decide whether a package supports the active engine and protocol versions. Later engine orchestration owns package resolution, availability, compatibility, and lockfile enforcement. Compiled content records the exact resolved extension version and any typed, source-provenanced extension payloads so downstream consumers never infer package identity from a manifest range.
+Theme, extension, audio, and sync package references are declarative inputs. Every extension requires a nonempty ordered array of unique grants from `content.project`, `renderer.slot`, `renderer.client`, `host.route`, and `host.handler`. The pure schema runtime does not inspect installed packages or decide whether a package supports the active engine and protocol versions. Later engine orchestration owns package resolution, availability, compatibility, and lockfile enforcement. Resolved extension input must repeat the manifest grants exactly and in the same order. Compiled content records that order, the exact resolved extension version, and any typed, source-provenanced extension payloads so downstream consumers never infer package identity or authority from a manifest range.
 
 The raw schemas are also exported:
 

@@ -6,7 +6,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 
 ## Boundary
 
-The serialized reader envelope contains renderable publication structure, Markdown blocks, public addresses, link locations, assets, routes, statistics, and the complete fixed Publisher attribution. It omits repository paths, source provenance, extension configuration, provider state, credentials, progress, bookmarks, preferences, analytics, audio state, and sync state.
+The serialized reader envelope contains renderable publication structure, Markdown blocks, public addresses, link locations, assets, routes, statistics, and the complete fixed Publisher attribution. It omits repository paths, source provenance, extension declarations, capability grants, configuration, payloads, provider state, credentials, progress, bookmarks, preferences, analytics, audio state, and sync state.
 
 Projection and full validation are build-time Node.js operations. Browser code should import `@genii-foundation/publisher-reader/runtime`, which constructs immutable in-memory indexes without filesystem, network, environment, process, clock, or randomness access.
 
