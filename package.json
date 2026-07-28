@@ -1,0 +1,25 @@
+{
+  "name": "@genii-foundation/publisher-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The GENII Publisher open source publishing application workspace.",
+  "license": "CPAL-1.0",
+  "type": "module",
+  "packageManager": "npm@10.9.0",
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": "10.9.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "validate": "npm run test"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
+  }
+}
