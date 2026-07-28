@@ -37,6 +37,11 @@ const packageDefinitions = [
     root: "packages/content/",
     manifestPath: "packages/content/package.json",
   },
+  {
+    label: "reader",
+    root: "packages/reader/",
+    manifestPath: "packages/reader/package.json",
+  },
 ];
 
 const packages = await Promise.all(
@@ -63,10 +68,12 @@ const packages = await Promise.all(
   }),
 );
 
-const [workspacePackage, schemaPackage, contentPackage] = packages;
+const [workspacePackage, schemaPackage, contentPackage, readerPackage] =
+  packages;
 assert.ok(workspacePackage);
 assert.ok(schemaPackage);
 assert.ok(contentPackage);
+assert.ok(readerPackage);
 
 const sourceNoticeBody = workspacePackage.sourceNotice
   .split("\n")
@@ -91,7 +98,11 @@ test("workspace and public package metadata identify CPAL 1.0", () => {
     "README.md",
     "SOURCE-NOTICE",
   ];
-  for (const packageDefinition of [schemaPackage, contentPackage]) {
+  for (const packageDefinition of [
+    schemaPackage,
+    contentPackage,
+    readerPackage,
+  ]) {
     for (const artifact of requiredPackageArtifacts) {
       assert.ok(
         packageDefinition.manifest.files.includes(artifact),

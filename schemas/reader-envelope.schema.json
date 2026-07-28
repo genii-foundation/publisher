@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://publisher.genii.foundation/schemas/content-envelope.schema.json",
-  "title": "GENII Publisher content envelope",
-  "description": "Framework-neutral, deterministic compiled publication content.",
+  "$id": "https://publisher.genii.foundation/schemas/reader-envelope.schema.json",
+  "title": "GENII Publisher reader envelope",
+  "description": "Framework-neutral, deterministic publication data for graphical and non-graphical readers.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,15 +10,13 @@
     "schemaVersion",
     "publicationId",
     "engineVersion",
-    "compilerVersion",
+    "readerVersion",
     "buildId",
+    "source",
     "artifact",
-    "hashes",
+    "audience",
+    "textProfile",
     "publication",
-    "sourceAuthority",
-    "sources",
-    "extensions",
-    "payloads",
     "works",
     "collections",
     "assets",
@@ -28,7 +26,7 @@
   ],
   "properties": {
     "$schema": {
-      "const": "https://publisher.genii.foundation/schemas/content-envelope.schema.json"
+      "const": "https://publisher.genii.foundation/schemas/reader-envelope.schema.json"
     },
     "schemaVersion": {
       "const": "1.0"
@@ -39,45 +37,32 @@
     "engineVersion": {
       "$ref": "#/$defs/exactSemver"
     },
-    "compilerVersion": {
+    "readerVersion": {
       "$ref": "#/$defs/exactSemver"
     },
     "buildId": {
       "$ref": "#/$defs/sha256Digest"
     },
+    "source": {
+      "$ref": "#/$defs/contentSourceIdentity"
+    },
     "artifact": {
       "$ref": "#/$defs/artifact"
     },
-    "hashes": {
-      "$ref": "#/$defs/envelopeHashes"
+    "audience": {
+      "enum": [
+        "public",
+        "preview"
+      ]
+    },
+    "textProfile": {
+      "$ref": "#/$defs/textProfile"
     },
     "publication": {
       "$ref": "#/$defs/publication"
     },
-    "sourceAuthority": {
-      "$ref": "#/$defs/sourceAuthority"
-    },
-    "sources": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/source"
-      }
-    },
-    "extensions": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/compiledExtension"
-      }
-    },
-    "payloads": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/contentPayload"
-      }
-    },
     "works": {
       "type": "array",
-      "minItems": 1,
       "items": {
         "$ref": "#/$defs/work"
       }
@@ -120,12 +105,6 @@
       "maxLength": 256,
       "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
     },
-    "packageName": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 214,
-      "pattern": "^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$"
-    },
     "exactSemver": {
       "type": "string",
       "maxLength": 256,
@@ -134,12 +113,6 @@
     "sha256Digest": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
-    },
-    "relativePath": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 1024,
-      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*[<>:\"|*])(?!.*%[0-9A-Fa-f]{2})(?!.*[?#])(?!.*[\\u0000-\\u001F\\u007F])(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:\\/|$))(?!.*(?:^|/)(?:[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³])(?:\\.[^/]*)?(?:/|$))(?!.*[. ](?:/|$))(?!.*//)(?!.*\\/$).+$"
     },
     "routePath": {
       "type": "string",
@@ -178,6 +151,44 @@
         }
       }
     },
+    "sectionReaderAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/routePath"
+        },
+        "anchor": {
+          "$ref": "#/$defs/contentId"
+        }
+      }
+    },
+    "blockDomId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 513,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "description": "A public block DOM identity. A qualified identity may contain a 256-character section content ID, one hyphen, and a 256-character block content ID."
+    },
+    "blockReaderAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "anchor"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/routePath"
+        },
+        "anchor": {
+          "$ref": "#/$defs/blockDomId"
+        }
+      }
+    },
     "originRelativeAnchoredHref": {
       "type": "string",
       "minLength": 3,
@@ -202,10 +213,6 @@
           "$ref": "#/$defs/absoluteHttpUrl"
         }
       ]
-    },
-    "jsonObject": {
-      "type": "object",
-      "additionalProperties": true
     },
     "publisher": {
       "type": "object",
@@ -252,43 +259,95 @@
         }
       }
     },
+    "contentSourceIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "publicationId",
+        "engineVersion",
+        "compilerVersion",
+        "buildId",
+        "contentHash"
+      ],
+      "properties": {
+        "kind": {
+          "const": "publication-content"
+        },
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "publicationId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "engineVersion": {
+          "$ref": "#/$defs/exactSemver"
+        },
+        "compilerVersion": {
+          "$ref": "#/$defs/exactSemver"
+        },
+        "buildId": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
     "artifact": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "kind",
         "mediaType",
-        "outputRoot",
         "relativePath"
       ],
       "properties": {
         "kind": {
-          "const": "publication-content"
+          "const": "publication-reader"
         },
         "mediaType": {
-          "const": "application/vnd.genii.publisher.content+json"
-        },
-        "outputRoot": {
-          "$ref": "#/$defs/relativePath"
+          "const": "application/vnd.genii.publisher.reader+json"
         },
         "relativePath": {
-          "const": "content/publication-content.json"
+          "const": "reader/publication-reader.json"
         }
       }
     },
-    "envelopeHashes": {
+    "textProfile": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "sourceSet",
-        "content"
+        "id",
+        "version",
+        "representation",
+        "normalization",
+        "offsetUnit",
+        "rangeScope",
+        "endBoundary"
       ],
       "properties": {
-        "sourceSet": {
-          "$ref": "#/$defs/sha256Digest"
+        "id": {
+          "const": "genii-reader-block-markdown"
         },
-        "content": {
-          "$ref": "#/$defs/sha256Digest"
+        "version": {
+          "const": "1.0"
+        },
+        "representation": {
+          "const": "markdown"
+        },
+        "normalization": {
+          "const": "none"
+        },
+        "offsetUnit": {
+          "const": "utf-16-code-unit"
+        },
+        "rangeScope": {
+          "const": "block"
+        },
+        "endBoundary": {
+          "const": "exclusive"
         }
       }
     },
@@ -327,396 +386,6 @@
         },
         "attribution": {
           "$ref": "#/$defs/attribution"
-        },
-        "metadata": {
-          "$ref": "#/$defs/jsonObject"
-        }
-      }
-    },
-    "source": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "path",
-        "role",
-        "kind",
-        "mediaType",
-        "rawByteLength",
-        "rawHash",
-        "normalizedByteLength",
-        "normalizedHash"
-      ],
-      "properties": {
-        "path": {
-          "$ref": "#/$defs/relativePath"
-        },
-        "role": {
-          "enum": [
-            "asset",
-            "collection-manifest",
-            "extension",
-            "manuscript",
-            "publication-manifest",
-            "work-manifest"
-          ]
-        },
-        "kind": {
-          "enum": [
-            "binary",
-            "text"
-          ]
-        },
-        "entityId": {
-          "$ref": "#/$defs/stableId"
-        },
-        "encoding": {
-          "const": "utf-8"
-        },
-        "mediaType": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 256
-        },
-        "rawByteLength": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "rawHash": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "normalizedByteLength": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "normalizedHash": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "normalizedCodeUnitLength": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "normalizedLineStarts": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "integer",
-            "minimum": 0
-          }
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "kind": {
-                "const": "text"
-              }
-            },
-            "required": [
-              "kind"
-            ]
-          },
-          "then": {
-            "properties": {
-              "encoding": {},
-              "normalizedCodeUnitLength": {},
-              "normalizedLineStarts": {}
-            },
-            "required": [
-              "encoding",
-              "normalizedCodeUnitLength",
-              "normalizedLineStarts"
-            ]
-          },
-          "else": {
-            "not": {
-              "anyOf": [
-                {
-                  "required": [
-                    "encoding"
-                  ]
-                },
-                {
-                  "required": [
-                    "normalizedCodeUnitLength"
-                  ]
-                },
-                {
-                  "required": [
-                    "normalizedLineStarts"
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      ]
-    },
-    "sourceAuthority": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "publicationManifestPath",
-        "sourceRoots",
-        "outputRoots",
-        "sharedAssetsRoot"
-      ],
-      "properties": {
-        "publicationManifestPath": {
-          "const": "publication.json"
-        },
-        "sourceRoots": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "$ref": "#/$defs/relativePath"
-          }
-        },
-        "outputRoots": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "$ref": "#/$defs/relativePath"
-          }
-        },
-        "sharedAssetsRoot": {
-          "$ref": "#/$defs/relativePath"
-        }
-      }
-    },
-    "sourcePoint": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "line",
-        "column",
-        "offset"
-      ],
-      "properties": {
-        "line": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "column": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "offset": {
-          "type": "integer",
-          "minimum": 0
-        }
-      }
-    },
-    "sourceSpan": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "sourcePath",
-        "start",
-        "end"
-      ],
-      "properties": {
-        "sourcePath": {
-          "$ref": "#/$defs/relativePath"
-        },
-        "start": {
-          "$ref": "#/$defs/sourcePoint"
-        },
-        "end": {
-          "$ref": "#/$defs/sourcePoint"
-        }
-      }
-    },
-    "block": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "id",
-        "anchor",
-        "kind",
-        "markdown",
-        "text",
-        "provenance",
-        "wordCount",
-        "contentHash"
-      ],
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/contentId"
-        },
-        "anchor": {
-          "$ref": "#/$defs/contentId"
-        },
-        "kind": {
-          "$ref": "#/$defs/stableId"
-        },
-        "markdown": {
-          "type": "string"
-        },
-        "text": {
-          "type": "string"
-        },
-        "provenance": {
-          "$ref": "#/$defs/sourceSpan"
-        },
-        "wordCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "contentHash": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "metadata": {
-          "$ref": "#/$defs/jsonObject"
-        }
-      }
-    },
-    "section": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "id",
-        "role",
-        "title",
-        "parentId",
-        "childIds",
-        "depth",
-        "order",
-        "routes",
-        "activeRouteNames",
-        "readerAddress",
-        "continuity",
-        "navigable",
-        "blocks",
-        "previousId",
-        "nextId",
-        "wordCount",
-        "readingMinutes",
-        "contentHash"
-      ],
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/contentId"
-        },
-        "role": {
-          "$ref": "#/$defs/stableId"
-        },
-        "title": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 512
-        },
-        "parentId": {
-          "oneOf": [
-            {
-              "type": "null"
-            },
-            {
-              "$ref": "#/$defs/contentId"
-            }
-          ]
-        },
-        "childIds": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "$ref": "#/$defs/contentId"
-          }
-        },
-        "depth": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 64
-        },
-        "order": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "routes": {
-          "type": "object",
-          "propertyNames": {
-            "$ref": "#/$defs/stableId"
-          },
-          "additionalProperties": {
-            "$ref": "#/$defs/contentAddress"
-          }
-        },
-        "activeRouteNames": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "$ref": "#/$defs/stableId"
-          }
-        },
-        "readerAddress": {
-          "oneOf": [
-            {
-              "type": "null"
-            },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "path"
-              ],
-              "properties": {
-                "path": {
-                  "$ref": "#/$defs/routePath"
-                },
-                "anchor": {
-                  "$ref": "#/$defs/contentId"
-                }
-              }
-            }
-          ]
-        },
-        "continuity": {
-          "$ref": "#/$defs/contentContinuity"
-        },
-        "navigable": {
-          "type": "boolean"
-        },
-        "blocks": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/block"
-          }
-        },
-        "previousId": {
-          "oneOf": [
-            {
-              "type": "null"
-            },
-            {
-              "$ref": "#/$defs/contentId"
-            }
-          ]
-        },
-        "nextId": {
-          "oneOf": [
-            {
-              "type": "null"
-            },
-            {
-              "$ref": "#/$defs/contentId"
-            }
-          ]
-        },
-        "wordCount": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "readingMinutes": {
-          "type": "integer",
-          "minimum": 0
-        },
-        "contentHash": {
-          "$ref": "#/$defs/sha256Digest"
-        },
-        "metadata": {
-          "$ref": "#/$defs/jsonObject"
         }
       }
     },
@@ -759,137 +428,190 @@
         }
       }
     },
-    "workSource": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "manifestPath",
-        "manuscriptPath",
-        "adapter",
-        "metrics"
-      ],
-      "properties": {
-        "manifestPath": {
-          "$ref": "#/$defs/relativePath"
+    "nullableContentId": {
+      "oneOf": [
+        {
+          "type": "null"
         },
-        "manuscriptPath": {
-          "$ref": "#/$defs/relativePath"
-        },
-        "assetsPath": {
-          "$ref": "#/$defs/relativePath"
-        },
-        "adapter": {
-          "$ref": "#/$defs/producerIdentity"
-        },
-        "metrics": {
-          "$ref": "#/$defs/metricProducerIdentity"
+        {
+          "$ref": "#/$defs/contentId"
         }
-      }
+      ]
     },
-    "producerIdentity": {
+    "nullableSectionReaderAddress": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/sectionReaderAddress"
+        }
+      ]
+    },
+    "nullableBlockReaderAddress": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/blockReaderAddress"
+        }
+      ]
+    },
+    "nullableBlockDomId": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/blockDomId"
+        }
+      ]
+    },
+    "block": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "id",
-        "package",
-        "version"
+        "kind",
+        "markdown",
+        "text",
+        "readerAddress",
+        "domId",
+        "wordCount",
+        "contentHash"
       ],
       "properties": {
         "id": {
+          "$ref": "#/$defs/contentId"
+        },
+        "kind": {
           "$ref": "#/$defs/stableId"
         },
-        "package": {
-          "$ref": "#/$defs/packageName"
+        "markdown": {
+          "type": "string"
         },
-        "version": {
-          "$ref": "#/$defs/exactSemver"
+        "text": {
+          "type": "string"
+        },
+        "readerAddress": {
+          "$ref": "#/$defs/nullableBlockReaderAddress"
+        },
+        "domId": {
+          "$ref": "#/$defs/nullableBlockDomId"
+        },
+        "wordCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256Digest"
         }
       }
     },
-    "metricProducerIdentity": {
+    "section": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "id",
-        "package",
-        "version",
-        "profileVersion"
+        "role",
+        "title",
+        "parentId",
+        "childIds",
+        "depth",
+        "order",
+        "routes",
+        "activeRouteNames",
+        "readerAddress",
+        "domId",
+        "continuity",
+        "navigable",
+        "blocks",
+        "previousId",
+        "nextId",
+        "wordCount",
+        "readingMinutes",
+        "contentHash"
       ],
       "properties": {
         "id": {
+          "$ref": "#/$defs/contentId"
+        },
+        "role": {
           "$ref": "#/$defs/stableId"
         },
-        "package": {
-          "$ref": "#/$defs/packageName"
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
         },
-        "version": {
-          "$ref": "#/$defs/exactSemver"
+        "parentId": {
+          "$ref": "#/$defs/nullableContentId"
         },
-        "profileVersion": {
-          "$ref": "#/$defs/exactSemver"
-        }
-      }
-    },
-    "compiledExtension": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "id",
-        "package",
-        "version",
-        "payloadIds"
-      ],
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/stableId"
+        "childIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/contentId"
+          }
         },
-        "package": {
-          "$ref": "#/$defs/packageName"
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
         },
-        "version": {
-          "$ref": "#/$defs/exactSemver"
+        "order": {
+          "type": "integer",
+          "minimum": 0
         },
-        "config": {
-          "$ref": "#/$defs/jsonObject"
+        "routes": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/stableId"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/contentAddress"
+          }
         },
-        "payloadIds": {
+        "activeRouteNames": {
           "type": "array",
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/stableId"
           }
-        }
-      }
-    },
-    "contentPayload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "id",
-        "extensionId",
-        "schema",
-        "sourcePaths",
-        "data",
-        "contentHash"
-      ],
-      "properties": {
-        "id": {
-          "$ref": "#/$defs/stableId"
         },
-        "extensionId": {
-          "$ref": "#/$defs/stableId"
+        "readerAddress": {
+          "$ref": "#/$defs/nullableSectionReaderAddress"
         },
-        "schema": {
-          "$ref": "#/$defs/absoluteHttpUrl"
+        "domId": {
+          "$ref": "#/$defs/nullableContentId"
         },
-        "sourcePaths": {
+        "continuity": {
+          "$ref": "#/$defs/contentContinuity"
+        },
+        "navigable": {
+          "type": "boolean"
+        },
+        "blocks": {
           "type": "array",
-          "uniqueItems": true,
           "items": {
-            "$ref": "#/$defs/relativePath"
+            "$ref": "#/$defs/block"
           }
         },
-        "data": {},
+        "previousId": {
+          "$ref": "#/$defs/nullableContentId"
+        },
+        "nextId": {
+          "$ref": "#/$defs/nullableContentId"
+        },
+        "wordCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readingMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
         "contentHash": {
           "$ref": "#/$defs/sha256Digest"
         }
@@ -904,7 +626,6 @@
         "language",
         "publicationState",
         "route",
-        "source",
         "rootSectionIds",
         "sections",
         "wordCount",
@@ -951,9 +672,6 @@
         "route": {
           "$ref": "#/$defs/routePath"
         },
-        "source": {
-          "$ref": "#/$defs/workSource"
-        },
         "rootSectionIds": {
           "type": "array",
           "minItems": 1,
@@ -979,9 +697,6 @@
         },
         "contentHash": {
           "$ref": "#/$defs/sha256Digest"
-        },
-        "metadata": {
-          "$ref": "#/$defs/jsonObject"
         }
       }
     },
@@ -991,8 +706,8 @@
       "required": [
         "id",
         "title",
+        "publicationState",
         "route",
-        "manifestPath",
         "workIds"
       ],
       "properties": {
@@ -1019,19 +734,12 @@
         "route": {
           "$ref": "#/$defs/routePath"
         },
-        "manifestPath": {
-          "$ref": "#/$defs/relativePath"
-        },
         "workIds": {
           "type": "array",
-          "minItems": 1,
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/stableId"
           }
-        },
-        "metadata": {
-          "$ref": "#/$defs/jsonObject"
         }
       }
     },
@@ -1187,7 +895,6 @@
       "additionalProperties": false,
       "required": [
         "id",
-        "sourcePath",
         "href",
         "mediaType",
         "hash"
@@ -1199,9 +906,6 @@
         "workId": {
           "$ref": "#/$defs/stableId"
         },
-        "sourcePath": {
-          "$ref": "#/$defs/relativePath"
-        },
         "href": {
           "$ref": "#/$defs/routePath"
         },
@@ -1212,41 +916,29 @@
         },
         "hash": {
           "$ref": "#/$defs/sha256Digest"
-        },
-        "metadata": {
-          "$ref": "#/$defs/jsonObject"
         }
       }
     },
-    "contentLocation": {
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "kind",
-            "workId",
-            "sectionId",
-            "occurrence"
-          ],
-          "properties": {
-            "kind": {
-              "const": "source"
-            },
-            "workId": {
-              "$ref": "#/$defs/stableId"
-            },
-            "sectionId": {
-              "$ref": "#/$defs/contentId"
-            },
-            "blockId": {
-              "$ref": "#/$defs/contentId"
-            },
-            "occurrence": {
-              "$ref": "#/$defs/sourceSpan"
-            }
-          }
+    "blockMarkdownRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end"
+      ],
+      "properties": {
+        "start": {
+          "type": "integer",
+          "minimum": 0
         },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "linkLocation": {
+      "oneOf": [
         {
           "type": "object",
           "additionalProperties": false,
@@ -1267,6 +959,34 @@
             },
             "blockId": {
               "$ref": "#/$defs/contentId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "workId",
+            "sectionId",
+            "blockId",
+            "range"
+          ],
+          "properties": {
+            "kind": {
+              "const": "block-markdown"
+            },
+            "workId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "sectionId": {
+              "$ref": "#/$defs/contentId"
+            },
+            "blockId": {
+              "$ref": "#/$defs/contentId"
+            },
+            "range": {
+              "$ref": "#/$defs/blockMarkdownRange"
             }
           }
         }
@@ -1378,7 +1098,7 @@
           "$ref": "#/$defs/stableId"
         },
         "source": {
-          "$ref": "#/$defs/contentLocation"
+          "$ref": "#/$defs/linkLocation"
         },
         "target": {
           "$ref": "#/$defs/linkTarget"
@@ -1394,9 +1114,6 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128
-        },
-        "metadata": {
-          "$ref": "#/$defs/jsonObject"
         }
       }
     },
@@ -1415,7 +1132,7 @@
       "properties": {
         "workCount": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 0
         },
         "collectionCount": {
           "type": "integer",
@@ -1423,7 +1140,7 @@
         },
         "sectionCount": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 0
         },
         "blockCount": {
           "type": "integer",

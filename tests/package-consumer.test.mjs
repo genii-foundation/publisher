@@ -315,6 +315,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       ...expectedDistPaths,
       "package.json",
       "publication.schema.json",
+      "reader-envelope.schema.json",
       ...expectedScriptPaths,
       ...expectedSourcePaths,
       "tsconfig.json",
@@ -507,9 +508,17 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         validateWorkShape,
       } from "@genii-foundation/publisher-schema";
       import {
+        inspectCanonicalUrlFragment as inspectBrowserFragment,
         inspectCanonicalRoutePath as inspectBrowserRoute,
       } from "@genii-foundation/publisher-schema/routes";
+      import {
+        READER_ENVELOPE_SCHEMA_URL,
+        READER_TEXT_PROFILE,
+        inspectCanonicalUrlFragment as inspectReaderFragment,
+        validateReaderEnvelopeShape,
+      } from "@genii-foundation/publisher-schema/reader";
       import contentEnvelopeSchema from "@genii-foundation/publisher-schema/content-envelope.schema.json" with { type: "json" };
+      import readerEnvelopeSchema from "@genii-foundation/publisher-schema/reader-envelope.schema.json" with { type: "json" };
       import workSchema from "@genii-foundation/publisher-schema/work.schema.json" with { type: "json" };
 
       assert.equal(
@@ -532,10 +541,24 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         valid: true,
         value: "/%E6%9D%B1%E4%BA%AC/",
       });
+      assert.deepEqual(inspectBrowserFragment("%61"), {
+        valid: true,
+        value: "%61",
+        decoded: "a",
+      });
+      assert.deepEqual(inspectReaderFragment("+"), {
+        valid: true,
+        value: "+",
+        decoded: "+",
+      });
       assert.equal(
         contentEnvelopeSchema.$id,
         "https://publisher.genii.foundation/schemas/content-envelope.schema.json",
       );
+      assert.equal(readerEnvelopeSchema.$id, READER_ENVELOPE_SCHEMA_URL);
+      assert.equal(READER_TEXT_PROFILE.id, "genii-reader-block-markdown");
+      assert.equal(READER_TEXT_PROFILE.representation, "markdown");
+      assert.equal(validateReaderEnvelopeShape({}).valid, false);
       const result = validateWorkShape({
         schemaVersion: "1.0",
         id: "installed-proof",
@@ -580,6 +603,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "collection.schema.json",
       "content-envelope.schema.json",
       "publication.schema.json",
+      "reader-envelope.schema.json",
       "work.schema.json",
     ]) {
       await rename(
@@ -593,6 +617,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         validateCollectionShape,
         validateContentEnvelopeShape,
         validatePublicationShape,
+        validateReaderEnvelopeShape,
         validateWorkShape,
       } from "@genii-foundation/publisher-schema";
 
@@ -613,6 +638,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         validatePublicationShape({}),
         validateCollectionShape({}),
         validateContentEnvelopeShape({}),
+        validateReaderEnvelopeShape({}),
       ]) {
         assert.equal(result.valid, false);
         assert.ok(result.diagnostics.length > 0);
@@ -633,14 +659,23 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         isCanonicalRoutePath,
         validateContentEnvelopeShape,
         validatePublicationShape,
+        validateReaderEnvelopeShape,
         type CanonicalRoutePathInspection,
         type PublicationContentEnvelope,
         type PublicationManifest,
+        type PublicationReaderEnvelope,
         type ValidationResult,
       } from "@genii-foundation/publisher-schema";
       import {
+        inspectCanonicalUrlFragment,
         inspectCanonicalRoutePath as inspectBrowserRoute,
       } from "@genii-foundation/publisher-schema/routes";
+      import {
+        READER_TEXT_PROFILE,
+        inspectCanonicalUrlFragment as inspectReaderFragment,
+        validateReaderEnvelopeShape as validateBrowserReaderEnvelopeShape,
+        type PublicationReaderEnvelope as BrowserPublicationReaderEnvelope,
+      } from "@genii-foundation/publisher-schema/reader";
 
       declare const publication: PublicationManifest;
       const result: ValidationResult<PublicationManifest> =
@@ -650,6 +685,14 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       const envelopeResult: ValidationResult<PublicationContentEnvelope> =
         validateContentEnvelopeShape(envelope);
       void envelopeResult;
+      declare const readerEnvelope: PublicationReaderEnvelope;
+      const readerEnvelopeResult: ValidationResult<PublicationReaderEnvelope> =
+        validateReaderEnvelopeShape(readerEnvelope);
+      void readerEnvelopeResult;
+      const browserReaderEnvelope: BrowserPublicationReaderEnvelope =
+        readerEnvelope;
+      void validateBrowserReaderEnvelopeShape(browserReaderEnvelope);
+      void READER_TEXT_PROFILE;
       declare const routeValue: unknown;
       const routeInspection: CanonicalRoutePathInspection =
         inspectCanonicalRoutePath(routeValue);
@@ -659,6 +702,8 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       }
       void routeInspection;
       void inspectBrowserRoute;
+      void inspectCanonicalUrlFragment;
+      void inspectReaderFragment;
     `;
     const typeConsumerConfig = {
       compilerOptions: {

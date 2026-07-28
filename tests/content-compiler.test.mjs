@@ -1446,6 +1446,79 @@ test("structured addresses preserve trailing routes and use active anchor bases"
   );
 });
 
+test("unanchored section addresses cannot claim another route owner", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const workRoute = input.sourceGraph.works[0].manifest.route;
+  assert.ok(workRoute);
+
+  const sameWorkRoot = replaceWork(input, "rain-gauge", (work) => ({
+    ...work,
+    sections: [
+      {
+        ...work.sections[0],
+        routes: { root: { path: workRoute } },
+        activeRouteNames: [],
+        readerLocation: { kind: "route", routeName: "root" },
+      },
+    ],
+  }));
+  assert.deepEqual(
+    compile(sameWorkRoot).works[0].sections[0].readerAddress,
+    { path: workRoute },
+  );
+
+  const crossOwnerInput = replaceWork(input, "rain-gauge", (work) => ({
+    ...work,
+    sections: [
+      {
+        ...work.sections[0],
+        routes: { foreign: { path: "/" } },
+        activeRouteNames: [],
+        readerLocation: { kind: "route", routeName: "foreign" },
+      },
+    ],
+  }));
+  const compileResult = compilePublicationContent(crossOwnerInput);
+  assert.equal(compileResult.valid, false);
+  assert.ok(
+    diagnosticCodes(compileResult).has(
+      "content.address.unanchored_owner_mismatch",
+    ),
+    validationMessage(compileResult),
+  );
+
+  const forged = structuredClone(compile(input));
+  forged.works[0].sections[0].routes.foreign = { path: "/" };
+  rehashWorkHierarchy(forged, 0, 0, 0);
+  const validation = validatePublicationContentEnvelope(forged);
+  assert.equal(validation.valid, false);
+  assert.ok(
+    diagnosticCodes(validation).has(
+      "content.address.unanchored_owner_mismatch",
+    ),
+    validationMessage(validation),
+  );
+
+  const forgedReaderAddress = structuredClone(compile(input));
+  forgedReaderAddress.works[0].sections[0].readerAddress = {
+    path: "/",
+  };
+  rehashWorkHierarchy(forgedReaderAddress, 0, 0, 0);
+  const readerAddressValidation = validatePublicationContentEnvelope(
+    forgedReaderAddress,
+  );
+  assert.equal(readerAddressValidation.valid, false);
+  assert.ok(
+    readerAddressValidation.diagnostics.some(
+      ({ code, path }) =>
+        code ===
+          "content.reader_address.unanchored_owner_mismatch" &&
+        path === "/works/0/sections/0/readerAddress",
+    ),
+    validationMessage(readerAddressValidation),
+  );
+});
+
 test("compiler rejects non-canonical serialized section routes", async () => {
   const input = await loadCompilationInput("canonical-field-notes");
   const invalidRoutes = [

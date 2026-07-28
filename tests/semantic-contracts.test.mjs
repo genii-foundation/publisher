@@ -16,11 +16,15 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  inspectAbsoluteHttpUrl,
   resolvePublicationLayout,
   validatePublicationSemantics,
   validatePublicationShape,
   validateWorkShape,
 } from "../schemas/dist/index.js";
+import {
+  validateAbsoluteHttpUrl as validateContentAbsoluteHttpUrl,
+} from "../packages/content/dist/validation.js";
 
 const fixtureRoot = new URL(
   "../fixtures/canonical-field-notes/",
@@ -107,6 +111,67 @@ test("network URLs reject executable schemes and embedded credentials", async ()
     ),
     [true, true, true],
   );
+});
+
+test("shared absolute HTTP URL decisions govern content and manifest validation", async () => {
+  const cases = [
+    ["https://example.test", true, undefined],
+    ["http://localhost:3000/reader", true, undefined],
+    [
+      "https://[2001:db8::1]:8443/%E2%9C%93?mode=quiet#start",
+      true,
+      undefined,
+    ],
+    ["ftp://example.test", false, "protocol"],
+    ["https://.", false, "host"],
+    [
+      "https://reader:secret@example.test",
+      false,
+      "credentials",
+    ],
+    [
+      `https://example.test/${"\ud800"}`,
+      false,
+      "unicode-scalar",
+    ],
+    [
+      `https://example.test/${"\udc00"}`,
+      false,
+      "unicode-scalar",
+    ],
+    [" https://example.test", false, "serialization"],
+    ["https://example.test ", false, "serialization"],
+    ["https://example.test/\nreader", false, "serialization"],
+    [String.raw`https://example.test\@evil.test`, false, "serialization"],
+    ["https://example.test/é", false, "serialization"],
+    ["https://example.test/%ZZ", false, "serialization"],
+    ["https://example.test/a[b]", false, "serialization"],
+  ];
+
+  const input = await loadCanonicalInput();
+  for (const [value, expected, issue] of cases) {
+    const inspection = inspectAbsoluteHttpUrl(value);
+    assert.equal(inspection.valid, expected, value);
+    if (!expected) {
+      assert.equal(inspection.issue, issue, value);
+    }
+    assert.equal(validateContentAbsoluteHttpUrl(value), expected, value);
+
+    const publication = structuredClone(input.publication);
+    publication.publication.publisher.url = value;
+    const result = validate({ ...input, publication });
+    assert.equal(result.valid, expected, value);
+    if (!expected) {
+      assert.ok(
+        result.diagnostics.some(
+          ({ code, path }) =>
+            code === "publication.publisher_url.invalid" &&
+            path === "/publication/publisher/url",
+        ),
+        `${value}: ${JSON.stringify(result.diagnostics, null, 2)}`,
+      );
+    }
+  }
 });
 
 test("shape validation rejects values outside the JSON data model", async () => {
