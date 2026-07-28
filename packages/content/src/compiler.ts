@@ -2114,6 +2114,21 @@ function validateSectionAddressAuthority(
       readonly routeName: string;
     }
   >();
+  const hasAuthorizedUnanchoredOwner = (
+    work: CompiledWork,
+    section: CompiledSection,
+    address: ContentAddress,
+  ): boolean => {
+    if (address.anchor !== undefined || address.path === work.route) {
+      return true;
+    }
+    const routeOwner = activeRouteOwnerByPath.get(address.path);
+    return (
+      routeOwner?.target.kind === "section" &&
+      routeOwner.target.workId === work.id &&
+      routeOwner.target.sectionId === section.id
+    );
+  };
   works.forEach((work, workIndex) => {
     work.sections.forEach((section, sectionIndex) => {
       for (const [routeName, address] of Object.entries(section.routes)) {
@@ -2171,6 +2186,23 @@ function validateSectionAddressAuthority(
             ),
           );
         }
+        if (!hasAuthorizedUnanchoredOwner(work, section, address)) {
+          diagnostics.push(
+            diagnostic(
+              "content.address.unanchored_owner_mismatch",
+              `/works/${workIndex}/sections/${sectionIndex}/routes/${routeName}`,
+              `Unanchored section address "${routeName}" does not use its own work route or a server route owned by that section.`,
+              "ownedUnanchoredAddress",
+              {
+                address,
+                routeName,
+                routeOwner: activeRouteOwnerByPath.get(address.path) ?? null,
+                sectionId: section.id,
+                workId: work.id,
+              },
+            ),
+          );
+        }
       }
       if (section.readerAddress !== null) {
         const addressKey = contentAddressOwnershipKey(
@@ -2217,6 +2249,31 @@ function validateSectionAddressAuthority(
               "activeReaderAddressBase",
               {
                 address: section.readerAddress,
+                sectionId: section.id,
+                workId: work.id,
+              },
+            ),
+          );
+        }
+        if (
+          !hasAuthorizedUnanchoredOwner(
+            work,
+            section,
+            section.readerAddress,
+          )
+        ) {
+          diagnostics.push(
+            diagnostic(
+              "content.reader_address.unanchored_owner_mismatch",
+              `/works/${workIndex}/sections/${sectionIndex}/readerAddress`,
+              "An unanchored reader address must use its own work route or a server route owned by that section.",
+              "ownedUnanchoredAddress",
+              {
+                address: section.readerAddress,
+                routeOwner:
+                  activeRouteOwnerByPath.get(
+                    section.readerAddress.path,
+                  ) ?? null,
                 sectionId: section.id,
                 workId: work.id,
               },

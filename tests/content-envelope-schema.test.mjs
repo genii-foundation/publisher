@@ -13,6 +13,7 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
 import test from "node:test";
 
 import contentEnvelopeSchema from "../schemas/content-envelope.schema.json" with {
@@ -25,6 +26,12 @@ import {
   CONTENT_SCHEMA_VERSION,
   validateContentEnvelopeShape,
 } from "../schemas/dist/index.js";
+import {
+  validatePublicationContentEnvelope,
+} from "../packages/content/dist/index.js";
+import {
+  EXACT_SEMVER,
+} from "../packages/content/dist/validation.js";
 
 const DIGEST = `sha256:${"0".repeat(64)}`;
 const COHERENCE_STYLE_CONTENT_ID =
@@ -285,6 +292,35 @@ test("content envelope digests use lowercase SHA-256 syntax", () => {
   });
 });
 
+test("content SemVer validation bounds oversized invalid prereleases", () => {
+  const hostileVersion = `1.2.3-${"a".repeat(50_000)}!`;
+  const startedAt = performance.now();
+  assert.equal(EXACT_SEMVER.test(hostileVersion), false);
+
+  const envelope = createMinimalEnvelope();
+  envelope.engineVersion = hostileVersion;
+  const result = validateContentEnvelopeShape(envelope);
+  assert.equal(result.valid, false);
+  assert.ok(
+    result.diagnostics.some(
+      ({ code, path }) =>
+        code === "schema.max_length" && path === "/engineVersion",
+    ),
+  );
+  assert.ok(
+    result.diagnostics.some(
+      ({ code, path }) =>
+        code === "schema.pattern" && path === "/engineVersion",
+    ),
+  );
+
+  const elapsed = performance.now() - startedAt;
+  assert.ok(
+    elapsed < 5_000,
+    `Content SemVer validation took ${elapsed.toFixed(1)} ms.`,
+  );
+});
+
 test("content envelope attribution is fixed", () => {
   const envelope = createMinimalEnvelope();
   envelope.publication.attribution.text = "Powered by Something Else";
@@ -402,6 +438,51 @@ test("section continuity rejects empty progress groups", () => {
     code: "schema.min_items",
     path: "/works/0/sections/0/continuity/progressGroups/0",
   });
+});
+
+test("content semantics reject duplicate progress IDs after linear shape validation", () => {
+  const cases = [
+    {
+      name: "within one group",
+      groups: [
+        ["first-reading", "opening-reading", "first-reading"],
+      ],
+      path:
+        "/works/0/sections/0/continuity/progressGroups/0/2",
+    },
+    {
+      name: "across groups",
+      groups: [
+        ["first-reading"],
+        ["opening-reading", "first-reading"],
+      ],
+      path:
+        "/works/0/sections/0/continuity/progressGroups/1/1",
+    },
+  ];
+
+  for (const testCase of cases) {
+    const envelope = createMinimalEnvelope();
+    envelope.works[0].sections[0].continuity.progressGroups =
+      testCase.groups;
+    const shape = validateContentEnvelopeShape(envelope);
+    assert.equal(
+      shape.valid,
+      true,
+      `${testCase.name}: ${JSON.stringify(shape.diagnostics, null, 2)}`,
+    );
+
+    const result = validatePublicationContentEnvelope(envelope);
+    assert.equal(result.valid, false, testCase.name);
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path }) =>
+          code === "content.continuity.progress_id_duplicate" &&
+          path === testCase.path,
+      ),
+      `${testCase.name}: ${JSON.stringify(result.diagnostics, null, 2)}`,
+    );
+  }
 });
 
 test("section and continuity IDs support long Coherence-style slugs", () => {

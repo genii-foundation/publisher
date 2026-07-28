@@ -33,6 +33,7 @@ import type {
 import { immutableSnapshot } from "./immutability.js";
 import {
   inspectCanonicalRoutePath,
+  isAbsoluteHttpUrl,
   type CanonicalRoutePathIssue,
 } from "./routes.js";
 
@@ -100,7 +101,8 @@ interface RedirectResolution {
 }
 
 const EXACT_SEMVER =
-  /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+  /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const MAX_EXACT_SEMVER_LENGTH = 256;
 const ROUTE_TOKEN = /\{[^{}]*\}/g;
 
 function diagnostic(
@@ -190,10 +192,13 @@ function validateEngineCompatibility(
   engineVersion: string,
   diagnostics: Diagnostic[],
 ): void {
-  const normalizedVersion = valid(engineVersion);
+  const normalizedVersion =
+    engineVersion.length <= MAX_EXACT_SEMVER_LENGTH &&
+      EXACT_SEMVER.test(engineVersion)
+      ? valid(engineVersion)
+      : null;
   if (
-    normalizedVersion === null ||
-    !EXACT_SEMVER.test(engineVersion)
+    normalizedVersion === null
   ) {
     diagnostics.push(
       diagnostic(
@@ -265,30 +270,20 @@ function validateAbsoluteHttpUrl(
   diagnostics: Diagnostic[],
   documentPath = CANONICAL_PUBLICATION_MANIFEST_PATH,
 ): boolean {
-  try {
-    const url = new URL(value);
-    if (
-      (url.protocol !== "http:" && url.protocol !== "https:") ||
-      url.hostname.length === 0 ||
-      url.username.length > 0 ||
-      url.password.length > 0
-    ) {
-      throw new TypeError("Not an absolute credential-free HTTP URL.");
-    }
+  if (isAbsoluteHttpUrl(value)) {
     return true;
-  } catch {
-    diagnostics.push(
-      diagnostic(
-        code,
-        path,
-        `${subject} must be an absolute HTTP or HTTPS URL without embedded credentials.`,
-        "absoluteHttpUrl",
-        { value },
-        documentPath,
-      ),
-    );
-    return false;
   }
+  diagnostics.push(
+    diagnostic(
+      code,
+      path,
+      `${subject} must be an absolute HTTP or HTTPS URL without embedded credentials.`,
+      "absoluteHttpUrl",
+      { value },
+      documentPath,
+    ),
+  );
+  return false;
 }
 
 function validatePublicationUrls(

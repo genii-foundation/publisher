@@ -8,7 +8,10 @@ The package is prerelease software. Its API may change before 1.0 through explic
 
 - `validatePublicationShape`, `validateWorkShape`, and `validateCollectionShape` apply the Draft 2020-12 JSON Schemas.
 - `validateContentEnvelopeShape` validates a compiled publication envelope before a renderer or other consumer accepts it.
+- `validateReaderEnvelopeShape` validates the strict, public reader projection shape. Full projection identity and relationship validation belongs to the reader package.
 - `inspectCanonicalRoutePath` reports whether a concrete public route has the one canonical serialized form and returns a stable failure reason. `isCanonicalRoutePath` is its type-guard form.
+- `inspectCanonicalUrlFragment` validates a well-formed Unicode-scalar fragment and decodes it exactly once. Its successful result carries both the serialized value and the decoded browser ownership key. `isCanonicalUrlFragment` is its type-guard form.
+- `inspectAbsoluteHttpUrl` validates exact ASCII HTTP and HTTPS URI serialization with a usable host and no embedded credentials. It rejects whitespace, controls, raw Unicode, malformed percent escapes, backslashes, and other input a browser would silently repair. `isAbsoluteHttpUrl` is its type-guard form.
 - `resolvePublicationLayout` is the safe pre-load gate for canonical and declared manifest paths, lexical boundaries, and duplicate manifest targets.
 - `resolveWorkSourcePaths` is the shared resolver for manifest-relative and repository-relative manuscript and asset paths.
 - `validatePublicationSemantics` checks relationships across loaded manifests, route continuity, attribution, protocol versions, and engine compatibility. Success returns a resolved source graph.
@@ -19,7 +22,11 @@ The caller owns file access. It shape-validates `publication.json`, resolves the
 
 Shape validation is not artifact acceptance. A renderer or other content consumer must use `validatePublicationContentEnvelope` from `@genii-foundation/publisher-content`, which applies the public shape validator and the derived identity, source custody, route authority, extension payload, and continuity checks. Calling `validateContentEnvelopeShape` alone proves structure only.
 
-Browser runtimes may import the route primitives alone from `@genii-foundation/publisher-schema/routes`. That subpath has no semantic-validator or package-resolution dependency.
+Browser runtimes may import the route primitives alone from `@genii-foundation/publisher-schema/routes`. They may import reader-envelope types, constants, and shape validation from `@genii-foundation/publisher-schema/reader`. Neither subpath loads semantic validation or package-resolution dependencies.
+
+The reader envelope is an audience-specific projection, not a second authoring source. It records its own reader build identity and the exact content-envelope identity it projects. Its fixed `textProfile` defines block-local Markdown offsets as unnormalized UTF-16 code units with exclusive end boundaries. Sections and blocks carry explicit nullable reader addresses and DOM IDs. Source-backed links use those block-local Markdown ranges rather than repository provenance.
+
+The reader schema excludes arbitrary metadata, repository paths, source provenance, extension configuration and payloads, provider state, credentials, progress, bookmarks, preferences, analytics, audio state, and sync state. Public assets retain only the identity, public href, media type, hash, and optional work owner that a reader needs. Every collection records its effective publication state rather than asking a browser to infer inheritance. A retained collection may have an empty `workIds` array after audience filtering removes draft works.
 
 Public envelope validation proves internal consistency and validates constraints over the byte lengths and normalized-text geometry declared in the envelope. It does not prove the original source bytes because the envelope does not contain them. Only compilation can perform the fatal UTF-8 comparison and compute source hashes from injected bytes.
 
@@ -31,13 +38,15 @@ The schemas and pure runtime prove lexical path safety only. Portable repository
 
 Internal server paths have one canonical serialized form. A path begins with exactly one slash, contains at most 2,048 serialized ASCII characters, and uses only slash plus the raw ASCII `pchar` repertoire, with percent reserved for encoding. Non-ASCII text uses uppercase percent escapes of its UTF-8 bytes, such as `/caf%C3%A9`. Percent-encoded ASCII is forbidden, and decoding must produce valid NFC Unicode without whitespace or control characters. Empty interior segments and current or parent directory segments are invalid. The trailing slash is significant, so `/work` and `/work/` are different valid routes.
 
-The raw JSON Schemas enforce the regular ASCII grammar and canonical UTF-8 byte forms. Complete decoded Unicode and NFC validation belongs to the package runtime. A direct JSON Schema match alone does not prove the NFC requirement.
+The raw JSON Schemas enforce the regular ASCII grammar, well-formed surrogate pairs, and canonical UTF-8 byte forms. Complete decoded Unicode and NFC validation belongs to the package runtime. A direct JSON Schema match alone does not prove the NFC requirement or semantic URL validity.
 
 Manifest validation, compilation, artifact validation, hosts, browser runtimes, and renderers use that exact serialized form. They reject noncanonical paths and never normalize, decode and re-encode, add a slash, or remove one. Queries and fragments never belong in a server path. Compiled section addresses represent an optional fragment as a separate `anchor` field. A legacy public path containing a space needs an explicit host or edge redirect to a renamed canonical public URL. It cannot enter the protocol through silent normalization.
 
 A string that passes these checks is not proof that the referenced filesystem object remains inside the publication root. Every filesystem loader must resolve real paths against an approved root and reject escapes caused by symbolic links, case folding, Unicode normalization, mount behavior, or a source change between validation and access. A loader must use filesystem-aware containment checks instead of trusting string prefixes.
 
 Compiled `sourceAuthority` always records the canonical root manifest path as `publication.json`, along with declared source roots, output roots, and the shared asset root. Every declared work `assetsPath` must remain inside a source root even when it is empty. Every browser-equivalent section content address, defined by its path and decoded optional anchor, has one section owner across the publication. Every section also records an explicit `readerAddress`, and every block records a portable reader `anchor` separate from its compiler projection ID. That anchor has a public destination only when the section has a reader address.
+
+Exact package and artifact SemVer strings contain at most 256 characters and use a bounded grammar. Continuity group identity uniqueness is enforced by the semantic content and reader runtimes with linear sets rather than deep array comparison in the raw envelope schema.
 
 Theme, extension, audio, and sync package references are declarative inputs. The pure schema runtime does not inspect installed packages or decide whether a package supports the active engine and protocol versions. Later engine orchestration owns package resolution, availability, compatibility, and lockfile enforcement. Compiled content records the exact resolved extension version and any typed, source-provenanced extension payloads so downstream consumers never infer package identity from a manifest range.
 
@@ -48,6 +57,7 @@ The raw schemas are also exported:
 @genii-foundation/publisher-schema/work.schema.json
 @genii-foundation/publisher-schema/collection.schema.json
 @genii-foundation/publisher-schema/content-envelope.schema.json
+@genii-foundation/publisher-schema/reader-envelope.schema.json
 ```
 
 ## Release safety

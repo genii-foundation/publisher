@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import { readFile, realpath } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { isAbsolute, relative, resolve } from "node:path";
+import { performance } from "node:perf_hooks";
 import test from "node:test";
 
 import {
@@ -520,6 +521,23 @@ test("semantic validation requires canonical installed-engine SemVer", async () 
       engineVersion,
     );
   }
+
+  const hostileVersion = `1.2.3-${"a".repeat(50_000)}!`;
+  const startedAt = performance.now();
+  const hostileResult = validateFixtureSemantics(fixture, {
+    engineVersion: hostileVersion,
+  });
+  const elapsed = performance.now() - startedAt;
+  assert.equal(hostileResult.valid, false);
+  assert.ok(
+    hostileResult.diagnostics.some(
+      ({ code }) => code === "engine.version.invalid",
+    ),
+  );
+  assert.ok(
+    elapsed < 5_000,
+    `Semantic SemVer validation took ${elapsed.toFixed(1)} ms.`,
+  );
 });
 
 test("layout resolution rejects encoded escapes and duplicate manifest paths before loading", async () => {

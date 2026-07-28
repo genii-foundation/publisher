@@ -11,29 +11,22 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-import type { PublicationContentEnvelope } from "./content-types.js";
-import type { PublicationReaderEnvelope } from "./reader-types.js";
 import type {
-  CollectionManifest,
-  PublicationManifest,
-  WorkManifest,
-} from "./types.js";
+  PublicationReaderEnvelope,
+  ReaderAudience,
+  Sha256Digest,
+} from "@genii-foundation/publisher-schema";
 
-export interface StandaloneValidationError {
-  readonly instancePath: string;
-  readonly keyword: string;
-  readonly message?: string;
-  readonly params: Readonly<Record<string, unknown>>;
-  readonly schemaPath: string;
+export const READER_PROJECTOR_VERSION = "0.1.0-alpha.0";
+
+export interface ProjectPublicationReaderOptions {
+  readonly audience: ReaderAudience;
 }
 
-export interface StandaloneValidateFunction<T> {
-  (input: unknown): input is T;
-  readonly errors?: readonly StandaloneValidationError[] | null;
+export interface PublicationReaderArtifact {
+  readonly relativePath: "reader/publication-reader.json";
+  readonly mediaType: "application/vnd.genii.publisher.reader+json";
+  readonly text: string;
+  readonly hash: Sha256Digest;
+  readonly envelope: PublicationReaderEnvelope;
 }
-
-export const publicationValidator: StandaloneValidateFunction<PublicationManifest>;
-export const workValidator: StandaloneValidateFunction<WorkManifest>;
-export const collectionValidator: StandaloneValidateFunction<CollectionManifest>;
-export const contentEnvelopeValidator: StandaloneValidateFunction<PublicationContentEnvelope>;
-export const readerEnvelopeValidator: StandaloneValidateFunction<PublicationReaderEnvelope>;

@@ -28,3 +28,14 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Bound the canonical publication manifest, empty work asset roots, exact section addresses, long linked content IDs, and pre-compilation redirect checks to their declared authority.
 - Completed the unreleased initial content-envelope 1.0 contract with explicit section reader addresses, distinct public block anchors, and collision-checked composite reader fragments.
 - Corrected the unreleased route contract to one canonical ASCII serialization across manifests, artifacts, hosts, browsers, and runtimes, with exact UTF-8 encoding, NFC, and trailing-slash semantics.
+- Added the strict reader-envelope 1.0 shape, browser-safe schema API, raw schema export, and packed-consumer proof.
+- Added one browser-safe fragment inspector for exact-once decoding across content validation and reader address lookup.
+- Added audience-aware reader projection, canonical reader artifacts, reader-owned public content hashes, cryptographic build verification, and a framework-neutral browser runtime.
+- Bound unanchored section addresses to their own work or section route instead of an unrelated active route.
+- Made browser-equivalent fragment aliases resolve to the exact requested serialization without object-order selection.
+- Hardened browser-facing fragments and absolute HTTP URLs against malformed Unicode, browser-repaired serialization, unusable hosts, and embedded credentials.
+- Bounded exact SemVer validation and made continuity uniqueness and reader navigation checks linear for hostile serialized input.
+- Made public reader-runtime object arguments fail closed when property descriptors, inheritance, symbols, or proxy traps make their meaning ambiguous.
+- Snapshotted the explicit projection audience and each runtime argument record once so stateful accessors or proxies cannot compose one request from conflicting states.
+- Applied unanchored route ownership to the selected reader address as well as every named section address.
+- Proved the packed reader root and browser entry points, both declaration surfaces, and a byte-identical rebuild from the shipped source.

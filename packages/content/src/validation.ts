@@ -13,18 +13,27 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import {
   inspectCanonicalRoutePath,
+  inspectCanonicalUrlFragment,
+  isAbsoluteHttpUrl,
   type Diagnostic,
 } from "@genii-foundation/publisher-schema";
-import unicodeWhitespace from "@unicode/unicode-15.1.0/Binary_Property/White_Space/regex.js";
 
-export const EXACT_SEMVER =
-  /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const EXACT_SEMVER_PATTERN =
+  /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+const MAX_EXACT_SEMVER_LENGTH = 256;
+
+export const EXACT_SEMVER = Object.freeze({
+  test(value: string): boolean {
+    return (
+      value.length <= MAX_EXACT_SEMVER_LENGTH &&
+      EXACT_SEMVER_PATTERN.test(value)
+    );
+  },
+});
 export const STABLE_ID =
   /^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
 const PACKAGE_NAME =
   /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
-const URL_FRAGMENT_ASCII_CHARACTER = /^[A-Za-z0-9._~!$&'()*+,;=:@/?-]$/;
-const HEX_DIGIT = /^[0-9A-Fa-f]$/;
 
 export function diagnostic(
   code: string,
@@ -177,94 +186,13 @@ export function validatePackageName(
   return false;
 }
 
-function hasUnpairedSurrogate(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const unit = value.charCodeAt(index);
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = value.charCodeAt(index + 1);
-      if (!(next >= 0xdc00 && next <= 0xdfff)) {
-        return true;
-      }
-      index += 1;
-    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
-      return true;
-    }
-  }
-  return false;
-}
-
 export function validateUrlFragment(
   value: unknown,
   path: string,
   diagnostics: Diagnostic[],
 ): boolean {
-  let valid =
-    typeof value === "string" &&
-    [...value].length >= 1 &&
-    [...value].length <= 2048 &&
-    !hasUnpairedSurrogate(value);
-
-  if (valid && typeof value === "string") {
-    for (let index = 0; index < value.length; index += 1) {
-      const character = String.fromCodePoint(value.codePointAt(index) ?? 0);
-      if (character.length === 2) {
-        index += 1;
-      }
-      if (character === "%") {
-        const first = value[index + 1];
-        const second = value[index + 2];
-        if (
-          first === undefined ||
-          second === undefined ||
-          !HEX_DIGIT.test(first) ||
-          !HEX_DIGIT.test(second)
-        ) {
-          valid = false;
-          break;
-        }
-        index += 2;
-        continue;
-      }
-      const codePoint = character.codePointAt(0) ?? 0;
-      if (
-        unicodeWhitespace.test(character) ||
-        codePoint <= 0x1f ||
-        codePoint === 0x7f ||
-        (codePoint <= 0x7f &&
-          !URL_FRAGMENT_ASCII_CHARACTER.test(character))
-      ) {
-        valid = false;
-        break;
-      }
-    }
-  }
-
-  if (valid && typeof value === "string") {
-    try {
-      const decoded = decodeURIComponent(value);
-      if (decoded.includes(":~:")) {
-        valid = false;
-      } else {
-        for (const character of decoded) {
-          const codePoint = character.codePointAt(0) ?? 0;
-          if (
-            unicodeWhitespace.test(character) ||
-            codePoint <= 0x1f ||
-            codePoint === 0x7f ||
-            (codePoint <= 0x7f &&
-              !URL_FRAGMENT_ASCII_CHARACTER.test(character))
-          ) {
-            valid = false;
-            break;
-          }
-        }
-      }
-    } catch {
-      valid = false;
-    }
-  }
-
-  if (valid) {
+  const inspection = inspectCanonicalUrlFragment(value);
+  if (inspection.valid) {
     return true;
   }
   diagnostics.push(
@@ -274,8 +202,11 @@ export function validateUrlFragment(
       "A URL fragment must be a non-empty portable RFC 3986 fragment without its leading hash.",
       "urlFragment",
       typeof value === "string"
-        ? { value }
-        : { actualType: value === null ? "null" : typeof value },
+        ? { issue: inspection.issue, value }
+        : {
+            actualType: value === null ? "null" : typeof value,
+            issue: inspection.issue,
+          },
     ),
   );
   return false;
@@ -319,20 +250,7 @@ export function validateRoute(
 }
 
 export function validateAbsoluteHttpUrl(value: unknown): boolean {
-  if (typeof value !== "string") {
-    return false;
-  }
-  try {
-    const url = new URL(value);
-    return (
-      (url.protocol === "http:" || url.protocol === "https:") &&
-      url.hostname.length > 0 &&
-      url.username.length === 0 &&
-      url.password.length === 0
-    );
-  } catch {
-    return false;
-  }
+  return isAbsoluteHttpUrl(value);
 }
 
 export function validateResolvedHref(

@@ -19,3 +19,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Enforced canonical manifest provenance, contained empty work asset roots, unique section address ownership, and long linked content identities.
 - Added explicit reader-location selection, resolved reader addresses, public block anchors separate from compiler IDs, and collision checks for composite block destinations.
 - Corrected the unreleased route contract to one canonical ASCII serialization across manifests, artifacts, hosts, browsers, and runtimes, with exact UTF-8 encoding, NFC, and trailing-slash semantics.
+- Replaced duplicate fragment validation with the schema-owned browser-safe exact-once inspector.
+- Bound unanchored section addresses to their own work or section route instead of an unrelated active route.
+- Shared strict absolute HTTP URL decisions with the schema runtime, rejected browser-repaired URL spellings, and rejected malformed Unicode fragments before browser serialization can collapse them.
+- Bounded exact SemVer validation and moved continuity progress-group uniqueness to the existing linear semantic pass.
+- Applied the same unanchored ownership rule to the selected reader address so forged envelopes cannot bypass named-route authority.

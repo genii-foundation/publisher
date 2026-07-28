@@ -29,10 +29,6 @@ import {
 } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import Ajv2020 from "ajv/dist/2020.js";
-import standaloneCode from "ajv/dist/standalone/index.js";
-import addFormats from "ajv-formats";
-
 const require = createRequire(import.meta.url);
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const sourceRoot = join(packageRoot, "src");
@@ -40,50 +36,6 @@ const distRoot = join(packageRoot, "dist");
 const tsconfigPath = join(packageRoot, "tsconfig.json");
 const packageManifestPath = join(packageRoot, "package.json");
 const sourceNoticePath = join(packageRoot, "SOURCE-NOTICE");
-const generatedValidatorsPath = join(
-  distRoot,
-  "generated-validators.js",
-);
-const validatorDefinitions = Object.freeze([
-  {
-    exportName: "publicationValidator",
-    fileName: "publication.schema.json",
-  },
-  {
-    exportName: "workValidator",
-    fileName: "work.schema.json",
-  },
-  {
-    exportName: "collectionValidator",
-    fileName: "collection.schema.json",
-  },
-  {
-    exportName: "contentEnvelopeValidator",
-    fileName: "content-envelope.schema.json",
-  },
-  {
-    exportName: "readerEnvelopeValidator",
-    fileName: "reader-envelope.schema.json",
-  },
-]);
-const embeddedRuntimeDefinitions = Object.freeze([
-  {
-    moduleId: "ajv/dist/runtime/ucs2length",
-    packageName: "ajv",
-  },
-  {
-    moduleId: "ajv/dist/runtime/equal",
-    packageName: "ajv",
-  },
-  {
-    moduleId: "ajv-formats/dist/formats",
-    packageName: "ajv-formats",
-  },
-  {
-    moduleId: "fast-deep-equal",
-    packageName: "fast-deep-equal",
-  },
-]);
 
 function assertSafeDistPath() {
   const resolvedPackageRoot = resolve(packageRoot);
@@ -148,158 +100,18 @@ function runCompiler(compilerPath) {
   }
 }
 
-function assertExactDevelopmentDependency(
-  packageManifest,
-  packageName,
-  installedManifest,
-) {
-  const expectedVersion = packageManifest.devDependencies?.[packageName];
-  if (typeof expectedVersion !== "string") {
-    throw new Error(
-      `schemas/package.json must pin ${packageName} as a development dependency.`,
-    );
-  }
-  if (installedManifest.version !== expectedVersion) {
-    throw new Error(
-      `Installed ${packageName} ${installedManifest.version} does not match the exact package pin ${expectedVersion}.`,
-    );
-  }
-}
-
-function sanitizeEmbeddedCommonJs(source) {
-  return source
-    .replace(/^.*\.code = ['"]require\([^;\n]+;?\r?\n/gmu, "")
-    .replace(/^\/\/# sourceMappingURL=.*\r?\n?/gmu, "")
-    .replaceAll("require(", "loadModule(")
-    .trimEnd();
-}
-
-function indent(text, spaces) {
-  const prefix = " ".repeat(spaces);
-  return text
-    .split("\n")
-    .map((line) => `${prefix}${line}`)
-    .join("\n");
-}
-
-function licenseComment(packageName, licenseText) {
-  const safeLicense = licenseText.replaceAll("*/", "* /").trimEnd();
-  return [
-    "/*",
-    `Bundled validator runtime from ${packageName}, used under its terms below.`,
-    safeLicense,
-    "*/",
-  ].join("\n");
-}
-
-async function createStandaloneValidators(noticeComment) {
-  const ajv = new Ajv2020({
-    allErrors: true,
-    coerceTypes: false,
-    code: {
-      esm: true,
-      source: true,
-    },
-    removeAdditional: false,
-    strict: true,
-    useDefaults: false,
-    validateFormats: true,
-  });
-  addFormats(ajv);
-
-  for (const definition of validatorDefinitions) {
-    const schema = JSON.parse(
-      await readFile(join(packageRoot, definition.fileName), "utf8"),
-    );
-    ajv.addSchema(schema, definition.exportName);
-  }
-
-  const validatorExports = Object.fromEntries(
-    validatorDefinitions.map(({ exportName }) => [
-      exportName,
-      exportName,
-    ]),
-  );
-  const validatorSource = standaloneCode(
-    ajv,
-    validatorExports,
-  ).replaceAll("require(", "loadEmbeddedModule(");
-
-  const embeddedModules = await Promise.all(
-    embeddedRuntimeDefinitions.map(async (definition) => ({
-      ...definition,
-      source: sanitizeEmbeddedCommonJs(
-        await readFile(
-          require.resolve(definition.moduleId),
-          "utf8",
-        ),
-      ),
-    })),
-  );
-  const packageLicenses = new Map();
-  for (const definition of embeddedRuntimeDefinitions) {
-    if (packageLicenses.has(definition.packageName)) {
-      continue;
-    }
-    const manifestPath = require.resolve(
-      `${definition.packageName}/package.json`,
-    );
-    packageLicenses.set(
-      definition.packageName,
-      await readFile(join(dirname(manifestPath), "LICENSE"), "utf8"),
-    );
-  }
-
-  const licenseComments = [...packageLicenses]
-    .map(([packageName, license]) =>
-      licenseComment(packageName, license),
-    )
-    .join("\n\n");
-  const moduleFactories = embeddedModules
-    .map(
-      ({ moduleId, source }) =>
-        [
-          `  ${JSON.stringify(moduleId)}: (module, exports, loadModule) => {`,
-          indent(source, 4),
-          "  },",
-        ].join("\n"),
-    )
-    .join("\n");
-  const embeddedLoader = [
-    "const embeddedModuleFactories = Object.freeze({",
-    moduleFactories,
-    "});",
-    "const embeddedModuleCache = new Map();",
-    "function loadEmbeddedModule(moduleId) {",
-    "  const cached = embeddedModuleCache.get(moduleId);",
-    "  if (cached !== undefined) {",
-    "    return cached.exports;",
-    "  }",
-    "  const factory = embeddedModuleFactories[moduleId];",
-    "  if (factory === undefined) {",
-    '    throw new Error(`Unknown embedded validator module: ${moduleId}`);',
-    "  }",
-    "  const module = { exports: {} };",
-    "  embeddedModuleCache.set(moduleId, module);",
-    "  factory(module, module.exports, loadEmbeddedModule);",
-    "  return module.exports;",
-    "}",
-  ].join("\n");
-
-  return [
-    noticeComment.trimEnd(),
-    licenseComments,
-    embeddedLoader,
-    validatorSource.trimEnd(),
-    "",
-  ].join("\n\n");
-}
-
 const [packageManifestText, sourceNotice] = await Promise.all([
   readFile(packageManifestPath, "utf8"),
   readFile(sourceNoticePath, "utf8"),
 ]);
 const packageManifest = JSON.parse(packageManifestText);
+const expectedTypeScriptVersion = packageManifest.devDependencies?.typescript;
+
+if (typeof expectedTypeScriptVersion !== "string") {
+  throw new Error(
+    "packages/reader/package.json must pin a TypeScript development dependency.",
+  );
+}
 
 const installedTypeScriptManifestPath = require.resolve(
   "typescript/package.json",
@@ -307,22 +119,10 @@ const installedTypeScriptManifestPath = require.resolve(
 const installedTypeScriptManifest = JSON.parse(
   await readFile(installedTypeScriptManifestPath, "utf8"),
 );
-assertExactDevelopmentDependency(
-  packageManifest,
-  "typescript",
-  installedTypeScriptManifest,
-);
-for (const packageName of ["ajv", "ajv-formats"]) {
-  const installedManifestPath = require.resolve(
-    `${packageName}/package.json`,
-  );
-  const installedManifest = JSON.parse(
-    await readFile(installedManifestPath, "utf8"),
-  );
-  assertExactDevelopmentDependency(
-    packageManifest,
-    packageName,
-    installedManifest,
+
+if (installedTypeScriptManifest.version !== expectedTypeScriptVersion) {
+  throw new Error(
+    `Installed TypeScript ${installedTypeScriptManifest.version} does not match the exact package pin ${expectedTypeScriptVersion}.`,
   );
 }
 
@@ -339,19 +139,23 @@ const noticeComment = `/*\n${noticeBody}*/\n`;
 assertSafeDistPath();
 await rm(distRoot, { force: true, recursive: true });
 runCompiler(compilerPath);
-await writeFile(
-  generatedValidatorsPath,
-  await createStandaloneValidators(noticeComment),
-  "utf8",
+
+const builtTypes = await import(
+  new URL(
+    `../dist/types.js?version=${encodeURIComponent(packageManifest.version)}`,
+    import.meta.url,
+  )
 );
+if (builtTypes.READER_PROJECTOR_VERSION !== packageManifest.version) {
+  throw new Error(
+    `Reader projector constant ${builtTypes.READER_PROJECTOR_VERSION ?? "(missing)"} does not match package version ${packageManifest.version}.`,
+  );
+}
 
 const sourceFiles = (await listFiles(sourceRoot)).filter(
   (path) => path.endsWith(".ts") && !path.endsWith(".d.ts"),
 );
-const expectedOutputs = new Set([
-  "SOURCE-NOTICE",
-  "generated-validators.js",
-]);
+const expectedOutputs = new Set(["SOURCE-NOTICE"]);
 
 for (const sourceFile of sourceFiles) {
   const sourcePath = toPackagePath(relative(sourceRoot, sourceFile));

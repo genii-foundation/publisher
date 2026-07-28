@@ -8,5 +8,6 @@ These records define the accepted foundation of GENII Publisher.
 4. [ADR 0004: License, attribution, and source availability](./0004-license-attribution-and-source-availability.md)
 5. [ADR 0005: Content envelope and compiler boundary](./0005-content-envelope-and-compiler-boundary.md)
 6. [ADR 0006: Canonical public route serialization](./0006-canonical-public-route-serialization.md)
+7. [ADR 0007: Reader projection and runtime boundary](./0007-reader-projection-and-runtime-boundary.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

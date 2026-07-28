@@ -16,9 +16,9 @@
     "schemas"
   ],
   "scripts": {
-    "build": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs",
-    "test": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node --test",
-    "validate": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node --test"
+    "build": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs",
+    "test": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node --test --test-concurrency=1",
+    "validate": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node --test --test-concurrency=1"
   },
   "devDependencies": {
     "ajv": "8.20.0",

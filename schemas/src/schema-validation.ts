@@ -16,6 +16,7 @@ import {
   collectionValidator,
   contentEnvelopeValidator,
   publicationValidator,
+  readerEnvelopeValidator,
   workValidator,
 } from "./generated-validators.js";
 import type {
@@ -32,6 +33,7 @@ import type {
   WorkManifest,
 } from "./types.js";
 import type { PublicationContentEnvelope } from "./content-types.js";
+import type { PublicationReaderEnvelope } from "./reader-types.js";
 
 export const SHAPE_DIAGNOSTIC_CODES = Object.freeze({
   additionalProperty: "schema.additional_property",
@@ -381,6 +383,12 @@ export function validateContentEnvelopeShape(
   input: unknown,
 ): ValidationResult<PublicationContentEnvelope> {
   return validateShape(contentEnvelopeValidator, input);
+}
+
+export function validateReaderEnvelopeShape(
+  input: unknown,
+): ValidationResult<PublicationReaderEnvelope> {
+  return validateShape(readerEnvelopeValidator, input);
 }
 
 export function validateManifestShape<K extends ManifestKind>(
