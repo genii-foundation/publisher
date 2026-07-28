@@ -571,13 +571,19 @@ async function startHost(
 ) {
   const port = await availablePort();
   const origin = `http://127.0.0.1:${port}`;
+  const nextExecutable = join(
+    hostRoot,
+    "node_modules",
+    "next",
+    "dist",
+    "bin",
+    "next",
+  );
   const child = spawn(
     process.execPath,
     [
-      npmExecPath,
-      "run",
+      nextExecutable,
       "start",
-      "--",
       "--hostname",
       "127.0.0.1",
       "--port",
@@ -631,7 +637,9 @@ async function startHost(
 }
 
 async function stopHost(child) {
-  if (child.exitCode !== null) {
+  const hasExited = () =>
+    child.exitCode !== null || child.signalCode !== null;
+  if (child.pid === undefined || hasExited()) {
     return;
   }
   child.kill("SIGTERM");
@@ -641,8 +649,19 @@ async function stopHost(child) {
     }),
     wait(5000),
   ]);
-  if (child.exitCode === null) {
+  if (!hasExited()) {
     child.kill("SIGKILL");
+    await Promise.race([
+      new Promise((resolvePromise) => {
+        child.once("exit", resolvePromise);
+      }),
+      wait(5000),
+    ]);
+  }
+  if (!hasExited()) {
+    throw new Error(
+      "Packed Next host did not terminate after SIGKILL.",
+    );
   }
 }
 
