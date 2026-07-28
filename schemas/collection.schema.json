@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/collection.schema.json",
+  "title": "GENII Publisher collection manifest",
+  "description": "Authoritative metadata and ordered work references for one collection.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "workIds"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/collection.schema.json"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/schemaVersion"
+    },
+    "id": {
+      "$ref": "#/$defs/stableId"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "publicationState": {
+      "enum": [
+        "draft",
+        "published",
+        "unlisted",
+        "archived"
+      ]
+    },
+    "route": {
+      "$ref": "#/$defs/routePath"
+    },
+    "workIds": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/stableId"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+    },
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "routePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^/"
+    }
+  }
+}

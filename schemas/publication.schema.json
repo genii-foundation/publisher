@@ -1,0 +1,526 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/publication.schema.json",
+  "title": "GENII Publisher publication manifest",
+  "description": "Framework-neutral configuration and ordered source references for one GENII Publisher publication.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "publication",
+    "engine",
+    "layout",
+    "works",
+    "routes",
+    "boundaries",
+    "attribution"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/publication.schema.json"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/schemaVersion"
+    },
+    "publication": {
+      "$ref": "#/$defs/publicationIdentity"
+    },
+    "engine": {
+      "$ref": "#/$defs/engineCompatibility"
+    },
+    "layout": {
+      "$ref": "#/$defs/layout"
+    },
+    "works": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/workReference"
+      }
+    },
+    "collections": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/collectionReference"
+      }
+    },
+    "theme": {
+      "$ref": "#/$defs/packageReference"
+    },
+    "extensions": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/extension"
+      }
+    },
+    "audio": {
+      "$ref": "#/$defs/audio"
+    },
+    "sync": {
+      "$ref": "#/$defs/sync"
+    },
+    "routes": {
+      "$ref": "#/$defs/routes"
+    },
+    "continuity": {
+      "$ref": "#/$defs/continuity"
+    },
+    "boundaries": {
+      "$ref": "#/$defs/boundaries"
+    },
+    "attribution": {
+      "$ref": "#/$defs/attribution"
+    }
+  },
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*\\.[0-9]+$",
+      "description": "Version of the source manifest contract."
+    },
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//).+$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "routePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^/"
+    },
+    "packageName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 214,
+      "pattern": "^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$"
+    },
+    "jsonObject": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "publisherIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "publicationIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "language",
+        "publisher"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "language": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+        },
+        "canonicalUrl": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        },
+        "publisher": {
+          "$ref": "#/$defs/publisherIdentity"
+        },
+        "metadata": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "engineCompatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compatibility"
+      ],
+      "properties": {
+        "compatibility": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "SemVer range accepted by the author repository."
+        }
+      }
+    },
+    "catalogReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "manifest": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    },
+    "workReference": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/catalogReference"
+        }
+      ],
+      "description": "Ordered work reference. Manifest overrides are repository relative."
+    },
+    "collectionReference": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/catalogReference"
+        }
+      ],
+      "description": "Ordered collection reference. Manifest overrides are repository relative."
+    },
+    "canonicalLayout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "const": "canonical"
+        }
+      }
+    },
+    "workLayoutOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "manifestTemplate": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//).*\\{workId\\}.*$"
+        }
+      }
+    },
+    "collectionLayoutOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "manifestTemplate": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//).*\\{collectionId\\}.*$"
+        }
+      }
+    },
+    "layoutOverrides": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "works": {
+          "$ref": "#/$defs/workLayoutOverride"
+        },
+        "collections": {
+          "$ref": "#/$defs/collectionLayoutOverride"
+        },
+        "assets": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "continuity": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    },
+    "declaredLayout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "overrides"
+      ],
+      "properties": {
+        "mode": {
+          "const": "declared"
+        },
+        "overrides": {
+          "$ref": "#/$defs/layoutOverrides"
+        }
+      }
+    },
+    "layout": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/canonicalLayout"
+        },
+        {
+          "$ref": "#/$defs/declaredLayout"
+        }
+      ]
+    },
+    "packageReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package"
+      ],
+      "properties": {
+        "package": {
+          "$ref": "#/$defs/packageName"
+        },
+        "config": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "package"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "package": {
+          "$ref": "#/$defs/packageName"
+        },
+        "config": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter"
+      ],
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/packageReference"
+        },
+        "catalog": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    },
+    "sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "consent",
+        "localFallback",
+        "capabilities"
+      ],
+      "properties": {
+        "provider": {
+          "$ref": "#/$defs/packageReference"
+        },
+        "consent": {
+          "const": "opt-in"
+        },
+        "localFallback": {
+          "const": true
+        },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "routes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "home",
+        "work"
+      ],
+      "properties": {
+        "home": {
+          "$ref": "#/$defs/routePath"
+        },
+        "work": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^/.*\\{workId\\}.*$"
+        },
+        "collection": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^/.*\\{collectionId\\}.*$"
+        },
+        "updates": {
+          "$ref": "#/$defs/routePath"
+        }
+      }
+    },
+    "redirectTarget": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/routePath"
+        },
+        {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        }
+      ]
+    },
+    "redirect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "status"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/routePath"
+        },
+        "to": {
+          "$ref": "#/$defs/redirectTarget"
+        },
+        "status": {
+          "type": "integer",
+          "enum": [
+            301,
+            302,
+            307,
+            308
+          ]
+        }
+      }
+    },
+    "continuity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "redirects"
+      ],
+      "properties": {
+        "redirects": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/redirect"
+          }
+        }
+      }
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceRoots",
+        "outputRoots"
+      ],
+      "properties": {
+        "sourceRoots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          }
+        },
+        "outputRoots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          }
+        }
+      }
+    },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "placement",
+        "copyright",
+        "text",
+        "url",
+        "sourceCodeUrl"
+      ],
+      "properties": {
+        "placement": {
+          "const": "footer"
+        },
+        "copyright": {
+          "const": "Copyright 2026 GENII Foundation"
+        },
+        "text": {
+          "const": "Published with GENII Publisher"
+        },
+        "url": {
+          "const": "https://publisher.genii.foundation"
+        },
+        "sourceCodeUrl": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://"
+        }
+      }
+    }
+  }
+}

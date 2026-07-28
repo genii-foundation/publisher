@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/work.schema.json",
+  "title": "GENII Publisher work manifest",
+  "description": "Authoritative metadata and source locations for one work.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "title",
+    "language",
+    "publicationState",
+    "manuscript"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/work.schema.json"
+    },
+    "schemaVersion": {
+      "$ref": "#/$defs/schemaVersion"
+    },
+    "id": {
+      "$ref": "#/$defs/stableId"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "subtitle": {
+      "type": "string",
+      "maxLength": 512
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+    },
+    "publicationState": {
+      "enum": [
+        "draft",
+        "published",
+        "unlisted",
+        "archived"
+      ]
+    },
+    "publishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "route": {
+      "$ref": "#/$defs/routePath"
+    },
+    "manuscript": {
+      "$ref": "#/$defs/sourcePath"
+    },
+    "assets": {
+      "$ref": "#/$defs/sourcePath"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+    },
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//).+$",
+      "not": {
+        "enum": [
+          ".",
+          ".."
+        ]
+      }
+    },
+    "repositoryRelativePath": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "relativeTo"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "relativeTo": {
+          "const": "repository"
+        }
+      }
+    },
+    "sourcePath": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/relativePath"
+        },
+        {
+          "$ref": "#/$defs/repositoryRelativePath"
+        }
+      ],
+      "description": "A string is relative to the work manifest directory. Repository relative paths require an explicit tagged object."
+    },
+    "routePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^/"
+    }
+  }
+}
