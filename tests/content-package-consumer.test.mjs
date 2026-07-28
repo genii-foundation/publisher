@@ -808,6 +808,13 @@ test("packed content freezes its runtime and proves production and development c
       assert.equal(JSON.parse(serialized).publicationId, "sample-observatory");
       assert.equal(artifact.text, serialized);
       assert.equal(artifact.envelope.buildId, validated.buildId);
+      assert.deepEqual(validated.works[0].sections[0].readerAddress, {
+        path: work.route,
+      });
+      assert.notEqual(
+        validated.works[0].sections[0].blocks[0].anchor,
+        validated.works[0].sections[0].blocks[0].id,
+      );
       assert.match(artifact.hash, /^sha256:[a-f0-9]{64}$/);
       console.log(artifact.hash);
     `;
@@ -964,6 +971,7 @@ test("packed content freezes its runtime and proves production and development c
         serializePublicationContentEnvelope,
         validatePublicationContentEnvelope,
         type CompilePublicationContentInput,
+        type SectionReaderLocationInput,
       } from "@genii-foundation/publisher-content";
       import type {
         PublicationContentEnvelope,
@@ -972,13 +980,14 @@ test("packed content freezes its runtime and proves production and development c
 
       declare const input: CompilePublicationContentInput;
       declare const envelope: PublicationContentEnvelope;
+      const readerLocation: SectionReaderLocationInput = { kind: "work" };
       const compiled: ValidationResult<PublicationContentEnvelope> =
         compilePublicationContent(input);
       const validated: ValidationResult<PublicationContentEnvelope> =
         validatePublicationContentEnvelope(envelope);
       const serialized: string = serializePublicationContentEnvelope(envelope);
       const artifact = createPublicationContentArtifact(envelope);
-      void [compiled, validated, serialized, artifact];
+      void [compiled, validated, serialized, artifact, readerLocation];
     `;
     await Promise.all([
       writeFile(join(productionRoot, "consumer.ts"), typeConsumer, "utf8"),

@@ -132,6 +132,17 @@ test("the neutral Markdown adapter preserves CommonMark block boundaries", () =>
     ["heading", "paragraph", "code"],
   );
   assert.equal(
+    new Set(
+      result.value.work.sections[0].blocks.map(({ anchor }) => anchor),
+    ).size,
+    3,
+  );
+  assert.ok(
+    result.value.work.sections[0].blocks.every(
+      ({ anchor, id }) => anchor.startsWith("b-") && anchor !== id,
+    ),
+  );
+  assert.equal(
     result.value.work.sections[0].blocks[2].markdown,
     "```text\nfirst\n\nsecond\n```",
   );
@@ -144,6 +155,9 @@ test("the neutral Markdown adapter preserves CommonMark block boundaries", () =>
   });
   assert.equal(result.value.work.sections[0].role, "section");
   assert.equal(result.value.work.sections[0].navigable, true);
+  assert.deepEqual(result.value.work.sections[0].readerLocation, {
+    kind: "work",
+  });
 });
 
 test("the Markdown adapter rejects malformed runtime input without throwing", () => {
@@ -295,6 +309,42 @@ test("route anchors create structured non-active addresses", () => {
       route: "/reader/",
       routeAnchor: "Field Note",
     },
+    {
+      workId: "field-note",
+      sectionId: "field-note-root",
+      title: "Field Note",
+      sourcePath: "publication/works/field-note/manuscript.md",
+      markdown: "# Field Note",
+      route: "/reader/",
+      routeAnchor: "Section",
+    },
+    {
+      workId: "field-note",
+      sectionId: "field-note-root",
+      title: "Field Note",
+      sourcePath: "publication/works/field-note/manuscript.md",
+      markdown: "# Field Note",
+      route: "/reader/",
+      routeAnchor: "%61",
+    },
+    {
+      workId: "field-note",
+      sectionId: "field-note-root",
+      title: "Field Note",
+      sourcePath: "publication/works/field-note/manuscript.md",
+      markdown: "# Field Note",
+      route: "/reader/",
+      routeAnchor: "section:~:text=phrase",
+    },
+    {
+      workId: "field-note",
+      sectionId: "field-note-root",
+      title: "Field Note",
+      sourcePath: "publication/works/field-note/manuscript.md",
+      markdown: "# Field Note",
+      route: "/reader/",
+      routeAnchor: "section%3A~%3Atext=phrase",
+    },
   ]) {
     const invalid = compileMarkdownWork(input);
     assert.equal(invalid.valid, false);
@@ -316,6 +366,11 @@ test("resolved internal hrefs may carry one portable URL fragment", () => {
     "/reader/#",
     "/reader/#Field Note",
     "/reader/#field-note-root#second",
+    "/reader/#%FF",
+    "/reader/#chapter%20one",
+    "/reader/#chapter%23one",
+    "/reader/#section:~:text=phrase",
+    "/reader/#section%3A~%3Atext=phrase",
   ]) {
     assert.equal(validateResolvedHref(href, "/href", []), false);
   }

@@ -28,7 +28,7 @@ The schemas and pure runtime prove lexical path safety only. Portable repository
 
 A string that passes these checks is not proof that the referenced filesystem object remains inside the publication root. Every filesystem loader must resolve real paths against an approved root and reject escapes caused by symbolic links, case folding, Unicode normalization, mount behavior, or a source change between validation and access. A loader must use filesystem-aware containment checks instead of trusting string prefixes.
 
-Compiled `sourceAuthority` always records the canonical root manifest path as `publication.json`, along with declared source roots, output roots, and the shared asset root. Every declared work `assetsPath` must remain inside a source root even when it is empty. Every exact section content address, defined by its path and optional anchor, has one section owner across the publication.
+Compiled `sourceAuthority` always records the canonical root manifest path as `publication.json`, along with declared source roots, output roots, and the shared asset root. Every declared work `assetsPath` must remain inside a source root even when it is empty. Every browser-equivalent section content address, defined by its path and decoded optional anchor, has one section owner across the publication. Every section also records an explicit `readerAddress`, and every block records a portable reader `anchor` separate from its compiler projection ID. That anchor has a public destination only when the section has a reader address.
 
 Theme, extension, audio, and sync package references are declarative inputs. The pure schema runtime does not inspect installed packages or decide whether a package supports the active engine and protocol versions. Later engine orchestration owns package resolution, availability, compatibility, and lockfile enforcement. Compiled content records the exact resolved extension version and any typed, source-provenanced extension payloads so downstream consumers never infer package identity from a manifest range.
 
@@ -43,7 +43,7 @@ The raw schemas are also exported:
 
 ## Release safety
 
-The source and content schemas currently accept contract version `1.0`. That contract is frozen: incompatible meaning changes require a new schema version and an explicit migration. The JavaScript package remains prerelease software, so exported convenience APIs may still evolve before package 1.0 without silently changing what schema version `1.0` means.
+The source and content schemas currently accept contract version `1.0`. The initial contract remains unpublished while its complete compiler and reader boundary is assembled. The first public package release freezes that contract. After publication, incompatible meaning changes require a new schema version and an explicit migration. The JavaScript package remains prerelease software, so exported convenience APIs may still evolve before package 1.0 without silently changing a published schema version.
 
 Prereleases must publish with an explicit `--tag next`. Stable versions may rely on npm's default `latest` tag or pass `--tag latest` explicitly. The source package checks that rule during `prepublishOnly`, but lifecycle scripts are only defense in depth. Publishing with scripts disabled or publishing a prebuilt tarball can bypass them. The trusted release workflow must inspect the version and requested tag independently, publish from this source directory with lifecycle scripts enabled, and reject any other path.
 

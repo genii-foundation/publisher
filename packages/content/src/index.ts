@@ -51,6 +51,7 @@ export type {
   ResolvedContentLinkLocationInput,
   ResolvedContentLinkInput,
   SectionContentInput,
+  SectionReaderLocationInput,
   WorkContentInput,
 } from "./types.js";
 export type {

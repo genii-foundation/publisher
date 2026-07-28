@@ -238,6 +238,31 @@ export function validateUrlFragment(
     }
   }
 
+  if (valid && typeof value === "string") {
+    try {
+      const decoded = decodeURIComponent(value);
+      if (decoded.includes(":~:")) {
+        valid = false;
+      } else {
+        for (const character of decoded) {
+          const codePoint = character.codePointAt(0) ?? 0;
+          if (
+            unicodeWhitespace.test(character) ||
+            codePoint <= 0x1f ||
+            codePoint === 0x7f ||
+            (codePoint <= 0x7f &&
+              !URL_FRAGMENT_ASCII_CHARACTER.test(character))
+          ) {
+            valid = false;
+            break;
+          }
+        }
+      }
+    } catch {
+      valid = false;
+    }
+  }
+
   if (valid) {
     return true;
   }

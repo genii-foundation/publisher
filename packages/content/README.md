@@ -8,7 +8,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 
 ## Current API
 
-- `compileMarkdownWork` creates one neutral CommonMark work input from an injected Markdown string and explicit durable work and root-section IDs.
+- `compileMarkdownWork` creates one neutral CommonMark work input from an injected Markdown string and explicit durable work and root-section IDs. It emits separate block projection IDs and public anchors plus an explicit work or named-route reader location.
 - `compilePublicationContent` accepts one complete in-memory publication input and returns a validated `PublicationContentEnvelope`.
 - `validatePublicationContentEnvelope` performs JSON Schema and semantic validation. It recomputes hierarchy, navigation, routes, redirects, links, assets, extension payload ownership, statistics, content hashes, and build identity from the data retained in the envelope.
 - `serializePublicationContentEnvelope` validates an envelope and emits canonical JSON followed by one LF.
@@ -41,7 +41,11 @@ Publication extensions resolve in manifest order. The `extensions` input must co
 
 The envelope copies the manifest's `sourceRoots` and `outputRoots` into `sourceAuthority`, records the canonical `publicationManifestPath` as `publication.json`, and records the resolved shared asset root. Every injected source except that root publication manifest must remain inside a declared source root. Source and output roots must not overlap, the shared asset root must be inside a source root, and the artifact output root must be declared. A work's declared `assetsPath` must remain inside a source root even when the directory is empty and no asset record is emitted.
 
-Asset `href` values are plain concrete origin-relative route paths. They cannot contain a query or fragment and cannot collide with another asset, an active route, or a redirect source. Section reader locations use structured `{ path, anchor? }` addresses. Each exact path and optional anchor tuple has one section owner across the publication. Every non-active address, including one with an anchor, must use the path of an active server route. Resolved link hrefs may use one validated fragment or an absolute credential-free HTTP URL.
+Asset `href` values are plain concrete origin-relative route paths. They cannot contain a query or fragment and cannot collide with another asset, an active route, or a redirect source. Section reader locations use structured `{ path, anchor? }` addresses. Each exact path and browser-decoded optional anchor tuple has one section owner across the publication. Fragment validation rejects the browser's `:~:` fragment-directive delimiter, including percent-encoded forms. Every non-active address, including one with an anchor, must use the path of an active server route. Resolved link hrefs may use one validated fragment or an absolute credential-free HTTP URL.
+
+Adapter sections declare `readerLocation` as `work`, `route`, or `none`. The compiler resolves it to an explicit `readerAddress`; it never chooses from route-map order. Navigable sections cannot select `none`, and only one section may own an unfragmented work route. Blocks carry a reader `anchor` separate from their compiler `id`. The anchor becomes public only when its section has a reader address. The compiler qualifies block anchors beneath anchored section locations and rejects publication-wide section and block address collisions.
+
+Block content hashes intentionally exclude the public anchor. A pure anchor repair preserves content relocation evidence, while the section and every parent build identity still change because section identity includes the anchor.
 
 ## Deterministic runtime
 

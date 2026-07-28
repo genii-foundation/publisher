@@ -159,6 +159,10 @@ function addCompiledSection(envelope) {
       },
     },
     activeRouteNames: ["canonical"],
+    readerAddress: {
+      path: "/reader/",
+      anchor: "first-reading",
+    },
     continuity: {
       id: "first-reading",
       legacyIds: ["opening-reading"],
@@ -321,6 +325,7 @@ test("section hierarchy, navigation, and continuity fields are required", () => 
   for (const field of [
     "role",
     "activeRouteNames",
+    "readerAddress",
     "continuity",
     "navigable",
   ]) {
@@ -333,6 +338,59 @@ test("section hierarchy, navigation, and continuity fields are required", () => 
       path: `/works/0/sections/0/${field}`,
     });
   }
+});
+
+test("reader and block anchors use portable public identities", () => {
+  const envelope = createMinimalEnvelope();
+  const section = addCompiledSection(envelope);
+  section.blocks = [
+    {
+      id: "opening-block",
+      anchor: "p-h0123456789abcdef",
+      kind: "paragraph",
+      markdown: "First",
+      text: "First",
+      provenance: createSourceSpan(),
+      wordCount: 1,
+      contentHash: DIGEST,
+    },
+  ];
+
+  let result = validateContentEnvelopeShape(envelope);
+  assert.equal(result.valid, true, JSON.stringify(result.diagnostics, null, 2));
+
+  delete section.blocks[0].anchor;
+  assertInvalid(envelope, {
+    code: "schema.required",
+    path: "/works/0/sections/0/blocks/0/anchor",
+  });
+
+  const percentEncoded = createMinimalEnvelope();
+  addCompiledSection(percentEncoded).readerAddress.anchor =
+    "chapter%2Fpart";
+  assertInvalid(percentEncoded, {
+    code: "schema.pattern",
+    path: "/works/0/sections/0/readerAddress/anchor",
+  });
+
+  const uppercaseBlock = createMinimalEnvelope();
+  const uppercaseSection = addCompiledSection(uppercaseBlock);
+  uppercaseSection.blocks = [
+    {
+      id: "opening-block",
+      anchor: "UPPERCASE",
+      kind: "paragraph",
+      markdown: "First",
+      text: "First",
+      provenance: createSourceSpan(),
+      wordCount: 1,
+      contentHash: DIGEST,
+    },
+  ];
+  assertInvalid(uppercaseBlock, {
+    code: "schema.pattern",
+    path: "/works/0/sections/0/blocks/0/anchor",
+  });
 });
 
 test("section continuity rejects empty progress groups", () => {
