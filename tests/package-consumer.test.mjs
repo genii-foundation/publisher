@@ -106,6 +106,37 @@ function toPackagePath(path) {
   return path.split(sep).join("/");
 }
 
+function collectRuntimeLockPackages(workspaceLock, directDependencies) {
+  const packageEntries = {};
+  const pending = Object.keys(directDependencies);
+  const visited = new Set();
+
+  while (pending.length > 0) {
+    const packageName = pending.pop();
+    if (packageName === undefined || visited.has(packageName)) {
+      continue;
+    }
+    visited.add(packageName);
+
+    const packagePath = `node_modules/${packageName}`;
+    const lockedPackage = workspaceLock.packages[packagePath];
+    assert.ok(lockedPackage, `Missing locked runtime package ${packageName}.`);
+    const portableLock = structuredClone(lockedPackage);
+    delete portableLock.dev;
+    delete portableLock.devOptional;
+    packageEntries[packagePath] = portableLock;
+
+    for (const dependencyName of Object.keys({
+      ...lockedPackage.dependencies,
+      ...lockedPackage.optionalDependencies,
+    })) {
+      pending.push(dependencyName);
+    }
+  }
+
+  return packageEntries;
+}
+
 async function listFiles(root) {
   const files = [];
 
@@ -146,10 +177,14 @@ async function removeOwnedTempDirectory(path) {
 }
 
 test("packed schema tarball installs and works in an offline consumer", async () => {
-  const [workspaceManifest, schemaPackageManifest] = await Promise.all([
-    readFile(join(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
-    readFile(join(schemaPackageRoot, "package.json"), "utf8").then(JSON.parse),
-  ]);
+  const [workspaceManifest, schemaPackageManifest, workspaceLock] =
+    await Promise.all([
+      readFile(join(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
+      readFile(join(schemaPackageRoot, "package.json"), "utf8").then(JSON.parse),
+      readFile(join(repositoryRoot, "package-lock.json"), "utf8").then(
+        JSON.parse,
+      ),
+    ]);
   assert.equal(
     satisfies(process.versions.node, workspaceManifest.engines.node),
     true,
@@ -273,17 +308,55 @@ test("packed schema tarball installs and works in an offline consumer", async ()
     ].sort();
     assert.deepEqual(packedPaths, expectedPackedPaths);
 
+    const tarballSpecifier = `file:${toPackagePath(
+      relative(consumerDirectory, tarballPath),
+    )}`;
     const consumerManifest = {
       name: "genii-publisher-schema-consumer-proof",
       version: "0.0.0",
       private: true,
       type: "module",
+      dependencies: {
+        [schemaPackageManifest.name]: tarballSpecifier,
+      },
     };
-    await writeFile(
-      join(consumerDirectory, "package.json"),
-      `${JSON.stringify(consumerManifest, null, 2)}\n`,
-      "utf8",
-    );
+    const consumerLock = {
+      name: consumerManifest.name,
+      version: consumerManifest.version,
+      lockfileVersion: workspaceLock.lockfileVersion,
+      requires: true,
+      packages: {
+        "": {
+          name: consumerManifest.name,
+          version: consumerManifest.version,
+          dependencies: consumerManifest.dependencies,
+        },
+        [`node_modules/${schemaPackageManifest.name}`]: {
+          version: schemaPackageManifest.version,
+          resolved: tarballSpecifier,
+          integrity: packResult.integrity,
+          license: schemaPackageManifest.license,
+          dependencies: schemaPackageManifest.dependencies,
+          engines: schemaPackageManifest.engines,
+        },
+        ...collectRuntimeLockPackages(
+          workspaceLock,
+          schemaPackageManifest.dependencies,
+        ),
+      },
+    };
+    await Promise.all([
+      writeFile(
+        join(consumerDirectory, "package.json"),
+        `${JSON.stringify(consumerManifest, null, 2)}\n`,
+        "utf8",
+      ),
+      writeFile(
+        join(consumerDirectory, "package-lock.json"),
+        `${JSON.stringify(consumerLock, null, 2)}\n`,
+        "utf8",
+      ),
+    ]);
 
     const npmCache = runNpm(["config", "get", "cache"], {
       cwd: temporaryRoot,
@@ -337,15 +410,14 @@ test("packed schema tarball installs and works in an offline consumer", async ()
 
     runNpm(
       [
-        "install",
+        "ci",
         "--offline",
         "--ignore-scripts",
+        "--omit=dev",
         "--no-audit",
         "--no-fund",
-        "--package-lock=false",
         "--cache",
         npmCache,
-        tarballPath,
       ],
       {
         cwd: consumerDirectory,
