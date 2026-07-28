@@ -42,6 +42,11 @@ const packageDefinitions = [
     root: "packages/reader/",
     manifestPath: "packages/reader/package.json",
   },
+  {
+    label: "next",
+    root: "packages/next/",
+    manifestPath: "packages/next/package.json",
+  },
 ];
 
 const packages = await Promise.all(
@@ -68,12 +73,18 @@ const packages = await Promise.all(
   }),
 );
 
-const [workspacePackage, schemaPackage, contentPackage, readerPackage] =
-  packages;
+const [
+  workspacePackage,
+  schemaPackage,
+  contentPackage,
+  readerPackage,
+  nextPackage,
+] = packages;
 assert.ok(workspacePackage);
 assert.ok(schemaPackage);
 assert.ok(contentPackage);
 assert.ok(readerPackage);
+assert.ok(nextPackage);
 
 const sourceNoticeBody = workspacePackage.sourceNotice
   .split("\n")
@@ -102,6 +113,7 @@ test("workspace and public package metadata identify CPAL 1.0", () => {
     schemaPackage,
     contentPackage,
     readerPackage,
+    nextPackage,
   ]) {
     for (const artifact of requiredPackageArtifacts) {
       assert.ok(
@@ -239,4 +251,73 @@ test("content package includes notices for its third-party dependencies", async 
     );
     assert.ok(thirdPartyNotices.includes(version), version);
   }
+});
+
+test("reader package includes its CommonMark parser notice", async () => {
+  assert.ok(
+    readerPackage.manifest.files.includes("THIRD_PARTY_NOTICES.md"),
+  );
+  assert.ok(readerPackage.manifest.files.includes("third-party-licenses"));
+
+  const [thirdPartyNotices, parserLicense] = await Promise.all([
+    read("packages/reader/THIRD_PARTY_NOTICES.md"),
+    read(
+      "packages/reader/third-party-licenses/mdast-util-from-markdown-LICENSE-MIT.txt",
+    ),
+  ]);
+  assert.match(thirdPartyNotices, /^# Third-party notices$/m);
+  assert.match(thirdPartyNotices, /not GENII Publisher Original Code/);
+  assert.match(
+    thirdPartyNotices,
+    /`mdast-util-from-markdown` \| 2\.0\.3 \| MIT/,
+  );
+  assert.equal(
+    readerPackage.manifest.dependencies["mdast-util-from-markdown"],
+    "2.0.3",
+  );
+  assert.match(parserLicense, /Copyright \(c\) Titus Wormer/);
+  assert.match(parserLicense, /Permission is hereby granted/);
+});
+
+test("Next package includes notices for direct and peer dependencies", async () => {
+  assert.ok(
+    nextPackage.manifest.files.includes("THIRD_PARTY_NOTICES.md"),
+  );
+  assert.ok(nextPackage.manifest.files.includes("third-party-licenses"));
+
+  const [
+    thirdPartyNotices,
+    nextLicense,
+    reactLicense,
+    markdownLicense,
+    serverOnlyLicense,
+    semverLicense,
+  ] = await Promise.all([
+    read("packages/next/THIRD_PARTY_NOTICES.md"),
+    read("packages/next/third-party-licenses/next-LICENSE-MIT.txt"),
+    read(
+      "packages/next/third-party-licenses/react-and-react-dom-LICENSE-MIT.txt",
+    ),
+    read("packages/next/third-party-licenses/react-markdown-LICENSE-MIT.txt"),
+    read("packages/next/third-party-licenses/server-only-LICENSE-MIT.txt"),
+    read("packages/next/third-party-licenses/semver-LICENSE-ISC.txt"),
+  ]);
+
+  assert.match(thirdPartyNotices, /^# Third-party notices$/m);
+  assert.match(thirdPartyNotices, /not GENII Publisher Original Code/);
+  for (const [packageName, version] of Object.entries({
+    ...nextPackage.manifest.dependencies,
+    ...nextPackage.manifest.peerDependencies,
+  }).filter(
+    ([packageName]) => !packageName.startsWith("@genii-foundation/"),
+  )) {
+    assert.ok(thirdPartyNotices.includes(`\`${packageName}\``));
+    assert.ok(thirdPartyNotices.includes(version));
+  }
+  assert.match(nextLicense, /Copyright \(c\) 2025 Vercel, Inc\./);
+  assert.match(reactLicense, /Copyright \(c\) Meta Platforms/);
+  assert.match(markdownLicense, /Copyright \(c\) Espen Hovlandsdal/);
+  assert.match(serverOnlyLicense, /Copyright \(c\) Meta Platforms/);
+  assert.match(serverOnlyLicense, /Permission is hereby granted/);
+  assert.match(semverLicense, /The ISC License/);
 });

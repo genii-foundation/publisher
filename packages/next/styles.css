@@ -1,0 +1,213 @@
+/*
+No alternative license is selected for GENII Publisher Original Code. The alternative-license fields in the required Exhibit A notice below are intentionally unpopulated.
+
+“The contents of this file are subject to the Common Public Attribution License Version 1.0 (the “License”); you may not use this file except in compliance with the License. You may obtain a copy of the License at https://opensource.org/license/cpal-1.0. The License is based on the Mozilla Public License Version 1.1 but Sections 14 and 15 have been added to cover use of software over a computer network and provide for limited attribution for the Original Developer. In addition, Exhibit A has been modified to be consistent with Exhibit B.
+Software distributed under the License is distributed on an “AS IS” basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for the specific language governing rights and limitations under the License.
+The Original Code is GENII Publisher.
+The Original Developer is not the Initial Developer and is __________. If left blank, the Original Developer is the Initial Developer.
+The Initial Developer of the Original Code is GENII Foundation. All portions of the code written by GENII Foundation are Copyright (c) 2026 GENII Foundation. All Rights Reserved.
+Contributor ______________________.
+Alternatively, the contents of this file may be used under the terms of the _____ license (the [___] License), in which case the provisions of [______] License are applicable instead of those above.
+If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
+*/
+
+.publisher-root,
+.publisher-root * {
+  box-sizing: border-box;
+}
+
+.publisher-root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-wrap: break-word;
+  background: var(--publisher-color-canvas);
+  color: var(--publisher-color-text);
+  font-family: var(--publisher-font-body);
+  font-size: var(--publisher-font-size);
+  line-height: var(--publisher-line-height);
+}
+
+.publisher-root a {
+  color: var(--publisher-color-accent);
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.15em;
+}
+
+.publisher-root a:focus-visible {
+  border-radius: var(--publisher-control-radius);
+  outline: 0.2rem solid var(--publisher-color-focus);
+  outline-offset: 0.2rem;
+}
+
+.publisher-root h1,
+.publisher-root h2,
+.publisher-root h3,
+.publisher-root h4,
+.publisher-root h5,
+.publisher-root h6 {
+  font-family: var(--publisher-font-heading);
+  line-height: 1.18;
+  text-wrap: balance;
+}
+
+.publisher-skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: var(--publisher-page-gutter);
+  left: var(--publisher-page-gutter);
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--publisher-color-border);
+  border-radius: var(--publisher-control-radius);
+  background: var(--publisher-color-surface);
+  transform: translateY(-250%);
+}
+
+.publisher-skip-link:focus {
+  transform: translateY(0);
+}
+
+.publisher-site-header,
+.publisher-attribution {
+  width: 100%;
+  padding: var(--publisher-page-gutter);
+  border-color: var(--publisher-color-border);
+  background: var(--publisher-color-surface);
+}
+
+.publisher-site-header {
+  border-bottom-style: solid;
+  border-bottom-width: 1px;
+}
+
+.publisher-site-title {
+  font-family: var(--publisher-font-heading);
+  font-weight: 700;
+}
+
+.publisher-root main {
+  width: min(
+    100% - (2 * var(--publisher-page-gutter)),
+    var(--publisher-reading-measure)
+  );
+  flex: 1 0 auto;
+  margin-inline: auto;
+  padding-block: var(--publisher-section-gap);
+}
+
+.publisher-publication-description,
+.publisher-work-subtitle {
+  color: var(--publisher-color-muted-text);
+  font-size: 1.12em;
+}
+
+.publisher-catalog {
+  display: grid;
+  gap: 1.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.publisher-catalog > li {
+  padding: 1rem;
+  border: 1px solid var(--publisher-color-border);
+  border-radius: var(--publisher-control-radius);
+  background: var(--publisher-color-surface);
+}
+
+.publisher-catalog h2,
+.publisher-catalog h3 {
+  margin-top: 0;
+}
+
+.publisher-reading-stat {
+  color: var(--publisher-color-muted-text);
+  font-size: 0.9em;
+}
+
+.publisher-manuscript {
+  display: grid;
+  gap: var(--publisher-section-gap);
+}
+
+.publisher-manuscript-section {
+  min-width: 0;
+  scroll-margin-top: var(--publisher-section-gap);
+}
+
+.publisher-section-title {
+  margin-block: 0 1em;
+}
+
+.publisher-markdown {
+  min-width: 0;
+  scroll-margin-top: var(--publisher-section-gap);
+}
+
+.publisher-markdown img,
+.publisher-markdown video {
+  max-width: 100%;
+  height: auto;
+}
+
+.publisher-markdown pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 1rem;
+  border-radius: var(--publisher-control-radius);
+  background: var(--publisher-color-surface);
+  font-family: var(--publisher-font-mono);
+}
+
+.publisher-markdown code {
+  font-family: var(--publisher-font-mono);
+}
+
+.publisher-markdown blockquote {
+  margin-inline: 0;
+  padding-inline-start: 1rem;
+  border-inline-start: 0.25rem solid var(--publisher-color-border);
+  color: var(--publisher-color-muted-text);
+}
+
+.publisher-section-navigation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: var(--publisher-section-gap);
+  padding-top: 1rem;
+  border-top: 1px solid var(--publisher-color-border);
+}
+
+.publisher-section-navigation > :last-child {
+  text-align: end;
+}
+
+.publisher-attribution {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  border-top-style: solid;
+  border-top-width: 1px;
+  visibility: visible;
+  opacity: 1;
+}
+
+.publisher-attribution p {
+  margin: 0;
+}
+
+@media (max-width: 42rem) {
+  .publisher-attribution {
+    grid-template-columns: 1fr;
+  }
+
+  .publisher-section-navigation {
+    grid-template-columns: 1fr;
+  }
+
+  .publisher-section-navigation > :last-child {
+    text-align: start;
+  }
+}

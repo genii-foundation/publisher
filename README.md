@@ -2,7 +2,7 @@
 
 GENII Publisher is an opinionated, open source publishing application for authors and institutions. It will provide the complete path from a manuscript repository to a durable, accessible publication while keeping each author's content, history, identity, and deployment under that author's control.
 
-Implementation has begun. The schema runtime, framework-neutral content compiler, and strict reader-envelope contract are built and tested from their packed artifacts, but no npm release exists yet.
+Implementation has begun. The schema runtime, framework-neutral content compiler, strict reader-envelope contract, explicit extension grants, and server-rendered Next.js reference application are built and tested from packed artifacts, but no npm release exists yet.
 
 ## Product contract
 
@@ -31,7 +31,7 @@ Each publication repository owns its manuscripts, editorial evidence, assets, co
 | `@genii-foundation/publisher-schema` | Versioned publication protocol and validators |
 | `@genii-foundation/publisher-content` | Framework-neutral content model and compilation primitives |
 | `@genii-foundation/publisher-reader` | Deterministic reader projection, framework-neutral runtime behavior, and shared presentation contracts |
-| `@genii-foundation/publisher-next` | Next.js reference renderer and host adapters |
+| `@genii-foundation/publisher-next` | Server-rendered Next.js application, data-only themes, and exact host continuity |
 | `@genii-foundation/publisher-audio` | Optional audio catalog and playback contracts |
 | `@genii-foundation/publisher-sync-supabase` | Optional Supabase synchronization adapter |
 | `@genii-foundation/publisher-updates` | Author-repository history and Updates generation |

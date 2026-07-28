@@ -39,3 +39,36 @@ jobs:
 
       - name: Validate
         run: npm run validate
+
+  browser-hydration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Use Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Use exact npm
+        run: npm install --global npm@10.9.0
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Locate preinstalled Chrome
+        shell: bash
+        run: |
+          browser_executable="$(command -v google-chrome)"
+          test -x "$browser_executable"
+          printf 'PUBLISHER_NEXT_BROWSER_EXECUTABLE=%s\n' "$browser_executable" >> "$GITHUB_ENV"
+
+      - name: Verify hydrated error attribution
+        run: npm exec -- node --test --test-concurrency=1 tests/next-packaged-host.test.mjs

@@ -1,0 +1,105 @@
+{
+  "name": "@genii-foundation/publisher-next",
+  "version": "0.1.0-alpha.0",
+  "description": "The official Next.js reference renderer for GENII Publisher.",
+  "license": "CPAL-1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27"
+  },
+  "files": [
+    "CHANGES.md",
+    "LEGAL",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md",
+    "SOURCE-NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "application-manifest.schema.json",
+    "dist",
+    "scripts/build.mjs",
+    "scripts/check-release-tag.mjs",
+    "src",
+    "styles.css",
+    "third-party-licenses",
+    "tsconfig.json"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./theme": {
+      "types": "./dist/theme/index.d.ts",
+      "import": "./dist/theme/index.js"
+    },
+    "./theme/default": {
+      "types": "./dist/theme/default.d.ts",
+      "import": "./dist/theme/default.js"
+    },
+    "./styles.css": "./styles.css",
+    "./application-manifest.schema.json": "./application-manifest.schema.json"
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "prepack": "node ./scripts/build.mjs",
+    "prepublishOnly": "node ./scripts/check-release-tag.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/genii-foundation/publisher.git",
+    "directory": "packages/next"
+  },
+  "homepage": "https://publisher.genii.foundation",
+  "bugs": {
+    "url": "https://github.com/genii-foundation/publisher/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "publisherHostOverrides": {
+    "next@16.2.12": {
+      "postcss": "8.5.24",
+      "sharp": "0.35.3"
+    }
+  },
+  "dependencies": {
+    "@genii-foundation/publisher-content": "0.1.0-alpha.0",
+    "@genii-foundation/publisher-reader": "0.1.0-alpha.0",
+    "@genii-foundation/publisher-schema": "0.1.0-alpha.0",
+    "react-markdown": "10.1.0",
+    "server-only": "0.0.1",
+    "semver": "7.8.5"
+  },
+  "peerDependencies": {
+    "next": "16.2.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@types/semver": "7.7.1",
+    "next": "16.2.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "typescript": "7.0.2"
+  }
+}

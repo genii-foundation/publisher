@@ -20,3 +20,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Made public runtime object arguments fail closed when property descriptors, inheritance, symbols, or proxy traps make their meaning ambiguous.
 - Snapshotted the explicit projection audience and each public runtime argument record once so stateful accessors or proxies cannot compose one request from conflicting states.
 - Proved reader artifacts omit extension capability grants in both neutral fixture publications.
+- Added a renderer-neutral CommonMark link application boundary with an exact bundled parser closure that preserves visible prose, respects UTF-16 source ranges, and rejects unsafe Markdown contexts.

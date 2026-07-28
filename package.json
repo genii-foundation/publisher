@@ -10,15 +10,21 @@
     "node": ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27",
     "npm": "10.9.0"
   },
+  "overrides": {
+    "next@16.2.12": {
+      "postcss": "8.5.24",
+      "sharp": "0.35.3"
+    }
+  },
   "workspaces": [
     "apps/*",
     "packages/*",
     "schemas"
   ],
   "scripts": {
-    "build": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs",
-    "test": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node --test --test-concurrency=1",
-    "validate": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node --test --test-concurrency=1"
+    "build": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/next/scripts/build.mjs",
+    "test": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/next/scripts/build.mjs && node --test --test-concurrency=1",
+    "validate": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/next/scripts/build.mjs && node --test --test-concurrency=1"
   },
   "devDependencies": {
     "ajv": "8.20.0",

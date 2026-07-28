@@ -106,17 +106,10 @@ const [packageManifestText, sourceNotice] = await Promise.all([
 ]);
 const packageManifest = JSON.parse(packageManifestText);
 const expectedTypeScriptVersion = packageManifest.devDependencies?.typescript;
-const expectedMarkdownParserVersion =
-  packageManifest.dependencies?.["mdast-util-from-markdown"];
 
 if (typeof expectedTypeScriptVersion !== "string") {
   throw new Error(
-    "packages/reader/package.json must pin a TypeScript development dependency.",
-  );
-}
-if (typeof expectedMarkdownParserVersion !== "string") {
-  throw new Error(
-    "packages/reader/package.json must pin its CommonMark parser dependency.",
+    "packages/next/package.json must pin a TypeScript development dependency.",
   );
 }
 
@@ -126,27 +119,10 @@ const installedTypeScriptManifestPath = require.resolve(
 const installedTypeScriptManifest = JSON.parse(
   await readFile(installedTypeScriptManifestPath, "utf8"),
 );
-const markdownParserEntryPath = require.resolve(
-  "mdast-util-from-markdown",
-);
-const installedMarkdownParserManifest = JSON.parse(
-  await readFile(
-    join(dirname(markdownParserEntryPath), "package.json"),
-    "utf8",
-  ),
-);
 
 if (installedTypeScriptManifest.version !== expectedTypeScriptVersion) {
   throw new Error(
     `Installed TypeScript ${installedTypeScriptManifest.version} does not match the exact package pin ${expectedTypeScriptVersion}.`,
-  );
-}
-if (
-  installedMarkdownParserManifest.version !==
-  expectedMarkdownParserVersion
-) {
-  throw new Error(
-    `Installed CommonMark parser ${installedMarkdownParserManifest.version} does not match the exact package pin ${expectedMarkdownParserVersion}.`,
   );
 }
 
@@ -170,20 +146,29 @@ const builtTypes = await import(
     import.meta.url,
   )
 );
-if (builtTypes.READER_PROJECTOR_VERSION !== packageManifest.version) {
+if (builtTypes.PUBLISHER_NEXT_VERSION !== packageManifest.version) {
   throw new Error(
-    `Reader projector constant ${builtTypes.READER_PROJECTOR_VERSION ?? "(missing)"} does not match package version ${packageManifest.version}.`,
+    `Next renderer constant ${builtTypes.PUBLISHER_NEXT_VERSION ?? "(missing)"} does not match package version ${packageManifest.version}.`,
+  );
+}
+if (
+  JSON.stringify(
+    builtTypes.PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES,
+  ) !== JSON.stringify(packageManifest.publisherHostOverrides)
+) {
+  throw new Error(
+    "The machine-readable host override contract does not match the exported renderer constant.",
   );
 }
 
 const sourceFiles = (await listFiles(sourceRoot)).filter(
-  (path) => path.endsWith(".ts") && !path.endsWith(".d.ts"),
+  (path) => /\.tsx?$/u.test(path) && !path.endsWith(".d.ts"),
 );
 const expectedOutputs = new Set(["SOURCE-NOTICE"]);
 
 for (const sourceFile of sourceFiles) {
   const sourcePath = toPackagePath(relative(sourceRoot, sourceFile));
-  const stem = sourcePath.slice(0, -".ts".length);
+  const stem = sourcePath.replace(/\.tsx?$/u, "");
   expectedOutputs.add(`${stem}.js`);
   expectedOutputs.add(`${stem}.d.ts`);
 }
@@ -194,12 +179,15 @@ const emittedFiles = await listFiles(distRoot);
 for (const emittedFile of emittedFiles) {
   const emittedPath = toPackagePath(relative(distRoot, emittedFile));
 
-  if (emittedPath.endsWith(".d.ts")) {
-    const declaration = await readFile(emittedFile, "utf8");
-    const noticedDeclaration = declaration.startsWith(noticeComment)
-      ? declaration
-      : `${noticeComment}${declaration}`;
-    await writeFile(emittedFile, noticedDeclaration, "utf8");
+  if (
+    emittedPath.endsWith(".d.ts") ||
+    emittedPath.endsWith(".js")
+  ) {
+    const source = await readFile(emittedFile, "utf8");
+    const noticedSource = source.startsWith(noticeComment)
+      ? source
+      : `${noticeComment}${source}`;
+    await writeFile(emittedFile, noticedSource, "utf8");
   }
 }
 
