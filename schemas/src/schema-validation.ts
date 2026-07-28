@@ -11,13 +11,17 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-import { readFileSync } from "node:fs";
-
-import type { ErrorObject, ValidateFunction } from "ajv";
-import { Ajv2020 } from "ajv/dist/2020.js";
-import addFormats from "ajv-formats";
-
 import { immutableSnapshot } from "./immutability.js";
+import {
+  collectionValidator,
+  contentEnvelopeValidator,
+  publicationValidator,
+  workValidator,
+} from "./generated-validators.js";
+import type {
+  StandaloneValidationError,
+  StandaloneValidateFunction,
+} from "./generated-validators.js";
 import type {
   CollectionManifest,
   Diagnostic,
@@ -27,8 +31,7 @@ import type {
   ValidationResult,
   WorkManifest,
 } from "./types.js";
-
-type SchemaDocument = Readonly<Record<string, unknown>>;
+import type { PublicationContentEnvelope } from "./content-types.js";
 
 export const SHAPE_DIAGNOSTIC_CODES = Object.freeze({
   additionalProperty: "schema.additional_property",
@@ -66,33 +69,6 @@ const SCHEMA_CODE_BY_KEYWORD: Readonly<Record<string, string>> = {
   uniqueItems: SHAPE_DIAGNOSTIC_CODES.uniqueItems,
 };
 
-function readSchema(fileName: string): SchemaDocument {
-  return JSON.parse(
-    readFileSync(new URL(`../${fileName}`, import.meta.url), "utf8"),
-  ) as SchemaDocument;
-}
-
-const ajv = new Ajv2020({
-  allErrors: true,
-  coerceTypes: false,
-  removeAdditional: false,
-  strict: true,
-  useDefaults: false,
-  validateFormats: true,
-});
-
-addFormats(ajv);
-
-const publicationValidator = ajv.compile<PublicationManifest>(
-  readSchema("publication.schema.json"),
-);
-const workValidator = ajv.compile<WorkManifest>(
-  readSchema("work.schema.json"),
-);
-const collectionValidator = ajv.compile<CollectionManifest>(
-  readSchema("collection.schema.json"),
-);
-
 function escapeJsonPointerToken(token: string): string {
   return token.replaceAll("~", "~0").replaceAll("/", "~1");
 }
@@ -101,7 +77,7 @@ function appendJsonPointerToken(path: string, token: string): string {
   return `${path}/${escapeJsonPointerToken(token)}`;
 }
 
-function diagnosticPath(error: ErrorObject): string {
+function diagnosticPath(error: StandaloneValidationError): string {
   if (
     error.keyword === "required" &&
     "missingProperty" in error.params &&
@@ -311,7 +287,7 @@ function createJsonDomainDiagnostics(input: unknown): readonly Diagnostic[] {
 }
 
 function createDiagnostics(
-  errors: readonly ErrorObject[] | null | undefined,
+  errors: readonly StandaloneValidationError[] | null | undefined,
 ): readonly Diagnostic[] {
   if (errors === null || errors === undefined || errors.length === 0) {
     return [
@@ -342,7 +318,7 @@ function createDiagnostics(
 }
 
 function validateShape<T>(
-  validator: ValidateFunction<T>,
+  validator: StandaloneValidateFunction<T>,
   input: unknown,
 ): ValidationResult<T> {
   let jsonDomainDiagnostics: readonly Diagnostic[];
@@ -399,6 +375,12 @@ export function validateCollectionShape(
   input: unknown,
 ): ValidationResult<CollectionManifest> {
   return validateShape(collectionValidator, input);
+}
+
+export function validateContentEnvelopeShape(
+  input: unknown,
+): ValidationResult<PublicationContentEnvelope> {
+  return validateShape(contentEnvelopeValidator, input);
 }
 
 export function validateManifestShape<K extends ManifestKind>(

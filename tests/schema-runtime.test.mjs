@@ -19,6 +19,7 @@ import test from "node:test";
 
 import {
   REQUIRED_ATTRIBUTION,
+  resolvePublicationSourcesForContentCompilation,
   resolvePublicationLayout,
   validateCollectionShape,
   validatePublicationSemantics,
@@ -129,6 +130,10 @@ test("schema package manifest declares runtime, schemas, and legal artifacts", a
   );
 
   assert.equal(packageManifest.license, "CPAL-1.0");
+  assert.equal(
+    packageManifest.engines.node,
+    ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27",
+  );
   assert.deepEqual(packageManifest.files, [
     "CHANGES.md",
     "LEGAL",
@@ -599,11 +604,117 @@ test("route and continuity validation rejects collisions but accepts external te
   );
 });
 
+test("pre-compilation source resolution defers only adapter terminal routes", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const unresolvedPublication = structuredClone(fixture.publication);
+  unresolvedPublication.continuity.redirects = [
+    {
+      from: "/journal/legacy-section",
+      to: "/reader/future-section",
+      status: 308,
+    },
+  ];
+  const unresolvedResult =
+    resolvePublicationSourcesForContentCompilation({
+      publication: unresolvedPublication,
+      engineVersion: "1.0.0",
+      workManifests: fixture.workManifests,
+      collectionManifests: fixture.collectionManifests,
+    });
+  assert.equal(
+    unresolvedResult.valid,
+    true,
+    JSON.stringify(unresolvedResult.diagnostics, null, 2),
+  );
+
+  const duplicatePublication = structuredClone(fixture.publication);
+  duplicatePublication.continuity.redirects = [
+    { from: "/legacy", to: "/reader/future-a", status: 308 },
+    { from: "/legacy", to: "/reader/future-b", status: 308 },
+  ];
+  const duplicateResult =
+    resolvePublicationSourcesForContentCompilation({
+      publication: duplicatePublication,
+      engineVersion: "1.0.0",
+      workManifests: fixture.workManifests,
+      collectionManifests: fixture.collectionManifests,
+    });
+  assert.equal(duplicateResult.valid, false);
+  assert.ok(
+    duplicateResult.diagnostics.some(
+      ({ code }) => code === "continuity.redirect.duplicate_source",
+    ),
+  );
+
+  const activeCollisionPublication =
+    structuredClone(fixture.publication);
+  activeCollisionPublication.continuity.redirects = [
+    { from: "/", to: "/reader/future", status: 308 },
+  ];
+  const activeCollisionResult =
+    resolvePublicationSourcesForContentCompilation({
+      publication: activeCollisionPublication,
+      engineVersion: "1.0.0",
+      workManifests: fixture.workManifests,
+      collectionManifests: fixture.collectionManifests,
+    });
+  assert.equal(activeCollisionResult.valid, false);
+  assert.ok(
+    activeCollisionResult.diagnostics.some(
+      ({ code }) =>
+        code === "continuity.redirect.active_route_source",
+    ),
+  );
+});
+
+test("semantic validation preserves configured trailing-slash routes", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const publication = structuredClone(fixture.publication);
+  publication.routes.home = "/home/";
+  publication.routes.updates = "/updates/";
+  publication.routes.work = "/works/{workId}/";
+  publication.routes.collection = "/collections/{collectionId}/";
+  publication.continuity.redirects = [
+    {
+      from: "/journal/morning-reading/",
+      to: "/works/rain-gauge/",
+      status: 308,
+    },
+  ];
+
+  const workManifests = new Map(fixture.workManifests);
+  const [workPath, work] = workManifests.entries().next().value;
+  workManifests.set(workPath, {
+    ...work,
+    route: "/works/rain-gauge/",
+  });
+
+  const collectionManifests = new Map(fixture.collectionManifests);
+  const [collectionPath, collection] =
+    collectionManifests.entries().next().value;
+  collectionManifests.set(collectionPath, {
+    ...collection,
+    route: "/collections/weather-observations/",
+  });
+
+  const result = validateFixtureSemantics(fixture, {
+    publication,
+    workManifests,
+    collectionManifests,
+  });
+
+  assert.equal(
+    result.valid,
+    true,
+    JSON.stringify(result.diagnostics, null, 2),
+  );
+});
+
 test("semantic diagnostics have deterministic public ordering", async () => {
   const fixture = await loadFixture("canonical-field-notes");
   const publication = structuredClone(fixture.publication);
   publication.schemaVersion = "2.0";
-  publication.routes.home = "/invalid/";
+  publication.routes.home = "/invalid?draft=true";
   publication.attribution.text = "Missing credit";
 
   const first = validateFixtureSemantics(fixture, { publication });

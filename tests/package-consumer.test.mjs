@@ -19,6 +19,7 @@ import {
   readFile,
   readdir,
   realpath,
+  rename,
   rm,
   symlink,
   writeFile,
@@ -199,6 +200,14 @@ test("packed schema tarball installs and works in an offline consumer", async ()
   );
   assert.equal(schemaPackageManifest.publishConfig.access, "public");
   assert.equal(schemaPackageManifest.publishConfig.provenance, true);
+  assert.deepEqual(schemaPackageManifest.dependencies, {
+    semver: "7.8.5",
+  });
+  assert.equal(schemaPackageManifest.devDependencies.ajv, "8.20.0");
+  assert.equal(
+    schemaPackageManifest.devDependencies["ajv-formats"],
+    "3.0.1",
+  );
   assert.equal(
     Object.hasOwn(schemaPackageManifest.publishConfig, "tag"),
     false,
@@ -267,8 +276,11 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       .map(({ path }) => path)
       .sort();
 
-    const sourceFiles = (await listFiles(schemaSourceRoot)).filter(
-      (path) => path.endsWith(".ts") && !path.endsWith(".d.ts"),
+    const allSourceFiles = (await listFiles(schemaSourceRoot)).filter(
+      (path) => path.endsWith(".ts"),
+    );
+    const sourceFiles = allSourceFiles.filter(
+      (path) => !path.endsWith(".d.ts"),
     );
     const expectedDistPaths = sourceFiles.flatMap((sourceFile) => {
       const sourcePath = toPackagePath(
@@ -277,7 +289,8 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       const stem = sourcePath.slice(0, -".ts".length);
       return [`dist/${stem}.d.ts`, `dist/${stem}.js`];
     });
-    const expectedSourcePaths = sourceFiles.map(
+    expectedDistPaths.push("dist/generated-validators.js");
+    const expectedSourcePaths = allSourceFiles.map(
       (sourceFile) =>
         `src/${toPackagePath(relative(schemaSourceRoot, sourceFile))}`,
     );
@@ -297,6 +310,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "README.md",
       "SOURCE-NOTICE",
       "collection.schema.json",
+      "content-envelope.schema.json",
       "dist/SOURCE-NOTICE",
       ...expectedDistPaths,
       "package.json",
@@ -424,6 +438,27 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         label: "offline tarball installation",
       },
     );
+    for (const buildOnlyPackage of [
+      "ajv",
+      "ajv-formats",
+      "fast-deep-equal",
+      "fast-uri",
+    ]) {
+      await assert.rejects(
+        realpath(
+          join(
+            consumerDirectory,
+            "node_modules",
+            buildOnlyPackage,
+          ),
+        ),
+        (error) =>
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "ENOENT",
+        `${buildOnlyPackage} must not be installed in the production consumer.`,
+      );
+    }
 
     const installedPackageRoot = join(
       consumerDirectory,
@@ -465,9 +500,11 @@ test("packed schema tarball installs and works in an offline consumer", async ()
     const consumerProof = `
       import assert from "node:assert/strict";
       import {
+        validateContentEnvelopeShape,
         validatePublicationShape,
         validateWorkShape,
       } from "@genii-foundation/publisher-schema";
+      import contentEnvelopeSchema from "@genii-foundation/publisher-schema/content-envelope.schema.json" with { type: "json" };
       import workSchema from "@genii-foundation/publisher-schema/work.schema.json" with { type: "json" };
 
       assert.equal(
@@ -475,6 +512,11 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         "https://publisher.genii.foundation/schemas/work.schema.json",
       );
       assert.equal(typeof validatePublicationShape, "function");
+      assert.equal(typeof validateContentEnvelopeShape, "function");
+      assert.equal(
+        contentEnvelopeSchema.$id,
+        "https://publisher.genii.foundation/schemas/content-envelope.schema.json",
+      );
       const result = validateWorkShape({
         schemaVersion: "1.0",
         id: "installed-proof",
@@ -490,9 +532,87 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       label: "installed package public export proof",
     });
 
+    const installedRuntimePaths = installedPaths.filter(
+      (path) => path.startsWith("dist/") && path.endsWith(".js"),
+    );
+    for (const path of installedRuntimePaths) {
+      const contents = await readFile(
+        join(installedPackageRoot, path),
+        "utf8",
+      );
+      assert.doesNotMatch(
+        contents,
+        /["']node:fs(?:\/promises)?["']/,
+        `${path} must not hold filesystem read authority.`,
+      );
+      assert.doesNotMatch(
+        contents,
+        /\b(?:import|export)\s+[^;\n]*\bfrom\s+["'](?:ajv(?:\/|["'])|ajv-formats(?:\/|["']))/,
+        `${path} must not resolve schema compiler modules at runtime.`,
+      );
+      assert.doesNotMatch(
+        contents,
+        /\brequire\s*\(/,
+        `${path} must not contain unresolved CommonJS module loads.`,
+      );
+    }
+
+    for (const schemaFileName of [
+      "collection.schema.json",
+      "content-envelope.schema.json",
+      "publication.schema.json",
+      "work.schema.json",
+    ]) {
+      await rename(
+        join(installedPackageRoot, schemaFileName),
+        join(installedPackageRoot, `${schemaFileName}.unavailable`),
+      );
+    }
+    const isolatedRuntimeProof = `
+      import assert from "node:assert/strict";
+      import {
+        validateCollectionShape,
+        validateContentEnvelopeShape,
+        validatePublicationShape,
+        validateWorkShape,
+      } from "@genii-foundation/publisher-schema";
+
+      const validWork = validateWorkShape({
+        schemaVersion: "1.0",
+        id: "isolated-runtime",
+        title: "Isolated Runtime",
+        language: "en",
+        publicationState: "draft",
+        manuscript: "manuscript.md",
+      });
+      assert.equal(
+        validWork.valid,
+        true,
+        JSON.stringify(validWork.diagnostics),
+      );
+      for (const result of [
+        validatePublicationShape({}),
+        validateCollectionShape({}),
+        validateContentEnvelopeShape({}),
+      ]) {
+        assert.equal(result.valid, false);
+        assert.ok(result.diagnostics.length > 0);
+      }
+    `;
+    run(
+      process.execPath,
+      ["--input-type=module", "--eval", isolatedRuntimeProof],
+      {
+        cwd: consumerDirectory,
+        label: "filesystem-independent standalone validator proof",
+      },
+    );
+
     const typeConsumer = `
       import {
+        validateContentEnvelopeShape,
         validatePublicationShape,
+        type PublicationContentEnvelope,
         type PublicationManifest,
         type ValidationResult,
       } from "@genii-foundation/publisher-schema";
@@ -501,6 +621,10 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       const result: ValidationResult<PublicationManifest> =
         validatePublicationShape(publication);
       void result;
+      declare const envelope: PublicationContentEnvelope;
+      const envelopeResult: ValidationResult<PublicationContentEnvelope> =
+        validateContentEnvelopeShape(envelope);
+      void envelopeResult;
     `;
     const typeConsumerConfig = {
       compilerOptions: {

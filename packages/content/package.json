@@ -1,12 +1,17 @@
 {
-  "name": "@genii-foundation/publisher-schema",
+  "name": "@genii-foundation/publisher-content",
   "version": "0.1.0-alpha.0",
-  "description": "Framework-neutral source schemas and validators for GENII Publisher.",
+  "description": "Framework-neutral content compilation primitives for GENII Publisher.",
   "license": "CPAL-1.0",
   "type": "module",
   "engines": {
     "node": ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27"
   },
+  "bundleDependencies": [
+    "@unicode/unicode-15.1.0",
+    "mdast-util-from-markdown",
+    "mdast-util-to-string"
+  ],
   "files": [
     "CHANGES.md",
     "LEGAL",
@@ -14,11 +19,12 @@
     "NOTICE.md",
     "README.md",
     "SOURCE-NOTICE",
+    "THIRD_PARTY_NOTICES.md",
     "dist",
     "scripts",
     "src",
-    "tsconfig.json",
-    "*.schema.json"
+    "third-party-licenses",
+    "tsconfig.json"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -26,22 +32,19 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./publication.schema.json": "./publication.schema.json",
-    "./work.schema.json": "./work.schema.json",
-    "./collection.schema.json": "./collection.schema.json",
-    "./content-envelope.schema.json": "./content-envelope.schema.json"
+    }
   },
   "scripts": {
-    "build": "node ./scripts/build.mjs",
+    "build": "node ./scripts/build.mjs && node ./scripts/bundle-runtime.mjs freeze",
     "check": "tsc -p tsconfig.json --noEmit",
-    "prepack": "node ./scripts/build.mjs",
+    "prepack": "npm run build && node ./scripts/bundle-runtime.mjs stage",
+    "postpack": "node ./scripts/bundle-runtime.mjs clean",
     "prepublishOnly": "node ./scripts/check-release-tag.mjs"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/genii-foundation/publisher.git",
-    "directory": "schemas"
+    "directory": "packages/content"
   },
   "homepage": "https://publisher.genii.foundation",
   "bugs": {
@@ -52,13 +55,15 @@
     "provenance": true
   },
   "dependencies": {
-    "semver": "7.8.5"
+    "@genii-foundation/publisher-schema": "0.1.0-alpha.0",
+    "@unicode/unicode-15.1.0": "1.6.17",
+    "mdast-util-from-markdown": "2.0.3",
+    "mdast-util-to-string": "4.0.0"
   },
   "devDependencies": {
     "@types/node": "22.20.1",
-    "@types/semver": "7.7.1",
-    "ajv": "8.20.0",
-    "ajv-formats": "3.0.1",
+    "esbuild": "0.27.0",
+    "semver": "7.8.5",
     "typescript": "7.0.2"
   }
 }

@@ -21,52 +21,211 @@ function read(relativePath) {
   return readFile(new URL(relativePath, repositoryRoot), "utf8");
 }
 
-const [license, notice, sourceNotice, schemaSourceNotice, packageText, readme] =
-  await Promise.all([
-    read("LICENSE"),
-    read("NOTICE.md"),
-    read("SOURCE-NOTICE"),
-    read("schemas/SOURCE-NOTICE"),
-    read("package.json"),
-    read("README.md"),
-  ]);
+const packageDefinitions = [
+  {
+    label: "workspace",
+    root: "",
+    manifestPath: "package.json",
+  },
+  {
+    label: "schema",
+    root: "schemas/",
+    manifestPath: "schemas/package.json",
+  },
+  {
+    label: "content",
+    root: "packages/content/",
+    manifestPath: "packages/content/package.json",
+  },
+];
 
-const packageManifest = JSON.parse(packageText);
-const sourceNoticeBody = sourceNotice.split("\n").slice(2).join("\n").trim();
+const packages = await Promise.all(
+  packageDefinitions.map(async (definition) => {
+    const [license, legal, notice, readme, sourceNotice, packageText] =
+      await Promise.all([
+        read(`${definition.root}LICENSE`),
+        read(`${definition.root}LEGAL`),
+        read(`${definition.root}NOTICE.md`),
+        read(`${definition.root}README.md`),
+        read(`${definition.root}SOURCE-NOTICE`),
+        read(definition.manifestPath),
+      ]);
 
-test("package metadata identifies CPAL 1.0", () => {
-  assert.equal(packageManifest.license, "CPAL-1.0");
+    return {
+      ...definition,
+      license,
+      legal,
+      notice,
+      readme,
+      sourceNotice,
+      manifest: JSON.parse(packageText),
+    };
+  }),
+);
+
+const [workspacePackage, schemaPackage, contentPackage] = packages;
+assert.ok(workspacePackage);
+assert.ok(schemaPackage);
+assert.ok(contentPackage);
+
+const sourceNoticeBody = workspacePackage.sourceNotice
+  .split("\n")
+  .slice(2)
+  .join("\n")
+  .trim();
+
+test("workspace and public package metadata identify CPAL 1.0", () => {
+  for (const packageDefinition of packages) {
+    assert.equal(
+      packageDefinition.manifest.license,
+      "CPAL-1.0",
+      packageDefinition.label,
+    );
+  }
+
+  const requiredPackageArtifacts = [
+    "CHANGES.md",
+    "LEGAL",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md",
+    "SOURCE-NOTICE",
+  ];
+  for (const packageDefinition of [schemaPackage, contentPackage]) {
+    for (const artifact of requiredPackageArtifacts) {
+      assert.ok(
+        packageDefinition.manifest.files.includes(artifact),
+        `${packageDefinition.label} package omits ${artifact}`,
+      );
+    }
+    assert.equal(packageDefinition.manifest.publishConfig.access, "public");
+    assert.equal(packageDefinition.manifest.publishConfig.provenance, true);
+  }
 });
 
-test("license retains the attribution and network use sections", () => {
-  assert.match(license, /14\. ADDITIONAL TERM: ATTRIBUTION/);
-  assert.match(license, /15\. ADDITIONAL TERM: NETWORK USE/);
-  assert.match(
-    license,
-    /Display of Attribution Information is required in Larger Works/,
-  );
+test("every license retains attribution and network source sharing", () => {
+  for (const packageDefinition of packages) {
+    assert.match(
+      packageDefinition.license,
+      /14\. ADDITIONAL TERM: ATTRIBUTION/,
+      packageDefinition.label,
+    );
+    assert.match(
+      packageDefinition.license,
+      /15\. ADDITIONAL TERM: NETWORK USE/,
+      packageDefinition.label,
+    );
+    assert.match(
+      packageDefinition.license,
+      /Display of Attribution Information is required in Larger Works/,
+      packageDefinition.label,
+    );
+  }
 });
 
-test("populated Exhibit A is the reusable source notice", () => {
-  assert.ok(license.includes(sourceNoticeBody));
-  assert.equal(schemaSourceNotice, sourceNotice);
+test("public packages carry exact license, legal, and source notice copies", () => {
+  for (const packageDefinition of packages) {
+    assert.equal(
+      packageDefinition.license,
+      workspacePackage.license,
+      `${packageDefinition.label} LICENSE`,
+    );
+    assert.equal(
+      packageDefinition.legal,
+      workspacePackage.legal,
+      `${packageDefinition.label} LEGAL`,
+    );
+    assert.equal(
+      packageDefinition.sourceNotice,
+      workspacePackage.sourceNotice,
+      `${packageDefinition.label} SOURCE-NOTICE`,
+    );
+    assert.ok(
+      packageDefinition.license.includes(sourceNoticeBody),
+      packageDefinition.label,
+    );
+  }
 });
 
-test("Exhibit B and public notices preserve the fixed credit", () => {
-  for (const text of [license, notice, readme]) {
-    assert.match(text, /Copyright 2026 GENII Foundation/);
-    assert.match(text, /Published with GENII Publisher/);
-    assert.match(text, /https:\/\/publisher\.genii\.foundation/);
+test("Exhibit B and every public package preserve the fixed credit", () => {
+  for (const packageDefinition of packages) {
+    for (const [artifact, text] of [
+      ["LICENSE", packageDefinition.license],
+      ["NOTICE.md", packageDefinition.notice],
+    ]) {
+      assert.match(
+        text,
+        /Copyright 2026 GENII Foundation/,
+        `${packageDefinition.label} ${artifact}`,
+      );
+      assert.match(
+        text,
+        /Published with GENII Publisher/,
+        `${packageDefinition.label} ${artifact}`,
+      );
+      assert.match(
+        text,
+        /https:\/\/publisher\.genii\.foundation/,
+        `${packageDefinition.label} ${artifact}`,
+      );
+    }
+
+    assert.match(
+      packageDefinition.readme,
+      /Copyright 2026 GENII Foundation/,
+      `${packageDefinition.label} README.md`,
+    );
+    assert.match(
+      packageDefinition.readme,
+      /Published with GENII Publisher/,
+      `${packageDefinition.label} README.md`,
+    );
   }
 });
 
 test("public documentation identifies the canonical source repository", () => {
   assert.match(
-    readme,
+    workspacePackage.readme,
     /https:\/\/github\.com\/genii-foundation\/publisher/,
   );
-  assert.match(
-    notice,
-    /https:\/\/github\.com\/genii-foundation\/publisher/,
+  for (const packageDefinition of packages) {
+    assert.match(
+      packageDefinition.notice,
+      /https:\/\/github\.com\/genii-foundation\/publisher/,
+      packageDefinition.label,
+    );
+  }
+});
+
+test("content package includes notices for its third-party dependencies", async () => {
+  assert.ok(
+    contentPackage.manifest.files.includes("THIRD_PARTY_NOTICES.md"),
   );
+  assert.ok(contentPackage.manifest.files.includes("third-party-licenses"));
+
+  const [thirdPartyNotices, unicodeLicense] = await Promise.all([
+    read("packages/content/THIRD_PARTY_NOTICES.md"),
+    read(
+      "packages/content/third-party-licenses/unicode-15.1.0-LICENSE-MIT.txt",
+    ),
+  ]);
+  assert.match(thirdPartyNotices, /^# Third-party notices$/m);
+  assert.match(thirdPartyNotices, /remain subject to their own license terms/);
+  assert.match(thirdPartyNotices, /not GENII\s+Publisher Original Code/);
+  assert.match(unicodeLicense, /^Copyright Mathias Bynens/m);
+  assert.match(unicodeLicense, /Permission is hereby granted/);
+
+  const internalPackagePrefix = "@genii-foundation/";
+  const thirdPartyDependencies = Object.entries(
+    contentPackage.manifest.dependencies,
+  ).filter(([packageName]) => !packageName.startsWith(internalPackagePrefix));
+  assert.ok(thirdPartyDependencies.length > 0);
+
+  for (const [packageName, version] of thirdPartyDependencies) {
+    assert.ok(
+      thirdPartyNotices.includes(`\`${packageName}\``),
+      packageName,
+    );
+    assert.ok(thirdPartyNotices.includes(version), version);
+  }
 });

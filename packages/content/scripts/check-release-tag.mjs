@@ -11,8 +11,53 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-export * from "./content-types.js";
-export * from "./layout.js";
-export * from "./schema-validation.js";
-export * from "./semantic-validation.js";
-export * from "./types.js";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { parse } from "semver";
+
+const packageRoot = fileURLToPath(new URL("../", import.meta.url));
+const packageManifestPath = new URL("../package.json", import.meta.url);
+
+export function expectedReleaseTag(version) {
+  const parsedVersion = parse(version);
+  if (parsedVersion === null) {
+    throw new Error(`Package version is not valid SemVer: ${version}`);
+  }
+
+  return parsedVersion.prerelease.length > 0 ? "next" : "latest";
+}
+
+export function assertReleaseTag(version, actualTag) {
+  const expectedTag = expectedReleaseTag(version);
+
+  if (actualTag === undefined || actualTag.length === 0) {
+    if (expectedTag === "latest") {
+      return;
+    }
+
+    throw new Error(
+      `npm_config_tag is required. Publish ${version} with --tag ${expectedTag}.`,
+    );
+  }
+
+  if (actualTag !== expectedTag) {
+    throw new Error(
+      `Refusing to publish ${version} with tag ${actualTag}. Use --tag ${expectedTag}.`,
+    );
+  }
+}
+
+async function main() {
+  const packageManifest = JSON.parse(
+    await readFile(packageManifestPath, "utf8"),
+  );
+  assertReleaseTag(packageManifest.version, process.env.npm_config_tag);
+}
+
+const invokedPath =
+  process.argv[1] === undefined ? undefined : resolve(process.argv[1]);
+if (invokedPath === resolve(packageRoot, "scripts", "check-release-tag.mjs")) {
+  await main();
+}

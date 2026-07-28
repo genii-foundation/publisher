@@ -267,7 +267,6 @@ test("routes are canonical origin-relative paths", () => {
     "/notes#draft",
     "/notes/%2e%2e/admin",
     "/notes//admin",
-    "/notes/",
     "/notes/\u0000admin",
   ]) {
     const publication = clone(canonicalPublication);
@@ -281,6 +280,32 @@ test("routes are canonical origin-relative paths", () => {
     validatePublication(rootPublication),
     true,
     validationMessage(validatePublication),
+  );
+
+  const trailingSlashPublication = clone(canonicalPublication);
+  trailingSlashPublication.routes.home = "/notes/";
+  trailingSlashPublication.routes.work = "/works/{workId}/";
+  trailingSlashPublication.routes.collection = "/collections/{collectionId}/";
+  assert.equal(
+    validatePublication(trailingSlashPublication),
+    true,
+    validationMessage(validatePublication),
+  );
+
+  const trailingSlashWork = clone(canonicalWork);
+  trailingSlashWork.route = "/works/first-essay/";
+  assert.equal(
+    validateWork(trailingSlashWork),
+    true,
+    validationMessage(validateWork),
+  );
+
+  const trailingSlashCollection = clone(canonicalCollection);
+  trailingSlashCollection.route = "/collections/essays/";
+  assert.equal(
+    validateCollection(trailingSlashCollection),
+    true,
+    validationMessage(validateCollection),
   );
 });
 
