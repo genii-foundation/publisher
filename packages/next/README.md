@@ -54,7 +54,7 @@ The reference author host pins the complete renderer toolchain. Do not use versi
 
 The package also accepts Node.js 24 and 26 through its declared engine range, and CI verifies those major lines. Node.js 22.12.0 and npm 10.9.0 are the exact reference-host pins.
 
-The `overrides` object is mandatory. Package-manager overrides declared by a dependency do not propagate into the consuming root. Copy `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` from the installed renderer into the root `package.json`, regenerate the root lockfile, inspect the diff, and commit it. The clean-host proof installs from that lockfile with `npm ci`, resolves PostCSS 8.5.24 and sharp 0.35.3 beneath Next.js 16.2.12, produces a real WebP through Next Image Optimization, and reports zero production vulnerabilities. An engine upgrade that changes this exported object is a host migration, not a casual dependency bump.
+The `overrides` object is mandatory. Package-manager overrides declared by a dependency do not propagate into the consuming root. Copy `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` from the installed renderer into the root `package.json`, regenerate the root lockfile, inspect the diff, and commit it. The clean-host proof generates that lockfile from one clean resolution, reinstalls it offline with `npm ci`, resolves PostCSS 8.5.24 and sharp 0.35.3 beneath Next.js 16.2.12, produces a real WebP through Next Image Optimization, and reports zero production vulnerabilities. An engine upgrade that changes this exported object is a host migration, not a casual dependency bump.
 
 ## Thin host
 
@@ -601,7 +601,7 @@ Next.js 16.2.12 otherwise resolves versions affected by three high-severity advi
 - PostCSS 8.4.31 is affected by [GHSA-6g55-p6wh-862q](https://github.com/advisories/GHSA-6g55-p6wh-862q), patched in 8.5.12, and [GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849), patched in 8.5.18.
 - Optional sharp 0.34.5 is affected by [GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj), patched in 0.35.0.
 
-`PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` pins PostCSS 8.5.24 and sharp 0.35.3 inside the consuming root. The clean packed-host proof installs and reinstalls from the generated lockfile, asserts those exact transitive versions and a loaded libvips version, reports zero production vulnerabilities, and requests an actual optimized WebP. This evidence closes the renderer's former transitive-dependency release gate while the exact override remains in force.
+`PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` pins PostCSS 8.5.24 and sharp 0.35.3 inside the consuming root. The clean packed-host proof resolves once, performs a frozen offline reinstall from the generated lockfile, asserts those exact transitive versions and a loaded libvips version, reports zero production vulnerabilities, and requests an actual optimized WebP. This evidence closes the renderer's former transitive-dependency release gate while the exact override remains in force.
 
 The attributed framework-error gate is also closed. The package supplies separate client-safe error components, the complete host contract wires every required framework surface, and the automated proof checks static, runtime, and hydrated browser behavior.
 

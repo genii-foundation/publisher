@@ -75,7 +75,7 @@ ADR 0008 grants extension capabilities but does not execute them here. Extension
 
 Next.js 16.2.12 otherwise resolves PostCSS 8.4.31 and optional sharp 0.34.5, which are covered by high-severity advisories [GHSA-6g55-p6wh-862q](https://github.com/advisories/GHSA-6g55-p6wh-862q), [GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849), and [GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj). Every consuming root copies `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` into its own `overrides` field and commits the resulting lockfile because dependency-package overrides do not propagate. The required override resolves PostCSS 8.5.24 and sharp 0.35.3.
 
-The clean packed-host proof performs an offline install, a frozen `npm ci`, a production audit with zero vulnerabilities, exact dependency inspection, and real WebP optimization through sharp. This evidence closes the transitive-dependency gate while the exact override remains in force.
+The clean packed-host proof performs one clean dependency resolution, a frozen offline `npm ci` reinstall, a production audit with zero vulnerabilities, exact dependency inspection, and real WebP optimization through sharp. This evidence closes the transitive-dependency gate while the exact override remains in force.
 
 ## Consequences
 

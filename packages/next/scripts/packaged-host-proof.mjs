@@ -1379,7 +1379,6 @@ export async function runPackagedHostProof(
     runNpm(
       [
         "install",
-        "--offline",
         "--ignore-scripts",
         "--no-audit",
         "--no-fund",
