@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/next-application-manifest.schema.json",
+  "title": "GENII Publisher Next.js application manifest",
+  "description": "Deterministic identity for one GENII Publisher reader envelope resolved through the official Next.js renderer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "publicationId",
+    "engineVersion",
+    "rendererVersion",
+    "buildId",
+    "artifact",
+    "source",
+    "theme",
+    "updates",
+    "continuity"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/next-application-manifest.schema.json"
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "publicationId": {
+      "$ref": "#/$defs/stableId"
+    },
+    "engineVersion": {
+      "$ref": "#/$defs/exactSemver"
+    },
+    "rendererVersion": {
+      "$ref": "#/$defs/exactSemver"
+    },
+    "buildId": {
+      "$ref": "#/$defs/sha256Digest"
+    },
+    "artifact": {
+      "$ref": "#/$defs/artifact"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "theme": {
+      "$ref": "#/$defs/theme"
+    },
+    "updates": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/updates"
+        }
+      ]
+    },
+    "continuity": {
+      "$ref": "#/$defs/continuity"
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "exactSemver": {
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "packageName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 214,
+      "pattern": "^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$"
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "mediaType",
+        "relativePath"
+      ],
+      "properties": {
+        "kind": {
+          "const": "publisher-next-application"
+        },
+        "mediaType": {
+          "const": "application/vnd.genii.publisher.next-application+json"
+        },
+        "relativePath": {
+          "const": "renderers/next/application.json"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "readerSchemaVersion",
+        "readerBuildId",
+        "audience"
+      ],
+      "properties": {
+        "readerSchemaVersion": {
+          "const": "1.0"
+        },
+        "readerBuildId": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "audience": {
+          "enum": [
+            "preview",
+            "public"
+          ]
+        }
+      }
+    },
+    "adapterBase": {
+      "type": "object",
+      "properties": {
+        "package": {
+          "$ref": "#/$defs/packageName"
+        },
+        "version": {
+          "$ref": "#/$defs/exactSemver"
+        },
+        "rendererCompatibility": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "apiVersion": {
+          "const": "1.0"
+        },
+        "configHash": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "theme": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/adapterBase"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "package",
+            "version",
+            "rendererCompatibility",
+            "apiVersion",
+            "configHash",
+            "tokensHash"
+          ],
+          "properties": {
+            "package": {
+              "$ref": "#/$defs/packageName"
+            },
+            "version": {
+              "$ref": "#/$defs/exactSemver"
+            },
+            "rendererCompatibility": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "apiVersion": {
+              "const": "1.0"
+            },
+            "configHash": {
+              "$ref": "#/$defs/sha256Digest"
+            },
+            "tokensHash": {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          }
+        }
+      ]
+    },
+    "updates": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/adapterBase"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "package",
+            "version",
+            "rendererCompatibility",
+            "apiVersion",
+            "configHash",
+            "viewHash"
+          ],
+          "properties": {
+            "package": {
+              "$ref": "#/$defs/packageName"
+            },
+            "version": {
+              "$ref": "#/$defs/exactSemver"
+            },
+            "rendererCompatibility": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "apiVersion": {
+              "const": "1.0"
+            },
+            "configHash": {
+              "$ref": "#/$defs/sha256Digest"
+            },
+            "viewHash": {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          }
+        }
+      ]
+    },
+    "continuity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "explicitRedirectCount",
+        "canonicalSlashRedirectCount"
+      ],
+      "properties": {
+        "mode": {
+          "const": "proxy"
+        },
+        "explicitRedirectCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "canonicalSlashRedirectCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

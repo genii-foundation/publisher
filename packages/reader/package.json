@@ -7,6 +7,9 @@
   "engines": {
     "node": ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27"
   },
+  "bundleDependencies": [
+    "mdast-util-from-markdown"
+  ],
   "files": [
     "CHANGES.md",
     "LEGAL",
@@ -14,9 +17,11 @@
     "NOTICE.md",
     "README.md",
     "SOURCE-NOTICE",
+    "THIRD_PARTY_NOTICES.md",
     "dist",
     "scripts",
     "src",
+    "third-party-licenses",
     "tsconfig.json"
   ],
   "main": "./dist/index.js",
@@ -29,12 +34,17 @@
     "./runtime": {
       "types": "./dist/runtime.d.ts",
       "import": "./dist/runtime.js"
+    },
+    "./markdown": {
+      "types": "./dist/markdown.d.ts",
+      "import": "./dist/markdown.js"
     }
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
-    "prepack": "node ./scripts/build.mjs",
+    "prepack": "npm run build && node ./scripts/bundle-dependencies.mjs stage",
+    "postpack": "node ./scripts/bundle-dependencies.mjs clean",
     "prepublishOnly": "node ./scripts/check-release-tag.mjs"
   },
   "repository": {
@@ -52,7 +62,8 @@
   },
   "dependencies": {
     "@genii-foundation/publisher-content": "0.1.0-alpha.0",
-    "@genii-foundation/publisher-schema": "0.1.0-alpha.0"
+    "@genii-foundation/publisher-schema": "0.1.0-alpha.0",
+    "mdast-util-from-markdown": "2.0.3"
   },
   "devDependencies": {
     "@types/node": "22.20.1",

@@ -176,6 +176,9 @@ async function expectedReaderPaths() {
   const scriptFiles = await listFiles(
     join(readerRoot, "scripts"),
   );
+  const thirdPartyLicenseFiles = await listFiles(
+    join(readerRoot, "third-party-licenses"),
+  );
   return [
     "CHANGES.md",
     "LEGAL",
@@ -183,6 +186,7 @@ async function expectedReaderPaths() {
     "NOTICE.md",
     "README.md",
     "SOURCE-NOTICE",
+    "THIRD_PARTY_NOTICES.md",
     "dist/SOURCE-NOTICE",
     ...sourceFiles.flatMap((sourcePath) => {
       const stem = packagePath(
@@ -201,6 +205,15 @@ async function expectedReaderPaths() {
       (sourcePath) =>
         `src/${packagePath(
           relative(join(readerRoot, "src"), sourcePath),
+        )}`,
+    ),
+    ...thirdPartyLicenseFiles.map(
+      (licensePath) =>
+        `third-party-licenses/${packagePath(
+          relative(
+            join(readerRoot, "third-party-licenses"),
+            licensePath,
+          ),
         )}`,
     ),
     "tsconfig.json",
@@ -280,6 +293,38 @@ function isAbsolutePath(value) {
   return value.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(value);
 }
 
+function collectRegistryClosure(lock, directNames) {
+  const closure = new Map();
+  const pending = [...directNames];
+  while (pending.length > 0) {
+    const name = pending.pop();
+    if (name === undefined || closure.has(name)) {
+      continue;
+    }
+    const entry = lock.packages?.[`node_modules/${name}`];
+    assert.ok(entry, `Missing lock entry for ${name}.`);
+    assert.equal(entry.link, undefined, `${name} must be registry-backed.`);
+    assert.equal(typeof entry.version, "string");
+    assert.equal(typeof entry.resolved, "string");
+    assert.equal(typeof entry.integrity, "string");
+    closure.set(name, entry);
+    pending.push(
+      ...Object.keys({
+        ...entry.dependencies,
+        ...entry.optionalDependencies,
+      }),
+    );
+  }
+  return closure;
+}
+
+function firstPartyPackedPaths(packResult) {
+  return packResult.files
+    .map(({ path }) => path)
+    .filter((path) => !path.startsWith("node_modules/"))
+    .sort();
+}
+
 test("reader release lifecycle enforces prerelease and stable npm tags", () => {
   assert.equal(expectedReleaseTag("1.0.0-alpha.1"), "next");
   assert.equal(expectedReleaseTag("1.0.0"), "latest");
@@ -318,6 +363,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     contentManifest,
     readerManifest,
     semverManifest,
+    workspaceLock,
   ] = await Promise.all([
     readFile(join(repositoryRoot, "package.json"), "utf8").then(
       JSON.parse,
@@ -333,6 +379,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     ),
     readFile(
       join(repositoryRoot, "node_modules", "semver", "package.json"),
+      "utf8",
+    ).then(JSON.parse),
+    readFile(
+      join(repositoryRoot, "package-lock.json"),
       "utf8",
     ).then(JSON.parse),
   ]);
@@ -353,6 +403,22 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     types: "./dist/runtime.d.ts",
     import: "./dist/runtime.js",
   });
+  assert.deepEqual(readerManifest.exports["./markdown"], {
+    types: "./dist/markdown.d.ts",
+    import: "./dist/markdown.js",
+  });
+  assert.equal(
+    readerManifest.dependencies["mdast-util-from-markdown"],
+    "2.0.3",
+  );
+  assert.deepEqual(readerManifest.bundleDependencies, [
+    "mdast-util-from-markdown",
+  ]);
+  const bundledClosure = collectRegistryClosure(
+    workspaceLock,
+    readerManifest.bundleDependencies,
+  );
+  const expectedBundledNames = [...bundledClosure.keys()].sort();
   assert.equal(readerManifest.publishConfig.access, "public");
   assert.equal(readerManifest.publishConfig.provenance, true);
   assert.equal(
@@ -396,9 +462,30 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       label: "packed reader artifact with lifecycle",
     });
     assert.deepEqual(
-      readerPack.files.map(({ path }) => path).sort(),
+      firstPartyPackedPaths(readerPack),
       await expectedReaderPaths(),
     );
+    assert.deepEqual(
+      [...readerPack.bundled].sort(),
+      expectedBundledNames,
+    );
+    assert.equal(
+      await pathExists(join(readerRoot, "node_modules")),
+      false,
+      "postpack must remove the temporary dependency bundle.",
+    );
+    const thirdPartyNotices = await readFile(
+      join(readerRoot, "THIRD_PARTY_NOTICES.md"),
+      "utf8",
+    );
+    for (const name of expectedBundledNames) {
+      const version = bundledClosure.get(name)?.version;
+      assert.equal(typeof version, "string");
+      assert.ok(
+        thirdPartyNotices.includes(`| \`${name}\` | ${version} |`),
+        `Third-party notice omits bundled ${name}@${version}.`,
+      );
+    }
 
     const readerTarball = join(packRoot, readerPack.filename);
     const schemaTarball = join(packRoot, schemaPack.filename);
@@ -421,6 +508,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         ),
       ),
     );
+    await rm(join(extractedReaderRoot, "node_modules"), {
+      force: true,
+      recursive: true,
+    });
     await symlink(
       join(repositoryRoot, "node_modules"),
       join(extractedReaderRoot, "node_modules"),
@@ -506,9 +597,35 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         .map((filePath) =>
           packagePath(relative(installedReaderRoot, filePath)),
         )
+        .filter((path) => !path.startsWith("node_modules/"))
         .sort(),
       await expectedReaderPaths(),
     );
+    for (const name of expectedBundledNames) {
+      const dependencyRoot = join(
+        installedReaderRoot,
+        "node_modules",
+        ...name.split("/"),
+      );
+      const installedManifest = JSON.parse(
+        await readFile(
+          join(dependencyRoot, "package.json"),
+          "utf8",
+        ),
+      );
+      assert.equal(
+        installedManifest.version,
+        bundledClosure.get(name)?.version,
+        `${name} differs from the parser closure packed with the reader.`,
+      );
+      assert.equal(
+        (await readdir(dependencyRoot)).some((entry) =>
+          entry.toLowerCase().startsWith("license"),
+        ),
+        true,
+        `Bundled ${name} omitted its license file.`,
+      );
+    }
     assert.equal(
       await pathExists(
         join(consumerRoot, "node_modules", "typescript"),
@@ -555,6 +672,9 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         serializePublicationReaderEnvelope,
         validatePublicationReaderEnvelope,
       } from "@genii-foundation/publisher-reader";
+      import {
+        applyReaderLinksToMarkdown,
+      } from "@genii-foundation/publisher-reader/markdown";
 
       const digest = "sha256:" + "0".repeat(64);
       const envelope = {
@@ -632,6 +752,38 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         { audience: "public" },
       );
       assert.equal(projected.valid, false);
+      const linked = applyReaderLinksToMarkdown(
+        {
+          id: "opening",
+          kind: "paragraph",
+          markdown: "Portable prose",
+          text: "Portable prose",
+          readerAddress: null,
+          domId: null,
+          wordCount: 2,
+          contentHash: digest,
+        },
+        [{
+          id: "portable-link",
+          source: {
+            kind: "block-markdown",
+            workId: "portable-work",
+            sectionId: "opening",
+            blockId: "opening",
+            range: { start: 0, end: 8 },
+          },
+          target: {
+            kind: "external",
+            url: "https://example.com/",
+          },
+          href: "https://example.com/",
+        }],
+      );
+      assert.equal(linked.valid, true, JSON.stringify(linked.diagnostics));
+      assert.equal(
+        linked.value,
+        "[Portable](<https://example.com/>) prose",
+      );
       const validated = validatePublicationReaderEnvelope(envelope);
       assert.equal(
         validated.valid,
@@ -680,6 +832,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         type ReaderAddress,
         type ReaderAddressResolution,
       } from "@genii-foundation/publisher-reader/runtime";
+      import {
+        applyReaderLinksToMarkdown,
+        type ReaderBlockMarkdownLink,
+      } from "@genii-foundation/publisher-reader/markdown";
 
       declare const input: unknown;
       declare const envelope: PublicationReaderEnvelope;
@@ -697,6 +853,12 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       const runtime: ValidationResult<PublicationReaderRuntime> =
         createPublicationReaderRuntime(envelope);
       const address: ReaderAddress = { path: "/" };
+      declare const block: import(
+        "@genii-foundation/publisher-reader"
+      ).ReaderBlock;
+      declare const links: readonly ReaderBlockMarkdownLink[];
+      const linked: ValidationResult<string> =
+        applyReaderLinksToMarkdown(block, links);
       declare const resolution: ReaderAddressResolution;
       void [
         READER_PROJECTOR_VERSION,
@@ -706,6 +868,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         artifact,
         runtime,
         address,
+        linked,
         resolution,
       ];
     `;

@@ -1,0 +1,629 @@
+/*
+No alternative license is selected for GENII Publisher Original Code. The alternative-license fields in the required Exhibit A notice below are intentionally unpopulated.
+
+“The contents of this file are subject to the Common Public Attribution License Version 1.0 (the “License”); you may not use this file except in compliance with the License. You may obtain a copy of the License at https://opensource.org/license/cpal-1.0. The License is based on the Mozilla Public License Version 1.1 but Sections 14 and 15 have been added to cover use of software over a computer network and provide for limited attribution for the Original Developer. In addition, Exhibit A has been modified to be consistent with Exhibit B.
+Software distributed under the License is distributed on an “AS IS” basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for the specific language governing rights and limitations under the License.
+The Original Code is GENII Publisher.
+The Original Developer is not the Initial Developer and is __________. If left blank, the Original Developer is the Initial Developer.
+The Initial Developer of the Original Code is GENII Foundation. All portions of the code written by GENII Foundation are Copyright (c) 2026 GENII Foundation. All Rights Reserved.
+Contributor ______________________.
+Alternatively, the contents of this file may be used under the terms of the _____ license (the [___] License), in which case the provisions of [______] License are applicable instead of those above.
+If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
+*/
+
+import type {
+  ReaderBlock,
+  ReaderPublicationIdentity,
+  ReaderSection,
+  ReaderWork,
+} from "@genii-foundation/publisher-schema";
+import {
+  createElement,
+  type ReactElement,
+  type ReactNode,
+} from "react";
+
+import type {
+  PublisherNextPage,
+  PublisherNextThemeInstance,
+  PublisherNextUpdatesView,
+} from "../types.js";
+import { PublisherAttribution } from "./attribution.js";
+import {
+  PublisherMarkdownBlock,
+  PublisherMarkdownInline,
+} from "./markdown.js";
+import {
+  publisherNextThemeStyle,
+} from "../theme/style.js";
+
+export type PublisherNextMarkdownForBlock = (
+  workId: string,
+  sectionId: string,
+  block: ReaderBlock,
+) => string;
+
+function PublicationHeader({
+  homePath,
+  title,
+}: {
+  readonly homePath: string;
+  readonly title: string;
+}): ReactElement {
+  return (
+    <header className="publisher-site-header">
+      <a className="publisher-site-title" href={homePath}>
+        {title}
+      </a>
+    </header>
+  );
+}
+
+function WorkSummary({
+  headingLevel,
+  work,
+}: {
+  readonly headingLevel: 2 | 3;
+  readonly work: ReaderWork;
+}): ReactElement {
+  const number = new Intl.NumberFormat("en");
+  const minuteUnit =
+    new Intl.PluralRules("en").select(
+      work.readingMinutes,
+    ) === "one"
+      ? "minute"
+      : "minutes";
+  return (
+    <li lang={work.language}>
+      {createElement(
+        `h${headingLevel}`,
+        null,
+        <a href={work.route}>{work.title}</a>,
+      )}
+      {work.subtitle === undefined ? null : <p>{work.subtitle}</p>}
+      {work.summary === undefined ? null : <p>{work.summary}</p>}
+      <p className="publisher-reading-stat" lang="en">
+        {number.format(work.wordCount)} words,{" "}
+        {number.format(work.readingMinutes)} {minuteUnit} read
+      </p>
+    </li>
+  );
+}
+
+function owningHeading(
+  section: ReaderSection,
+): ReaderBlock | null {
+  const first = section.blocks[0];
+  return first?.kind === "heading" &&
+    first.text === section.title
+    ? first
+    : null;
+}
+
+function SectionContent({
+  assetHrefs,
+  headingLevel,
+  markdownForBlock,
+  renderedPath,
+  section,
+  skipBlockId,
+  workId,
+}: {
+  readonly assetHrefs: ReadonlySet<string>;
+  readonly headingLevel?: number;
+  readonly markdownForBlock: PublisherNextMarkdownForBlock;
+  readonly renderedPath: string;
+  readonly section: ReaderSection;
+  readonly skipBlockId?: string;
+  readonly workId: string;
+}): ReactElement {
+  const ownedDomId =
+    section.readerAddress?.path === renderedPath
+      ? section.domId
+      : null;
+  const headingBlock =
+    headingLevel === undefined ? null : owningHeading(section);
+  const headingBlockDomId =
+    headingBlock?.readerAddress?.path === renderedPath
+      ? headingBlock.domId
+      : null;
+  const omittedBlockId = skipBlockId ?? headingBlock?.id;
+  return (
+    <section
+      className="publisher-manuscript-section"
+      data-publisher-section={section.id}
+      {...(ownedDomId === null ? {} : { id: ownedDomId })}
+    >
+      {headingLevel === undefined
+        ? null
+        : createElement(
+            `h${Math.min(6, Math.max(2, headingLevel))}`,
+            {
+              className: "publisher-section-title",
+              ...(headingBlock === null
+                ? {}
+                : {
+                    "data-publisher-block": headingBlock.id,
+                  }),
+              ...(headingBlockDomId === null
+                ? {}
+                : { id: headingBlockDomId }),
+            },
+            headingBlock === null ? (
+              section.title
+            ) : (
+              <PublisherMarkdownInline
+                assetHrefs={assetHrefs}
+                markdown={markdownForBlock(
+                  workId,
+                  section.id,
+                  headingBlock,
+                )}
+              />
+            ),
+          )}
+      {section.blocks.flatMap((block) =>
+        block.id === omittedBlockId
+          ? []
+          : [
+              <PublisherMarkdownBlock
+                assetHrefs={assetHrefs}
+                block={block}
+                key={block.id}
+                markdown={markdownForBlock(
+                  workId,
+                  section.id,
+                  block,
+                )}
+                renderedPath={renderedPath}
+              />,
+            ],
+      )}
+    </section>
+  );
+}
+
+function HomePage({
+  page,
+}: {
+  readonly page: Extract<PublisherNextPage, { kind: "home" }>;
+}): ReactElement {
+  return (
+    <>
+      <h1>{page.publication.title}</h1>
+      {page.publication.description === undefined ? null : (
+        <p className="publisher-publication-description">
+          {page.publication.description}
+        </p>
+      )}
+      {page.works.length === 0 ? null : (
+        <section aria-labelledby="publisher-works-heading">
+          <h2 id="publisher-works-heading" lang="en">
+            Works
+          </h2>
+          <ol className="publisher-catalog">
+            {page.works.map((work) => (
+              <WorkSummary
+                headingLevel={3}
+                key={work.id}
+                work={work}
+              />
+            ))}
+          </ol>
+        </section>
+      )}
+      {page.collections.length === 0 ? null : (
+        <section aria-labelledby="publisher-collections-heading">
+          <h2 id="publisher-collections-heading" lang="en">
+            Collections
+          </h2>
+          <ol className="publisher-catalog">
+            {page.collections.map((collection) => (
+              <li key={collection.id}>
+                <h3>
+                  <a href={collection.route}>{collection.title}</a>
+                </h3>
+                {collection.description === undefined ? null : (
+                  <p>{collection.description}</p>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+    </>
+  );
+}
+
+function WorkPage({
+  markdownForBlock,
+  page,
+}: {
+  readonly markdownForBlock: PublisherNextMarkdownForBlock;
+  readonly page: Extract<PublisherNextPage, { kind: "work" }>;
+}): ReactElement {
+  const assetHrefs = new Set(
+    page.assets.flatMap(({ href, mediaType }) =>
+      mediaType.startsWith("image/") ? [href] : [],
+    ),
+  );
+  const titleSection =
+    page.work.rootSectionIds.length === 1
+      ? (page.work.sections.find(
+          ({ id, title }) =>
+            id === page.work.rootSectionIds[0] &&
+            title === page.work.title,
+        ) ?? null)
+      : null;
+  const titleBlock =
+    titleSection === null ? null : owningHeading(titleSection);
+  const titleBlockDomId =
+    titleBlock?.readerAddress?.path === page.path
+      ? titleBlock.domId
+      : null;
+  return (
+    <article
+      data-publisher-work={page.work.id}
+      lang={page.work.language}
+    >
+      <header>
+        <h1
+          {...(titleBlock === null
+            ? {}
+            : { "data-publisher-block": titleBlock.id })}
+          {...(titleBlockDomId === null
+            ? {}
+            : { id: titleBlockDomId })}
+        >
+          {titleBlock === null || titleSection === null ? (
+            page.work.title
+          ) : (
+            <PublisherMarkdownInline
+              assetHrefs={assetHrefs}
+              markdown={markdownForBlock(
+                page.work.id,
+                titleSection.id,
+                titleBlock,
+              )}
+            />
+          )}
+        </h1>
+        {page.work.subtitle === undefined ? null : (
+          <p className="publisher-work-subtitle">{page.work.subtitle}</p>
+        )}
+        {page.work.summary === undefined ? null : (
+          <p>{page.work.summary}</p>
+        )}
+      </header>
+      <div className="publisher-manuscript">
+        {page.work.sections.map((section) => (
+          <SectionContent
+            assetHrefs={assetHrefs}
+            {...(section.id === titleSection?.id
+              ? {}
+              : { headingLevel: section.depth + 2 })}
+            key={section.id}
+            markdownForBlock={markdownForBlock}
+            renderedPath={page.path}
+            section={section}
+            {...(section.id === titleSection?.id &&
+            titleBlock !== null
+              ? { skipBlockId: titleBlock.id }
+              : {})}
+            workId={page.work.id}
+          />
+        ))}
+      </div>
+    </article>
+  );
+}
+
+function CollectionPage({
+  page,
+}: {
+  readonly page: Extract<
+    PublisherNextPage,
+    { kind: "collection" }
+  >;
+}): ReactElement {
+  return (
+    <article data-publisher-collection={page.collection.id}>
+      <h1>{page.collection.title}</h1>
+      {page.collection.description === undefined ? null : (
+        <p>{page.collection.description}</p>
+      )}
+      <ol className="publisher-catalog">
+        {page.works.map((work) => (
+          <WorkSummary
+            headingLevel={2}
+            key={work.id}
+            work={work}
+          />
+        ))}
+      </ol>
+    </article>
+  );
+}
+
+function SectionPage({
+  markdownForBlock,
+  page,
+}: {
+  readonly markdownForBlock: PublisherNextMarkdownForBlock;
+  readonly page: Extract<PublisherNextPage, { kind: "section" }>;
+}): ReactElement {
+  const sectionHref = (section: ReaderSection): string | null => {
+    if (section.readerAddress === null) {
+      return null;
+    }
+    return `${section.readerAddress.path}${
+      section.readerAddress.anchor === undefined
+        ? ""
+        : `#${section.readerAddress.anchor}`
+    }`;
+  };
+  const previousHref =
+    page.previous === null ? null : sectionHref(page.previous);
+  const nextHref = page.next === null ? null : sectionHref(page.next);
+  const headingBlock = owningHeading(page.section);
+  const headingDomId =
+    headingBlock?.readerAddress?.path === page.path
+      ? headingBlock.domId
+      : null;
+  const assetHrefs = new Set(
+    page.assets.flatMap(({ href, mediaType }) =>
+      mediaType.startsWith("image/") ? [href] : [],
+    ),
+  );
+  return (
+    <article
+      data-publisher-work={page.work.id}
+      lang={page.work.language}
+    >
+      <header>
+        <p>
+          <a href={page.work.route}>{page.work.title}</a>
+        </p>
+        <h1
+          {...(headingBlock === null
+            ? {}
+            : { "data-publisher-block": headingBlock.id })}
+          {...(headingDomId === null
+            ? {}
+            : { id: headingDomId })}
+        >
+          {headingBlock === null ? (
+            page.section.title
+          ) : (
+            <PublisherMarkdownInline
+              assetHrefs={assetHrefs}
+              markdown={markdownForBlock(
+                page.work.id,
+                page.section.id,
+                headingBlock,
+              )}
+            />
+          )}
+        </h1>
+      </header>
+      <div className="publisher-manuscript">
+        <SectionContent
+          assetHrefs={assetHrefs}
+          markdownForBlock={markdownForBlock}
+          renderedPath={page.path}
+          section={page.section}
+          {...(headingBlock === null
+            ? {}
+            : { skipBlockId: headingBlock.id })}
+          workId={page.work.id}
+        />
+      </div>
+      {previousHref === null && nextHref === null ? null : (
+        <nav
+          aria-label="Section navigation"
+          className="publisher-section-navigation"
+          lang="en"
+        >
+          {previousHref === null ? <span /> : (
+            <a href={previousHref}>
+              Previous:{" "}
+              <span lang={page.work.language}>
+                {page.previous?.title}
+              </span>
+            </a>
+          )}
+          {nextHref === null ? null : (
+            <a href={nextHref}>
+              Next:{" "}
+              <span lang={page.work.language}>
+                {page.next?.title}
+              </span>
+            </a>
+          )}
+        </nav>
+      )}
+    </article>
+  );
+}
+
+function UpdatesPage({
+  updates,
+}: {
+  readonly updates: PublisherNextUpdatesView;
+}): ReactElement {
+  return (
+    <section className="publisher-updates">
+      <header>
+        <h1>{updates.title}</h1>
+        {updates.description === undefined ? null : (
+          <p>{updates.description}</p>
+        )}
+      </header>
+      {updates.entries.length === 0 ? (
+        <p>
+          {updates.emptyMessage ?? (
+            <span lang="en">No updates have been published.</span>
+          )}
+        </p>
+      ) : (
+        <ol className="publisher-catalog">
+          {updates.entries.map((entry) => (
+            <li key={entry.id}>
+              <article data-publisher-update={entry.id}>
+                <h2>
+                  {entry.href === undefined ? (
+                    entry.title
+                  ) : (
+                    <a href={entry.href}>{entry.title}</a>
+                  )}
+                </h2>
+                {entry.publishedAt === undefined ? null : (
+                  <p>
+                    <time dateTime={entry.publishedAt}>
+                      {entry.publishedAt}
+                    </time>
+                  </p>
+                )}
+                {entry.summary === undefined ? null : (
+                  <p>{entry.summary}</p>
+                )}
+              </article>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+async function PageBody({
+  markdownForBlock,
+  page,
+  updates,
+}: {
+  readonly markdownForBlock: PublisherNextMarkdownForBlock;
+  readonly page: PublisherNextPage;
+  readonly updates: PublisherNextUpdatesView | null;
+}): Promise<ReactNode> {
+  switch (page.kind) {
+    case "home":
+      return <HomePage page={page} />;
+    case "work":
+      return (
+        <WorkPage
+          markdownForBlock={markdownForBlock}
+          page={page}
+        />
+      );
+    case "collection":
+      return <CollectionPage page={page} />;
+    case "section":
+      return (
+        <SectionPage
+          markdownForBlock={markdownForBlock}
+          page={page}
+        />
+      );
+    case "updates":
+      if (updates === null) {
+        throw new TypeError(
+          "The Updates route has no configured renderer.",
+        );
+      }
+      return <UpdatesPage updates={updates} />;
+  }
+}
+
+export interface PublisherPageViewProps {
+  readonly homePath: string;
+  readonly markdownForBlock: PublisherNextMarkdownForBlock;
+  readonly page: PublisherNextPage;
+  readonly theme: PublisherNextThemeInstance;
+  readonly updates: PublisherNextUpdatesView | null;
+}
+
+interface PublisherPageShellProps {
+  readonly body: ReactNode;
+  readonly homePath: string;
+  readonly pageKind: PublisherNextPage["kind"] | "not-found";
+  readonly publication: ReaderPublicationIdentity;
+  readonly theme: PublisherNextThemeInstance;
+}
+
+function PublisherPageShell({
+  body,
+  homePath,
+  pageKind,
+  publication,
+  theme,
+}: PublisherPageShellProps): ReactElement {
+  return (
+    <div
+      className="publisher-root"
+      data-publisher-page={pageKind}
+      style={publisherNextThemeStyle(theme)}
+    >
+      <a
+        className="publisher-skip-link"
+        href="#publisher:main"
+        lang="en"
+      >
+        Skip to content
+      </a>
+      <PublicationHeader
+        homePath={homePath}
+        title={publication.title}
+      />
+      <main id="publisher:main">{body}</main>
+      <PublisherAttribution publication={publication} />
+    </div>
+  );
+}
+
+export async function PublisherPageView({
+  homePath,
+  markdownForBlock,
+  page,
+  theme,
+  updates,
+}: PublisherPageViewProps): Promise<ReactElement> {
+  const body = await PageBody({
+    markdownForBlock,
+    page,
+    updates,
+  });
+  return (
+    <PublisherPageShell
+      body={body}
+      homePath={homePath}
+      pageKind={page.kind}
+      publication={page.publication}
+      theme={theme}
+    />
+  );
+}
+
+export function PublisherNotFoundView({
+  homePath,
+  publication,
+  theme,
+}: {
+  readonly homePath: string;
+  readonly publication: ReaderPublicationIdentity;
+  readonly theme: PublisherNextThemeInstance;
+}): ReactElement {
+  return (
+    <PublisherPageShell
+      body={
+        <div lang="en">
+          <h1>Page not found</h1>
+          <p>This publication has no page at this address.</p>
+        </div>
+      }
+      homePath={homePath}
+      pageKind="not-found"
+      publication={publication}
+      theme={theme}
+    />
+  );
+}

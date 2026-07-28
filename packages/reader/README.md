@@ -41,6 +41,28 @@ Source-backed link ranges use the fixed `genii-reader-block-markdown` profile. O
 
 The projected link registry does not prove that arbitrary Markdown or embedded HTML contains no other URLs. Renderers must sanitize untrusted Markdown. A compiler that requires complete internal-link coverage needs a separate parsing invariant.
 
+### Applying source-backed links
+
+Import `applyReaderLinksToMarkdown` from
+`@genii-foundation/publisher-reader/markdown` when a renderer needs Markdown
+with source-backed ReaderLinks attached. The helper accepts one validated
+`ReaderBlock` and only the `block-markdown` ReaderLinks for that block. It
+returns a `ValidationResult<string>` and never mutates either input.
+
+The helper parses the exact block with the bundled, lockfile-pinned CommonMark
+parser, checks each UTF-16 range against the syntax tree, inserts links from
+the end of the block toward the beginning, then reparses the result. It
+accepts a range inside one text node or around one complete emphasis or
+strong container. It rejects duplicate and overlapping ranges, partial
+formatting, node-crossing ranges, malformed Unicode boundaries, existing
+link, code, or image contexts, and every attempted application in a block
+containing raw HTML. The final parse must preserve the original prose and
+formatting after the introduced link wrappers are removed.
+
+The helper uses each validated `link.href` as the destination. Semantic
+ReaderLinks carry navigation meaning without a source span, so callers must
+handle them outside this API.
+
 ## Integrity boundary
 
 The browser runtime validates JSON shape, relational consistency, address ownership, navigation, link ranges, statistics, and attribution without Node.js or cryptographic authority. The package root adds canonical SHA-256 verification through `validatePublicationReaderEnvelope`.

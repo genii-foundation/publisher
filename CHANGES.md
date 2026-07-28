@@ -41,3 +41,11 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Proved the packed reader root and browser entry points, both declaration surfaces, and a byte-identical rebuild from the shipped source.
 - Defined closed extension capability grants, exact ordered host resolution, compiled identity retention, and reader omission.
 - Hardened compiler grant matching so invalid manifest members cannot disappear before exact resolution comparison.
+- Added the official Next.js server renderer, closed theme tokens, safe Markdown pages, and deterministic application identity.
+- Bound one validated, frozen Updates view to application identity and kept its markup, metadata, links, and shell under engine control.
+- Preserved per-route slash authority, exact internal redirect paths and queries, semantic external destinations, and canonical raw path spelling through an engine-owned Next.js Proxy handler.
+- Kept the persistent linked attribution and publication source link on publication, not-found, static framework error, and hydrated App Router error surfaces.
+- Split the renderer into browser-safe root exports, protected `/server` APIs, configuration-only `/config` APIs, and client-safe `/client` error components.
+- Proved a clean 17-file Next.js renderer integration with server-rendered manuscript text and no build-time host source mutation.
+- Required consuming roots to lock patched PostCSS and sharp versions because dependency-package overrides do not propagate.
+- Proved zero production audit findings, real WebP optimization, illegal Client Component server-import failure, attributed static error pages, secret-safe runtime errors, manuscript-free browser error chunks, and attributed App Router error hydration in Chrome.
