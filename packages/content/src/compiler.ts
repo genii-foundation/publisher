@@ -2917,11 +2917,104 @@ function isExtensionCapability(
   );
 }
 
+interface InspectedExtensionCapabilities {
+  readonly capabilities: readonly ExtensionCapability[];
+  readonly valid: boolean;
+}
+
+function cloneDeclaredExtensionCapabilities(
+  value: unknown,
+  pointer: string,
+  diagnostics: Diagnostic[],
+): InspectedExtensionCapabilities {
+  if (!Array.isArray(value)) {
+    diagnostics.push(
+      diagnostic(
+        "content.extension.declared_capabilities_invalid",
+        pointer,
+        "Manifest extension capabilities must be an array.",
+        "type",
+        { expected: "array" },
+      ),
+    );
+    return { capabilities: [], valid: false };
+  }
+
+  let valid = value.length > 0;
+  if (!valid) {
+    diagnostics.push(
+      diagnostic(
+        "content.extension.declared_capabilities_empty",
+        pointer,
+        "Manifest extension capabilities cannot be empty.",
+        "minItems",
+        { limit: 1 },
+      ),
+    );
+  }
+
+  const capabilities: ExtensionCapability[] = [];
+  const firstIndexByCapability = new Map<string, number>();
+  value.forEach((capability, index) => {
+    const capabilityPointer = `${pointer}/${index}`;
+    if (typeof capability !== "string") {
+      valid = false;
+      diagnostics.push(
+        diagnostic(
+          "content.extension.declared_capability_type_invalid",
+          capabilityPointer,
+          "Manifest extension capabilities must be strings.",
+          "type",
+          { actualType: typeof capability, expected: "string" },
+        ),
+      );
+      return;
+    }
+    if (!isExtensionCapability(capability)) {
+      valid = false;
+      diagnostics.push(
+        diagnostic(
+          "content.extension.declared_capability_unknown",
+          capabilityPointer,
+          "Manifest extension capabilities must use the closed protocol vocabulary.",
+          "extensionCapability",
+          {
+            capability,
+            supported: EXTENSION_CAPABILITIES,
+          },
+        ),
+      );
+      return;
+    }
+
+    const firstIndex = firstIndexByCapability.get(capability);
+    if (firstIndex !== undefined) {
+      valid = false;
+      diagnostics.push(
+        diagnostic(
+          "content.extension.declared_capability_duplicate",
+          capabilityPointer,
+          `Manifest extension capability "${capability}" appears more than once.`,
+          "uniqueItems",
+          { capability, firstIndex, duplicateIndex: index },
+        ),
+      );
+    } else {
+      firstIndexByCapability.set(capability, index);
+    }
+    capabilities.push(capability);
+  });
+  if (capabilities.length !== value.length) {
+    valid = false;
+  }
+  return { capabilities, valid };
+}
+
 function cloneResolvedExtensionCapabilities(
   value: unknown,
   pointer: string,
   diagnostics: Diagnostic[],
-): readonly ExtensionCapability[] {
+): InspectedExtensionCapabilities {
   if (!Array.isArray(value)) {
     diagnostics.push(
       diagnostic(
@@ -2932,7 +3025,20 @@ function cloneResolvedExtensionCapabilities(
         { expected: "array" },
       ),
     );
-    return [];
+    return { capabilities: [], valid: false };
+  }
+
+  let valid = value.length > 0;
+  if (!valid) {
+    diagnostics.push(
+      diagnostic(
+        "content.extension.capabilities_empty",
+        pointer,
+        "Resolved extension capabilities cannot be empty.",
+        "minItems",
+        { limit: 1 },
+      ),
+    );
   }
 
   const capabilities: ExtensionCapability[] = [];
@@ -2940,6 +3046,7 @@ function cloneResolvedExtensionCapabilities(
   value.forEach((capability, index) => {
     const capabilityPointer = `${pointer}/${index}`;
     if (!isExtensionCapability(capability)) {
+      valid = false;
       diagnostics.push(
         diagnostic(
           "content.extension.capability_unknown",
@@ -2957,6 +3064,7 @@ function cloneResolvedExtensionCapabilities(
 
     const firstIndex = firstIndexByCapability.get(capability);
     if (firstIndex !== undefined) {
+      valid = false;
       diagnostics.push(
         diagnostic(
           "content.extension.capability_duplicate",
@@ -2971,7 +3079,10 @@ function cloneResolvedExtensionCapabilities(
     }
     capabilities.push(capability);
   });
-  return capabilities;
+  if (capabilities.length !== value.length) {
+    valid = false;
+  }
+  return { capabilities, valid };
 }
 
 function capabilityResolutionMismatchReason(
@@ -3019,9 +3130,12 @@ function compileExtensionsAndPayloads(
   const extensions = declaredExtensions.map(
     (declared, index): CompiledExtension => {
       const resolved = resolvedExtensions[index];
-      const declaredCapabilities = Array.isArray(declared.capabilities)
-        ? declared.capabilities.filter(isExtensionCapability)
-        : [];
+      const declaredCapabilities =
+        cloneDeclaredExtensionCapabilities(
+          declared.capabilities,
+          `/publication/extensions/${index}/capabilities`,
+          diagnostics,
+        );
       const resolvedCapabilities =
         cloneResolvedExtensionCapabilities(
           resolved?.capabilities,
@@ -3055,16 +3169,23 @@ function compileExtensionsAndPayloads(
         );
       }
       const capabilitiesMatch =
-        declaredCapabilities.length === resolvedCapabilities.length &&
-        declaredCapabilities.every(
+        declaredCapabilities.valid &&
+        resolvedCapabilities.valid &&
+        declaredCapabilities.capabilities.length ===
+          resolvedCapabilities.capabilities.length &&
+        declaredCapabilities.capabilities.every(
           (capability, capabilityIndex) =>
-            capability === resolvedCapabilities[capabilityIndex],
+            capability ===
+            resolvedCapabilities.capabilities[capabilityIndex],
         );
       if (!capabilitiesMatch) {
-        const reason = capabilityResolutionMismatchReason(
-          declaredCapabilities,
-          resolvedCapabilities,
-        );
+        const reason =
+          declaredCapabilities.valid && resolvedCapabilities.valid
+            ? capabilityResolutionMismatchReason(
+                declaredCapabilities.capabilities,
+                resolvedCapabilities.capabilities,
+              )
+            : "mismatched";
         diagnostics.push(
           diagnostic(
             "content.extension.capability_resolution_mismatch",
@@ -3073,8 +3194,10 @@ function compileExtensionsAndPayloads(
             "extensionCapabilityResolution",
             {
               reason,
-              declared: declaredCapabilities,
-              resolved: resolvedCapabilities,
+              declared: declaredCapabilities.capabilities,
+              declaredValid: declaredCapabilities.valid,
+              resolved: resolvedCapabilities.capabilities,
+              resolvedValid: resolvedCapabilities.valid,
             },
           ),
         );
@@ -3100,7 +3223,7 @@ function compileExtensionsAndPayloads(
         id: declared.id,
         package: declared.package,
         version,
-        capabilities: resolvedCapabilities,
+        capabilities: resolvedCapabilities.capabilities,
         ...(config === undefined ? {} : { config }),
         payloadIds: [],
       };

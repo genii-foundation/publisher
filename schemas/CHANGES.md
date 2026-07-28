@@ -40,3 +40,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Applied unanchored route ownership to the selected reader address as well as every named section address.
 - Proved the packed reader root and browser entry points, both declaration surfaces, and a byte-identical rebuild from the shipped source.
 - Defined closed extension capability grants, exact ordered host resolution, compiled identity retention, and reader omission.
+- Hardened compiler grant matching so invalid manifest members cannot disappear before exact resolution comparison.

@@ -655,6 +655,63 @@ test("extension resolution rejects unknown, duplicate, and inexact capability gr
   }
 });
 
+test("invalid manifest grants cannot disappear before exact resolution comparison", async () => {
+  const input = await loadCompilationInput("declared-night-dispatch");
+  const cases = [
+    {
+      label: "mixed valid and unknown",
+      capabilities: ["content.project", "renderer.everything"],
+      code: "content.extension.declared_capability_unknown",
+      path: "/publication/extensions/0/capabilities/1",
+    },
+    {
+      label: "mixed valid and non-string",
+      capabilities: ["content.project", 7],
+      code: "content.extension.declared_capability_type_invalid",
+      path: "/publication/extensions/0/capabilities/1",
+    },
+  ];
+
+  for (const testCase of cases) {
+    const invalidInput = replacePublication(
+      input,
+      (publication) => {
+        publication.extensions[0].capabilities =
+          testCase.capabilities;
+        return publication;
+      },
+    );
+    invalidInput.extensions = invalidInput.extensions.map(
+      (extension) => ({
+        ...extension,
+        capabilities: ["content.project"],
+      }),
+    );
+
+    const result = compilePublicationContent(invalidInput);
+    assert.equal(result.valid, false, testCase.label);
+    assert.equal(Object.hasOwn(result, "value"), false, testCase.label);
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path }) =>
+          code === testCase.code && path === testCase.path,
+      ),
+      `${testCase.label}: ${validationMessage(result)}`,
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, params }) =>
+          code ===
+            "content.extension.capability_resolution_mismatch" &&
+          params.reason === "mismatched" &&
+          params.declaredValid === false &&
+          params.resolvedValid === true,
+      ),
+      `${testCase.label}: ${validationMessage(result)}`,
+    );
+  }
+});
+
 test("custom metric producers preserve legacy counts and exact identity", async () => {
   const input = await loadCompilationInput("canonical-field-notes");
   const customMetrics = {

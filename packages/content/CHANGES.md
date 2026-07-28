@@ -25,3 +25,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Bounded exact SemVer validation and moved continuity progress-group uniqueness to the existing linear semantic pass.
 - Applied the same unanchored ownership rule to the selected reader address so forged envelopes cannot bypass named-route authority.
 - Required exact ordered extension capability grants and bound them to content and build identity.
+- Hardened raw manifest grant validation so invalid members cannot disappear before exact resolution comparison.
