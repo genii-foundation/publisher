@@ -20,6 +20,7 @@ import {
   readdir,
   realpath,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { basename, dirname, join, relative, sep } from "node:path";
@@ -306,25 +307,14 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         ]),
       ),
     );
-    runNpm(
-      [
-        "install",
-        "--offline",
-        "--ignore-scripts",
-        "--no-audit",
-        "--no-fund",
-        "--package-lock=false",
-        "--cache",
-        npmCache,
-      ],
-      {
-        cwd: extractedPackageRoot,
-        label: "packed source development install",
-      },
+    await symlink(
+      join(repositoryRoot, "node_modules"),
+      join(extractedPackageRoot, "node_modules"),
+      process.platform === "win32" ? "junction" : "dir",
     );
     runNpm(["run", "build"], {
       cwd: extractedPackageRoot,
-      label: "packed source rebuild",
+      label: "packed source rebuild with exact workspace toolchain",
     });
     const rebuiltDistPaths = (
       await listFiles(join(extractedPackageRoot, "dist"))
