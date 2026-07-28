@@ -2,7 +2,7 @@
 
 GENII Publisher is an opinionated, open source publishing application for authors and institutions. It will provide the complete path from a manuscript repository to a durable, accessible publication while keeping each author's content, history, identity, and deployment under that author's control.
 
-The project is in its architecture and protocol phase. No installable release exists yet.
+Implementation has begun. The schema runtime is built and tested from its packed artifact, but no npm release exists yet.
 
 ## Product contract
 
@@ -40,7 +40,7 @@ The package boundaries will be proven against a neutral fixture before code move
 
 ## Attribution and source
 
-GENII Publisher is licensed under the Common Public Attribution License 1.0. Network deployment of the covered code triggers source availability duties.
+GENII Publisher is licensed under the Common Public Attribution License 1.0. External network deployment that lets anyone other than the deployer use the covered code triggers source availability duties.
 
 Every rendered publication will retain a persistent footer credit:
 
@@ -48,7 +48,13 @@ Every rendered publication will retain a persistent footer credit:
 
 The credit links to `https://publisher.genii.foundation`. The license and its populated attribution exhibit define the controlling obligation.
 
-Source code is available at [github.com/genii-foundation/publisher](https://github.com/genii-foundation/publisher).
+Every graphical renderer must also show the publication manifest's `sourceCodeUrl` as a conspicuous source availability link alongside the persistent footer attribution. Recording the URL in a manifest without rendering it does not satisfy the GENII Publisher interface contract.
+
+GENII Publisher source code is available at [github.com/genii-foundation/publisher](https://github.com/genii-foundation/publisher).
+
+## First release gates
+
+The first public package release remains blocked until `publisher.genii.foundation` serves the attribution landing page and stable schema URLs, npm trusted publishing is bound to the release workflow, and the exact prerelease tag is verified. A source package passing local tests is not a public release. Metaphysics has tried this trick before.
 
 ## Coherence migration gate
 

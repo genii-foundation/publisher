@@ -77,32 +77,61 @@
   "$defs": {
     "schemaVersion": {
       "type": "string",
-      "pattern": "^[1-9][0-9]*\\.[0-9]+$",
-      "description": "Version of the source manifest contract."
+      "const": "1.0",
+      "description": "Version of the source manifest contract accepted by this schema."
     },
     "stableId": {
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
     },
     "relativePath": {
       "type": "string",
       "minLength": 1,
       "maxLength": 1024,
-      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//).+$",
-      "not": {
-        "enum": [
-          ".",
-          ".."
-        ]
-      }
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*[<>:\"|*])(?!.*%[0-9A-Fa-f]{2})(?!.*[?#])(?!.*[\\u0000-\\u001F\\u007F])(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:\\/|$))(?!.*(?:^|/)(?:[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³])(?:\\.[^/]*)?(?:/|$))(?!.*[. ](?:/|$))(?!.*//)(?!.*\\/$).+$"
+    },
+    "nonRootRoutePath": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2048,
+      "pattern": "^/(?!/)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:\\/|$))(?!.*\\\\)(?!.*%[0-9A-Fa-f]{2})(?!.*[?#])(?!.*[\\u0000-\\u001F\\u007F])(?!.*//)(?!.*\\/$).+$"
     },
     "routePath": {
       "type": "string",
       "minLength": 1,
       "maxLength": 2048,
-      "pattern": "^/"
+      "oneOf": [
+        {
+          "const": "/"
+        },
+        {
+          "$ref": "#/$defs/nonRootRoutePath"
+        }
+      ]
+    },
+    "workRouteTemplate": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/nonRootRoutePath"
+        },
+        {
+          "type": "string",
+          "pattern": "\\{workId\\}"
+        }
+      ]
+    },
+    "collectionRouteTemplate": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/nonRootRoutePath"
+        },
+        {
+          "type": "string",
+          "pattern": "\\{collectionId\\}"
+        }
+      ]
     },
     "packageName": {
       "type": "string",
@@ -128,7 +157,8 @@
         },
         "url": {
           "type": "string",
-          "format": "uri"
+          "format": "uri",
+          "pattern": "^https?://"
         }
       }
     },
@@ -241,7 +271,15 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1024,
-          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//).*\\{workId\\}.*$"
+          "allOf": [
+            {
+              "$ref": "#/$defs/relativePath"
+            },
+            {
+              "type": "string",
+              "pattern": "\\{workId\\}"
+            }
+          ]
         }
       }
     },
@@ -257,7 +295,15 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 1024,
-          "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//).*\\{collectionId\\}.*$"
+          "allOf": [
+            {
+              "$ref": "#/$defs/relativePath"
+            },
+            {
+              "type": "string",
+              "pattern": "\\{collectionId\\}"
+            }
+          ]
         }
       }
     },
@@ -396,16 +442,10 @@
           "$ref": "#/$defs/routePath"
         },
         "work": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2048,
-          "pattern": "^/.*\\{workId\\}.*$"
+          "$ref": "#/$defs/workRouteTemplate"
         },
         "collection": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 2048,
-          "pattern": "^/.*\\{collectionId\\}.*$"
+          "$ref": "#/$defs/collectionRouteTemplate"
         },
         "updates": {
           "$ref": "#/$defs/routePath"

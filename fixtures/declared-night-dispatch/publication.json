@@ -1,0 +1,109 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/publication.schema.json",
+  "schemaVersion": "1.0",
+  "publication": {
+    "id": "night-dispatch",
+    "title": "Night Dispatch",
+    "description": "Two invented stories preserved in an irregular archive.",
+    "language": "en",
+    "canonicalUrl": "https://night-dispatch.example",
+    "publisher": {
+      "name": "Example Story Cooperative",
+      "url": "https://story-cooperative.example"
+    }
+  },
+  "engine": {
+    "compatibility": ">=1.0.0 <2.0.0"
+  },
+  "layout": {
+    "mode": "declared",
+    "overrides": {
+      "works": {
+        "root": "archive/texts",
+        "manifestTemplate": "{workId}/record.json"
+      },
+      "collections": {
+        "root": "lists",
+        "manifestTemplate": "{collectionId}/index.json"
+      },
+      "assets": "shared/media",
+      "continuity": "publishing/continuity"
+    }
+  },
+  "works": [
+    {
+      "id": "signal-lantern"
+    },
+    {
+      "id": "platform-bell",
+      "manifest": "oddities/platform-card.json"
+    }
+  ],
+  "collections": [
+    {
+      "id": "after-dark"
+    }
+  ],
+  "extensions": [
+    {
+      "id": "margin-notes",
+      "package": "@example/margin-notes-extension",
+      "config": {
+        "placement": "after-work"
+      }
+    }
+  ],
+  "sync": {
+    "provider": {
+      "package": "@example/sync-adapter",
+      "config": {
+        "namespace": "night-dispatch"
+      }
+    },
+    "consent": "opt-in",
+    "localFallback": true,
+    "capabilities": [
+      "progress",
+      "bookmarks"
+    ]
+  },
+  "routes": {
+    "home": "/",
+    "work": "/dispatch/{workId}",
+    "collection": "/sequences/{collectionId}",
+    "updates": "/dispatch-log"
+  },
+  "continuity": {
+    "redirects": [
+      {
+        "from": "/stories/lantern",
+        "to": "/dispatch/signal-lantern",
+        "status": 308
+      },
+      {
+        "from": "/platform",
+        "to": "/dispatch/platform-bell",
+        "status": 301
+      }
+    ]
+  },
+  "boundaries": {
+    "sourceRoots": [
+      "archive",
+      "lists",
+      "oddities",
+      "publishing",
+      "shared"
+    ],
+    "outputRoots": [
+      ".publisher"
+    ]
+  },
+  "attribution": {
+    "placement": "footer",
+    "copyright": "Copyright 2026 GENII Foundation",
+    "text": "Published with GENII Publisher",
+    "url": "https://publisher.genii.foundation",
+    "sourceCodeUrl": "https://github.com/genii-foundation/publisher"
+  }
+}

@@ -104,7 +104,7 @@ Every ID is stable. Renaming a title, changing a domain, or moving a source file
 
 ## Version and engine compatibility
 
-`schemaVersion` versions each source contract. Version 1 uses `major.minor` syntax. A major change may alter meaning or remove a field. A minor change may add optional behavior while preserving older valid sources.
+`schemaVersion` versions each source contract. The current schemas accept exactly `1.0`. A future protocol version will ship as a distinct schema contract with an explicit migration. A major change may alter meaning or remove a field. A minor change may add optional behavior while preserving older valid sources.
 
 `engine.compatibility` is a SemVer range evaluated by the engine validator. JSON Schema only checks that the range is present. The author repository must still pin an exact engine package version and commit its lockfile. Compatibility is a claim about which engines may read the source protocol. It is not a dependency resolver.
 
@@ -168,7 +168,9 @@ An irregular legacy source may bypass the shared template:
 
 Catalog level `manifest` overrides are repository relative. They must remain inside a declared source root.
 
-All paths use POSIX separators. Absolute paths, parent traversal, and backslashes are invalid. Layout resolution ends at one ingestion boundary. Compilers, renderers, audio packages, sync packages, and extensions consume normalized data instead of reopening the repository to infer paths.
+All portable repository paths use POSIX separators. They reject POSIX absolute paths, Windows drive prefixes, backslashes, current and parent directory segments, duplicate or trailing separators, percent-encoded octets, query or fragment metacharacters, and ASCII controls. Layout resolution ends at one ingestion boundary. Compilers, renderers, audio packages, sync packages, and extensions consume normalized data instead of reopening the repository to infer paths.
+
+These checks prove lexical safety only. A filesystem loader must resolve every referenced object against an approved real publication root and reject escapes caused by symbolic links, case folding, Unicode normalization, mount behavior, or a source change between validation and access. Passing a schema or pure-runtime check never authorizes a loader to trust string-prefix containment.
 
 ## Work source paths
 
@@ -206,6 +208,8 @@ Extension order is significant. An engine must reject duplicate extension IDs an
 
 Editorial packages are independent inputs, not engine internals. A foundation or publisher may release voice profiles, style rules, schemas, and supervised editorial commands as separately versioned packages. The author repository chooses and configures them.
 
+The pure schema runtime validates package reference syntax and manifest relationships only. It does not inspect an installation. Later engine orchestration verifies that referenced theme, extension, audio, and sync packages are installed at exact author-controlled versions and declare compatible engine and protocol ranges.
+
 ## Optional audio and sync
 
 The presence of `audio` enables an audio adapter. Its optional catalog is a repository relative source path. The adapter contract determines the catalog contents.
@@ -216,11 +220,13 @@ The presence of `sync` enables an installed provider for the listed capabilities
 
 Route templates use `{workId}` and `{collectionId}` tokens. Renderer adapters translate those semantic templates into their own routing mechanism. A publication with collection references must provide a collection route template.
 
-Continuity redirects preserve previously published paths. A redirect source is always an origin relative route. Its target may be an origin relative route or an absolute URL. Redirect records are publication data, not generated cache. The semantic validator must reject redirect loops, duplicate sources, invalid status transitions, and conflicts with active canonical routes.
+Internal routes are origin relative and begin with exactly one slash. They reject network-path references, backslashes, queries, fragments, percent-encoded octets, ASCII controls, current or parent directory segments, duplicate separators, and trailing slashes. `/` is the sole trailing-slash exception. Work and collection templates obey the same rules while retaining their required semantic token.
+
+Continuity redirects preserve previously published paths. A redirect source is always an origin relative route. Its target may be an origin relative route or an absolute, credential-free HTTP or HTTPS URL. Redirect records are publication data, not generated cache. JSON Schema rejects unsupported redirect status codes. The semantic validator rejects redirect loops, duplicate sources, conflicts with active canonical routes, and internal redirect chains that end without an active route or external URL.
 
 ## Source and output boundaries
 
-`boundaries.sourceRoots` declares author controlled input. `boundaries.outputRoots` declares paths the compiler may replace. These sets must not overlap. Every layout override, catalog manifest override, and work source must resolve within a source root. Generated files must stay within an output root.
+The root `publication.json` is an implicit author controlled source manifest. `boundaries.sourceRoots` declares the subordinate author controlled source trees that it may reference. `boundaries.outputRoots` declares paths the compiler may replace. The declared source and output roots must not overlap. Every layout override, catalog manifest override, and work source must resolve within a source root. Generated files must stay within an output root.
 
 `.publisher` is the canonical disposable output and cache root. It is never author source. Build, preview, validation, import, and migration commands must not modify source roots unless the command is an explicit source migration with a human review gate.
 
@@ -234,25 +240,28 @@ Every valid publication manifest carries the engine attribution contract:
 - Copyright notice is `Copyright 2026 GENII Foundation`.
 - Visible text is `Published with GENII Publisher`.
 - The attribution link is `https://publisher.genii.foundation`.
-- `sourceCodeUrl` is an absolute HTTP or HTTPS URL where users of a network deployment can obtain the corresponding covered source code and deployed modifications.
+- `sourceCodeUrl` is an absolute, credential-free HTTP or HTTPS URL where users of a network deployment can obtain the corresponding covered source code and deployed modifications.
 
 Themes, extensions, and renderer adapters may style the attribution accessibly, but they may not hide it, remove it, alter its text or target, or make it dismissible. The engine must render it on every reader page.
+
+Every graphical renderer must expose `sourceCodeUrl` as a conspicuous source availability notice alongside the persistent footer attribution on every reader page. The notice must be visible without developer tools and link to the corresponding covered source. A manifest value alone does not satisfy this interface requirement or prove that the source remains available.
 
 `sourceCodeUrl` concerns code covered by the engine license. It does not assign a license to manuscripts, images, audio, editorial records, or other publication content. Each author controls those rights separately. The CPAL 1.0 license text remains authoritative if this protocol and the license differ.
 
 ## Semantic validation beyond JSON Schema
 
-JSON Schema validates shape. The engine validator must also verify:
+JSON Schema validates shape and lexical string constraints. The pure schema runtime also verifies relationships that depend only on injected manifest data:
 
-- SemVer compatibility with the installed engine.
+- SemVer compatibility with the engine version injected by orchestration.
 - Unique publication, work, collection, and extension identities.
 - Exact ID agreement between catalog references and source manifests.
 - Valid collection references and required route tokens.
 - Safe, nonoverlapping source and output roots.
 - Resolved source containment within declared source roots.
 - Redirect uniqueness, destination validity, and loop freedom.
-- Installed package availability and package protocol compatibility.
-- Public, absolute network source URL syntax.
+- Absolute, credential-free HTTP or HTTPS network source URL syntax.
 - Preservation of the fixed footer attribution contract.
 
-Validation returns structured diagnostics with stable codes and JSON Pointer locations. It does not rewrite any source file or manuscript.
+This pure validation does not inspect installed theme, extension, audio, or sync packages. Later engine orchestration verifies package availability, exact lockfile resolution, and compatibility with the active engine and protocol.
+
+Validation returns structured diagnostics with stable codes and JSON Pointer locations. It does not rewrite any source file or manuscript. Filesystem loaders retain the separate real-path containment duties described above.

@@ -126,21 +126,35 @@ test("canonical source manifests satisfy all three schemas", () => {
   );
 });
 
+test("current schemas reject unsupported protocol versions", () => {
+  const publication = clone(canonicalPublication);
+  publication.schemaVersion = "999.0";
+  assert.equal(validatePublication(publication), false);
+
+  const work = clone(canonicalWork);
+  work.schemaVersion = "847.3";
+  assert.equal(validateWork(work), false);
+
+  const collection = clone(canonicalCollection);
+  collection.schemaVersion = "42.0";
+  assert.equal(validateCollection(collection), false);
+});
+
 test("declared layout supports roots, templates, and irregular manifests", () => {
   const publication = clone(canonicalPublication);
   publication.layout = {
     mode: "declared",
     overrides: {
       works: {
-        root: "editorial/sources/volumes",
-        manifestTemplate: "{workId}/volume.json",
+        root: "archive/records",
+        manifestTemplate: "{workId}/entry.json",
       },
       collections: {
-        root: "editorial/collections",
-        manifestTemplate: "{collectionId}/series.json",
+        root: "catalog/groups",
+        manifestTemplate: "{collectionId}/listing.json",
       },
-      assets: "media",
-      continuity: "publishing/continuity",
+      assets: "shared/media",
+      continuity: "history/routes",
     },
   };
   publication.works.push({
@@ -148,10 +162,11 @@ test("declared layout supports roots, templates, and irregular manifests", () =>
     manifest: "archive/preface/metadata.json",
   });
   publication.boundaries.sourceRoots = [
-    "editorial",
-    "media",
-    "publishing",
     "archive",
+    "catalog",
+    "history",
+    "legacy",
+    "shared",
   ];
 
   assert.equal(
@@ -164,7 +179,7 @@ test("declared layout supports roots, templates, and irregular manifests", () =>
 test("work paths distinguish manifest-relative and repository-relative input", () => {
   const work = clone(canonicalWork);
   work.manuscript = {
-    path: "editorial/manuscripts/first-essay.md",
+    path: "archive/manuscripts/first-essay.md",
     relativeTo: "repository",
   };
 
@@ -193,17 +208,80 @@ test("declared manifest templates require their semantic ID token", () => {
   assert.equal(validatePublication(publication), false);
 });
 
-test("repository paths reject absolute paths, traversal, and backslashes", () => {
+test("repository paths reject unsafe or ambiguous syntax", () => {
   for (const manuscript of [
     "/private/manuscript.md",
     "../manuscript.md",
     "content/../manuscript.md",
     String.raw`content\manuscript.md`,
+    "content/%2e%2e/manuscript.md",
+    "content/%2Fmanuscript.md",
+    "content/manuscript.md?draft",
+    "content/manuscript.md#section",
+    "content/\u0000manuscript.md",
+    "content/con/manuscript.md",
+    "content/PRN.txt/manuscript.md",
+    "content/com1.log/manuscript.md",
+    "content/bad:name/manuscript.md",
+    "content/bad<name>/manuscript.md",
+    "content/bad\"name/manuscript.md",
+    "content/bad|name/manuscript.md",
+    "content/bad*name/manuscript.md",
+    "content/trailing./manuscript.md",
+    "content/trailing /manuscript.md",
   ]) {
     const work = clone(canonicalWork);
     work.manuscript = manuscript;
     assert.equal(validateWork(work), false, manuscript);
   }
+});
+
+test("stable IDs reject Windows reserved device basenames", () => {
+  for (const id of ["con", "nul.txt", "com1", "lpt9.log"]) {
+    const publication = clone(canonicalPublication);
+    publication.works[0].id = id;
+    assert.equal(validatePublication(publication), false, id);
+
+    const work = clone(canonicalWork);
+    work.id = id;
+    assert.equal(validateWork(work), false, id);
+
+    const collection = clone(canonicalCollection);
+    collection.id = id;
+    assert.equal(validateCollection(collection), false, id);
+  }
+
+  for (const id of ["conifer", "aux-notes", "com10", "lpt0", "nulled"]) {
+    const work = clone(canonicalWork);
+    work.id = id;
+    assert.equal(validateWork(work), true, validationMessage(validateWork));
+  }
+});
+
+test("routes are canonical origin-relative paths", () => {
+  for (const route of [
+    "//evil.example",
+    "/notes/../admin",
+    String.raw`/notes\admin`,
+    "/notes?draft=true",
+    "/notes#draft",
+    "/notes/%2e%2e/admin",
+    "/notes//admin",
+    "/notes/",
+    "/notes/\u0000admin",
+  ]) {
+    const publication = clone(canonicalPublication);
+    publication.routes.home = route;
+    assert.equal(validatePublication(publication), false, route);
+  }
+
+  const rootPublication = clone(canonicalPublication);
+  rootPublication.routes.home = "/";
+  assert.equal(
+    validatePublication(rootPublication),
+    true,
+    validationMessage(validatePublication),
+  );
 });
 
 test("catalog references cannot duplicate authoritative work metadata", () => {

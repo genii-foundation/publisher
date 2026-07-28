@@ -1,0 +1,14 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/work.schema.json",
+  "schemaVersion": "1.0",
+  "id": "platform-bell",
+  "title": "The Platform Bell",
+  "summary": "A midnight bell leaves an unexplained entry in the station ledger.",
+  "language": "en",
+  "publicationState": "unlisted",
+  "route": "/dispatch/platform-bell",
+  "manuscript": {
+    "path": "archive/pages/platform-bell.md",
+    "relativeTo": "repository"
+  }
+}

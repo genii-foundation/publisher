@@ -12,11 +12,13 @@
   },
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "schemas"
   ],
   "scripts": {
-    "test": "node --test",
-    "validate": "npm run test"
+    "build": "node schemas/scripts/build.mjs",
+    "test": "node schemas/scripts/build.mjs && node --test",
+    "validate": "node schemas/scripts/build.mjs && node --test"
   },
   "devDependencies": {
     "ajv": "8.20.0",
