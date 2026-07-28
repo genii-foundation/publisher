@@ -813,7 +813,9 @@ async function removeOwnedTemporaryRoot(targetPath) {
   }
   await rm(realTarget, {
     force: true,
+    maxRetries: 50,
     recursive: true,
+    retryDelay: 100,
   });
 }
 
