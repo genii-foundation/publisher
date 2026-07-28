@@ -317,6 +317,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     schemaManifest,
     contentManifest,
     readerManifest,
+    semverManifest,
   ] = await Promise.all([
     readFile(join(repositoryRoot, "package.json"), "utf8").then(
       JSON.parse,
@@ -330,8 +331,16 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     readFile(join(readerRoot, "package.json"), "utf8").then(
       JSON.parse,
     ),
+    readFile(
+      join(repositoryRoot, "node_modules", "semver", "package.json"),
+      "utf8",
+    ).then(JSON.parse),
   ]);
 
+  assert.equal(
+    schemaManifest.dependencies[semverManifest.name],
+    semverManifest.version,
+  );
   assert.equal(
     readerManifest.dependencies[schemaManifest.name],
     schemaManifest.version,
@@ -372,6 +381,14 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       ignoreScripts: true,
       label: "packed schema dependency",
     });
+    const semverPack = packPackage(
+      join(repositoryRoot, "node_modules", "semver"),
+      packRoot,
+      {
+        ignoreScripts: true,
+        label: "packed external runtime dependency",
+      },
+    );
     const contentPack = packPackage(contentRoot, packRoot, {
       label: "packed content dependency with lifecycle",
     });
@@ -385,6 +402,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
 
     const readerTarball = join(packRoot, readerPack.filename);
     const schemaTarball = join(packRoot, schemaPack.filename);
+    const semverTarball = join(packRoot, semverPack.filename);
     const contentTarball = join(packRoot, contentPack.filename);
     run("tar", ["-xzf", readerTarball, "-C", rebuildRoot], {
       cwd: temporaryRoot,
@@ -436,6 +454,9 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       private: true,
       type: "module",
       dependencies: {
+        [semverManifest.name]: `file:${packagePath(
+          relative(consumerRoot, semverTarball),
+        )}`,
         [schemaManifest.name]: `file:${packagePath(
           relative(consumerRoot, schemaTarball),
         )}`,
@@ -448,10 +469,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       },
     };
     await writeJson(join(consumerRoot, "package.json"), manifest);
-    const npmCache = runNpm(["config", "get", "cache"], {
-      cwd: temporaryRoot,
-      label: "npm cache lookup",
-    });
+    const npmCache = join(temporaryRoot, "npm-cache");
     runNpm(
       [
         "install",
