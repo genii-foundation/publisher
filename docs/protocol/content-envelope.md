@@ -50,7 +50,19 @@ The compiler validates publication-wide continuity ownership. Adapters may suppl
 
 Each section contains ordered Markdown blocks with adapter-supplied IDs, exact normalized Markdown, adapter-supplied plain text, and an exact source range. All block and link occurrence spans use normalized text geometry. Source offsets count JavaScript UTF-16 code units in the LF-normalized string. Lines and columns are one-based in the envelope. End offsets are exclusive. The compiler rejects ranges outside the normalized source, ranges that split a surrogate pair, block Markdown that differs from its declared slice, overlapping block ranges, and source occurrences outside their section or declared block.
 
-The neutral `compileMarkdownWork` helper requires explicit work and root-section IDs. It uses CommonMark block boundaries and content-addressed projection IDs for blocks. Those block IDs are deterministic, but they do not replace durable section identity or reviewed continuity records.
+Every section adapter input declares one reader location:
+
+- `work` selects the unfragmented work route.
+- `route` selects one named section address exactly.
+- `none` is allowed only for a nonnavigable section.
+
+The compiler resolves that declaration to `readerAddress`. It never treats the first route, a route named `canonical`, or object insertion order as public policy. Since an unfragmented work route has one content owner, at most one section in a work may select it.
+
+Every block has a compiler projection `id` and a separate reader `anchor`. The anchor uses the portable content-ID grammar, which excludes percent-encoded fragments. When the section has an unanchored reader address, the block address appends its anchor. When the section has an anchored reader address, the block address appends `<section-anchor>-<block-anchor>`. A block in an unlocated nonnavigable section has no public destination. These final path and decoded-fragment tuples must be unique across the publication. Renderers must assign the resolved fragment as the DOM `id` and locate it with `getElementById` or an escaped selector. Content IDs may contain dots or begin with digits.
+
+Block `contentHash` values cover content, not anchors. This allows bookmark recovery to recognize unchanged content after an anchor repair. The section hash includes each block ID, anchor, and content hash, so an anchor change still changes the section, work, content, and build identities.
+
+The neutral `compileMarkdownWork` helper requires explicit work and root-section IDs. It uses CommonMark block boundaries and derives separate content-addressed projection IDs and public anchors. Those values are deterministic, but they do not replace durable section identity or reviewed continuity records.
 
 Every work records an adapter producer as `{ id, package, version }` and a metric producer as `{ id, package, version, profileVersion }`. Every version is exact SemVer. Omitting a metric producer selects `unicode-word-count` from `@genii-foundation/publisher-content`. Its `version` equals the exact content compiler and package version, currently `0.1.0-alpha.0`, and its `profileVersion` is `15.1.0`. The core profile derives counts and rejects block-level overrides. Its word counts use the Letter and Number general categories from the bundled Unicode 15.1.0 data. They do not depend on the Unicode tables built into the host JavaScript runtime. ASCII and typographic apostrophes join adjacent word characters.
 
@@ -91,7 +103,7 @@ The envelope records logical repository-relative paths, not filesystem capabilit
 
 The active route registry names each home, Updates, work, collection, and section route owner. Server paths are concrete, globally unique, origin-relative values. They may retain the publication's trailing slash policy, but they never contain a query or fragment.
 
-A section route is a named `ContentAddress` with a `path` and optional `anchor`. Each exact path and optional anchor tuple has one section owner across the publication, though that section may expose the address under more than one local route name. `activeRouteNames` identifies which named addresses own active server paths. An active address cannot have an anchor. Every non-active address, including one with an anchor, must use the path of an active server route. A reader address can therefore retain a location such as `{ "path": "/reader/", "anchor": "first-reading" }` without smuggling `#first-reading` into the server route registry. Redirects retain manifest order after validation.
+A section route is a named `ContentAddress` with a `path` and optional `anchor`. Each browser-equivalent path and decoded-anchor tuple has one section owner across the publication, though that section may expose the address under more than one local route name. Percent-encoded fragments must be well-formed UTF-8 and cannot encode whitespace, controls, otherwise forbidden fragment characters, or the `:~:` browser fragment-directive delimiter. `activeRouteNames` identifies which named addresses own active server paths. An active address cannot have an anchor. Every non-active address, including one with an anchor, must use the path of an active server route. A resolved `readerAddress` can therefore retain a location such as `{ "path": "/reader/", "anchor": "first-reading" }` without smuggling `#first-reading` into the server route registry. The selected reader anchor uses the stricter portable content-ID grammar even though non-reader content addresses may use the general URL-fragment grammar. Redirects retain manifest order after validation.
 
 Resolved assets identify a source snapshot, plain public route `href`, media type, SHA-256 hash, and optional work owner. An asset href follows the concrete origin-relative route grammar. It cannot contain a query, fragment, route template, or absolute URL. It cannot collide with another asset, an active route, or a redirect source.
 

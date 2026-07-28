@@ -17,3 +17,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Froze the Markdown parser closure against package export conditions and proved byte-identical packed consumers across supported even-numbered Node releases.
 - Separated metric package versions from profile versions and bound public source claims to compiler-feasible UTF-8 and newline normalization geometry.
 - Enforced canonical manifest provenance, contained empty work asset roots, unique section address ownership, and long linked content identities.
+- Added explicit reader-location selection, resolved reader addresses, public block anchors separate from compiler IDs, and collision checks for composite block destinations.

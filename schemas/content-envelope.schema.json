@@ -531,6 +531,7 @@
       "additionalProperties": false,
       "required": [
         "id",
+        "anchor",
         "kind",
         "markdown",
         "text",
@@ -540,6 +541,9 @@
       ],
       "properties": {
         "id": {
+          "$ref": "#/$defs/contentId"
+        },
+        "anchor": {
           "$ref": "#/$defs/contentId"
         },
         "kind": {
@@ -579,6 +583,7 @@
         "order",
         "routes",
         "activeRouteNames",
+        "readerAddress",
         "continuity",
         "navigable",
         "blocks",
@@ -641,6 +646,28 @@
           "items": {
             "$ref": "#/$defs/stableId"
           }
+        },
+        "readerAddress": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path"
+              ],
+              "properties": {
+                "path": {
+                  "$ref": "#/$defs/routePath"
+                },
+                "anchor": {
+                  "$ref": "#/$defs/contentId"
+                }
+              }
+            }
+          ]
         },
         "continuity": {
           "$ref": "#/$defs/contentContinuity"

@@ -50,6 +50,7 @@ export interface CompilationSourceRange {
 
 export interface MarkdownBlockInput {
   readonly id: string;
+  readonly anchor: string;
   readonly kind: string;
   readonly markdown: string;
   readonly text: string;
@@ -58,6 +59,18 @@ export interface MarkdownBlockInput {
   readonly metadata?: Readonly<Record<string, JSONValue>>;
 }
 
+export type SectionReaderLocationInput =
+  | {
+      readonly kind: "none";
+    }
+  | {
+      readonly kind: "route";
+      readonly routeName: string;
+    }
+  | {
+      readonly kind: "work";
+    };
+
 export interface SectionContentInput {
   readonly id: string;
   readonly role?: string;
@@ -65,6 +78,7 @@ export interface SectionContentInput {
   readonly parentId?: string;
   readonly routes?: Readonly<Record<string, ContentAddress>>;
   readonly activeRouteNames?: readonly string[];
+  readonly readerLocation: SectionReaderLocationInput;
   readonly continuity?: ContentContinuity;
   readonly navigable?: boolean;
   readonly blocks: readonly MarkdownBlockInput[];

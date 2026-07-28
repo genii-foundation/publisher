@@ -82,6 +82,7 @@ export interface SourceSpan {
 
 export interface MarkdownContentBlock {
   readonly id: string;
+  readonly anchor: string;
   readonly kind: string;
   readonly markdown: string;
   readonly text: string;
@@ -113,6 +114,7 @@ export interface CompiledSection {
   readonly order: number;
   readonly routes: Readonly<Record<string, ContentAddress>>;
   readonly activeRouteNames: readonly string[];
+  readonly readerAddress: ContentAddress | null;
   readonly continuity: ContentContinuity;
   readonly navigable: boolean;
   readonly blocks: readonly MarkdownContentBlock[];

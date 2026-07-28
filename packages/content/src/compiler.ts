@@ -148,10 +148,12 @@ function sectionHashBasis(section: {
   readonly order: number;
   readonly routes: Readonly<Record<string, ContentAddress>>;
   readonly activeRouteNames: readonly string[];
+  readonly readerAddress: ContentAddress | null;
   readonly continuity: ContentContinuity;
   readonly navigable: boolean;
   readonly blocks: readonly {
     readonly id: string;
+    readonly anchor: string;
     readonly contentHash: Sha256Digest;
   }[];
   readonly metadata?: Readonly<Record<string, JSONValue>>;
@@ -166,10 +168,12 @@ function sectionHashBasis(section: {
     order: section.order,
     routes: section.routes,
     activeRouteNames: section.activeRouteNames,
+    readerAddress: section.readerAddress,
     continuity: section.continuity,
     navigable: section.navigable,
     blocks: section.blocks.map((block) => ({
       id: block.id,
+      anchor: block.anchor,
       contentHash: block.contentHash,
     })),
     ...(section.metadata === undefined
@@ -829,6 +833,29 @@ function formatContentAddress(address: ContentAddress): string {
     : `${address.path}#${address.anchor}`;
 }
 
+function contentAddressOwnershipKey(address: ContentAddress): string {
+  if (address.anchor === undefined) {
+    return JSON.stringify([address.path]);
+  }
+  let decodedAnchor = address.anchor;
+  try {
+    decodedAnchor = decodeURIComponent(address.anchor);
+  } catch {
+    // Fragment validation reports the malformed encoding. Retain a total key
+    // here so one invalid address cannot suppress the remaining diagnostics.
+  }
+  return JSON.stringify([address.path, decodedAnchor]);
+}
+
+function ownContentAddress(
+  routes: Readonly<Record<string, ContentAddress>>,
+  routeName: string,
+): ContentAddress | undefined {
+  return Object.hasOwn(routes, routeName)
+    ? routes[routeName]
+    : undefined;
+}
+
 function normalizeSectionRoutes(
   section: SectionContentInput,
   pointer: string,
@@ -909,7 +936,7 @@ function normalizeSectionRoutes(
       return;
     }
     firstActiveIndexByName.set(name, index);
-    const address = routes[name];
+    const address = ownContentAddress(routes, name);
     if (address === undefined) {
       diagnostics.push(
         diagnostic(
@@ -934,6 +961,99 @@ function normalizeSectionRoutes(
   });
 
   return { routes, activeRouteNames };
+}
+
+function resolveSectionReaderAddress(
+  section: SectionContentInput,
+  routes: Readonly<Record<string, ContentAddress>>,
+  workRoute: string,
+  navigable: boolean,
+  pointer: string,
+  diagnostics: Diagnostic[],
+): ContentAddress | null {
+  const location = section.readerLocation;
+  if (
+    location === null ||
+    typeof location !== "object" ||
+    Array.isArray(location)
+  ) {
+    diagnostics.push(
+      diagnostic(
+        "content.section.reader_location_invalid",
+        `${pointer}/readerLocation`,
+        "Every section must declare a reader location.",
+        "readerLocation",
+        { actualType: location === null ? "null" : typeof location },
+      ),
+    );
+    return null;
+  }
+
+  if (location.kind === "none") {
+    if (navigable) {
+      diagnostics.push(
+        diagnostic(
+          "content.section.reader_location_required",
+          `${pointer}/readerLocation`,
+          "A navigable section must declare a public reader location.",
+          "navigableReaderLocation",
+          { sectionId: section.id },
+        ),
+      );
+    }
+    return null;
+  }
+
+  if (location.kind === "work") {
+    return { path: workRoute };
+  }
+
+  if (location.kind === "route") {
+    if (
+      !validateStableId(
+        location.routeName,
+        `${pointer}/readerLocation/routeName`,
+        diagnostics,
+      )
+    ) {
+      return null;
+    }
+    const address = ownContentAddress(routes, location.routeName);
+    if (address === undefined) {
+      diagnostics.push(
+        diagnostic(
+          "content.section.reader_route_unknown",
+          `${pointer}/readerLocation/routeName`,
+          `Reader route "${location.routeName}" has no matching section address.`,
+          "knownRouteName",
+          { routeName: location.routeName, sectionId: section.id },
+        ),
+      );
+      return null;
+    }
+    if (address.anchor !== undefined) {
+      validateContentId(
+        address.anchor,
+        `${pointer}/routes/${location.routeName}/anchor`,
+        diagnostics,
+      );
+    }
+    return {
+      path: address.path,
+      ...(address.anchor === undefined ? {} : { anchor: address.anchor }),
+    };
+  }
+
+  diagnostics.push(
+    diagnostic(
+      "content.section.reader_location_kind_unknown",
+      `${pointer}/readerLocation/kind`,
+      "A reader location kind must be work, route, or none.",
+      "readerLocationKind",
+      { kind: (location as { readonly kind?: unknown }).kind },
+    ),
+  );
+  return null;
 }
 
 function normalizeSectionContinuity(
@@ -1076,8 +1196,14 @@ function compileBlock(
   customMetrics: boolean,
   diagnostics: Diagnostic[],
 ): MarkdownContentBlock | undefined {
-  validateContentId(block.id, `${pointer}/id`, diagnostics);
-  validateStableId(block.kind, `${pointer}/kind`, diagnostics);
+  const validIdentity = [
+    validateContentId(block.id, `${pointer}/id`, diagnostics),
+    validateContentId(block.anchor, `${pointer}/anchor`, diagnostics),
+    validateStableId(block.kind, `${pointer}/kind`, diagnostics),
+  ].every(Boolean);
+  if (!validIdentity) {
+    return undefined;
+  }
 
   if (
     !Number.isInteger(block.provenance.startOffset) ||
@@ -1200,6 +1326,7 @@ function compileBlock(
 
   return {
     id: block.id,
+    anchor: block.anchor,
     kind: block.kind,
     markdown,
     text,
@@ -1418,8 +1545,16 @@ function compileWork(
       pointer,
       diagnostics,
     );
+    const readerAddress = resolveSectionReaderAddress(
+      section,
+      routes,
+      workRoute,
+      navigable,
+      pointer,
+      diagnostics,
+    );
     for (const routeName of activeRouteNames) {
-      const address = routes[routeName];
+      const address = ownContentAddress(routes, routeName);
       if (address === undefined || address.anchor !== undefined) {
         continue;
       }
@@ -1447,6 +1582,7 @@ function compileWork(
     );
 
     const blockIdFirstIndex = new Map<string, number>();
+    const blockAnchorFirstIndex = new Map<string, number>();
     const blocks: MarkdownContentBlock[] = [];
     section.blocks.forEach((block, blockIndex) => {
       const blockPointer = `${pointer}/blocks/${blockIndex}`;
@@ -1468,6 +1604,25 @@ function compileWork(
         );
       } else {
         blockIdFirstIndex.set(block.id, blockIndex);
+      }
+      const firstAnchorIndex = blockAnchorFirstIndex.get(block.anchor);
+      if (firstAnchorIndex !== undefined) {
+        diagnostics.push(
+          diagnostic(
+            "content.block.duplicate_anchor",
+            `${blockPointer}/anchor`,
+            `Public block anchor "${block.anchor}" is duplicated in section "${section.id}".`,
+            "uniqueBlockAnchor",
+            {
+              workId: workSource.workId,
+              sectionId: section.id,
+              firstIndex: firstAnchorIndex,
+              duplicateIndex: blockIndex,
+            },
+          ),
+        );
+      } else {
+        blockAnchorFirstIndex.set(block.anchor, blockIndex);
       }
       if (block.provenance.sourcePath !== workSource.manuscriptPath) {
         diagnostics.push(
@@ -1521,10 +1676,12 @@ function compileWork(
       order: sectionIndex,
       routes,
       activeRouteNames,
+      readerAddress,
       continuity,
       navigable,
       blocks: blocks.map((block) => ({
         id: block.id,
+        anchor: block.anchor,
         contentHash: block.contentHash,
       })),
       ...(metadata === undefined ? {} : { metadata }),
@@ -1960,7 +2117,8 @@ function validateSectionAddressAuthority(
   works.forEach((work, workIndex) => {
     work.sections.forEach((section, sectionIndex) => {
       for (const [routeName, address] of Object.entries(section.routes)) {
-        const addressKey = formatContentAddress(address);
+        const addressKey = contentAddressOwnershipKey(address);
+        const addressDisplay = formatContentAddress(address);
         const firstOwner = ownerByAddress.get(addressKey);
         if (
           firstOwner !== undefined &&
@@ -1971,7 +2129,7 @@ function validateSectionAddressAuthority(
             diagnostic(
               "content.address.collision",
               `/works/${workIndex}/sections/${sectionIndex}/routes/${routeName}`,
-              `Section address "${addressKey}" is owned by more than one section.`,
+              `Section address "${addressDisplay}" is owned by more than one section.`,
               "uniqueContentAddress",
               {
                 address,
@@ -2012,6 +2170,100 @@ function validateSectionAddressAuthority(
               },
             ),
           );
+        }
+      }
+      if (section.readerAddress !== null) {
+        const addressKey = contentAddressOwnershipKey(
+          section.readerAddress,
+        );
+        const addressDisplay = formatContentAddress(
+          section.readerAddress,
+        );
+        const firstOwner = ownerByAddress.get(addressKey);
+        if (
+          firstOwner !== undefined &&
+          (firstOwner.workId !== work.id ||
+            firstOwner.sectionId !== section.id)
+        ) {
+          diagnostics.push(
+            diagnostic(
+              "content.reader_address.collision",
+              `/works/${workIndex}/sections/${sectionIndex}/readerAddress`,
+              `Reader address "${addressDisplay}" is owned by more than one section.`,
+              "uniqueReaderAddress",
+              {
+                address: section.readerAddress,
+                firstOwner,
+                duplicateOwner: {
+                  sectionId: section.id,
+                  workId: work.id,
+                },
+              },
+            ),
+          );
+        } else if (firstOwner === undefined) {
+          ownerByAddress.set(addressKey, {
+            workId: work.id,
+            sectionId: section.id,
+            routeName: "$reader",
+          });
+        }
+        if (!activeRouteOwnerByPath.has(section.readerAddress.path)) {
+          diagnostics.push(
+            diagnostic(
+              "content.reader_address.base_route_unresolved",
+              `/works/${workIndex}/sections/${sectionIndex}/readerAddress/path`,
+              "A reader address must use an active server route as its base path.",
+              "activeReaderAddressBase",
+              {
+                address: section.readerAddress,
+                sectionId: section.id,
+                workId: work.id,
+              },
+            ),
+          );
+        }
+        for (const [blockIndex, block] of section.blocks.entries()) {
+          const blockAddress: ContentAddress = {
+            path: section.readerAddress.path,
+            anchor:
+              section.readerAddress.anchor === undefined
+                ? block.anchor
+                : `${section.readerAddress.anchor}-${block.anchor}`,
+          };
+          validateUrlFragment(
+            blockAddress.anchor,
+            `/works/${workIndex}/sections/${sectionIndex}/blocks/${blockIndex}/anchor`,
+            diagnostics,
+          );
+          const blockAddressKey = contentAddressOwnershipKey(blockAddress);
+          const blockAddressDisplay = formatContentAddress(blockAddress);
+          const firstBlockAddressOwner = ownerByAddress.get(blockAddressKey);
+          if (firstBlockAddressOwner !== undefined) {
+            diagnostics.push(
+              diagnostic(
+                "content.block_address.collision",
+                `/works/${workIndex}/sections/${sectionIndex}/blocks/${blockIndex}/anchor`,
+                `Public block address "${blockAddressDisplay}" collides with another content address.`,
+                "uniqueBlockAddress",
+                {
+                  address: blockAddress,
+                  firstOwner: firstBlockAddressOwner,
+                  duplicateOwner: {
+                    blockId: block.id,
+                    sectionId: section.id,
+                    workId: work.id,
+                  },
+                },
+              ),
+            );
+          } else {
+            ownerByAddress.set(blockAddressKey, {
+              workId: work.id,
+              sectionId: section.id,
+              routeName: `$block:${block.id}`,
+            });
+          }
         }
       }
     });
@@ -3582,6 +3834,7 @@ function validateEnvelopeBlock(
 ): void {
   const pointer = `${sectionPointer}/blocks/${blockIndex}`;
   validateContentId(block.id, `${pointer}/id`, diagnostics);
+  validateContentId(block.anchor, `${pointer}/anchor`, diagnostics);
   validateStableId(block.kind, `${pointer}/kind`, diagnostics);
   if (coreMetrics) {
     expectDerivedValue(
@@ -3825,6 +4078,7 @@ function validateEnvelopeWork(
         title: section.title,
         routes: section.routes,
         activeRouteNames: section.activeRouteNames,
+        readerLocation: { kind: "none" },
         continuity: section.continuity,
         navigable: section.navigable,
         blocks: [],
@@ -3832,6 +4086,53 @@ function validateEnvelopeWork(
       sectionPointer,
       diagnostics,
     );
+    if (section.readerAddress === null) {
+      if (section.navigable) {
+        diagnostics.push(
+          diagnostic(
+            "content.envelope.reader_address_required",
+            `${sectionPointer}/readerAddress`,
+            `Navigable section "${section.id}" has no public reader address.`,
+            "navigableReaderAddress",
+            { sectionId: section.id, workId: work.id },
+          ),
+        );
+      }
+    } else {
+      validateRoute(
+        section.readerAddress.path,
+        `${sectionPointer}/readerAddress/path`,
+        diagnostics,
+      );
+      if (section.readerAddress.anchor !== undefined) {
+        validateContentId(
+          section.readerAddress.anchor,
+          `${sectionPointer}/readerAddress/anchor`,
+          diagnostics,
+        );
+      }
+      const usesWorkRoute =
+        section.readerAddress.anchor === undefined &&
+        section.readerAddress.path === work.route;
+      const usesNamedAddress = Object.values(section.routes).some((address) =>
+        equalJson(address, section.readerAddress)
+      );
+      if (!usesWorkRoute && !usesNamedAddress) {
+        diagnostics.push(
+          diagnostic(
+            "content.envelope.reader_address_unowned",
+            `${sectionPointer}/readerAddress`,
+            `Reader address for section "${section.id}" is neither its work route nor one of its named section addresses.`,
+            "ownedReaderAddress",
+            {
+              readerAddress: section.readerAddress,
+              sectionId: section.id,
+              workId: work.id,
+            },
+          ),
+        );
+      }
+    }
     expectDerivedValue(
       section.routes,
       routeCheck.routes,
@@ -3847,6 +4148,7 @@ function validateEnvelopeWork(
     );
 
     const blockIdFirstIndex = new Map<string, number>();
+    const blockAnchorFirstIndex = new Map<string, number>();
     section.blocks.forEach((block, blockIndex) => {
       const firstIndex = blockIdFirstIndex.get(block.id);
       if (firstIndex !== undefined) {
@@ -3861,6 +4163,23 @@ function validateEnvelopeWork(
         );
       } else {
         blockIdFirstIndex.set(block.id, blockIndex);
+      }
+      const firstAnchorIndex = blockAnchorFirstIndex.get(block.anchor);
+      if (firstAnchorIndex !== undefined) {
+        diagnostics.push(
+          diagnostic(
+            "content.envelope.block_anchor_duplicate",
+            `${sectionPointer}/blocks/${blockIndex}/anchor`,
+            `Public block anchor "${block.anchor}" appears more than once in section "${section.id}".`,
+            "uniqueBlockAnchor",
+            {
+              firstIndex: firstAnchorIndex,
+              duplicateIndex: blockIndex,
+            },
+          ),
+        );
+      } else {
+        blockAnchorFirstIndex.set(block.anchor, blockIndex);
       }
       validateEnvelopeBlock(
         block,
@@ -4395,7 +4714,7 @@ function validateEnvelopeActiveRoutes(
     });
     for (const section of work.sections) {
       for (const routeName of section.activeRouteNames) {
-        const address = section.routes[routeName];
+        const address = ownContentAddress(section.routes, routeName);
         if (address === undefined || address.anchor !== undefined) {
           continue;
         }

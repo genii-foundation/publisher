@@ -37,7 +37,6 @@ import {
   validatePackageName,
   validateRoute,
   validateStableId,
-  validateUrlFragment,
 } from "./validation.js";
 
 export const CONTENT_UNICODE_VERSION = "15.1.0";
@@ -401,7 +400,7 @@ function compileMarkdownWorkInput(
     validateRoute(route, "/route", diagnostics);
   }
   if (routeAnchor !== undefined) {
-    validateUrlFragment(routeAnchor, "/routeAnchor", diagnostics);
+    validateContentId(routeAnchor, "/routeAnchor", diagnostics);
     if (route === undefined) {
       diagnostics.push(
         diagnostic(
@@ -469,9 +468,14 @@ function compileMarkdownWorkInput(
       occurrence === 1
         ? `markdown-block-${hash}`
         : `markdown-block-${hash}-${occurrence}`;
+    const anchor =
+      occurrence === 1
+        ? `b-${hash}`
+        : `b-${hash}-${occurrence}`;
 
     blocks.push({
       id,
+      anchor,
       kind: blockKind(node.type),
       markdown,
       text: toString(node),
@@ -503,6 +507,10 @@ function compileMarkdownWorkInput(
       route === undefined || routeAnchor !== undefined
         ? []
         : ["canonical"],
+    readerLocation:
+      route === undefined
+        ? { kind: "work" as const }
+        : { kind: "route" as const, routeName: "canonical" },
     continuity: {
       id: sectionId,
       legacyIds: [],

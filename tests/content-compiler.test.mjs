@@ -108,10 +108,12 @@ function rehashWorkHierarchy(envelope, workIndex, sectionIndex, blockIndex) {
     order: section.order,
     routes: section.routes,
     activeRouteNames: section.activeRouteNames,
+    readerAddress: section.readerAddress,
     continuity: section.continuity,
     navigable: section.navigable,
-    blocks: section.blocks.map(({ id, contentHash }) => ({
+    blocks: section.blocks.map(({ id, anchor, contentHash }) => ({
       id,
+      anchor,
       contentHash,
     })),
     ...(section.metadata === undefined
@@ -392,6 +394,17 @@ test("canonical content compiles with exact schema, assets, and links", async ()
   assert.equal(envelope.assets[0].id, "gauge-scale");
   assert.equal(envelope.links[0].target.kind, "asset");
   assert.equal(envelope.links[0].href, envelope.assets[0].href);
+  assert.deepEqual(envelope.works[0].sections[0].readerAddress, {
+    path: envelope.works[0].route,
+  });
+  assert.ok(
+    envelope.works[0].sections[0].blocks.every(
+      ({ anchor, id }) =>
+        anchor.startsWith("b-") &&
+        id.startsWith("markdown-block-") &&
+        anchor !== id,
+    ),
+  );
   assert.deepEqual(envelope.works[0].source.metrics, {
     id: "unicode-word-count",
     package: "@genii-foundation/publisher-content",
@@ -723,6 +736,10 @@ test("long Coherence IDs and historical-only lineage survive compilation", async
           },
         },
         activeRouteNames: [],
+        readerLocation: {
+          kind: "route",
+          routeName: "reader",
+        },
         continuity: {
           id: COHERENCE_STYLE_CONTENT_ID,
           legacyIds: [],
@@ -755,6 +772,7 @@ test("long Coherence IDs and historical-only lineage survive compilation", async
     section.routes.reader.anchor,
     COHERENCE_STYLE_CONTENT_ID,
   );
+  assert.deepEqual(section.readerAddress, section.routes.reader);
   assert.deepEqual(section.continuity.historicalSectionIds, [
     "retired-section-lineage",
   ]);
@@ -790,6 +808,475 @@ test("a manuscript edit changes the complete deterministic hash cascade", async 
     createPublicationContentArtifact(changed).hash,
     createPublicationContentArtifact(baseline).hash,
   );
+});
+
+test("public block anchors are independent from content-only block hashes", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const baseline = compile(input);
+  const renamed = compile(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section, sectionIndex) => ({
+        ...section,
+        blocks: section.blocks.map((block, blockIndex) =>
+          sectionIndex === 0 && blockIndex === 0
+            ? { ...block, anchor: "reviewed-opening-anchor" }
+            : block,
+        ),
+      })),
+    })),
+  );
+
+  assert.equal(
+    renamed.works[0].sections[0].blocks[0].contentHash,
+    baseline.works[0].sections[0].blocks[0].contentHash,
+  );
+  assert.notEqual(
+    renamed.works[0].sections[0].contentHash,
+    baseline.works[0].sections[0].contentHash,
+  );
+  assert.notEqual(
+    renamed.works[0].contentHash,
+    baseline.works[0].contentHash,
+  );
+  assert.notEqual(renamed.hashes.content, baseline.hashes.content);
+  assert.notEqual(renamed.buildId, baseline.buildId);
+
+  const repeatedInput = await replaceManuscript(
+    input,
+    "rain-gauge",
+    () => "Same observation.\n\nSame observation.\n",
+  );
+  const repeated = compile({ ...repeatedInput, links: [] });
+  const [first, second] = repeated.works[0].sections[0].blocks;
+  assert.ok(first);
+  assert.ok(second);
+  assert.notEqual(first.id, second.id);
+  assert.notEqual(first.anchor, second.anchor);
+  assert.equal(first.contentHash, second.contentHash);
+});
+
+test("reader locations are explicit, owned, and collision checked", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+
+  const duplicateBlockAnchor = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section) => ({
+        ...section,
+        blocks: section.blocks.map((block, index) =>
+          index === 1
+            ? { ...block, anchor: section.blocks[0].anchor }
+            : block,
+        ),
+      })),
+    })),
+  );
+  assert.equal(duplicateBlockAnchor.valid, false);
+  assert.ok(
+    diagnosticCodes(duplicateBlockAnchor).has(
+      "content.block.duplicate_anchor",
+    ),
+    validationMessage(duplicateBlockAnchor),
+  );
+
+  const missingBlockAnchor = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section) => ({
+        ...section,
+        blocks: section.blocks.map((block, index) =>
+          index === 0 ? { ...block, anchor: undefined } : block,
+        ),
+      })),
+    })),
+  );
+  assert.equal(missingBlockAnchor.valid, false);
+  assert.ok(
+    diagnosticCodes(missingBlockAnchor).has("content.id.invalid"),
+    validationMessage(missingBlockAnchor),
+  );
+  assert.equal(
+    diagnosticCodes(missingBlockAnchor).has("content.input.unreadable"),
+    false,
+    validationMessage(missingBlockAnchor),
+  );
+
+  const missing = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section) => ({
+        ...section,
+        readerLocation: undefined,
+      })),
+    })),
+  );
+  assert.equal(missing.valid, false);
+  assert.ok(
+    diagnosticCodes(missing).has("content.section.reader_location_invalid"),
+    validationMessage(missing),
+  );
+
+  const unknown = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section) => ({
+        ...section,
+        readerLocation: {
+          kind: "route",
+          routeName: "missing",
+        },
+      })),
+    })),
+  );
+  assert.equal(unknown.valid, false);
+  assert.ok(
+    diagnosticCodes(unknown).has("content.section.reader_route_unknown"),
+    validationMessage(unknown),
+  );
+
+  const inheritedRouteName = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section) => ({
+        ...section,
+        routes: {},
+        activeRouteNames: ["constructor"],
+        readerLocation: {
+          kind: "route",
+          routeName: "constructor",
+        },
+      })),
+    })),
+  );
+  assert.equal(inheritedRouteName.valid, false);
+  assert.ok(
+    diagnosticCodes(inheritedRouteName).has(
+      "content.section.reader_route_unknown",
+    ),
+    validationMessage(inheritedRouteName),
+  );
+  assert.ok(
+    diagnosticCodes(inheritedRouteName).has(
+      "content.section.active_route_unknown",
+    ),
+    validationMessage(inheritedRouteName),
+  );
+  assert.equal(
+    diagnosticCodes(inheritedRouteName).has("content.input.unreadable"),
+    false,
+    validationMessage(inheritedRouteName),
+  );
+
+  const unknownKind = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section) => ({
+        ...section,
+        readerLocation: { kind: "guess" },
+      })),
+    })),
+  );
+  assert.equal(unknownKind.valid, false);
+  assert.ok(
+    diagnosticCodes(unknownKind).has(
+      "content.section.reader_location_kind_unknown",
+    ),
+    validationMessage(unknownKind),
+  );
+
+  const encodedReaderAnchor = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section) => ({
+        ...section,
+        routes: {
+          encoded: {
+            path: input.sourceGraph.works[0].manifest.route,
+            anchor: "%61",
+          },
+        },
+        activeRouteNames: [],
+        readerLocation: {
+          kind: "route",
+          routeName: "encoded",
+        },
+      })),
+    })),
+  );
+  assert.equal(encodedReaderAnchor.valid, false);
+  assert.ok(
+    diagnosticCodes(encodedReaderAnchor).has("content.id.invalid"),
+    validationMessage(encodedReaderAnchor),
+  );
+
+  for (const anchor of [
+    "section:~:text=phrase",
+    "section%3A~%3Atext=phrase",
+  ]) {
+    const fragmentDirective = compilePublicationContent(
+      replaceWork(input, "rain-gauge", (work) => ({
+        ...work,
+        sections: work.sections.map((section) => ({
+          ...section,
+          routes: {
+            legacy: {
+              path: input.sourceGraph.works[0].manifest.route,
+              anchor,
+            },
+          },
+          activeRouteNames: [],
+          readerLocation: { kind: "none" },
+          navigable: false,
+        })),
+      })),
+    );
+    assert.equal(fragmentDirective.valid, false);
+    assert.ok(
+      diagnosticCodes(fragmentDirective).has("content.fragment.invalid"),
+      validationMessage(fragmentDirective),
+    );
+  }
+
+  const none = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section) => ({
+        ...section,
+        readerLocation: { kind: "none" },
+      })),
+    })),
+  );
+  assert.equal(none.valid, false);
+  assert.ok(
+    diagnosticCodes(none).has("content.section.reader_location_required"),
+    validationMessage(none),
+  );
+
+  const workRoute = input.sourceGraph.works[0].manifest.route;
+  const duplicateWorkOwner = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: [
+        ...work.sections,
+        {
+          id: "rain-gauge-second",
+          role: "section",
+          title: "Second Reading",
+          readerLocation: { kind: "work" },
+          navigable: true,
+          blocks: [],
+        },
+      ],
+    })),
+  );
+  assert.equal(duplicateWorkOwner.valid, false);
+  assert.ok(
+    diagnosticCodes(duplicateWorkOwner).has(
+      "content.reader_address.collision",
+    ),
+    validationMessage(duplicateWorkOwner),
+  );
+
+  const firstAnchor = input.works[0].sections[0].blocks[0].anchor;
+  const blockAddressCollision = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: [
+        ...work.sections,
+        {
+          id: "rain-gauge-collision",
+          role: "section",
+          title: "Colliding Reading",
+          routes: {
+            reader: {
+              path: workRoute,
+              anchor: firstAnchor,
+            },
+          },
+          activeRouteNames: [],
+          readerLocation: {
+            kind: "route",
+            routeName: "reader",
+          },
+          navigable: true,
+          blocks: [],
+        },
+      ],
+    })),
+  );
+  assert.equal(blockAddressCollision.valid, false);
+  assert.ok(
+    diagnosticCodes(blockAddressCollision).has("content.address.collision"),
+    validationMessage(blockAddressCollision),
+  );
+});
+
+test("qualified block addresses support composite pages and reject ambiguity", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const workRoute = input.sourceGraph.works[0].manifest.route;
+  const compositeInput = replaceWork(input, "rain-gauge", (work) => {
+    const root = work.sections[0];
+    return {
+      ...work,
+      sections: [
+        {
+          ...root,
+          routes: {
+            reader: {
+              path: workRoute,
+              anchor: "first",
+            },
+          },
+          activeRouteNames: [],
+          readerLocation: {
+            kind: "route",
+            routeName: "reader",
+          },
+          blocks: [{ ...root.blocks[0], anchor: "p-habc" }],
+        },
+        {
+          id: "rain-gauge-second",
+          role: "section",
+          title: "Second Reading",
+          routes: {
+            reader: {
+              path: workRoute,
+              anchor: "second",
+            },
+          },
+          activeRouteNames: [],
+          readerLocation: {
+            kind: "route",
+            routeName: "reader",
+          },
+          navigable: true,
+          blocks: [{ ...root.blocks[1], anchor: "p-habc" }],
+        },
+      ],
+    };
+  });
+  const composite = compile(compositeInput);
+  const [first, second] = composite.works[0].sections;
+  assert.deepEqual(first.readerAddress, {
+    path: workRoute,
+    anchor: "first",
+  });
+  assert.deepEqual(second.readerAddress, {
+    path: workRoute,
+    anchor: "second",
+  });
+  assert.equal(
+    `${first.readerAddress.anchor}-${first.blocks[0].anchor}`,
+    "first-p-habc",
+  );
+  assert.equal(
+    `${second.readerAddress.anchor}-${second.blocks[0].anchor}`,
+    "second-p-habc",
+  );
+
+  const ambiguous = compilePublicationContent(
+    replaceWork(compositeInput, "rain-gauge", (work) => ({
+      ...work,
+      sections: work.sections.map((section, index) =>
+        index === 0
+          ? {
+              ...section,
+              routes: {},
+              activeRouteNames: [],
+              readerLocation: { kind: "work" },
+              blocks: [
+                {
+                  ...section.blocks[0],
+                  anchor: "second-p-habc",
+                },
+              ],
+            }
+          : section,
+      ),
+    })),
+  );
+  assert.equal(ambiguous.valid, false);
+  assert.ok(
+    diagnosticCodes(ambiguous).has("content.block_address.collision"),
+    validationMessage(ambiguous),
+  );
+
+  const encodedAliasCollision = compilePublicationContent(
+    replaceWork(input, "rain-gauge", (work) => {
+      const root = work.sections[0];
+      return {
+        ...work,
+        sections: [
+          {
+            ...root,
+            blocks: [
+              {
+                ...root.blocks[0],
+                anchor: "b-one",
+              },
+              ...root.blocks.slice(1),
+            ],
+          },
+          {
+            id: "rain-gauge-encoded-alias",
+            role: "section",
+            title: "Encoded Alias",
+            routes: {
+              legacy: {
+                path: workRoute,
+                anchor: "%62-one",
+              },
+            },
+            activeRouteNames: [],
+            readerLocation: { kind: "none" },
+            navigable: false,
+            blocks: [],
+          },
+        ],
+      };
+    }),
+  );
+  assert.equal(encodedAliasCollision.valid, false);
+  assert.ok(
+    diagnosticCodes(encodedAliasCollision).has(
+      "content.address.collision",
+    ),
+    validationMessage(encodedAliasCollision),
+  );
+
+  const selected = (reverse) =>
+    compile(
+      replaceWork(input, "rain-gauge", (work) => ({
+        ...work,
+        sections: work.sections.map((section) => ({
+          ...section,
+          routes: Object.fromEntries(
+            (reverse
+              ? [
+                  ["selected", { path: workRoute, anchor: "selected" }],
+                  ["alias", { path: workRoute, anchor: "alias" }],
+                ]
+              : [
+                  ["alias", { path: workRoute, anchor: "alias" }],
+                  ["selected", { path: workRoute, anchor: "selected" }],
+                ]),
+          ),
+          activeRouteNames: [],
+          readerLocation: {
+            kind: "route",
+            routeName: "selected",
+          },
+        })),
+      })),
+    );
+  const forward = selected(false);
+  const reversed = selected(true);
+  assert.deepEqual(
+    forward.works[0].sections[0].readerAddress,
+    reversed.works[0].sections[0].readerAddress,
+  );
+  assert.equal(forward.buildId, reversed.buildId);
 });
 
 test("compiled envelopes and artifacts are detached immutable snapshots", async () => {
@@ -931,6 +1418,10 @@ test("structured addresses preserve trailing routes and use active anchor bases"
           },
         },
         activeRouteNames: ["canonical"],
+        readerLocation: {
+          kind: "route",
+          routeName: "reader",
+        },
       },
     ],
   }));
@@ -941,6 +1432,7 @@ test("structured addresses preserve trailing routes and use active anchor bases"
     path: "/reader/",
     anchor: "rain-gauge-root",
   });
+  assert.deepEqual(section.readerAddress, section.routes.reader);
   assert.ok(
     envelope.routes.active.some(
       ({ path }) => path === "/reading/rain-gauge/",
@@ -966,6 +1458,7 @@ test("navigation skips structural sections without flattening hierarchy", async 
           title: "Measurements",
           parentId: root.id,
           navigable: false,
+          readerLocation: { kind: "none" },
           blocks: [],
         },
         {
@@ -974,6 +1467,17 @@ test("navigation skips structural sections without flattening hierarchy", async 
           title: "Afterword",
           parentId: root.id,
           navigable: true,
+          routes: {
+            reader: {
+              path: input.sourceGraph.works[0].manifest.route,
+              anchor: "rain-gauge-afterword",
+            },
+          },
+          activeRouteNames: [],
+          readerLocation: {
+            kind: "route",
+            routeName: "reader",
+          },
           blocks: [],
         },
       ],
@@ -1335,6 +1839,34 @@ test("semantic envelope validation rejects forged derived state", async () => {
   assert.throws(
     () => serializePublicationContentEnvelope(forged),
     /invalid content envelope/i,
+  );
+
+  const forgedReaderAddress = structuredClone(envelope);
+  forgedReaderAddress.works[0].sections[0].readerAddress = { path: "/" };
+  rehashWorkHierarchy(forgedReaderAddress, 0, 0, 0);
+  const readerAddressValidation = validatePublicationContentEnvelope(
+    forgedReaderAddress,
+  );
+  assert.equal(readerAddressValidation.valid, false);
+  assert.ok(
+    diagnosticCodes(readerAddressValidation).has(
+      "content.envelope.reader_address_unowned",
+    ),
+    validationMessage(readerAddressValidation),
+  );
+
+  const missingReaderAddress = structuredClone(envelope);
+  missingReaderAddress.works[0].sections[0].readerAddress = null;
+  rehashWorkHierarchy(missingReaderAddress, 0, 0, 0);
+  const missingReaderValidation = validatePublicationContentEnvelope(
+    missingReaderAddress,
+  );
+  assert.equal(missingReaderValidation.valid, false);
+  assert.ok(
+    diagnosticCodes(missingReaderValidation).has(
+      "content.envelope.reader_address_required",
+    ),
+    validationMessage(missingReaderValidation),
   );
 });
 
