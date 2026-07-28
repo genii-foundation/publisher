@@ -57,19 +57,29 @@
   "$defs": {
     "schemaVersion": {
       "type": "string",
-      "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+      "const": "1.0"
     },
     "stableId": {
       "type": "string",
       "minLength": 1,
       "maxLength": 128,
-      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
     },
     "routePath": {
       "type": "string",
       "minLength": 1,
       "maxLength": 2048,
-      "pattern": "^/"
+      "oneOf": [
+        {
+          "const": "/"
+        },
+        {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 2048,
+          "pattern": "^/(?!/)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:\\/|$))(?!.*\\\\)(?!.*%[0-9A-Fa-f]{2})(?!.*[?#])(?!.*[\\u0000-\\u001F\\u007F])(?!.*//)(?!.*\\/$).+$"
+        }
+      ]
     }
   }
 }

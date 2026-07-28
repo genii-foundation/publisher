@@ -1,0 +1,75 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/publication.schema.json",
+  "schemaVersion": "1.0",
+  "publication": {
+    "id": "rain-gauge-journal",
+    "title": "Rain Gauge Journal",
+    "description": "Brief observations from an invented weather station.",
+    "language": "en",
+    "canonicalUrl": "https://rain-gauge.example",
+    "publisher": {
+      "name": "Example Field Station",
+      "url": "https://field-station.example"
+    }
+  },
+  "engine": {
+    "compatibility": ">=1.0.0 <2.0.0"
+  },
+  "layout": {
+    "mode": "canonical"
+  },
+  "works": [
+    {
+      "id": "rain-gauge"
+    }
+  ],
+  "collections": [
+    {
+      "id": "weather-observations"
+    }
+  ],
+  "theme": {
+    "package": "@example/rain-gauge-theme",
+    "config": {
+      "accent": "slate"
+    }
+  },
+  "audio": {
+    "adapter": {
+      "package": "@example/audio-file-adapter",
+      "config": {
+        "mediaRoot": "publication/media/audio"
+      }
+    }
+  },
+  "routes": {
+    "home": "/",
+    "work": "/works/{workId}",
+    "collection": "/collections/{collectionId}",
+    "updates": "/updates"
+  },
+  "continuity": {
+    "redirects": [
+      {
+        "from": "/journal/morning-reading",
+        "to": "/works/rain-gauge",
+        "status": 308
+      }
+    ]
+  },
+  "boundaries": {
+    "sourceRoots": [
+      "publication"
+    ],
+    "outputRoots": [
+      ".publisher"
+    ]
+  },
+  "attribution": {
+    "placement": "footer",
+    "copyright": "Copyright 2026 GENII Foundation",
+    "text": "Published with GENII Publisher",
+    "url": "https://publisher.genii.foundation",
+    "sourceCodeUrl": "https://github.com/genii-foundation/publisher"
+  }
+}

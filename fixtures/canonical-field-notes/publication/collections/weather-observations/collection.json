@@ -1,0 +1,12 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/collection.schema.json",
+  "schemaVersion": "1.0",
+  "id": "weather-observations",
+  "title": "Weather Observations",
+  "description": "Measured notes from the example station.",
+  "publicationState": "published",
+  "route": "/collections/weather-observations",
+  "workIds": [
+    "rain-gauge"
+  ]
+}

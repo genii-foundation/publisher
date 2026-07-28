@@ -1,0 +1,542 @@
+/*
+No alternative license is selected for GENII Publisher Original Code. The alternative-license fields in the required Exhibit A notice below are intentionally unpopulated.
+
+“The contents of this file are subject to the Common Public Attribution License Version 1.0 (the “License”); you may not use this file except in compliance with the License. You may obtain a copy of the License at https://opensource.org/license/cpal-1.0. The License is based on the Mozilla Public License Version 1.1 but Sections 14 and 15 have been added to cover use of software over a computer network and provide for limited attribution for the Original Developer. In addition, Exhibit A has been modified to be consistent with Exhibit B.
+Software distributed under the License is distributed on an “AS IS” basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for the specific language governing rights and limitations under the License.
+The Original Code is GENII Publisher.
+The Original Developer is not the Initial Developer and is __________. If left blank, the Original Developer is the Initial Developer.
+The Initial Developer of the Original Code is GENII Foundation. All portions of the code written by GENII Foundation are Copyright (c) 2026 GENII Foundation. All Rights Reserved.
+Contributor ______________________.
+Alternatively, the contents of this file may be used under the terms of the _____ license (the [___] License), in which case the provisions of [______] License are applicable instead of those above.
+If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
+*/
+
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { basename, dirname, join, relative, sep } from "node:path";
+import { tmpdir } from "node:os";
+import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { satisfies } from "semver";
+
+import {
+  assertReleaseTag,
+  expectedReleaseTag,
+} from "../schemas/scripts/check-release-tag.mjs";
+
+const npmExecPath = process.env.npm_execpath;
+if (npmExecPath === undefined || npmExecPath.length === 0) {
+  throw new Error(
+    "The package consumer test must run through npm so npm_execpath identifies the exact npm CLI.",
+  );
+}
+
+const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+const schemaPackageRoot = join(repositoryRoot, "schemas");
+const schemaSourceRoot = join(schemaPackageRoot, "src");
+const sourceNoticePath = join(schemaPackageRoot, "SOURCE-NOTICE");
+const releaseTagScriptPath = join(
+  schemaPackageRoot,
+  "scripts",
+  "check-release-tag.mjs",
+);
+
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd,
+    encoding: "utf8",
+    env: options.env ?? process.env,
+    input: options.input,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+
+  if (result.error !== undefined) {
+    throw result.error;
+  }
+
+  if (result.status !== 0) {
+    throw new Error(
+      [
+        `${options.label ?? basename(command)} exited with status ${result.status ?? "unknown"}.`,
+        result.stdout,
+        result.stderr,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
+
+  return result.stdout.trim();
+}
+
+function runNpm(args, options = {}) {
+  return run(process.execPath, [npmExecPath, ...args], {
+    ...options,
+    label: options.label ?? `npm ${args[0] ?? ""}`.trim(),
+  });
+}
+
+function runReleaseTagCheck(tag) {
+  const env = { ...process.env };
+  delete env.npm_config_tag;
+  if (tag !== undefined) {
+    env.npm_config_tag = tag;
+  }
+
+  return spawnSync(process.execPath, [releaseTagScriptPath], {
+    cwd: schemaPackageRoot,
+    encoding: "utf8",
+    env,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+}
+
+function toPackagePath(path) {
+  return path.split(sep).join("/");
+}
+
+function collectRuntimeLockPackages(workspaceLock, directDependencies) {
+  const packageEntries = {};
+  const pending = Object.keys(directDependencies);
+  const visited = new Set();
+
+  while (pending.length > 0) {
+    const packageName = pending.pop();
+    if (packageName === undefined || visited.has(packageName)) {
+      continue;
+    }
+    visited.add(packageName);
+
+    const packagePath = `node_modules/${packageName}`;
+    const lockedPackage = workspaceLock.packages[packagePath];
+    assert.ok(lockedPackage, `Missing locked runtime package ${packageName}.`);
+    const portableLock = structuredClone(lockedPackage);
+    delete portableLock.dev;
+    delete portableLock.devOptional;
+    packageEntries[packagePath] = portableLock;
+
+    for (const dependencyName of Object.keys({
+      ...lockedPackage.dependencies,
+      ...lockedPackage.optionalDependencies,
+    })) {
+      pending.push(dependencyName);
+    }
+  }
+
+  return packageEntries;
+}
+
+async function listFiles(root) {
+  const files = [];
+
+  async function visit(directory) {
+    const entries = await readdir(directory, { withFileTypes: true });
+    entries.sort((left, right) => left.name.localeCompare(right.name));
+
+    for (const entry of entries) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(path);
+      } else if (entry.isFile()) {
+        files.push(path);
+      } else {
+        throw new Error(`Unexpected non-file package entry: ${path}`);
+      }
+    }
+  }
+
+  await visit(root);
+  return files;
+}
+
+async function removeOwnedTempDirectory(path) {
+  const resolvedTempRoot = await realpath(tmpdir());
+  const resolvedTarget = await realpath(path);
+
+  if (
+    dirname(resolvedTarget) !== resolvedTempRoot ||
+    !basename(resolvedTarget).startsWith("genii-publisher-package-consumer-")
+  ) {
+    throw new Error(
+      `Refusing to remove unexpected temporary directory: ${resolvedTarget}`,
+    );
+  }
+
+  await rm(resolvedTarget, { force: true, recursive: true });
+}
+
+test("packed schema tarball installs and works in an offline consumer", async () => {
+  const [workspaceManifest, schemaPackageManifest, workspaceLock] =
+    await Promise.all([
+      readFile(join(repositoryRoot, "package.json"), "utf8").then(JSON.parse),
+      readFile(join(schemaPackageRoot, "package.json"), "utf8").then(JSON.parse),
+      readFile(join(repositoryRoot, "package-lock.json"), "utf8").then(
+        JSON.parse,
+      ),
+    ]);
+  assert.equal(
+    satisfies(process.versions.node, workspaceManifest.engines.node),
+    true,
+    `Node ${process.versions.node} does not satisfy ${workspaceManifest.engines.node}.`,
+  );
+
+  const npmVersion = runNpm(["--version"], { label: "npm version check" });
+  assert.equal(
+    npmVersion,
+    workspaceManifest.engines.npm,
+    `Expected npm ${workspaceManifest.engines.npm}, received ${npmVersion}.`,
+  );
+  assert.equal(schemaPackageManifest.publishConfig.access, "public");
+  assert.equal(schemaPackageManifest.publishConfig.provenance, true);
+  assert.equal(
+    Object.hasOwn(schemaPackageManifest.publishConfig, "tag"),
+    false,
+    "publishConfig.tag must remain unset so prereleases require an explicit non-default tag and stable releases resolve to npm's default latest tag.",
+  );
+
+  assert.equal(expectedReleaseTag("1.0.0-alpha.1"), "next");
+  assert.equal(expectedReleaseTag("1.0.0"), "latest");
+  assert.throws(
+    () => assertReleaseTag("not-a-version", "next"),
+    /not valid SemVer/,
+  );
+  assert.doesNotThrow(() => assertReleaseTag("1.0.0", undefined));
+  assert.doesNotThrow(() => assertReleaseTag("1.0.0", "latest"));
+  assert.throws(
+    () => assertReleaseTag("1.0.0", "next"),
+    /--tag latest/,
+  );
+
+  const acceptedTag = runReleaseTagCheck("next");
+  assert.equal(acceptedTag.status, 0, acceptedTag.stderr);
+  for (const rejectedTag of [undefined, "latest", "beta"]) {
+    const rejectedResult = runReleaseTagCheck(rejectedTag);
+    assert.notEqual(
+      rejectedResult.status,
+      0,
+      `Tag ${rejectedTag ?? "(absent)"} should be rejected.`,
+    );
+    assert.match(rejectedResult.stderr, /--tag next/);
+  }
+
+  const temporaryRoot = await mkdtemp(
+    join(tmpdir(), "genii-publisher-package-consumer-"),
+  );
+
+  try {
+    const packDirectory = join(temporaryRoot, "pack");
+    const consumerDirectory = join(temporaryRoot, "consumer");
+    const rebuildDirectory = join(temporaryRoot, "rebuild");
+    await Promise.all([
+      mkdir(packDirectory),
+      mkdir(consumerDirectory),
+      mkdir(rebuildDirectory),
+    ]);
+
+    const packJson = runNpm(
+      [
+        "pack",
+        "--ignore-scripts",
+        "--json",
+        "--pack-destination",
+        packDirectory,
+        schemaPackageRoot,
+      ],
+      {
+        cwd: temporaryRoot,
+        label: "npm pack with scripts disabled",
+      },
+    );
+    const packResults = JSON.parse(packJson);
+    assert.equal(packResults.length, 1);
+
+    const [packResult] = packResults;
+    const tarballPath = join(packDirectory, packResult.filename);
+    const packedPaths = packResult.files
+      .map(({ path }) => path)
+      .sort();
+
+    const sourceFiles = (await listFiles(schemaSourceRoot)).filter(
+      (path) => path.endsWith(".ts") && !path.endsWith(".d.ts"),
+    );
+    const expectedDistPaths = sourceFiles.flatMap((sourceFile) => {
+      const sourcePath = toPackagePath(
+        relative(schemaSourceRoot, sourceFile),
+      );
+      const stem = sourcePath.slice(0, -".ts".length);
+      return [`dist/${stem}.d.ts`, `dist/${stem}.js`];
+    });
+    const expectedSourcePaths = sourceFiles.map(
+      (sourceFile) =>
+        `src/${toPackagePath(relative(schemaSourceRoot, sourceFile))}`,
+    );
+    const expectedScriptPaths = (
+      await listFiles(join(schemaPackageRoot, "scripts"))
+    ).map(
+      (scriptFile) =>
+        `scripts/${toPackagePath(
+          relative(join(schemaPackageRoot, "scripts"), scriptFile),
+        )}`,
+    );
+    const expectedPackedPaths = [
+      "CHANGES.md",
+      "LEGAL",
+      "LICENSE",
+      "NOTICE.md",
+      "README.md",
+      "SOURCE-NOTICE",
+      "collection.schema.json",
+      "dist/SOURCE-NOTICE",
+      ...expectedDistPaths,
+      "package.json",
+      "publication.schema.json",
+      ...expectedScriptPaths,
+      ...expectedSourcePaths,
+      "tsconfig.json",
+      "work.schema.json",
+    ].sort();
+    assert.deepEqual(packedPaths, expectedPackedPaths);
+
+    const tarballSpecifier = `file:${toPackagePath(
+      relative(consumerDirectory, tarballPath),
+    )}`;
+    const consumerManifest = {
+      name: "genii-publisher-schema-consumer-proof",
+      version: "0.0.0",
+      private: true,
+      type: "module",
+      dependencies: {
+        [schemaPackageManifest.name]: tarballSpecifier,
+      },
+    };
+    const consumerLock = {
+      name: consumerManifest.name,
+      version: consumerManifest.version,
+      lockfileVersion: workspaceLock.lockfileVersion,
+      requires: true,
+      packages: {
+        "": {
+          name: consumerManifest.name,
+          version: consumerManifest.version,
+          dependencies: consumerManifest.dependencies,
+        },
+        [`node_modules/${schemaPackageManifest.name}`]: {
+          version: schemaPackageManifest.version,
+          resolved: tarballSpecifier,
+          integrity: packResult.integrity,
+          license: schemaPackageManifest.license,
+          dependencies: schemaPackageManifest.dependencies,
+          engines: schemaPackageManifest.engines,
+        },
+        ...collectRuntimeLockPackages(
+          workspaceLock,
+          schemaPackageManifest.dependencies,
+        ),
+      },
+    };
+    await Promise.all([
+      writeFile(
+        join(consumerDirectory, "package.json"),
+        `${JSON.stringify(consumerManifest, null, 2)}\n`,
+        "utf8",
+      ),
+      writeFile(
+        join(consumerDirectory, "package-lock.json"),
+        `${JSON.stringify(consumerLock, null, 2)}\n`,
+        "utf8",
+      ),
+    ]);
+
+    const npmCache = runNpm(["config", "get", "cache"], {
+      cwd: temporaryRoot,
+      label: "npm cache lookup",
+    });
+
+    run("tar", ["-xzf", tarballPath, "-C", rebuildDirectory], {
+      cwd: temporaryRoot,
+      label: "packed source extraction",
+    });
+    const extractedPackageRoot = join(rebuildDirectory, "package");
+    const packedDistPaths = [
+      "dist/SOURCE-NOTICE",
+      ...expectedDistPaths,
+    ].sort();
+    const packedDistContents = new Map(
+      await Promise.all(
+        packedDistPaths.map(async (path) => [
+          path,
+          await readFile(join(extractedPackageRoot, path)),
+        ]),
+      ),
+    );
+    await symlink(
+      join(repositoryRoot, "node_modules"),
+      join(extractedPackageRoot, "node_modules"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    runNpm(["run", "build"], {
+      cwd: extractedPackageRoot,
+      label: "packed source rebuild with exact workspace toolchain",
+    });
+    const rebuiltDistPaths = (
+      await listFiles(join(extractedPackageRoot, "dist"))
+    )
+      .map(
+        (path) =>
+          `dist/${toPackagePath(
+            relative(join(extractedPackageRoot, "dist"), path),
+          )}`,
+      )
+      .sort();
+    assert.deepEqual(rebuiltDistPaths, packedDistPaths);
+    for (const path of rebuiltDistPaths) {
+      assert.deepEqual(
+        await readFile(join(extractedPackageRoot, path)),
+        packedDistContents.get(path),
+        `${path} differs from the output shipped in the packed artifact.`,
+      );
+    }
+
+    runNpm(
+      [
+        "ci",
+        "--offline",
+        "--ignore-scripts",
+        "--omit=dev",
+        "--no-audit",
+        "--no-fund",
+        "--cache",
+        npmCache,
+      ],
+      {
+        cwd: consumerDirectory,
+        label: "offline tarball installation",
+      },
+    );
+
+    const installedPackageRoot = join(
+      consumerDirectory,
+      "node_modules",
+      "@genii-foundation",
+      "publisher-schema",
+    );
+    const installedPaths = (await listFiles(installedPackageRoot))
+      .map((path) => toPackagePath(relative(installedPackageRoot, path)))
+      .sort();
+    assert.deepEqual(installedPaths, expectedPackedPaths);
+
+    const sourceNotice = await readFile(sourceNoticePath, "utf8");
+    const noticeBody = sourceNotice.endsWith("\n")
+      ? sourceNotice
+      : `${sourceNotice}\n`;
+    const noticeComment = `/*\n${noticeBody}*/\n`;
+    assert.equal(
+      await readFile(
+        join(installedPackageRoot, "dist", "SOURCE-NOTICE"),
+        "utf8",
+      ),
+      sourceNotice,
+    );
+
+    for (const path of installedPaths.filter(
+      (entry) =>
+        (entry.startsWith("dist/") && entry !== "dist/SOURCE-NOTICE") ||
+        entry.startsWith("scripts/") ||
+        entry.startsWith("src/"),
+    )) {
+      const contents = await readFile(join(installedPackageRoot, path), "utf8");
+      assert.ok(
+        contents.startsWith(noticeComment),
+        `${path} must carry the exact Exhibit A notice.`,
+      );
+    }
+
+    const consumerProof = `
+      import assert from "node:assert/strict";
+      import {
+        validatePublicationShape,
+        validateWorkShape,
+      } from "@genii-foundation/publisher-schema";
+      import workSchema from "@genii-foundation/publisher-schema/work.schema.json" with { type: "json" };
+
+      assert.equal(
+        workSchema.$id,
+        "https://publisher.genii.foundation/schemas/work.schema.json",
+      );
+      assert.equal(typeof validatePublicationShape, "function");
+      const result = validateWorkShape({
+        schemaVersion: "1.0",
+        id: "installed-proof",
+        title: "Installed Proof",
+        language: "en",
+        publicationState: "draft",
+        manuscript: "manuscript.md",
+      });
+      assert.equal(result.valid, true, JSON.stringify(result.diagnostics));
+    `;
+    run(process.execPath, ["--input-type=module", "--eval", consumerProof], {
+      cwd: consumerDirectory,
+      label: "installed package public export proof",
+    });
+
+    const typeConsumer = `
+      import {
+        validatePublicationShape,
+        type PublicationManifest,
+        type ValidationResult,
+      } from "@genii-foundation/publisher-schema";
+
+      declare const publication: PublicationManifest;
+      const result: ValidationResult<PublicationManifest> =
+        validatePublicationShape(publication);
+      void result;
+    `;
+    const typeConsumerConfig = {
+      compilerOptions: {
+        target: "ES2022",
+        module: "NodeNext",
+        moduleResolution: "NodeNext",
+        noEmit: true,
+        strict: true,
+      },
+      include: ["consumer.ts"],
+    };
+    await Promise.all([
+      writeFile(
+        join(consumerDirectory, "consumer.ts"),
+        typeConsumer,
+        "utf8",
+      ),
+      writeFile(
+        join(consumerDirectory, "tsconfig.json"),
+        `${JSON.stringify(typeConsumerConfig, null, 2)}\n`,
+        "utf8",
+      ),
+    ]);
+    run(
+      process.execPath,
+      [
+        join(repositoryRoot, "node_modules", "typescript", "bin", "tsc"),
+        "-p",
+        join(consumerDirectory, "tsconfig.json"),
+      ],
+      {
+        cwd: consumerDirectory,
+        label: "installed package declaration proof",
+      },
+    );
+  } finally {
+    await removeOwnedTempDirectory(temporaryRoot);
+  }
+});

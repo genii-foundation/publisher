@@ -1,0 +1,16 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/work.schema.json",
+  "schemaVersion": "1.0",
+  "id": "rain-gauge",
+  "title": "The Seven O'Clock Reading",
+  "summary": "A small record of rain, wind, and patient measurement.",
+  "language": "en",
+  "publicationState": "published",
+  "publishedAt": "2026-04-12T07:00:00Z",
+  "route": "/works/rain-gauge",
+  "manuscript": "manuscript.md",
+  "assets": "assets",
+  "metadata": {
+    "station": "north-garden"
+  }
+}
