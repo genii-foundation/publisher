@@ -7,7 +7,7 @@
   "type": "module",
   "packageManager": "npm@10.9.0",
   "engines": {
-    "node": ">=22.12.0",
+    "node": ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27",
     "npm": "10.9.0"
   },
   "workspaces": [
@@ -16,9 +16,9 @@
     "schemas"
   ],
   "scripts": {
-    "build": "node schemas/scripts/build.mjs",
-    "test": "node schemas/scripts/build.mjs && node --test",
-    "validate": "node schemas/scripts/build.mjs && node --test"
+    "build": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs",
+    "test": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node --test",
+    "validate": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node --test"
   },
   "devDependencies": {
     "ajv": "8.20.0",

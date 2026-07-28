@@ -1,0 +1,1420 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/content-envelope.schema.json",
+  "title": "GENII Publisher content envelope",
+  "description": "Framework-neutral, deterministic compiled publication content.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "publicationId",
+    "engineVersion",
+    "compilerVersion",
+    "buildId",
+    "artifact",
+    "hashes",
+    "publication",
+    "sourceAuthority",
+    "sources",
+    "extensions",
+    "payloads",
+    "works",
+    "collections",
+    "assets",
+    "links",
+    "routes",
+    "statistics"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/content-envelope.schema.json"
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "publicationId": {
+      "$ref": "#/$defs/stableId"
+    },
+    "engineVersion": {
+      "$ref": "#/$defs/exactSemver"
+    },
+    "compilerVersion": {
+      "$ref": "#/$defs/exactSemver"
+    },
+    "buildId": {
+      "$ref": "#/$defs/sha256Digest"
+    },
+    "artifact": {
+      "$ref": "#/$defs/artifact"
+    },
+    "hashes": {
+      "$ref": "#/$defs/envelopeHashes"
+    },
+    "publication": {
+      "$ref": "#/$defs/publication"
+    },
+    "sourceAuthority": {
+      "$ref": "#/$defs/sourceAuthority"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "extensions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/compiledExtension"
+      }
+    },
+    "payloads": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/contentPayload"
+      }
+    },
+    "works": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/work"
+      }
+    },
+    "collections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/collection"
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/asset"
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/link"
+      }
+    },
+    "routes": {
+      "$ref": "#/$defs/routes"
+    },
+    "statistics": {
+      "$ref": "#/$defs/statistics"
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "contentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "packageName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 214,
+      "pattern": "^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$"
+    },
+    "exactSemver": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*[<>:\"|*])(?!.*%[0-9A-Fa-f]{2})(?!.*[?#])(?!.*[\\u0000-\\u001F\\u007F])(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:\\/|$))(?!.*(?:^|/)(?:[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³])(?:\\.[^/]*)?(?:/|$))(?!.*[. ](?:/|$))(?!.*//)(?!.*\\/$).+$"
+    },
+    "routePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "oneOf": [
+        {
+          "const": "/"
+        },
+        {
+          "type": "string",
+          "minLength": 2,
+          "pattern": "^/(?!/)(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:\\/|$))(?!.*\\\\)(?!.*%[0-9A-Fa-f]{2})(?!.*[?#{}])(?!.*[\\u0000-\\u001F\\u007F])(?!.*//).+$"
+        }
+      ]
+    },
+    "urlFragment": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^(?!.*\\s)(?:[A-Za-z0-9._~!$&'()*+,;=:@/?-]|%[0-9A-Fa-f]{2}|[^\\u0000-\\u007F])+$"
+    },
+    "contentAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/routePath"
+        },
+        "anchor": {
+          "$ref": "#/$defs/urlFragment"
+        }
+      }
+    },
+    "originRelativeAnchoredHref": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 4097,
+      "pattern": "^/(?!/)(?!\\.{1,2}(?:/|#|$))(?![^#]*\\/\\.{1,2}(?:\\/|#|$))(?![^#]*\\\\)(?![^#]*%[0-9A-Fa-f]{2})(?![^#]*[?{}])(?![^#]*[\\u0000-\\u001F\\u007F])(?![^#]*//)[^#]*#(?!.*\\s)(?:[A-Za-z0-9._~!$&'()*+,;=:@/?-]|%[0-9A-Fa-f]{2}|[^\\u0000-\\u007F])+$"
+    },
+    "absoluteHttpUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https?://(?![^/?#]*@)"
+    },
+    "resolvedHref": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/routePath"
+        },
+        {
+          "$ref": "#/$defs/originRelativeAnchoredHref"
+        },
+        {
+          "$ref": "#/$defs/absoluteHttpUrl"
+        }
+      ]
+    },
+    "jsonObject": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "url": {
+          "$ref": "#/$defs/absoluteHttpUrl"
+        }
+      }
+    },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "placement",
+        "copyright",
+        "text",
+        "url",
+        "sourceCodeUrl"
+      ],
+      "properties": {
+        "placement": {
+          "const": "footer"
+        },
+        "copyright": {
+          "const": "Copyright 2026 GENII Foundation"
+        },
+        "text": {
+          "const": "Published with GENII Publisher"
+        },
+        "url": {
+          "const": "https://publisher.genii.foundation"
+        },
+        "sourceCodeUrl": {
+          "$ref": "#/$defs/absoluteHttpUrl"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "mediaType",
+        "outputRoot",
+        "relativePath"
+      ],
+      "properties": {
+        "kind": {
+          "const": "publication-content"
+        },
+        "mediaType": {
+          "const": "application/vnd.genii.publisher.content+json"
+        },
+        "outputRoot": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "relativePath": {
+          "const": "content/publication-content.json"
+        }
+      }
+    },
+    "envelopeHashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceSet",
+        "content"
+      ],
+      "properties": {
+        "sourceSet": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "content": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "language",
+        "publisher",
+        "attribution"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "language": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+        },
+        "canonicalUrl": {
+          "$ref": "#/$defs/absoluteHttpUrl"
+        },
+        "publisher": {
+          "$ref": "#/$defs/publisher"
+        },
+        "attribution": {
+          "$ref": "#/$defs/attribution"
+        },
+        "metadata": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "role",
+        "kind",
+        "mediaType",
+        "rawByteLength",
+        "rawHash",
+        "normalizedByteLength",
+        "normalizedHash"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "role": {
+          "enum": [
+            "asset",
+            "collection-manifest",
+            "extension",
+            "manuscript",
+            "publication-manifest",
+            "work-manifest"
+          ]
+        },
+        "kind": {
+          "enum": [
+            "binary",
+            "text"
+          ]
+        },
+        "entityId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "encoding": {
+          "const": "utf-8"
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "rawByteLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rawHash": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "normalizedByteLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "normalizedHash": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "normalizedCodeUnitLength": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "normalizedLineStarts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "text"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "properties": {
+              "encoding": {},
+              "normalizedCodeUnitLength": {},
+              "normalizedLineStarts": {}
+            },
+            "required": [
+              "encoding",
+              "normalizedCodeUnitLength",
+              "normalizedLineStarts"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "encoding"
+                  ]
+                },
+                {
+                  "required": [
+                    "normalizedCodeUnitLength"
+                  ]
+                },
+                {
+                  "required": [
+                    "normalizedLineStarts"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "sourceAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicationManifestPath",
+        "sourceRoots",
+        "outputRoots",
+        "sharedAssetsRoot"
+      ],
+      "properties": {
+        "publicationManifestPath": {
+          "const": "publication.json"
+        },
+        "sourceRoots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          }
+        },
+        "outputRoots": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          }
+        },
+        "sharedAssetsRoot": {
+          "$ref": "#/$defs/relativePath"
+        }
+      }
+    },
+    "sourcePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "line",
+        "column",
+        "offset"
+      ],
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "sourceSpan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourcePath",
+        "start",
+        "end"
+      ],
+      "properties": {
+        "sourcePath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "start": {
+          "$ref": "#/$defs/sourcePoint"
+        },
+        "end": {
+          "$ref": "#/$defs/sourcePoint"
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "markdown",
+        "text",
+        "provenance",
+        "wordCount",
+        "contentHash"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/contentId"
+        },
+        "kind": {
+          "$ref": "#/$defs/stableId"
+        },
+        "markdown": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/sourceSpan"
+        },
+        "wordCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "metadata": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role",
+        "title",
+        "parentId",
+        "childIds",
+        "depth",
+        "order",
+        "routes",
+        "activeRouteNames",
+        "continuity",
+        "navigable",
+        "blocks",
+        "previousId",
+        "nextId",
+        "wordCount",
+        "readingMinutes",
+        "contentHash"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/contentId"
+        },
+        "role": {
+          "$ref": "#/$defs/stableId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "parentId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/contentId"
+            }
+          ]
+        },
+        "childIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/contentId"
+          }
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "routes": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/stableId"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/contentAddress"
+          }
+        },
+        "activeRouteNames": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "continuity": {
+          "$ref": "#/$defs/contentContinuity"
+        },
+        "navigable": {
+          "type": "boolean"
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/block"
+          }
+        },
+        "previousId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/contentId"
+            }
+          ]
+        },
+        "nextId": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/contentId"
+            }
+          ]
+        },
+        "wordCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readingMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "metadata": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "contentContinuity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "legacyIds",
+        "progressGroups",
+        "historicalSectionIds"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/contentId"
+        },
+        "legacyIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/contentId"
+          }
+        },
+        "progressGroups": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/contentId"
+            }
+          }
+        },
+        "historicalSectionIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/contentId"
+          }
+        }
+      }
+    },
+    "workSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifestPath",
+        "manuscriptPath",
+        "adapter",
+        "metrics"
+      ],
+      "properties": {
+        "manifestPath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "manuscriptPath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "assetsPath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "adapter": {
+          "$ref": "#/$defs/producerIdentity"
+        },
+        "metrics": {
+          "$ref": "#/$defs/metricProducerIdentity"
+        }
+      }
+    },
+    "producerIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "package",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "package": {
+          "$ref": "#/$defs/packageName"
+        },
+        "version": {
+          "$ref": "#/$defs/exactSemver"
+        }
+      }
+    },
+    "metricProducerIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "package",
+        "version",
+        "profileVersion"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "package": {
+          "$ref": "#/$defs/packageName"
+        },
+        "version": {
+          "$ref": "#/$defs/exactSemver"
+        },
+        "profileVersion": {
+          "$ref": "#/$defs/exactSemver"
+        }
+      }
+    },
+    "compiledExtension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "package",
+        "version",
+        "payloadIds"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "package": {
+          "$ref": "#/$defs/packageName"
+        },
+        "version": {
+          "$ref": "#/$defs/exactSemver"
+        },
+        "config": {
+          "$ref": "#/$defs/jsonObject"
+        },
+        "payloadIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "contentPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "extensionId",
+        "schema",
+        "sourcePaths",
+        "data",
+        "contentHash"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "extensionId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "schema": {
+          "$ref": "#/$defs/absoluteHttpUrl"
+        },
+        "sourcePaths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/relativePath"
+          }
+        },
+        "data": {},
+        "contentHash": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
+    },
+    "work": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "language",
+        "publicationState",
+        "route",
+        "source",
+        "rootSectionIds",
+        "sections",
+        "wordCount",
+        "readingMinutes",
+        "contentHash"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "subtitle": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "language": {
+          "type": "string",
+          "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+        },
+        "publicationState": {
+          "enum": [
+            "archived",
+            "draft",
+            "published",
+            "unlisted"
+          ]
+        },
+        "publishedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "route": {
+          "$ref": "#/$defs/routePath"
+        },
+        "source": {
+          "$ref": "#/$defs/workSource"
+        },
+        "rootSectionIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/contentId"
+          }
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/section"
+          }
+        },
+        "wordCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readingMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "metadata": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "route",
+        "manifestPath",
+        "workIds"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "publicationState": {
+          "enum": [
+            "archived",
+            "draft",
+            "published",
+            "unlisted"
+          ]
+        },
+        "route": {
+          "$ref": "#/$defs/routePath"
+        },
+        "manifestPath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "workIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "metadata": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "routeTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "home"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "updates"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "workId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "work"
+            },
+            "workId": {
+              "$ref": "#/$defs/stableId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "collectionId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "collection"
+            },
+            "collectionId": {
+              "$ref": "#/$defs/stableId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "workId",
+            "sectionId",
+            "routeName"
+          ],
+          "properties": {
+            "kind": {
+              "const": "section"
+            },
+            "workId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "sectionId": {
+              "$ref": "#/$defs/contentId"
+            },
+            "routeName": {
+              "$ref": "#/$defs/stableId"
+            }
+          }
+        }
+      ]
+    },
+    "activeRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "target"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/routePath"
+        },
+        "target": {
+          "$ref": "#/$defs/routeTarget"
+        }
+      }
+    },
+    "redirect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to",
+        "status"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/routePath"
+        },
+        "to": {
+          "$ref": "#/$defs/resolvedHref"
+        },
+        "status": {
+          "enum": [
+            301,
+            302,
+            307,
+            308
+          ]
+        }
+      }
+    },
+    "routes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active",
+        "redirects"
+      ],
+      "properties": {
+        "active": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/activeRoute"
+          }
+        },
+        "redirects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/redirect"
+          }
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sourcePath",
+        "href",
+        "mediaType",
+        "hash"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "workId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "sourcePath": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "href": {
+          "$ref": "#/$defs/routePath"
+        },
+        "mediaType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256Digest"
+        },
+        "metadata": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "contentLocation": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "workId",
+            "sectionId",
+            "occurrence"
+          ],
+          "properties": {
+            "kind": {
+              "const": "source"
+            },
+            "workId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "sectionId": {
+              "$ref": "#/$defs/contentId"
+            },
+            "blockId": {
+              "$ref": "#/$defs/contentId"
+            },
+            "occurrence": {
+              "$ref": "#/$defs/sourceSpan"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "workId",
+            "sectionId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "semantic"
+            },
+            "workId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "sectionId": {
+              "$ref": "#/$defs/contentId"
+            },
+            "blockId": {
+              "$ref": "#/$defs/contentId"
+            }
+          }
+        }
+      ]
+    },
+    "linkTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "assetId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "asset"
+            },
+            "assetId": {
+              "$ref": "#/$defs/stableId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "collectionId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "collection"
+            },
+            "collectionId": {
+              "$ref": "#/$defs/stableId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "url"
+          ],
+          "properties": {
+            "kind": {
+              "const": "external"
+            },
+            "url": {
+              "$ref": "#/$defs/absoluteHttpUrl"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "workId",
+            "sectionId",
+            "routeName"
+          ],
+          "properties": {
+            "kind": {
+              "const": "section"
+            },
+            "workId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "sectionId": {
+              "$ref": "#/$defs/contentId"
+            },
+            "routeName": {
+              "$ref": "#/$defs/stableId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "workId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "work"
+            },
+            "workId": {
+              "$ref": "#/$defs/stableId"
+            }
+          }
+        }
+      ]
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "target",
+        "href"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "source": {
+          "$ref": "#/$defs/contentLocation"
+        },
+        "target": {
+          "$ref": "#/$defs/linkTarget"
+        },
+        "href": {
+          "$ref": "#/$defs/resolvedHref"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "relation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "metadata": {
+          "$ref": "#/$defs/jsonObject"
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workCount",
+        "collectionCount",
+        "sectionCount",
+        "blockCount",
+        "wordCount",
+        "readingMinutes",
+        "wordsPerMinute"
+      ],
+      "properties": {
+        "workCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "collectionCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sectionCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "blockCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wordCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "readingMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wordsPerMinute": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        }
+      }
+    }
+  }
+}

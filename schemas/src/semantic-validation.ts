@@ -43,6 +43,7 @@ export const SUPPORTED_SCHEMA_VERSIONS = Object.freeze({
   publication: "1.0",
   work: "1.0",
   collection: "1.0",
+  content: "1.0",
 });
 
 export interface SemanticValidationInput {
@@ -468,19 +469,6 @@ function validateOriginRelativeRoute(
       ),
     );
   }
-  if (value.length > 1 && value.endsWith("/")) {
-    diagnostics.push(
-      diagnostic(
-        "route.trailing_slash",
-        path,
-        "Routes must not end with a slash unless the route is the root path.",
-        "originRelativeRoute",
-        { value },
-        documentPath,
-      ),
-    );
-  }
-
   const tokens: readonly string[] = value.match(ROUTE_TOKEN) ?? [];
   const unmatchedBraces = value.replaceAll(ROUTE_TOKEN, "");
   if (requiredToken === undefined) {
@@ -794,6 +782,7 @@ function validateRedirects(
   publication: PublicationManifest,
   activeRoutes: ReadonlyMap<string, ActiveRoute>,
   diagnostics: Diagnostic[],
+  deferInternalTerminalResolution = false,
 ): void {
   const redirects = publication.continuity?.redirects ?? [];
   const records: RedirectRecord[] = [];
@@ -936,7 +925,10 @@ function validateRedirects(
     }
 
     const resolution = resolveRedirectRoute(start.to);
-    if (resolution.kind === "unresolved") {
+    if (
+      resolution.kind === "unresolved" &&
+      !deferInternalTerminalResolution
+    ) {
       diagnostics.push(
         diagnostic(
           "continuity.redirect.internal_target_unresolved",
@@ -1140,8 +1132,9 @@ function resolveLoadedSourceGraph(
  * loads files and injects immutable path keyed maps; this function performs no
  * filesystem access and never mutates publication source.
  */
-export function validatePublicationSemantics(
+function validatePublicationSemanticsInternal(
   input: SemanticValidationInput,
+  deferRedirectTerminalResolution: boolean,
 ): ValidationResult<ResolvedPublicationSourceGraph> {
   const diagnostics: Diagnostic[] = [];
   const layoutResult = resolvePublicationLayout(input.publication);
@@ -1187,7 +1180,12 @@ export function validatePublicationSemantics(
     layoutResult.valid ? layoutResult.value : undefined,
     diagnostics,
   );
-  validateRedirects(input.publication, activeRoutes, diagnostics);
+  validateRedirects(
+    input.publication,
+    activeRoutes,
+    diagnostics,
+    deferRedirectTerminalResolution,
+  );
 
   const sources = layoutResult.valid
     ? resolveLoadedSourceGraph(input, layoutResult.value, diagnostics)
@@ -1208,4 +1206,23 @@ export function validatePublicationSemantics(
     },
     diagnostics: [],
   });
+}
+
+export function validatePublicationSemantics(
+  input: SemanticValidationInput,
+): ValidationResult<ResolvedPublicationSourceGraph> {
+  return validatePublicationSemanticsInternal(input, false);
+}
+
+/**
+ * Resolves the manifest-owned source graph before adapter-owned section routes
+ * exist. Redirect syntax, source ownership, uniqueness, and cycles are still
+ * validated here. A content compiler must validate internal terminal routes
+ * after adapter-owned routes exist and before it accepts or serializes an
+ * artifact.
+ */
+export function resolvePublicationSourcesForContentCompilation(
+  input: SemanticValidationInput,
+): ValidationResult<ResolvedPublicationSourceGraph> {
+  return validatePublicationSemanticsInternal(input, true);
 }

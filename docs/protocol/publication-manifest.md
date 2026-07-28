@@ -4,11 +4,13 @@ Status: initial architecture contract
 
 The root `publication.json` file describes one publication without choosing a web framework, database, hosting provider, or editorial voice. It owns publication identity, ordered catalog references, capability configuration, routes, continuity, source boundaries, and engine attribution. It does not duplicate work or collection metadata.
 
-The protocol has three JSON Schemas:
+The author source protocol has three JSON Schemas:
 
 - `schemas/publication.schema.json` validates root `publication.json`.
 - `schemas/work.schema.json` validates each authoritative `work.json`.
 - `schemas/collection.schema.json` validates each authoritative `collection.json`.
+
+The generated `schemas/content-envelope.schema.json` contract validates the deterministic compiler result. Its authority and identity rules are documented in [Publication content envelope](./content-envelope.md).
 
 Renderer adapters consume normalized data produced from these sources. An author repository pins the installed engine, theme, extension, audio, and sync packages in its package manifest and lockfile.
 
@@ -104,7 +106,7 @@ Every ID is stable. Renaming a title, changing a domain, or moving a source file
 
 ## Version and engine compatibility
 
-`schemaVersion` versions each source contract. The current schemas accept exactly `1.0`. A future protocol version will ship as a distinct schema contract with an explicit migration. A major change may alter meaning or remove a field. A minor change may add optional behavior while preserving older valid sources.
+`schemaVersion` versions each source contract. The current schemas accept exactly `1.0`, and that contract is frozen. A future incompatible protocol will ship as a distinct schema contract with an explicit migration. The prerelease JavaScript package API may still evolve, but it may not silently change the meaning of source schema version `1.0`.
 
 `engine.compatibility` is a SemVer range evaluated by the engine validator. JSON Schema only checks that the range is present. The author repository must still pin an exact engine package version and commit its lockfile. Compatibility is a claim about which engines may read the source protocol. It is not a dependency resolver.
 
@@ -196,6 +198,8 @@ A legacy work may use a repository relative path only with an explicit tag:
 
 The same tagged form applies to `assets`. A bare string never means repository relative.
 
+If a work declares `assets`, its resolved `assetsPath` must remain inside a declared source root even when the directory is empty and no compiled asset record refers to it. The declaration defines source authority. It does not depend on directory discovery or asset count.
+
 The protocol never authorizes an engine migration to revise manuscript prose. A source migration may update schema fields, path declarations, or host adapter files. Any prose change requires a distinct human supervised editorial operation.
 
 ## Themes and extensions
@@ -205,6 +209,8 @@ The protocol never authorizes an engine migration to revise manuscript prose. A 
 Package configuration must contain JSON data only. Secrets do not belong in `publication.json`. Providers resolve private credentials from their runtime environment.
 
 Extension order is significant. An engine must reject duplicate extension IDs and packages that do not declare compatibility with the active engine protocol.
+
+The manifest records extension identity and configuration, not an installed version. Engine orchestration resolves exactly one installed ID, package, and exact semantic version for every declaration in manifest order. An extension may then contribute typed JSON payloads. Each payload declares a stable ID, its extension owner, an absolute credential-free schema URL, its author-source paths, and JSON data. The compiled envelope hashes the exact extension version, payload data, and source identities. Core compilation records the schema URL but does not fetch or execute it.
 
 Editorial packages are independent inputs, not engine internals. A foundation or publisher may release voice profiles, style rules, schemas, and supervised editorial commands as separately versioned packages. The author repository chooses and configures them.
 
@@ -220,13 +226,15 @@ The presence of `sync` enables an installed provider for the listed capabilities
 
 Route templates use `{workId}` and `{collectionId}` tokens. Renderer adapters translate those semantic templates into their own routing mechanism. A publication with collection references must provide a collection route template.
 
-Internal routes are origin relative and begin with exactly one slash. They reject network-path references, backslashes, queries, fragments, percent-encoded octets, ASCII controls, current or parent directory segments, duplicate separators, and trailing slashes. `/` is the sole trailing-slash exception. Work and collection templates obey the same rules while retaining their required semantic token.
+Internal routes are origin relative and begin with exactly one slash. They reject network-path references, backslashes, queries, fragments, percent-encoded octets, ASCII controls, current or parent directory segments, and duplicate interior separators. Both trailing-slash and non-trailing-slash policies are valid. GENII Publisher preserves the path form selected by the publication instead of normalizing one policy into the other. Work and collection templates obey the same rules while retaining their required semantic token.
 
 Continuity redirects preserve previously published paths. A redirect source is always an origin relative route. Its target may be an origin relative route or an absolute, credential-free HTTP or HTTPS URL. Redirect records are publication data, not generated cache. JSON Schema rejects unsupported redirect status codes. The semantic validator rejects redirect loops, duplicate sources, conflicts with active canonical routes, and internal redirect chains that end without an active route or external URL.
 
+Adapter-owned section locations enter the compiled content envelope as a path and optional anchor. Each exact content address has one section owner across the publication. A non-active address must use an active server route as its base path.
+
 ## Source and output boundaries
 
-The root `publication.json` is an implicit author controlled source manifest. `boundaries.sourceRoots` declares the subordinate author controlled source trees that it may reference. `boundaries.outputRoots` declares paths the compiler may replace. The declared source and output roots must not overlap. Every layout override, catalog manifest override, and work source must resolve within a source root. Generated files must stay within an output root.
+The root `publication.json` is an implicit author controlled source manifest. The compiled envelope records that canonical path as `sourceAuthority.publicationManifestPath`. `boundaries.sourceRoots` declares the subordinate author controlled source trees that it may reference. `boundaries.outputRoots` declares paths the compiler may replace. The declared source and output roots must not overlap. Every layout override, catalog manifest override, work manuscript, and declared work asset root must resolve within a source root. Asset-root containment still applies when the directory is empty. Generated files must stay within an output root.
 
 `.publisher` is the canonical disposable output and cache root. It is never author source. Build, preview, validation, import, and migration commands must not modify source roots unless the command is an explicit source migration with a human review gate.
 
@@ -263,5 +271,13 @@ JSON Schema validates shape and lexical string constraints. The pure schema runt
 - Preservation of the fixed footer attribution contract.
 
 This pure validation does not inspect installed theme, extension, audio, or sync packages. Later engine orchestration verifies package availability, exact lockfile resolution, and compatibility with the active engine and protocol.
+
+`validatePublicationSemantics` performs complete manifest-owned route and redirect checks. A content compiler may call the narrower `resolvePublicationSourcesForContentCompilation` before adapter-owned section routes exist. That function deliberately defers only redirect terminal resolution. The compiler must register adapter routes and perform final redirect, asset, and public-path authority validation before it accepts or serializes a content envelope. The narrow resolver is not an artifact acceptance API.
+
+The narrow resolver still enforces redirect syntax, duplicate-source rejection, collisions with already-known active routes, and loop detection. Only an unresolved internal chain's terminal check waits for adapter routes.
+
+The compiled envelope records metric producer identity as `{ id, package, version, profileVersion }`. For the core word counter, the package is `@genii-foundation/publisher-content`, `version` equals the exact compiler and package version, and `profileVersion` is the bundled Unicode profile version `15.1.0`.
+
+`validatePublicationContentEnvelope` proves the artifact's internal consistency and agreement with its declared byte and normalized-text geometry. Original source bytes are absent from the envelope, so public artifact validation cannot repeat compilation's fatal UTF-8 comparison or independently recompute source hashes.
 
 Validation returns structured diagnostics with stable codes and JSON Pointer locations. It does not rewrite any source file or manuscript. Filesystem loaders retain the separate real-path containment duties described above.
