@@ -454,9 +454,6 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       private: true,
       type: "module",
       dependencies: {
-        [semverManifest.name]: `file:${packagePath(
-          relative(consumerRoot, semverTarball),
-        )}`,
         [schemaManifest.name]: `file:${packagePath(
           relative(consumerRoot, schemaTarball),
         )}`,
@@ -465,6 +462,11 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         )}`,
         [readerManifest.name]: `file:${packagePath(
           relative(consumerRoot, readerTarball),
+        )}`,
+      },
+      overrides: {
+        [semverManifest.name]: `file:${packagePath(
+          relative(consumerRoot, semverTarball),
         )}`,
       },
     };
