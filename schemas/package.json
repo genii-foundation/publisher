@@ -27,6 +27,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./routes": {
+      "types": "./dist/routes.d.ts",
+      "import": "./dist/routes.js"
+    },
     "./publication.schema.json": "./publication.schema.json",
     "./work.schema.json": "./work.schema.json",
     "./collection.schema.json": "./collection.schema.json",

@@ -226,7 +226,7 @@ test("the Markdown adapter rejects malformed runtime input without throwing", ()
   );
 });
 
-test("route primitives are total and preserve trailing-slash routes", () => {
+test("route primitives enforce and preserve canonical serialized routes", () => {
   for (const value of [undefined, null, 42, Symbol("route"), {}]) {
     const idDiagnostics = [];
     const routeDiagnostics = [];
@@ -245,13 +245,46 @@ test("route primitives are total and preserve trailing-slash routes", () => {
   }
 
   assert.equal(validateRoute("/", "/route", []), true);
-  assert.equal(validateRoute("/works/field-note/", "/route", []), true);
-  for (const route of [
-    "/works/field-note/?mode=reader",
-    "/works/field-note/#field-note-root",
-    "/works//field-note/",
-  ]) {
-    assert.equal(validateRoute(route, "/route", []), false);
+  assert.equal(validateRoute("/caf%C3%A9", "/route", []), true);
+  assert.equal(
+    validateRoute("/%E6%9D%B1%E4%BA%AC/", "/route", []),
+    true,
+  );
+  assert.equal(validateRoute("/x", "/route", []), true);
+  assert.equal(validateRoute("/x/", "/route", []), true);
+
+  const invalidRoutes = [
+    ["/café", "raw-non-ascii"],
+    ["/hello world", "whitespace"],
+    ["/caf%c3%a9", "percent-encoding-case"],
+    ["/hello%20world", "percent-encoded-ascii"],
+    ["/x%2Fy", "percent-encoded-ascii"],
+    ["/%2E%2E/x", "percent-encoded-ascii"],
+    ["/%", "percent-encoding-syntax"],
+    ["/%E9", "percent-encoding-utf8"],
+    ["/%C0%AF", "percent-encoding-utf8"],
+    ["/e%CC%81", "unicode-normalization"],
+    ["/%C2%85", "control-character"],
+    ["/%E2%80%83", "whitespace"],
+    ["/a\u0000b", "control-character"],
+    ["/./x", "dot-segment"],
+    ["/a//b", "empty-segment"],
+    ["/square[bracket]", "character"],
+    ["/works/field-note/?mode=reader", "character"],
+    ["/works/field-note/#field-note-root", "character"],
+    [`/${"a".repeat(2_048)}`, "length"],
+  ];
+  for (const [route, issue] of invalidRoutes) {
+    const diagnostics = [];
+    assert.equal(validateRoute(route, "/route", diagnostics), false, route);
+    assert.deepEqual(
+      diagnostics.map(({ code, params }) => ({
+        code,
+        issue: params.issue,
+      })),
+      [{ code: "content.route.invalid", issue }],
+      route,
+    );
   }
 
   const result = compileMarkdownWork({
@@ -260,15 +293,32 @@ test("route primitives are total and preserve trailing-slash routes", () => {
     title: "Field Note",
     sourcePath: "publication/works/field-note/manuscript.md",
     markdown: "# Field Note",
-    route: "/works/field-note/",
+    route: "/works/caf%C3%A9/",
   });
   assert.equal(result.valid, true, JSON.stringify(result.diagnostics));
   assert.deepEqual(result.value.work.sections[0].routes, {
-    canonical: { path: "/works/field-note/" },
+    canonical: { path: "/works/caf%C3%A9/" },
   });
   assert.deepEqual(
     result.value.work.sections[0].activeRouteNames,
     ["canonical"],
+  );
+
+  const invalidResult = compileMarkdownWork({
+    workId: "field-note",
+    sectionId: "field-note-root",
+    title: "Field Note",
+    sourcePath: "publication/works/field-note/manuscript.md",
+    markdown: "# Field Note",
+    route: "/works/café/",
+  });
+  assert.equal(invalidResult.valid, false);
+  assert.ok(
+    invalidResult.diagnostics.some(
+      ({ code, params }) =>
+        code === "content.route.invalid" &&
+        params.issue === "raw-non-ascii",
+    ),
   );
 });
 
@@ -357,11 +407,13 @@ test("resolved internal hrefs may carry one portable URL fragment", () => {
     "/reader#field-note-root",
     "/#field-note-root",
     "/reader/#Field-Note",
+    "/caf%C3%A9/#field-note-root",
   ]) {
     assert.equal(validateResolvedHref(href, "/href", []), true);
   }
 
   for (const href of [
+    "/café/#field-note-root",
     "/reader/?mode=reader#field-note-root",
     "/reader/#",
     "/reader/#Field Note",

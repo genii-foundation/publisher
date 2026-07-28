@@ -757,7 +757,7 @@ test("packed content freezes its runtime and proves production and development c
         title: "A Neutral Sample",
         language: "en",
         publicationState: "published",
-        route: "/works/sample-work",
+        route: "/works/caf%C3%A9/",
         manuscript: "manuscript.md",
       }));
       const workPath = layout.works.manifests[0].manifestPath;
@@ -808,9 +808,15 @@ test("packed content freezes its runtime and proves production and development c
       assert.equal(JSON.parse(serialized).publicationId, "sample-observatory");
       assert.equal(artifact.text, serialized);
       assert.equal(artifact.envelope.buildId, validated.buildId);
+      assert.equal(validated.works[0].route, "/works/caf%C3%A9/");
       assert.deepEqual(validated.works[0].sections[0].readerAddress, {
         path: work.route,
       });
+      assert.ok(
+        validated.routes.active.some(
+          ({ path }) => path === "/works/caf%C3%A9/",
+        ),
+      );
       assert.notEqual(
         validated.works[0].sections[0].blocks[0].anchor,
         validated.works[0].sections[0].blocks[0].id,

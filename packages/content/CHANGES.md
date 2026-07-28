@@ -18,3 +18,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Separated metric package versions from profile versions and bound public source claims to compiler-feasible UTF-8 and newline normalization geometry.
 - Enforced canonical manifest provenance, contained empty work asset roots, unique section address ownership, and long linked content identities.
 - Added explicit reader-location selection, resolved reader addresses, public block anchors separate from compiler IDs, and collision checks for composite block destinations.
+- Corrected the unreleased route contract to one canonical ASCII serialization across manifests, artifacts, hosts, browsers, and runtimes, with exact UTF-8 encoding, NFC, and trailing-slash semantics.

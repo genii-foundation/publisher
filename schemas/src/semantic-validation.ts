@@ -31,6 +31,10 @@ import type {
   WorkManifest,
 } from "./types.js";
 import { immutableSnapshot } from "./immutability.js";
+import {
+  inspectCanonicalRoutePath,
+  type CanonicalRoutePathIssue,
+} from "./routes.js";
 
 export const REQUIRED_ATTRIBUTION = Object.freeze({
   placement: "footer",
@@ -97,8 +101,6 @@ interface RedirectResolution {
 
 const EXACT_SEMVER =
   /^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*))*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
-const ASCII_CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
-const PERCENT_ENCODED_OCTET = /%[0-9a-f]{2}/i;
 const ROUTE_TOKEN = /\{[^{}]*\}/g;
 
 function diagnostic(
@@ -370,107 +372,9 @@ function validateOriginRelativeRoute(
     return false;
   }
 
-  if (!value.startsWith("/") || value.startsWith("//")) {
-    diagnostics.push(
-      diagnostic(
-        "route.origin_relative",
-        path,
-        "Routes must begin with exactly one slash.",
-        "originRelativeRoute",
-        { value },
-        documentPath,
-      ),
-    );
-  }
-  const routeLength = [...value].length;
-  if (routeLength < 1 || routeLength > 2048) {
-    diagnostics.push(
-      diagnostic(
-        "route.length",
-        path,
-        "Routes must contain between 1 and 2048 characters.",
-        "routeLength",
-        { value, length: routeLength, minLength: 1, maxLength: 2048 },
-        documentPath,
-      ),
-    );
-  }
-  if (value.includes("\\")) {
-    diagnostics.push(
-      diagnostic(
-        "route.backslash",
-        path,
-        "Routes must use forward slashes.",
-        "originRelativeRoute",
-        { value },
-        documentPath,
-      ),
-    );
-  }
-  if (ASCII_CONTROL_CHARACTER.test(value)) {
-    diagnostics.push(
-      diagnostic(
-        "route.control_character",
-        path,
-        "Routes must not contain ASCII control characters.",
-        "originRelativeRoute",
-        { value },
-        documentPath,
-      ),
-    );
-  }
-  if (value.includes("?") || value.includes("#")) {
-    diagnostics.push(
-      diagnostic(
-        "route.url_metacharacter",
-        path,
-        "Routes must not contain query or fragment metacharacters.",
-        "originRelativeRoute",
-        { value },
-        documentPath,
-      ),
-    );
-  }
-  if (PERCENT_ENCODED_OCTET.test(value)) {
-    diagnostics.push(
-      diagnostic(
-        "route.percent_encoding",
-        path,
-        "Routes must not contain percent-encoded octets.",
-        "originRelativeRoute",
-        { value },
-        documentPath,
-      ),
-    );
-  }
-
-  const segments = value.split("/").slice(1);
-  if (segments.includes(".") || segments.includes("..")) {
-    diagnostics.push(
-      diagnostic(
-        "route.dot_segment",
-        path,
-        "Routes must not contain dot segments.",
-        "originRelativeRoute",
-        { value },
-        documentPath,
-      ),
-    );
-  }
-  if (value.slice(1).includes("//")) {
-    diagnostics.push(
-      diagnostic(
-        "route.empty_segment",
-        path,
-        "Routes must not contain empty interior segments.",
-        "originRelativeRoute",
-        { value },
-        documentPath,
-      ),
-    );
-  }
   const tokens: readonly string[] = value.match(ROUTE_TOKEN) ?? [];
   const unmatchedBraces = value.replaceAll(ROUTE_TOKEN, "");
+  let concreteRoute: string | undefined;
   if (requiredToken === undefined) {
     if (
       tokens.length > 0 ||
@@ -487,12 +391,16 @@ function validateOriginRelativeRoute(
           documentPath,
         ),
       );
+    } else {
+      concreteRoute = value;
     }
   } else {
     const requiredTokenCount = tokens.filter(
       (token) => token === requiredToken,
     ).length;
+    let tokenValid = true;
     if (requiredTokenCount === 0) {
+      tokenValid = false;
       diagnostics.push(
         diagnostic(
           "route.template_token_required",
@@ -510,6 +418,7 @@ function validateOriginRelativeRoute(
       unmatchedBraces.includes("{") ||
       unmatchedBraces.includes("}")
     ) {
+      tokenValid = false;
       diagnostics.push(
         diagnostic(
           "route.template_token_invalid",
@@ -521,9 +430,139 @@ function validateOriginRelativeRoute(
         ),
       );
     }
+    if (tokenValid) {
+      concreteRoute = value.replace(
+        requiredToken,
+        "-".repeat(requiredToken.length),
+      );
+    }
+  }
+
+  if (concreteRoute !== undefined) {
+    const inspection = inspectCanonicalRoutePath(concreteRoute);
+    if (!inspection.valid) {
+      const routeDiagnostic = canonicalRouteDiagnostic(
+        inspection.issue,
+        value,
+        path,
+        documentPath,
+      );
+      diagnostics.push(routeDiagnostic);
+    }
   }
 
   return diagnostics.length === initialDiagnosticCount;
+}
+
+function canonicalRouteDiagnostic(
+  issue: CanonicalRoutePathIssue,
+  value: string,
+  path: string,
+  documentPath: string,
+): Diagnostic {
+  const details: Readonly<
+    Record<
+      CanonicalRoutePathIssue,
+      {
+        readonly code: string;
+        readonly keyword: string;
+        readonly message: string;
+      }
+    >
+  > = {
+    backslash: {
+      code: "route.backslash",
+      keyword: "canonicalRoute",
+      message: "Canonical routes must use forward slashes.",
+    },
+    character: {
+      code: "route.character",
+      keyword: "canonicalRoute",
+      message:
+        "Canonical routes may use only RFC 3986 path characters and slashes.",
+    },
+    "control-character": {
+      code: "route.control_character",
+      keyword: "canonicalRoute",
+      message: "Canonical routes must not contain control characters.",
+    },
+    "dot-segment": {
+      code: "route.dot_segment",
+      keyword: "canonicalRoute",
+      message: "Canonical routes must not contain dot segments.",
+    },
+    "empty-segment": {
+      code: "route.empty_segment",
+      keyword: "canonicalRoute",
+      message: "Canonical routes must not contain empty interior segments.",
+    },
+    length: {
+      code: "route.length",
+      keyword: "routeLength",
+      message:
+        "Canonical serialized routes must contain between 1 and 2048 ASCII characters.",
+    },
+    "origin-relative": {
+      code: "route.origin_relative",
+      keyword: "canonicalRoute",
+      message: "Canonical routes must begin with exactly one slash.",
+    },
+    "percent-encoded-ascii": {
+      code: "route.percent_encoding",
+      keyword: "canonicalRoute",
+      message:
+        "Canonical routes must not percent encode ASCII characters.",
+    },
+    "percent-encoding-case": {
+      code: "route.percent_encoding",
+      keyword: "canonicalRoute",
+      message:
+        "Canonical routes must use uppercase hexadecimal percent encoding.",
+    },
+    "percent-encoding-syntax": {
+      code: "route.percent_encoding",
+      keyword: "canonicalRoute",
+      message: "Canonical routes must contain complete percent-encoded octets.",
+    },
+    "percent-encoding-utf8": {
+      code: "route.percent_encoding",
+      keyword: "canonicalRoute",
+      message:
+        "Canonical routes must use valid UTF-8 percent encoding for non-ASCII characters.",
+    },
+    "raw-non-ascii": {
+      code: "route.raw_non_ascii",
+      keyword: "canonicalRoute",
+      message:
+        "Canonical routes must percent encode non-ASCII characters as uppercase UTF-8 octets.",
+    },
+    type: {
+      code: "route.type",
+      keyword: "canonicalRoute",
+      message: "Canonical routes must be strings.",
+    },
+    "unicode-normalization": {
+      code: "route.unicode_normalization",
+      keyword: "canonicalRoute",
+      message:
+        "Canonical routes must decode to Unicode Normalization Form C text.",
+    },
+    whitespace: {
+      code: "route.whitespace",
+      keyword: "canonicalRoute",
+      message: "Canonical routes must not contain Unicode whitespace.",
+    },
+  };
+  const detail = details[issue];
+
+  return diagnostic(
+    detail.code,
+    path,
+    detail.message,
+    detail.keyword,
+    { issue, value },
+    documentPath,
+  );
 }
 
 function addActiveRoute(

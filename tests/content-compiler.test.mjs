@@ -1401,7 +1401,7 @@ test("structured addresses preserve trailing routes and use active anchor bases"
       ...publication,
       routes: {
         ...publication.routes,
-        updates: "/reader/",
+        updates: "/reader/%E6%9D%B1%E4%BA%AC/",
       },
     }),
   );
@@ -1411,9 +1411,9 @@ test("structured addresses preserve trailing routes and use active anchor bases"
       {
         ...work.sections[0],
         routes: {
-          canonical: { path: "/reading/rain-gauge/" },
+          canonical: { path: "/reading/caf%C3%A9/" },
           reader: {
-            path: "/reader/",
+            path: "/reader/%E6%9D%B1%E4%BA%AC/",
             anchor: "rain-gauge-root",
           },
         },
@@ -1429,19 +1429,71 @@ test("structured addresses preserve trailing routes and use active anchor bases"
   const section = envelope.works[0].sections[0];
 
   assert.deepEqual(section.routes.reader, {
-    path: "/reader/",
+    path: "/reader/%E6%9D%B1%E4%BA%AC/",
     anchor: "rain-gauge-root",
   });
   assert.deepEqual(section.readerAddress, section.routes.reader);
   assert.ok(
     envelope.routes.active.some(
-      ({ path }) => path === "/reading/rain-gauge/",
+      ({ path }) => path === "/reading/caf%C3%A9/",
     ),
   );
   assert.equal(
-    envelope.routes.active.some(({ path }) => path === "/reader/"),
+    envelope.routes.active.some(
+      ({ path }) => path === "/reader/%E6%9D%B1%E4%BA%AC/",
+    ),
     true,
   );
+});
+
+test("compiler rejects non-canonical serialized section routes", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const invalidRoutes = [
+    ["raw-unicode", "/café", "raw-non-ascii"],
+    ["raw-space", "/hello world", "whitespace"],
+    ["lowercase-escape", "/caf%c3%a9", "percent-encoding-case"],
+    ["encoded-space", "/hello%20world", "percent-encoded-ascii"],
+    ["encoded-slash", "/x%2Fy", "percent-encoded-ascii"],
+    ["encoded-dot", "/%2E%2E/x", "percent-encoded-ascii"],
+    ["bare-percent", "/%", "percent-encoding-syntax"],
+    ["nonhex-escape", "/%ZZ", "percent-encoding-syntax"],
+    ["incomplete-utf8", "/%E9", "percent-encoding-utf8"],
+    ["overlong-utf8", "/%C0%AF", "percent-encoding-utf8"],
+    ["decoded-nfd", "/e%CC%81", "unicode-normalization"],
+    ["decoded-control", "/%C2%85", "control-character"],
+    ["decoded-space", "/%E2%80%83", "whitespace"],
+    ["raw-control", "/a\u0000b", "control-character"],
+    ["dot-segment", "/./x", "dot-segment"],
+    ["empty-segment", "/a//b", "empty-segment"],
+    ["non-pchar-ascii", "/square[bracket]", "character"],
+    ["serialized-too-long", `/${"a".repeat(2_048)}`, "length"],
+  ];
+  const invalidInput = replaceWork(input, "rain-gauge", (work) => ({
+    ...work,
+    sections: [
+      {
+        ...work.sections[0],
+        routes: Object.fromEntries(
+          invalidRoutes.map(([name, path]) => [name, { path }]),
+        ),
+        activeRouteNames: [],
+      },
+    ],
+  }));
+  const result = compilePublicationContent(invalidInput);
+
+  assert.equal(result.valid, false);
+  for (const [name, , expectedIssue] of invalidRoutes) {
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, params, path }) =>
+          code === "content.route.invalid" &&
+          params.issue === expectedIssue &&
+          path === `/works/0/sections/0/routes/${name}/path`,
+      ),
+      `${name} should report ${expectedIssue}: ${validationMessage(result)}`,
+    );
+  }
 });
 
 test("navigation skips structural sections without flattening hierarchy", async () => {

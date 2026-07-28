@@ -226,7 +226,18 @@ The presence of `sync` enables an installed provider for the listed capabilities
 
 Route templates use `{workId}` and `{collectionId}` tokens. Renderer adapters translate those semantic templates into their own routing mechanism. A publication with collection references must provide a collection route template.
 
-Internal routes are origin relative and begin with exactly one slash. They reject network-path references, backslashes, queries, fragments, percent-encoded octets, ASCII controls, current or parent directory segments, and duplicate interior separators. Both trailing-slash and non-trailing-slash policies are valid. GENII Publisher preserves the path form selected by the publication instead of normalizing one policy into the other. Work and collection templates obey the same rules while retaining their required semantic token.
+Internal routes use one canonical ASCII serialization. A concrete path is origin relative, begins with exactly one slash, and contains at most 2,048 serialized characters. Its raw grammar is slash plus the ASCII `pchar` repertoire, with percent reserved for encoding. Non-ASCII text uses uppercase percent escapes of its UTF-8 bytes:
+
+```text
+/caf%C3%A9
+/%E6%9D%B1%E4%BA%AC/
+```
+
+Percent-encoded ASCII is forbidden. Decoding must produce valid NFC Unicode without whitespace or control characters. Network-path references, backslashes, queries, fragments, empty interior segments, and current or parent directory segments are invalid.
+
+Validators reject noncanonical routes and never normalize them. Manifest data, compiled artifacts, the host, browser code, and other runtimes all use the exact same serialized value. They do not decode and re-encode it. Both trailing-slash policies are valid, but the slash remains significant: `/works/essay` and `/works/essay/` are distinct routes. Work and collection templates retain their one required semantic token while their literal portions obey this grammar.
+
+An established public path that contains spaces cannot become a canonical protocol route, including by replacing a space with percent-encoded ASCII. A migration must either rename that public URL or retain it through an explicit redirect at the host or edge boundary. The engine will not silently repair it, because that would make the browser, host, manifest, and compiled artifact disagree about route identity.
 
 Continuity redirects preserve previously published paths. A redirect source is always an origin relative route. Its target may be an origin relative route or an absolute, credential-free HTTP or HTTPS URL. Redirect records are publication data, not generated cache. JSON Schema rejects unsupported redirect status codes. The semantic validator rejects redirect loops, duplicate sources, conflicts with active canonical routes, and internal redirect chains that end without an active route or external URL.
 

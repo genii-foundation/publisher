@@ -13,6 +13,7 @@ If you wish to allow use of your version of this file only under the terms of th
 
 export * from "./content-types.js";
 export * from "./layout.js";
+export * from "./routes.js";
 export * from "./schema-validation.js";
 export * from "./semantic-validation.js";
 export * from "./types.js";

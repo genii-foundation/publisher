@@ -26,10 +26,16 @@ async function readJson(relativePath) {
   );
 }
 
-const [publicationSchema, workSchema, collectionSchema] = await Promise.all([
+const [
+  publicationSchema,
+  workSchema,
+  collectionSchema,
+  contentEnvelopeSchema,
+] = await Promise.all([
   readJson("schemas/publication.schema.json"),
   readJson("schemas/work.schema.json"),
   readJson("schemas/collection.schema.json"),
+  readJson("schemas/content-envelope.schema.json"),
 ]);
 
 const ajv = new Ajv2020({
@@ -258,52 +264,175 @@ test("stable IDs reject Windows reserved device basenames", () => {
   }
 });
 
-test("routes are canonical origin-relative paths", () => {
-  for (const route of [
-    "//evil.example",
-    "/notes/../admin",
-    String.raw`/notes\admin`,
-    "/notes?draft=true",
-    "/notes#draft",
-    "/notes/%2e%2e/admin",
-    "/notes//admin",
-    "/notes/\u0000admin",
-  ]) {
+test("concrete route schemas share one canonical ASCII serialization", () => {
+  const concreteRoutePatterns = {
+    publication: publicationSchema.$defs.nonRootRoutePath.pattern,
+    work: workSchema.$defs.routePath.oneOf[1].pattern,
+    collection: collectionSchema.$defs.routePath.oneOf[1].pattern,
+    contentEnvelope:
+      contentEnvelopeSchema.$defs.routePath.oneOf[1].pattern,
+  };
+  assert.equal(
+    new Set(Object.values(concreteRoutePatterns)).size,
+    1,
+    JSON.stringify(concreteRoutePatterns, null, 2),
+  );
+
+  const validRoutes = [
+    "/",
+    "/notes",
+    "/notes/",
+    "/caf%C3%A9",
+    "/caf%C3%A9/",
+    "/%E6%9D%B1%E4%BA%AC",
+    "/%E6%9D%B1%E4%BA%AC/",
+    "/~reader:@v1!$&'()*+,;=",
+  ];
+  for (const route of validRoutes) {
     const publication = clone(canonicalPublication);
     publication.routes.home = route;
+    assert.equal(
+      validatePublication(publication),
+      true,
+      `publication ${route}: ${validationMessage(validatePublication)}`,
+    );
+
+    const work = clone(canonicalWork);
+    work.route = route;
+    assert.equal(
+      validateWork(work),
+      true,
+      `work ${route}: ${validationMessage(validateWork)}`,
+    );
+
+    const collection = clone(canonicalCollection);
+    collection.route = route;
+    assert.equal(
+      validateCollection(collection),
+      true,
+      `collection ${route}: ${validationMessage(validateCollection)}`,
+    );
+  }
+
+  const invalidRoutes = [
+    ["network path", "//evil.example"],
+    ["leading dot segment", "/./admin"],
+    ["nested dot segment", "/notes/../admin"],
+    ["empty segment", "/notes//admin"],
+    ["backslash", String.raw`/notes\admin`],
+    ["query", "/notes?draft=true"],
+    ["fragment", "/notes#draft"],
+    ["raw Unicode", "/café"],
+    ["raw space", "/hello world"],
+    ["lowercase escape", "/caf%c3%a9"],
+    ["mixed case escape", "/caf%C3%a9"],
+    ["encoded ASCII", "/hello%20world"],
+    ["encoded slash", "/x%2Fy"],
+    ["encoded dot segment", "/%2E%2E/admin"],
+    ["bare percent", "/notes%"],
+    ["nonhex escape", "/notes%GG"],
+    ["truncated UTF-8", "/%E9"],
+    ["overlong UTF-8", "/%C0%AF"],
+    ["UTF-8 surrogate", "/%ED%A0%80"],
+    ["UTF-8 above Unicode", "/%F4%90%80%80"],
+    ["stray UTF-8 continuation", "/%80"],
+    ["encoded C1 control", "/%C2%85"],
+    ["encoded no-break space", "/%C2%A0"],
+    ["encoded em space", "/%E2%80%83"],
+    ["encoded byte-order mark", "/%EF%BB%BF"],
+    ["square brackets", "/notes[1]"],
+    ["backtick", "/notes`draft"],
+    ["caret", "/notes^draft"],
+    ["pipe", "/notes|draft"],
+    ["quotation mark", "/notes\"draft"],
+    ["control character", "/notes/\u0000admin"],
+  ];
+  for (const [label, route] of invalidRoutes) {
+    const publication = clone(canonicalPublication);
+    publication.routes.home = route;
+    assert.equal(validatePublication(publication), false, `publication ${label}`);
+
+    const work = clone(canonicalWork);
+    work.route = route;
+    assert.equal(validateWork(work), false, `work ${label}`);
+
+    const collection = clone(canonicalCollection);
+    collection.route = route;
+    assert.equal(validateCollection(collection), false, `collection ${label}`);
+  }
+});
+
+test("route templates preserve only their one required literal token", () => {
+  for (const [workRoute, collectionRoute] of [
+    ["/works/{workId}", "/collections/{collectionId}"],
+    ["/works/{workId}/", "/collections/{collectionId}/"],
+    [
+      "/caf%C3%A9/{workId}",
+      "/%E6%9D%B1%E4%BA%AC/{collectionId}/",
+    ],
+  ]) {
+    const publication = clone(canonicalPublication);
+    publication.routes.work = workRoute;
+    publication.routes.collection = collectionRoute;
+    assert.equal(
+      validatePublication(publication),
+      true,
+      validationMessage(validatePublication),
+    );
+  }
+
+  for (const route of [
+    "/works/workId",
+    "/works/{collectionId}",
+    "/works/{workId}/{workId}",
+    "/works/{workId}/{sectionId}",
+    "/works/{workid}",
+    "/works/{workId",
+    "/works/%7BworkId%7D",
+    "/caf%c3%a9/{workId}",
+    "/%E9/{workId}",
+  ]) {
+    const publication = clone(canonicalPublication);
+    publication.routes.work = route;
     assert.equal(validatePublication(publication), false, route);
   }
 
-  const rootPublication = clone(canonicalPublication);
-  rootPublication.routes.home = "/";
+  for (const route of [
+    "/collections/collectionId",
+    "/collections/{workId}",
+    "/collections/{collectionId}/{collectionId}",
+    "/collections/{collectionId}/{shelfId}",
+    "/collections/{collectionid}",
+    "/collections/{collectionId",
+    "/collections/%7BcollectionId%7D",
+    "/caf%c3%a9/{collectionId}",
+    "/%E9/{collectionId}",
+  ]) {
+    const publication = clone(canonicalPublication);
+    publication.routes.collection = route;
+    assert.equal(validatePublication(publication), false, route);
+  }
+});
+
+test("shape schemas leave decoded NFC normalization to semantic validation", () => {
+  const decomposedRoute = "/e%CC%81";
+
+  const publication = clone(canonicalPublication);
+  publication.routes.home = decomposedRoute;
   assert.equal(
-    validatePublication(rootPublication),
+    validatePublication(publication),
     true,
     validationMessage(validatePublication),
   );
 
-  const trailingSlashPublication = clone(canonicalPublication);
-  trailingSlashPublication.routes.home = "/notes/";
-  trailingSlashPublication.routes.work = "/works/{workId}/";
-  trailingSlashPublication.routes.collection = "/collections/{collectionId}/";
-  assert.equal(
-    validatePublication(trailingSlashPublication),
-    true,
-    validationMessage(validatePublication),
-  );
+  const work = clone(canonicalWork);
+  work.route = decomposedRoute;
+  assert.equal(validateWork(work), true, validationMessage(validateWork));
 
-  const trailingSlashWork = clone(canonicalWork);
-  trailingSlashWork.route = "/works/first-essay/";
+  const collection = clone(canonicalCollection);
+  collection.route = decomposedRoute;
   assert.equal(
-    validateWork(trailingSlashWork),
-    true,
-    validationMessage(validateWork),
-  );
-
-  const trailingSlashCollection = clone(canonicalCollection);
-  trailingSlashCollection.route = "/collections/essays/";
-  assert.equal(
-    validateCollection(trailingSlashCollection),
+    validateCollection(collection),
     true,
     validationMessage(validateCollection),
   );
