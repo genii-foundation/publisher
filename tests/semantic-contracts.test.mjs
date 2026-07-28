@@ -168,36 +168,69 @@ test("shape validation rejects values outside the JSON data model", async () => 
   );
 });
 
-test("generated concrete routes retain the 2048 character limit", async () => {
+test("route semantics count the serialized ASCII form and preserve it exactly", async () => {
   const input = await loadCanonicalInput();
-  const astralWorkManifests = new Map(input.workManifests);
-  const [astralWorkPath, originalWork] =
-    astralWorkManifests.entries().next().value;
-  const astralWork = {
+  const publicationWithoutRedirects = structuredClone(input.publication);
+  publicationWithoutRedirects.continuity.redirects = [];
+  const [workPath, originalWork] = input.workManifests.entries().next().value;
+
+  const encodedWork = {
     ...originalWork,
-    route: `/${"😀".repeat(1_100)}`,
+    route: "/caf%C3%A9/",
   };
-  const astralShapeResult = validateWorkShape(astralWork);
+  const encodedShapeResult = validateWorkShape(encodedWork);
   assert.equal(
-    astralShapeResult.valid,
+    encodedShapeResult.valid,
     true,
-    JSON.stringify(astralShapeResult.diagnostics, null, 2),
+    JSON.stringify(encodedShapeResult.diagnostics, null, 2),
   );
-  astralWorkManifests.set(astralWorkPath, astralWork);
-  const astralPublication = structuredClone(input.publication);
-  astralPublication.continuity.redirects = [];
-  const astralResult = validate({
+  const encodedResult = validate({
     ...input,
-    publication: astralPublication,
-    workManifests: astralWorkManifests,
+    publication: publicationWithoutRedirects,
+    workManifests: new Map([[workPath, encodedWork]]),
   });
   assert.equal(
-    astralResult.valid,
+    encodedResult.valid,
     true,
-    JSON.stringify(astralResult.diagnostics, null, 2),
+    JSON.stringify(encodedResult.diagnostics, null, 2),
+  );
+  assert.equal(encodedResult.value.works[0].manifest.route, "/caf%C3%A9/");
+
+  const longestRoute = `/${"a".repeat(2_047)}`;
+  assert.equal(longestRoute.length, 2_048);
+  const longestResult = validate({
+    ...input,
+    publication: publicationWithoutRedirects,
+    workManifests: new Map([
+      [workPath, { ...originalWork, route: longestRoute }],
+    ]),
+  });
+  assert.equal(
+    longestResult.valid,
+    true,
+    JSON.stringify(longestResult.diagnostics, null, 2),
   );
 
-  const publication = structuredClone(input.publication);
+  const tooLongRoute = `/${"a".repeat(2_048)}`;
+  assert.equal(tooLongRoute.length, 2_049);
+  const tooLongResult = validate({
+    ...input,
+    publication: publicationWithoutRedirects,
+    workManifests: new Map([
+      [workPath, { ...originalWork, route: tooLongRoute }],
+    ]),
+  });
+  assert.equal(tooLongResult.valid, false);
+  assert.ok(
+    tooLongResult.diagnostics.some(
+      ({ code, documentPath, path }) =>
+        code === "route.length" &&
+        documentPath === workPath &&
+        path === "/route",
+    ),
+  );
+
+  const publication = structuredClone(publicationWithoutRedirects);
   publication.routes.work = `/${"a".repeat(2038)}/{workId}`;
   assert.equal(publication.routes.work.length, 2048);
 
@@ -208,13 +241,14 @@ test("generated concrete routes retain the 2048 character limit", async () => {
     JSON.stringify(shapeResult.diagnostics, null, 2),
   );
 
-  const workManifests = new Map(input.workManifests);
-  const [workPath, work] = workManifests.entries().next().value;
-  const workWithoutRoute = structuredClone(work);
+  const workWithoutRoute = structuredClone(originalWork);
   delete workWithoutRoute.route;
-  workManifests.set(workPath, workWithoutRoute);
 
-  const result = validate({ ...input, publication, workManifests });
+  const result = validate({
+    ...input,
+    publication,
+    workManifests: new Map([[workPath, workWithoutRoute]]),
+  });
   assert.equal(result.valid, false);
   assert.ok(
     result.diagnostics.some(
@@ -222,6 +256,52 @@ test("generated concrete routes retain the 2048 character limit", async () => {
         code === "route.length" && path === "/routes/work",
     ),
   );
+});
+
+test("route semantics reject non-canonical serialized spellings", async () => {
+  const input = await loadCanonicalInput();
+  const publication = structuredClone(input.publication);
+  publication.continuity.redirects = [];
+  const [workPath, originalWork] = input.workManifests.entries().next().value;
+  const invalidRoutes = [
+    ["raw Unicode", "/café", "route.raw_non_ascii"],
+    ["raw whitespace", "/hello world", "route.whitespace"],
+    ["lowercase escapes", "/caf%c3%a9", "route.percent_encoding"],
+    ["encoded ASCII space", "/hello%20world", "route.percent_encoding"],
+    ["encoded ASCII slash", "/x%2Fy", "route.percent_encoding"],
+    ["encoded ASCII dot", "/%2E%2E/x", "route.percent_encoding"],
+    ["bare percent", "/%", "route.percent_encoding"],
+    ["non-hex escape", "/%ZZ", "route.percent_encoding"],
+    ["incomplete UTF-8", "/%E9", "route.percent_encoding"],
+    ["overlong UTF-8", "/%C0%AF", "route.percent_encoding"],
+    ["decoded NFD", "/e%CC%81", "route.unicode_normalization"],
+    ["decoded control", "/%C2%85", "route.control_character"],
+    ["decoded whitespace", "/%E2%80%83", "route.whitespace"],
+    ["raw control", "/a\u0000b", "route.control_character"],
+    ["dot segment", "/./x", "route.dot_segment"],
+    ["empty segment", "/a//b", "route.empty_segment"],
+    ["non-pchar ASCII", "/square[bracket]", "route.character"],
+  ];
+
+  for (const [label, route, expectedCode] of invalidRoutes) {
+    const result = validate({
+      ...input,
+      publication,
+      workManifests: new Map([
+        [workPath, { ...originalWork, route }],
+      ]),
+    });
+    assert.equal(result.valid, false, label);
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, documentPath, path }) =>
+          code === expectedCode &&
+          documentPath === workPath &&
+          path === "/route",
+      ),
+      `${label} should report ${expectedCode}: ${JSON.stringify(result.diagnostics, null, 2)}`,
+    );
+  }
 });
 
 test("semantic results are detached immutable snapshots", async () => {

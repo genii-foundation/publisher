@@ -18,6 +18,8 @@ import { isAbsolute, relative, resolve } from "node:path";
 import test from "node:test";
 
 import {
+  inspectCanonicalRoutePath,
+  isCanonicalRoutePath,
   REQUIRED_ATTRIBUTION,
   resolvePublicationSourcesForContentCompilation,
   resolvePublicationLayout,
@@ -124,6 +126,68 @@ function validateFixtureSemantics(fixture, overrides = {}) {
   });
 }
 
+test("canonical route inspection uses one ASCII serialized spelling", () => {
+  assert.deepEqual(inspectCanonicalRoutePath(null), {
+    valid: false,
+    issue: "type",
+  });
+  assert.equal(isCanonicalRoutePath(null), false);
+
+  const longestCanonicalRoute = `/${"a".repeat(2_047)}`;
+  const validRoutes = [
+    "/",
+    "/caf%C3%A9",
+    "/%E6%9D%B1%E4%BA%AC/",
+    "/%F0%9F%98%80",
+    "/x",
+    "/x/",
+    longestCanonicalRoute,
+  ];
+
+  assert.equal(longestCanonicalRoute.length, 2_048);
+  for (const route of validRoutes) {
+    assert.deepEqual(inspectCanonicalRoutePath(route), {
+      valid: true,
+      value: route,
+    });
+    assert.equal(isCanonicalRoutePath(route), true);
+    assert.equal(
+      new URL(route, "https://reader.example").pathname,
+      route,
+    );
+  }
+
+  const invalidRoutes = [
+    ["/café", "raw-non-ascii"],
+    ["/hello world", "whitespace"],
+    ["/caf%c3%a9", "percent-encoding-case"],
+    ["/hello%20world", "percent-encoded-ascii"],
+    ["/x%2Fy", "percent-encoded-ascii"],
+    ["/%2E%2E/x", "percent-encoded-ascii"],
+    ["/%", "percent-encoding-syntax"],
+    ["/%ZZ", "percent-encoding-syntax"],
+    ["/%E9", "percent-encoding-utf8"],
+    ["/%C0%AF", "percent-encoding-utf8"],
+    ["/e%CC%81", "unicode-normalization"],
+    ["/%C2%85", "control-character"],
+    ["/%E2%80%83", "whitespace"],
+    ["/a\u0000b", "control-character"],
+    ["/./x", "dot-segment"],
+    ["/a//b", "empty-segment"],
+    ["/square[bracket]", "character"],
+    [`/${"a".repeat(2_048)}`, "length"],
+  ];
+
+  for (const [route, issue] of invalidRoutes) {
+    assert.deepEqual(
+      inspectCanonicalRoutePath(route),
+      { valid: false, issue },
+      route,
+    );
+    assert.equal(isCanonicalRoutePath(route), false, route);
+  }
+});
+
 test("schema package manifest declares runtime, schemas, and legal artifacts", async () => {
   const packageManifest = await readJson(
     new URL("schemas/package.json", repositoryRoot),
@@ -159,6 +223,10 @@ test("schema package manifest declares runtime, schemas, and legal artifacts", a
     packageManifest.exports["./collection.schema.json"],
     "./collection.schema.json",
   );
+  assert.deepEqual(packageManifest.exports["./routes"], {
+    types: "./dist/routes.d.ts",
+    import: "./dist/routes.js",
+  });
 
   const legalArtifacts = [
     "CHANGES.md",
@@ -601,6 +669,92 @@ test("route and continuity validation rejects collisions but accepts external te
     collisionResult.diagnostics.some(
       ({ code }) => code === "route.active_collision",
     ),
+  );
+});
+
+test("route templates receive complete canonical Unicode validation", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const validPublication = structuredClone(fixture.publication);
+  validPublication.routes.work = "/works/caf%C3%A9/{workId}/";
+  validPublication.routes.collection =
+    "/collections/%E6%9D%B1%E4%BA%AC/{collectionId}/";
+  const validResult = validateFixtureSemantics(fixture, {
+    publication: validPublication,
+  });
+  assert.equal(
+    validResult.valid,
+    true,
+    JSON.stringify(validResult.diagnostics, null, 2),
+  );
+
+  const neutralPlaceholderPublication = structuredClone(
+    fixture.publication,
+  );
+  neutralPlaceholderPublication.routes.work = "/{workId}%CC%87";
+  const neutralPlaceholderResult = validateFixtureSemantics(fixture, {
+    publication: neutralPlaceholderPublication,
+  });
+  assert.equal(
+    neutralPlaceholderResult.valid,
+    true,
+    JSON.stringify(neutralPlaceholderResult.diagnostics, null, 2),
+  );
+
+  const generatedCompositionWorks = new Map(fixture.workManifests);
+  const [generatedWorkPath, generatedWork] =
+    generatedCompositionWorks.entries().next().value;
+  const generatedWorkWithoutRoute = structuredClone(generatedWork);
+  delete generatedWorkWithoutRoute.route;
+  generatedCompositionWorks.set(
+    generatedWorkPath,
+    generatedWorkWithoutRoute,
+  );
+  const generatedCompositionResult = validateFixtureSemantics(fixture, {
+    publication: neutralPlaceholderPublication,
+    workManifests: generatedCompositionWorks,
+  });
+  assert.equal(generatedCompositionResult.valid, false);
+  assert.ok(
+    generatedCompositionResult.diagnostics.some(
+      ({ code, path }) =>
+        code === "route.unicode_normalization" &&
+        path === "/routes/work",
+    ),
+  );
+
+  const nonNormalizedPublication = structuredClone(fixture.publication);
+  nonNormalizedPublication.routes.work = "/works/e%CC%81/{workId}";
+  const nonNormalizedResult = validateFixtureSemantics(fixture, {
+    publication: nonNormalizedPublication,
+  });
+  assert.equal(nonNormalizedResult.valid, false);
+  assert.ok(
+    nonNormalizedResult.diagnostics.some(
+      ({ code, path }) =>
+        code === "route.unicode_normalization" &&
+        path === "/routes/work",
+    ),
+  );
+
+  const malformedTokenPublication = structuredClone(fixture.publication);
+  malformedTokenPublication.routes.work = "/works/{workId}/{other}";
+  const malformedTokenResult = validateFixtureSemantics(fixture, {
+    publication: malformedTokenPublication,
+  });
+  assert.equal(malformedTokenResult.valid, false);
+  assert.ok(
+    malformedTokenResult.diagnostics.some(
+      ({ code, path }) =>
+        code === "route.template_token_invalid" &&
+        path === "/routes/work",
+    ),
+  );
+  assert.equal(
+    malformedTokenResult.diagnostics.some(
+      ({ code, path }) =>
+        code === "route.character" && path === "/routes/work",
+    ),
+    false,
   );
 });
 

@@ -618,30 +618,160 @@ test("link source evidence is discriminated from semantic relationships", () => 
   });
 });
 
-test("server route paths allow trailing slashes but reject query and fragment syntax", () => {
-  const trailingSlashEnvelope = createMinimalEnvelope();
-  trailingSlashEnvelope.works[0].route = "/works/rain-gauge/";
-  trailingSlashEnvelope.routes.active[1].path = "/works/rain-gauge/";
-  const trailingSlashResult = validateContentEnvelopeShape(
-    trailingSlashEnvelope,
-  );
-  assert.equal(
-    trailingSlashResult.valid,
-    true,
-    JSON.stringify(trailingSlashResult.diagnostics, null, 2),
-  );
+test("anchored hrefs use canonical routes with independent length limits", () => {
+  const createEnvelopeWithAnchoredLink = (href) => {
+    const envelope = createMinimalEnvelope();
+    const section = addCompiledSection(envelope);
+    envelope.links.push({
+      id: "anchored-link",
+      source: {
+        kind: "semantic",
+        workId: "rain-gauge",
+        sectionId: section.id,
+      },
+      target: {
+        kind: "section",
+        workId: "rain-gauge",
+        sectionId: section.id,
+        routeName: "reader",
+      },
+      href,
+    });
+    return envelope;
+  };
 
+  const maximumRoute = `/${"a".repeat(2_047)}`;
+  const maximumFragment = "b".repeat(2_048);
+  for (const href of [
+    "/caf%C3%A9/#anchor",
+    "/%E6%9D%B1%E4%BA%AC/#修行",
+    `${maximumRoute}#${maximumFragment}`,
+  ]) {
+    const envelope = createEnvelopeWithAnchoredLink(href);
+    const result = validateContentEnvelopeShape(envelope);
+    assert.equal(
+      result.valid,
+      true,
+      `${href.slice(0, 80)}: ${JSON.stringify(result.diagnostics, null, 2)}`,
+    );
+  }
+
+  const invalidHrefs = [
+    ["raw Unicode path", "/café/#anchor"],
+    ["encoded ASCII path", "/caf%65/#anchor"],
+    ["lowercase UTF-8 path", "/caf%c3%a9/#anchor"],
+    ["truncated UTF-8 path", "/%E9/#anchor"],
+    ["overlong UTF-8 path", "/%C0%AF/#anchor"],
+    ["overlong route", `/${"a".repeat(2_048)}#anchor`],
+    ["overlong fragment", `/#${"a".repeat(2_049)}`],
+  ];
+  for (const [label, href] of invalidHrefs) {
+    const envelope = createEnvelopeWithAnchoredLink(href);
+    const result = validateContentEnvelopeShape(envelope);
+    assert.equal(result.valid, false, label);
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path }) =>
+          code === "schema.pattern" && path === "/links/0/href",
+      ),
+      `${label}: ${JSON.stringify(result.diagnostics, null, 2)}`,
+    );
+  }
+});
+
+test("serialized content routes use the canonical ASCII grammar", () => {
   for (const route of [
-    "/works/rain-gauge/?draft=true",
-    "/works/rain-gauge/#first-reading",
+    "/",
+    "/works/rain-gauge",
+    "/works/rain-gauge/",
+    "/caf%C3%A9",
+    "/caf%C3%A9/",
+    "/%E6%9D%B1%E4%BA%AC",
+    "/%E6%9D%B1%E4%BA%AC/",
+    "/~reader:@v1!$&'()*+,;=",
   ]) {
     const envelope = createMinimalEnvelope();
     envelope.works[0].route = route;
-    assertInvalid(envelope, {
-      code: "schema.pattern",
-      path: "/works/0/route",
-    });
+    envelope.routes.active[1].path = route;
+    const result = validateContentEnvelopeShape(envelope);
+    assert.equal(
+      result.valid,
+      true,
+      `${route}: ${JSON.stringify(result.diagnostics, null, 2)}`,
+    );
   }
+
+  const invalidRoutes = [
+    ["network path", "//evil.example"],
+    ["leading dot segment", "/./admin"],
+    ["nested dot segment", "/notes/../admin"],
+    ["empty segment", "/notes//admin"],
+    ["backslash", String.raw`/notes\admin`],
+    ["query", "/notes?draft=true"],
+    ["fragment", "/notes#draft"],
+    ["template braces", "/works/{workId}"],
+    ["raw Unicode", "/café"],
+    ["raw space", "/hello world"],
+    ["lowercase escape", "/caf%c3%a9"],
+    ["mixed case escape", "/caf%C3%a9"],
+    ["encoded ASCII", "/hello%20world"],
+    ["encoded slash", "/x%2Fy"],
+    ["encoded dot segment", "/%2E%2E/admin"],
+    ["bare percent", "/notes%"],
+    ["nonhex escape", "/notes%GG"],
+    ["truncated UTF-8", "/%E9"],
+    ["overlong UTF-8", "/%C0%AF"],
+    ["UTF-8 surrogate", "/%ED%A0%80"],
+    ["UTF-8 above Unicode", "/%F4%90%80%80"],
+    ["stray UTF-8 continuation", "/%80"],
+    ["encoded C1 control", "/%C2%85"],
+    ["encoded no-break space", "/%C2%A0"],
+    ["encoded em space", "/%E2%80%83"],
+    ["encoded byte-order mark", "/%EF%BB%BF"],
+    ["square brackets", "/notes[1]"],
+    ["backtick", "/notes`draft"],
+    ["caret", "/notes^draft"],
+    ["pipe", "/notes|draft"],
+    ["quotation mark", "/notes\"draft"],
+    ["control character", "/notes/\u0000admin"],
+  ];
+  for (const [label, route] of invalidRoutes) {
+    const workEnvelope = createMinimalEnvelope();
+    workEnvelope.works[0].route = route;
+    const workResult = validateContentEnvelopeShape(workEnvelope);
+    assert.equal(workResult.valid, false, `work route ${label}`);
+    assert.ok(
+      workResult.diagnostics.some(
+        ({ code, path }) =>
+          code === "schema.pattern" && path === "/works/0/route",
+      ),
+      `${label}: ${JSON.stringify(workResult.diagnostics, null, 2)}`,
+    );
+
+    const routeTableEnvelope = createMinimalEnvelope();
+    routeTableEnvelope.routes.active[1].path = route;
+    const routeTableResult = validateContentEnvelopeShape(routeTableEnvelope);
+    assert.equal(routeTableResult.valid, false, `route table ${label}`);
+    assert.ok(
+      routeTableResult.diagnostics.some(
+        ({ code, path }) =>
+          code === "schema.pattern" && path === "/routes/active/1/path",
+      ),
+      `${label}: ${JSON.stringify(routeTableResult.diagnostics, null, 2)}`,
+    );
+  }
+});
+
+test("content route shape leaves decoded NFC normalization to full validation", () => {
+  const envelope = createMinimalEnvelope();
+  envelope.works[0].route = "/e%CC%81";
+  envelope.routes.active[1].path = "/e%CC%81";
+  const result = validateContentEnvelopeShape(envelope);
+  assert.equal(
+    result.valid,
+    true,
+    JSON.stringify(result.diagnostics, null, 2),
+  );
 });
 
 test("required publication membership arrays cannot be empty", () => {

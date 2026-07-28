@@ -11,7 +11,10 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-import type { Diagnostic } from "@genii-foundation/publisher-schema";
+import {
+  inspectCanonicalRoutePath,
+  type Diagnostic,
+} from "@genii-foundation/publisher-schema";
 import unicodeWhitespace from "@unicode/unicode-15.1.0/Binary_Property/White_Space/regex.js";
 
 export const EXACT_SEMVER =
@@ -20,8 +23,6 @@ export const STABLE_ID =
   /^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
 const PACKAGE_NAME =
   /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
-const ASCII_CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
-const PERCENT_ENCODED_OCTET = /%[0-9a-f]{2}/i;
 const URL_FRAGMENT_ASCII_CHARACTER = /^[A-Za-z0-9._~!$&'()*+,;=:@/?-]$/;
 const HEX_DIGIT = /^[0-9A-Fa-f]$/;
 
@@ -300,25 +301,8 @@ export function validateRoute(
     return false;
   }
 
-  const segments = value.split("/");
-  const valid =
-    value.length >= 1 &&
-    [...value].length <= 2048 &&
-    (value === "/" ||
-      (value.startsWith("/") &&
-        !value.startsWith("//") &&
-        !value.includes("//") &&
-        !value.includes("\\") &&
-        !value.includes("?") &&
-        !value.includes("#") &&
-        !PERCENT_ENCODED_OCTET.test(value) &&
-        !ASCII_CONTROL_CHARACTER.test(value) &&
-        !segments.includes(".") &&
-        !segments.includes("..") &&
-        !value.includes("{") &&
-        !value.includes("}")));
-
-  if (valid) {
+  const inspection = inspectCanonicalRoutePath(value);
+  if (inspection.valid) {
     return true;
   }
   diagnostics.push(
@@ -327,7 +311,7 @@ export function validateRoute(
       path,
       `"${value}" is not a concrete origin-relative route.`,
       "route",
-      { value },
+      { issue: inspection.issue, value },
       documentPath,
     ),
   );
