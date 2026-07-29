@@ -15,6 +15,7 @@
     "README.md",
     "SOURCE-NOTICE",
     "THIRD_PARTY_NOTICES.md",
+    "bin",
     "dist",
     "scripts",
     "src",
@@ -31,6 +32,9 @@
       "types": "./dist/node.d.ts",
       "node": "./dist/node.js"
     }
+  },
+  "bin": {
+    "genii-publisher": "./bin/genii-publisher.mjs"
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",

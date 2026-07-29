@@ -173,6 +173,7 @@ async function expectedPublisherPackagePaths() {
     (path) => path.endsWith(".ts") && !path.endsWith(".d.ts"),
   );
   const scriptFiles = await listFiles(join(publisherRoot, "scripts"));
+  const binaryFiles = await listFiles(join(publisherRoot, "bin"));
   return [
     "CHANGES.md",
     "LEGAL",
@@ -181,6 +182,14 @@ async function expectedPublisherPackagePaths() {
     "README.md",
     "SOURCE-NOTICE",
     "THIRD_PARTY_NOTICES.md",
+    // The author lifecycle executable ships with the package, because an author
+    // runs it out of their own installation.
+    ...binaryFiles.map(
+      (binary) =>
+        `bin/${packagePath(
+          relative(join(publisherRoot, "bin"), binary),
+        )}`,
+    ),
     "dist/SOURCE-NOTICE",
     ...sourceFiles.flatMap((source) => {
       const stem = packagePath(
