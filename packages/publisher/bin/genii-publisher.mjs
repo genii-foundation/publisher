@@ -47,6 +47,14 @@ import {
   applyHostRollback,
   planHostRollback,
 } from "../dist/node/lifecycle/rollback.js";
+import {
+  buildPublicationReader,
+} from "../dist/node/build.js";
+import {
+  checkReaderArtifact,
+  resolveArtifactDestination,
+  writeReaderArtifact,
+} from "../dist/node/materialize.js";
 
 const defaultRenderer = "@genii-foundation/publisher-next";
 const journalDirectoryName = join(".publisher", "transaction");
@@ -60,6 +68,7 @@ Commands
   upgrade apply   Apply a reviewed upgrade. Requires a clean Git tree.
   rollback plan   Report what undoing the last apply would restore.
   rollback apply  Undo the last apply, restoring its recorded baseline.
+  build           Compile the publication and write the reader artifact.
   recover         Restore the baseline left by an interrupted apply.
 
 Options
@@ -73,6 +82,11 @@ Options
   --acknowledge-manual-steps
                           Confirms you have read the manual steps an upgrade
                           reports. Required when it reports any.
+  --publication <dir>     Publication root holding publication.json.
+                          Defaults to the host root.
+  --audience <mode>       public or preview. Defaults to public.
+  --check                 Report whether the artifact on disk is current and
+                          exit nonzero if it is not. Writes nothing.
   --json                  Emit machine readable output.
   --help                  Show this text.
   --version               Show the application package version.
@@ -93,6 +107,9 @@ function parseArguments(argv) {
     renderer: defaultRenderer,
     protectedRoots: [],
     plan: null,
+    publication: null,
+    audience: "public",
+    check: false,
     acknowledgeManualSteps: false,
     json: false,
     help: false,
@@ -103,6 +120,8 @@ function parseArguments(argv) {
     ["--layout", "layout"],
     ["--renderer", "renderer"],
     ["--plan", "plan"],
+    ["--publication", "publication"],
+    ["--audience", "audience"],
   ]);
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -117,6 +136,10 @@ function parseArguments(argv) {
     }
     if (argument === "--json") {
       options.json = true;
+      continue;
+    }
+    if (argument === "--check") {
+      options.check = true;
       continue;
     }
     if (argument === "--acknowledge-manual-steps") {
@@ -153,6 +176,7 @@ function parseArguments(argv) {
   // resolution. Reporting a bad option only after failing to resolve a renderer
   // tells the author about the wrong problem.
   assertLayout(options.layout);
+  assertAudience(options.audience);
   return options;
 }
 
@@ -564,6 +588,108 @@ function runRollbackApply(options) {
   return 0;
 }
 
+async function runBuild(options) {
+  const hostRoot = resolveHostRoot(options.host);
+  const publicationRoot = resolveHostRoot(
+    options.publication ?? hostRoot,
+  );
+  const { create } = await loadHostTemplate(hostRoot, options.renderer);
+  const template = create(hostTemplateInput(hostRoot));
+
+  const built = await buildPublicationReader({
+    publicationRoot,
+    audience: assertAudience(options.audience),
+  });
+  if (!built.valid) {
+    if (options.json) {
+      process.stdout.write(
+        `${JSON.stringify({ valid: false, diagnostics: built.diagnostics }, null, 2)}\n`,
+      );
+    } else {
+      process.stderr.write(
+        `${publicationRoot} did not compile.\n${describeDiagnostics(built.diagnostics)}\n`,
+      );
+    }
+    return 1;
+  }
+
+  const destination = resolveArtifactDestination({
+    hostRoot,
+    readerDataPath: template.readerDataPath,
+    rendererManagedPaths: template.files.map((file) => file.path),
+    ...(options.protectedRoots.length === 0
+      ? {}
+      : { protectedRoots: options.protectedRoots }),
+  });
+
+  if (options.check) {
+    const checked = checkReaderArtifact({
+      destination,
+      text: built.value.text,
+    });
+    if (options.json) {
+      process.stdout.write(`${JSON.stringify(checked, null, 2)}\n`);
+    } else {
+      process.stdout.write(
+        `${describeCheck(checked, hostRoot, publicationRoot)}\n`,
+      );
+    }
+    return checked.outcome === "current" ? 0 : 1;
+  }
+
+  const written = writeReaderArtifact({
+    destination,
+    text: built.value.text,
+  });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(written, null, 2)}\n`);
+    return 0;
+  }
+  process.stdout.write(
+    `Publication  ${publicationRoot}\n` +
+      `Artifact     ${written.hostRelativePath}\n` +
+      `Digest       ${written.sha256}\n` +
+      `Size         ${written.bytes.toLocaleString("en-US")} bytes\n` +
+      (written.outcome === "current"
+        ? "Already current. Nothing written.\n"
+        : "Written.\n"),
+  );
+  return 0;
+}
+
+function describeDiagnostics(diagnostics) {
+  const shown = diagnostics.slice(0, 20);
+  const lines = shown.map((item) => {
+    const where = item.documentPath ?? "";
+    const at = item.path === "" ? "" : ` ${item.path}`;
+    return `  ${item.code}  ${where}${at}\n    ${item.message}`;
+  });
+  if (diagnostics.length > shown.length) {
+    lines.push(`  and ${diagnostics.length - shown.length} more`);
+  }
+  return lines.join("\n");
+}
+
+function describeCheck(checked, hostRoot, publicationRoot) {
+  const lines = [];
+  lines.push(`Host         ${hostRoot}`);
+  lines.push(`Publication  ${publicationRoot}`);
+  lines.push(`Artifact     ${checked.hostRelativePath}`);
+  lines.push(`Expected     ${checked.expected}`);
+  lines.push(`On disk      ${checked.actual ?? "absent"}`);
+  lines.push("");
+  if (checked.outcome === "current") {
+    lines.push("The artifact on disk matches this publication.");
+  } else if (checked.outcome === "missing") {
+    lines.push("No artifact on disk. Run build to produce it.");
+  } else {
+    lines.push(
+      "The artifact on disk was built from different sources. Run build.",
+    );
+  }
+  return lines.join("\n");
+}
+
 function runRecover(options) {
   const hostRoot = resolveHostRoot(options.host);
   const result = recoverHostTransaction({
@@ -588,6 +714,15 @@ function assertLayout(value) {
   if (value !== "canonical" && value !== "declared") {
     throw new CommandError(
       `--layout must be canonical or declared, not ${JSON.stringify(value)}.`,
+    );
+  }
+  return value;
+}
+
+function assertAudience(value) {
+  if (value !== "public" && value !== "preview") {
+    throw new CommandError(
+      `--audience must be public or preview, not ${JSON.stringify(value)}.`,
     );
   }
   return value;
@@ -649,6 +784,8 @@ async function main(argv) {
       return runRollbackPlan(options);
     case "rollback apply":
       return runRollbackApply(options);
+    case "build":
+      return await runBuild(options);
     case "recover":
       return runRecover(options);
     default:

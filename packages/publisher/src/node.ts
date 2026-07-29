@@ -24,6 +24,19 @@ export {
   compileLoadedPublicationContent,
 } from "./node/compile.js";
 export {
+  ArtifactDestinationError,
+  checkReaderArtifact,
+  hashArtifactText,
+  resolveArtifactDestination,
+  writeReaderArtifact,
+} from "./node/materialize.js";
+export type {
+  ArtifactCheckResult,
+  ArtifactDestination,
+  ArtifactDestinationInput,
+  ArtifactWriteResult,
+} from "./node/materialize.js";
+export {
   loadPublicationCompilationSources,
 } from "./node/loader.js";
 export {
