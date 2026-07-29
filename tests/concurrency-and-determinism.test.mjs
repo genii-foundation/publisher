@@ -26,7 +26,7 @@ If you wish to allow use of your version of this file only under the terms of th
 // gap, so one apply completes and the other is refused by name.
 
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   cpSync,
@@ -151,27 +151,6 @@ function runSync(cwd, args) {
   return result;
 }
 
-/** Starts the executable without waiting, so two can genuinely overlap. */
-function start(cwd, args) {
-  const child = spawn(process.execPath, [executable, ...args], {
-    cwd,
-    env: { ...process.env, NO_COLOR: "1" },
-  });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (chunk) => {
-    stdout += chunk;
-  });
-  child.stderr.on("data", (chunk) => {
-    stderr += chunk;
-  });
-  return new Promise((resolve) => {
-    child.on("close", (status) => {
-      resolve({ status, stdout, stderr });
-    });
-  });
-}
-
 test("the journal is created exclusively, so a second apply cannot race in", () => {
   // A timing test cannot be trusted here and I proved that on myself. My first
   // version of this file spawned two applies and asserted the good outcome; it
@@ -213,90 +192,69 @@ test("the journal is created exclusively, so a second apply cannot race in", () 
   );
 });
 
-test("two applies at once never leave the host half done", async (t) => {
+test("a second apply cannot damage a completed one", (t) => {
+  // This replaces a test that spawned two applies at once and asserted the good
+  // outcome. It caused two continuous integration failures: the first found a real
+  // defect, the second was my own assertion allowing only one of two legitimate
+  // refusals. Whether two spawned processes overlap is scheduling dependent, so it
+  // could neither be relied on to catch the race nor trusted when it went red.
+  //
+  // Every property it reached for is asserted deterministically instead. The
+  // exclusive journal create is checked in the source above. A journal left behind
+  // blocking the next apply is the test below. Engine staged files not counting as
+  // author work is in host-git-baseline. Recovery removing them is in
+  // host-transaction.
+  //
+  // What is left is the invariant an author cares about, and it can be sequenced
+  // rather than raced: applying twice must leave the host complete, and the second
+  // attempt must refuse rather than write over the first.
   const hostRoot = host(t);
   const planned = runSync(hostRoot, ["init", "plan"]);
   const planHash = /^Plan\s+(sha256:[a-f0-9]{64})$/mu.exec(planned)?.[1];
   assert.ok(planHash, planned);
 
-  const [first, second] = await Promise.all([
-    start(hostRoot, ["init", "apply", "--plan", planHash]),
-    start(hostRoot, ["init", "apply", "--plan", planHash]),
-  ]);
-  const both = [first, second];
-  const output = both.map((r) => r.stdout + r.stderr).join("\n");
-
-  // This is a smoke test, not a proof. Whether the two processes actually overlap
-  // depends on scheduling, so it cannot be relied on to catch the race. What it
-  // does check is that running two applies together never leaves a broken host,
-  // whatever the interleaving turns out to be.
-  assert.ok(
-    existsSync(join(hostRoot, "publisher.host.json")),
-    `neither apply completed:\n${output}`,
+  const first = execFileSync(
+    process.execPath,
+    [executable, "init", "apply", "--plan", planHash],
+    { cwd: hostRoot, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } },
   );
-  assert.equal(
-    both.filter((r) => r.status === 0).length >= 1,
-    true,
-    `expected at least one apply to succeed:\n${output}`,
-  );
+  assert.match(first, /file\(s\) written/u);
+  const state = readFileSync(join(hostRoot, "publisher.host.json"), "utf8");
 
-  // And no raw filesystem error reaches the author. These are what the race used
-  // to produce, and they name internal staged paths that mean nothing to anyone.
+  // Deliberately not committed, which is the state the winner leaves and the state
+  // the loser met on the loaded runner.
+  const second = spawnSync(
+    process.execPath,
+    [executable, "init", "apply", "--plan", planHash],
+    { cwd: hostRoot, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } },
+  );
+  assert.notEqual(second.status, 0, "a second apply must refuse");
+  // The plan hash catches it before the Git gate does, which is the better order:
+  // the plan computed against the original tree no longer describes this one, and
+  // saying so names the actual problem rather than the tree being dirty.
+  assert.match(second.stderr, /plan changed since it was reviewed/u);
+  // Not a bare filesystem error, and not blaming the author for an engine file.
+  // Those were the two real defects behind the removed test.
+  assert.equal(/ENOENT/u.test(second.stderr), false, second.stderr);
   assert.equal(
-    /ENOENT/u.test(output),
+    /publisher-staged/u.test(second.stderr),
     false,
-    `a raw filesystem error escaped:\n${output}`,
+    `the refusal named an engine staged file:\n${second.stderr}`,
   );
+
+  // The completed host is untouched by the refusal.
   assert.equal(
-    /publisher-staged/u.test(output),
-    false,
-    `an internal staged path escaped:\n${output}`,
-  );
-
-  // Whichever lost, if one did, was told what happened rather than shown a stack.
-  //
-  // Two refusals are legitimate and which one appears depends on how far the winner
-  // got. If the loser reaches the journal it is told a transaction is in progress.
-  // If the winner finished first, the loser's clean tree gate sees the files the
-  // winner just wrote, still uncommitted, and refuses on those. That second case is
-  // correct: the tree really is dirty and a rollback really could not recover.
-  //
-  // My first version of this assertion allowed only the journal refusal. It passed
-  // eight consecutive local runs and failed on a loaded continuous integration
-  // runner, which is the whole reason this is labelled a smoke test.
-  const loser = both.find((r) => r.status !== 0);
-  if (loser !== undefined) {
-    assert.match(
-      loser.stderr,
-      /Another host transaction is already in progress|did not finish|requires a clean Git tree/u,
-      `the refused apply must explain itself:\n${loser.stderr}`,
-    );
-    // Whichever refusal it is, it must not be a bare filesystem error and must not
-    // blame the author for an engine file. Those were the two real defects here.
-    assert.equal(/ENOENT/u.test(loser.stderr), false, loser.stderr);
-    assert.equal(
-      /publisher-staged/u.test(loser.stderr),
-      false,
-      `the refusal named an engine staged file:\n${loser.stderr}`,
-    );
-  }
-
-  // The tree holds exactly one coherent host state.
-  const state = JSON.parse(
     readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
+    state,
   );
-  assert.equal(state.renderer, "@genii-foundation/publisher-next");
-  assert.ok(state.managedFiles.length > 0);
-
-  // Nothing is left over in the journal directory either way.
   assert.equal(
     existsSync(join(hostRoot, ".publisher", "transaction", "transaction.json")),
     false,
-    "a journal survived a finished apply",
+    "a journal survived a refused apply",
   );
 });
 
-test("a journal left by a crash blocks the next apply by name", async (t) => {
+test("a journal left by a crash blocks the next apply by name", (t) => {
   const hostRoot = host(t);
   const planned = runSync(hostRoot, ["init", "plan"]);
   const planHash = /^Plan\s+(sha256:[a-f0-9]{64})$/mu.exec(planned)?.[1];
@@ -310,12 +268,11 @@ test("a journal left by a crash blocks the next apply by name", async (t) => {
     "utf8",
   );
 
-  const attempted = await start(hostRoot, [
-    "init",
-    "apply",
-    "--plan",
-    planHash,
-  ]);
+  const attempted = spawnSync(
+    process.execPath,
+    [executable, "init", "apply", "--plan", planHash],
+    { cwd: hostRoot, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } },
+  );
   assert.notEqual(attempted.status, 0);
   assert.match(attempted.stderr, /did not finish/u);
   assert.match(attempted.stderr, /Recover it/u);
