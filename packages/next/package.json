@@ -43,6 +43,10 @@
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js"
     },
+    "./host": {
+      "types": "./dist/host.d.ts",
+      "import": "./dist/host.js"
+    },
     "./theme": {
       "types": "./dist/theme/index.d.ts",
       "import": "./dist/theme/index.js"

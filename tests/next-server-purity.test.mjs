@@ -69,6 +69,13 @@ test("publication rendering stays server-only outside the error boundary entry",
     },
   ];
 
+  // The host contract is a data module: it emits the source text of the files an
+  // author host contains, so it necessarily carries a client directive and
+  // browser globals as quoted strings without ever executing them. It is
+  // exempted from the whole-file scan and held to the narrower conditions below
+  // instead, because a blanket exemption would also hide a real directive.
+  const templateDataModules = new Set(["src/host.ts"]);
+
   for (const filePath of await sourceFiles()) {
     const source = await readFile(filePath, "utf8");
     const sourcePath = relative(packageRoot, filePath);
@@ -78,6 +85,43 @@ test("publication rendering stays server-only outside the error boundary entry",
           source,
           /["']use client["']/u,
           `${sourcePath} must remain an explicit client boundary.`,
+        );
+      }
+      continue;
+    }
+    if (templateDataModules.has(sourcePath)) {
+      // A directive prologue may be preceded by any number of comments, so the
+      // comments have to come off before the first statement can be identified.
+      // Matching only a leading block comment let a real directive through,
+      // because this file carries line comments after its license header.
+      const withoutComments = source
+        .replace(/\/\*[\s\S]*?\*\//gu, "")
+        .replace(/^[ \t]*\/\/.*$/gmu, "");
+      assert.doesNotMatch(
+        withoutComments,
+        /^\s*["']use client["']/u,
+        `${sourcePath} must not declare itself a client module.`,
+      );
+      assert.doesNotMatch(
+        source,
+        /from "\.\/(?:client|server)\//u,
+        `${sourcePath} must not import a client or server entry.`,
+      );
+      // Anything that looks like a client directive or a browser global has to
+      // be quoted template text, never a statement in this module.
+      for (const [index, line] of source
+        .split("\n")
+        .entries()) {
+        const flagged = forbidden.find((item) =>
+          item.pattern.test(line),
+        );
+        if (flagged === undefined) {
+          continue;
+        }
+        assert.match(
+          line,
+          /^\s*(?:["'`]|\.\.\.|\/\/)/u,
+          `${sourcePath}:${index + 1} carries a ${flagged.label} outside quoted template text.`,
         );
       }
       continue;

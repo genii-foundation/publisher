@@ -27,3 +27,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Proved attributed static 404 and 500 HTML, forced runtime and root-layout 500 responses without secret leakage, and attributed hydration of both App Router error boundaries in Chrome.
 - Made Exhibit B values renderer owned at runtime, added a branded client-safe error identity validator, removed the raw continuity constructor from the public server entry, and kept a linked canonical source fallback for invalid low-level callers.
 - Required release through an exact provenance-attested tarball and rejected direct package-directory publication.
+- Added the versioned renderer-owned host contract behind a ./host export, with a contract version independent of the package version, and made the packaged host proof consume it instead of carrying its own copies of the host files.
