@@ -27,6 +27,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
+import { resolveGitBaseline } from "./git-baseline.js";
 import {
   PUBLISHER_HOST_STATE_PATH,
   type PublisherHostLayout,
@@ -267,12 +268,20 @@ export interface HostInitializationApplyInput {
    * applying the plan it reviewed rather than one recomputed since.
    */
   readonly expectedPlanHash: string;
+  /**
+   * Skips the Git baseline gate. Only for exercising the writer in isolation:
+   * every author-facing path leaves it on, because rollback is a checkout of the
+   * commit the gate records.
+   */
+  readonly skipGitBaseline?: boolean;
 }
 
 export interface HostInitializationApplyResult {
   readonly outcome: "applied" | "alreadyApplied";
   readonly changed: readonly string[];
   readonly planHash: string;
+  /** The commit a rollback returns to, or null when the gate was skipped. */
+  readonly baselineCommit: string | null;
 }
 
 /**
@@ -298,6 +307,13 @@ export function applyHostInitialization(
     );
   }
 
+  // The gate runs here rather than in the command layer, so calling apply
+  // directly cannot bypass it.
+  const baseline =
+    input.skipGitBaseline === true
+      ? null
+      : resolveGitBaseline(input.hostRoot);
+
   const result = applyHostMutations({
     root: input.hostRoot,
     mutations: input.plan.mutations,
@@ -308,5 +324,6 @@ export function applyHostInitialization(
     outcome: result.outcome,
     changed: result.changed,
     planHash: input.plan.planHash,
+    baselineCommit: baseline === null ? null : baseline.commit,
   });
 }

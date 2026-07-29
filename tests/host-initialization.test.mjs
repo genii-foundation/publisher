@@ -112,6 +112,9 @@ function apply(hostRoot, journalDirectory, computed) {
     journalDirectory,
     plan: computed,
     expectedPlanHash: computed.planHash,
+    // These fixtures exercise planning and the writer, not the Git gate, which
+    // has its own suite against real repositories.
+    skipGitBaseline: true,
   });
 }
 
@@ -323,6 +326,7 @@ test("applying a plan whose hash was not the one reviewed is refused", (t) => {
         plan: computed,
         expectedPlanHash:
           "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        skipGitBaseline: true,
       }),
     /plan changed since it was reviewed/u,
   );
