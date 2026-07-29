@@ -20,6 +20,7 @@ import addFormats from "ajv-formats";
 
 import {
   EXTENSION_CAPABILITIES,
+  validatePublicationShape,
 } from "../schemas/dist/index.js";
 
 const repositoryRoot = new URL("../", import.meta.url);
@@ -545,4 +546,80 @@ test("sync is opt in and preserves local fallback", () => {
 
   publication.sync.localFallback = false;
   assert.equal(validatePublication(publication), false);
+});
+
+// -------------------------------- a fixed notice explains why it is fixed
+
+test("a rewritten attribution notice explains the licensing reason", () => {
+  // "must be equal to constant" beside "Copyright 2026 GENII Foundation" reads as
+  // the engine demanding an author credit the Foundation for their own book. It was
+  // the first thing that stopped me when I authored a publication against this
+  // engine, and nothing in the refusal said why or which field is mine.
+  const publication = clone(canonicalPublication);
+  publication.attribution.copyright = "Copyright 2026 Estuary Press";
+
+  const result = validatePublicationShape(publication);
+  assert.equal(result.valid, false);
+  const refusal = result.diagnostics.find(
+    (item) => item.path === "/attribution/copyright",
+  );
+  assert.ok(refusal, JSON.stringify(result.diagnostics));
+
+  // The machine readable parts are untouched, so anything keying on them is safe.
+  assert.equal(refusal.code, "schema.const");
+  assert.equal(refusal.keyword, "const");
+  assert.equal(
+    refusal.params.allowedValue,
+    "Copyright 2026 GENII Foundation",
+  );
+
+  // And the sentence a person reads now carries the reason and the remedy.
+  assert.match(refusal.message, /CPAL 1\.0/u);
+  assert.match(refusal.message, /not a claim over your work/u);
+  assert.match(refusal.message, /sourceCodeUrl/u);
+});
+
+test("every fixed attribution field explains itself", () => {
+  // All four are fixed for the same reason, so an author editing any of them should
+  // learn it rather than only the one I happened to hit.
+  for (const [field, value] of [
+    ["copyright", "Copyright 2026 Estuary Press"],
+    ["text", "Powered by something else"],
+    ["url", "https://estuary.example"],
+    ["placement", "header"],
+  ]) {
+    const publication = clone(canonicalPublication);
+    publication.attribution[field] = value;
+    const shape = validatePublicationShape(publication);
+    const refusal = shape.diagnostics.find(
+      (item) => item.path === `/attribution/${field}`,
+    );
+    assert.ok(refusal, `${field} produced no diagnostic at its own path`);
+    assert.match(
+      refusal.message,
+      /CPAL 1\.0|footer/u,
+      `${field} was refused without saying why: ${refusal.message}`,
+    );
+  }
+});
+
+test("an ordinary type error is not decorated", () => {
+  // The explanation table is for constraints whose reason is invisible in the
+  // schema. If it grows into a place for restating ordinary errors, every message
+  // gets longer and none gets clearer.
+  const publication = clone(canonicalPublication);
+  publication.publication.title = 42;
+  const refusal = validatePublicationShape(publication).diagnostics.find(
+    (item) => item.path === "/publication/title",
+  );
+  assert.ok(refusal, "expected a diagnostic for a non-string title");
+  assert.equal(
+    /CPAL/u.test(refusal.message),
+    false,
+    `an unrelated error was decorated: ${refusal.message}`,
+  );
+  assert.ok(
+    refusal.message.length < 80,
+    `an ordinary message should stay short, got: ${refusal.message}`,
+  );
 });

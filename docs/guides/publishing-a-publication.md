@@ -382,6 +382,16 @@ copyright, and there is no field for your own. If you need your copyright on the
 page, put it in your prose for now. This is a known gap rather than a decision
 anyone is happy with.
 
+Editing any of the four fixed fields is refused, and the refusal says why rather
+than only that a constant did not match:
+
+```
+must be equal to constant. This engine is licensed under CPAL 1.0, which requires
+that the Original Developer's attribution be displayed, so the notice is fixed and
+cannot be rewritten. It is not a claim over your work. Your own copyright has no
+field in this manifest yet, and sourceCodeUrl is the one attribution field you set.
+```
+
 ## What your renderer can serve
 
 A renderer declares which route kinds its generated host can serve, and `build`
