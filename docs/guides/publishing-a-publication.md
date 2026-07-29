@@ -68,9 +68,13 @@ a typo into an unprotected tree.
 
 An Updates route is not servable by the Next renderer. If your manifest declares
 `routes.updates`, `build` refuses before writing anything and names the route,
-because writing the artifact would leave a host that fails to start. Both shipped
-fixtures declare one, so if you copied a fixture as a starting point, remove that
-route. Updates support is a known gap rather than a bug in your manifest.
+because writing the artifact would leave a host that fails to start. Updates
+support is a known gap rather than a bug in your manifest.
+
+If you want a working publication to start from, copy `fixtures/canonical-tide-tables`.
+It is the one fixture the shipped renderer can serve end to end. The other two
+declare Updates routes and exist to exercise the protocol rather than to be
+copied.
 
 Three things that catch people, all refused with the file and the field named:
 
