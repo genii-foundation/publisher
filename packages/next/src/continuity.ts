@@ -11,6 +11,16 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
+import {
+  normalizePortableRepositoryText,
+} from "@genii-foundation/publisher-schema";
+import {
+  GENII_PUBLISHER_SOURCE_CODE_URL,
+  REQUIRED_ATTRIBUTION,
+} from "@genii-foundation/publisher-schema/attribution";
+import {
+  inspectAbsoluteHttpUrl,
+} from "@genii-foundation/publisher-schema/routes";
 import type {
   PublicationReaderEnvelope,
 } from "@genii-foundation/publisher-schema";
@@ -55,7 +65,7 @@ function canonicalSegmentKey(path: string): string | null {
         (segment) =>
           segment.length === 0 ||
           segment.includes("/") ||
-          segment !== segment.normalize("NFC"),
+          segment !== normalizePortableRepositoryText(segment),
       )
     ) {
       return null;
@@ -72,11 +82,12 @@ function attributedNotFoundResponse(
   const publication = reader.publication;
   const title = escapeHtml(publication.title);
   const language = escapeHtml(publication.language);
-  const attribution = publication.attribution;
-  const sourceLink =
-    attribution.sourceCodeUrl === undefined
-      ? ""
-      : `<a href="${escapeHtml(attribution.sourceCodeUrl)}">Publication source code</a>`;
+  const inspectedSourceCodeUrl = inspectAbsoluteHttpUrl(
+    publication.attribution.sourceCodeUrl,
+  );
+  const sourceCodeUrl = inspectedSourceCodeUrl.valid
+    ? inspectedSourceCodeUrl.value
+    : GENII_PUBLISHER_SOURCE_CODE_URL;
   const html = [
     "<!doctype html>",
     `<html lang="${language}">`,
@@ -92,9 +103,9 @@ function attributedNotFoundResponse(
     "<p>This publication has no page at this address.</p>",
     "</main>",
     '<footer class="publisher-attribution" data-publisher-attribution="required" lang="en">',
-    `<p>${escapeHtml(attribution.copyright)}</p>`,
-    `<p><a href="${escapeHtml(attribution.url)}">${escapeHtml(attribution.text)}</a></p>`,
-    sourceLink.length === 0 ? "" : `<p>${sourceLink}</p>`,
+    `<p>${escapeHtml(REQUIRED_ATTRIBUTION.copyright)}</p>`,
+    `<p><a href="${escapeHtml(REQUIRED_ATTRIBUTION.url)}">${escapeHtml(REQUIRED_ATTRIBUTION.text)}</a></p>`,
+    `<p><a href="${escapeHtml(sourceCodeUrl)}">Publication source code</a></p>`,
     "</footer>",
     "</div>",
     "</body>",

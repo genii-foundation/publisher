@@ -12,12 +12,15 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 import type {
-  Diagnostic,
   PublicationReaderEnvelope,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
 
-import { diagnostic } from "./diagnostics.js";
+import {
+  createDiagnosticCollector,
+  diagnostic,
+  sortDiagnostics,
+} from "./diagnostics.js";
 import {
   calculateReaderBlockContentHash,
   calculateReaderBuildId,
@@ -40,7 +43,7 @@ export function validatePublicationReaderEnvelope(
       return runtimeResult;
     }
     const envelope = runtimeResult.value.envelope;
-    const diagnostics: Diagnostic[] = [];
+    const diagnostics = createDiagnosticCollector();
     envelope.works.forEach((work, workIndex) => {
       work.sections.forEach((section, sectionIndex) => {
         section.blocks.forEach((block, blockIndex) => {
@@ -113,7 +116,7 @@ export function validatePublicationReaderEnvelope(
     if (diagnostics.length > 0) {
       return immutableSnapshot({
         valid: false,
-        diagnostics,
+        diagnostics: sortDiagnostics(diagnostics),
       });
     }
     return immutableSnapshot({

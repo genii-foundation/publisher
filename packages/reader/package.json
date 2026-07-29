@@ -43,9 +43,9 @@
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
-    "prepack": "npm run build && node ./scripts/bundle-dependencies.mjs stage",
+    "prepack": "node ./scripts/build.mjs && node ./scripts/bundle-dependencies.mjs stage",
     "postpack": "node ./scripts/bundle-dependencies.mjs clean",
-    "prepublishOnly": "node ./scripts/check-release-tag.mjs"
+    "prepublishOnly": "node ../../provenance/scripts/reject-directory-publish.mjs"
   },
   "repository": {
     "type": "git",

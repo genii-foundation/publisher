@@ -575,7 +575,9 @@ function PublisherPageShell({
         title={publication.title}
       />
       <main id="publisher:main">{body}</main>
-      <PublisherAttribution publication={publication} />
+      <PublisherAttribution
+        sourceCodeUrl={publication.attribution.sourceCodeUrl}
+      />
     </div>
   );
 }

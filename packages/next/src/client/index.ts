@@ -12,13 +12,19 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 export {
+  createPublisherNextErrorIdentity,
+} from "../error-identity.js";
+export {
   PublisherNextErrorPage,
   PublisherNextFrameworkErrorPage,
   PublisherNextGlobalErrorPage,
 } from "./error.js";
 export type {
-  PublisherNextErrorBoundaryProps,
+  CreatePublisherNextErrorIdentityInput,
   PublisherNextErrorIdentity,
+} from "../error-identity.js";
+export type {
+  PublisherNextErrorBoundaryProps,
   PublisherNextErrorPageProps,
   PublisherNextFrameworkErrorPageProps,
 } from "./error.js";

@@ -442,10 +442,10 @@ test("both fixture publications project into deterministic public reader artifac
       workIds: ["rain-gauge"],
       collectionIds: ["weather-observations"],
       buildId:
-        "sha256:5a92aa459ca39bcb3b4b49c5b03b40a0f71ca03324e9b2cd06beb11d7de7e7e1",
+        "sha256:5da07b8ea5f7e1760f1c18bf6ea356f56966d71c37fdc2e1a5fc934beb9ee557",
       byteLength: 5991,
       artifactHash:
-        "sha256:df17e06f9281722e9e27ffa9c30d7b9f647796578f0abbfe953c157a12f9429e",
+        "sha256:55fbcbb4e49ba139c20c8a8102e9ec8b1bcb66f8be6908eb930777145b89fc0b",
     },
     {
       directory: "declared-night-dispatch",
@@ -453,10 +453,10 @@ test("both fixture publications project into deterministic public reader artifac
       workIds: ["signal-lantern", "platform-bell"],
       collectionIds: ["after-dark"],
       buildId:
-        "sha256:fbaaea5533b9fe437b2fa4596a8408f940a360e1ce99186c1838434c8b1bc2a4",
+        "sha256:f074086d1034b3d1a0bcf113fb00e9bbd7b383b314e2e801a2195db89d990e39",
       byteLength: 8727,
       artifactHash:
-        "sha256:a0450b64535e51e5a3ac6d4fdbded70472617477caa2efcc1b6828b9facb9f51",
+        "sha256:0d5b335db97cf33df1f0115b1d7f0751bcf8e61fc619cfe11ca09493caa188cc",
     },
   ];
 

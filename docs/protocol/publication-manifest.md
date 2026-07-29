@@ -170,7 +170,15 @@ An irregular legacy source may bypass the shared template:
 
 Catalog level `manifest` overrides are repository relative. They must remain inside a declared source root.
 
-All portable repository paths use POSIX separators. They reject POSIX absolute paths, Windows drive prefixes, backslashes, current and parent directory segments, duplicate or trailing separators, percent-encoded octets, query or fragment metacharacters, and ASCII controls. Layout resolution ends at one ingestion boundary. Compilers, renderers, audio packages, sync packages, and extensions consume normalized data instead of reopening the repository to infer paths.
+All portable repository paths use POSIX separators and well-formed Unicode 15.1 NFC. Native-script filenames are valid within a 1,024 Unicode-scalar ceiling and the secondary 2,048 UTF-16-code-unit, 4,096 UTF-8-byte, 256-segment, and 255-byte-per-segment ceilings. Paths reject POSIX absolute paths, Windows drive prefixes, backslashes, current and parent directory segments, duplicate or trailing separators, percent-encoded octets, query or fragment metacharacters, ASCII controls, Unicode line and paragraph separators, Unicode bidirectional controls, Windows-forbidden filename characters, Windows reserved device names, and segments ending in an ASCII dot or space.
+
+Portable identity uses the generated Unicode 15.1 full default case fold with CaseFolding statuses C and F, followed by generated Unicode 15.1 canonical decomposition, canonical ordering, and composition. It excludes locale-specific and Turkic mappings. Code points unassigned in Unicode 15.1 behave as inert starters even if later Unicode versions assign them another combining class. It therefore treats full-fold equivalents such as `Straße.md` and `STRASSE.MD`, Greek sigma variants, Unicode 15.1 NFC equivalents, and ordinary case variants as the same repository path. Portable segment identity then removes the trailing ASCII dots and spaces ignored by Win32.
+
+The tables ship inside the browser-safe schema runtime. Build verification regenerates case folding from the exactly pinned `@unicode/unicode-15.1.0` data and normalization from the checked-in, source-hashed Unicode 15.1 normalization data. Runtime identity never imports either source dataset and never consults host Unicode case conversion, locale behavior, or `String.prototype.normalize`.
+
+The display-control exclusion is version independent. It rejects U+061C, U+200E, U+200F, U+202A through U+202E, U+2066 through U+2069, U+2028, and U+2029. U+200C ZERO WIDTH NON-JOINER and U+200D ZERO WIDTH JOINER remain valid because they participate in orthography. Variation selectors and other well-formed NFC characters also retain their exact spelling. The protocol does not erase them or apply a confusable-character mapping.
+
+Filesystem loaders use the same portable identity to reject colliding undeclared siblings. Layout resolution ends at one ingestion boundary. Compilers, renderers, audio packages, sync packages, and extensions consume normalized data instead of reopening the repository to infer paths.
 
 These checks prove lexical safety only. A filesystem loader must resolve every referenced object against an approved real publication root and reject escapes caused by symbolic links, case folding, Unicode normalization, mount behavior, or a source change between validation and access. Passing a schema or pure-runtime check never authorizes a loader to trust string-prefix containment.
 
@@ -245,7 +253,7 @@ Internal routes use one canonical ASCII serialization. A concrete path is origin
 /%E6%9D%B1%E4%BA%AC/
 ```
 
-Percent-encoded ASCII is forbidden. Decoding must produce valid NFC Unicode without whitespace or control characters. Network-path references, backslashes, queries, fragments, empty interior segments, and current or parent directory segments are invalid.
+Percent-encoded ASCII is forbidden. Decoding must produce Unicode 15.1 NFC without whitespace or control characters. Route and fragment inspectors use the bundled Unicode 15.1 normalizer rather than host Unicode tables. Network-path references, backslashes, queries, fragments, empty interior segments, and current or parent directory segments are invalid.
 
 Validators reject noncanonical routes and never normalize them. Manifest data, compiled artifacts, the host, browser code, and other runtimes all use the exact same serialized value. They do not decode and re-encode it. Both trailing-slash policies are valid, but the slash remains significant: `/works/essay` and `/works/essay/` are distinct routes. Work and collection templates retain their one required semantic token while their literal portions obey this grammar.
 

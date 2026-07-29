@@ -18,6 +18,9 @@ import {
   createPublisherNextConfig,
 } from "../packages/next/dist/config.js";
 import {
+  createPublisherNextContinuityHandler,
+} from "../packages/next/dist/continuity.js";
+import {
   createPublisherNextRoutePlan,
 } from "../packages/next/dist/routes.js";
 
@@ -34,6 +37,9 @@ function assertValid(result) {
   );
   return result.value;
 }
+
+const UNICODE_15_1_NFC_DRIFT_SEGMENT =
+  "q\u{1acf}\u0323";
 
 test("the route plan preserves exact decoded segments", async () => {
   const reader = await createFixtureReader();
@@ -164,6 +170,110 @@ test("the route plan preserves exact decoded segments", async () => {
   assert.equal(Object.isFrozen(plan), true);
   assert.equal(Object.isFrozen(plan.staticParams), true);
   assert.equal(Object.isFrozen(plan.staticParams[0]), true);
+});
+
+test("the route plan uses the pinned Unicode 15.1 normalization contract", async () => {
+  const reader = structuredClone(await createFixtureReader());
+  const stableRoute = {
+    path:
+      `/unicode/${encodeURIComponent(
+        UNICODE_15_1_NFC_DRIFT_SEGMENT,
+      )}`,
+    target: {
+      kind: "work",
+      workId: "published-notes",
+    },
+  };
+  reader.routes.active.push(stableRoute);
+
+  const plan = assertValid(createPublisherNextRoutePlan(reader));
+  assert.deepEqual(
+    plan.resolve([
+      "unicode",
+      UNICODE_15_1_NFC_DRIFT_SEGMENT,
+    ]),
+    {
+      status: "resolved",
+      route: stableRoute,
+    },
+  );
+});
+
+test("continuity uses the pinned Unicode 15.1 normalization contract", async () => {
+  const reader = structuredClone(await createFixtureReader());
+  const encodedSegment = encodeURIComponent(
+    UNICODE_15_1_NFC_DRIFT_SEGMENT,
+  );
+  const stableRoute = {
+    path: `/unicode/${encodedSegment}`,
+    target: {
+      kind: "work",
+      workId: "published-notes",
+    },
+  };
+  reader.routes.active.push(stableRoute);
+  const plan = assertValid(createPublisherNextRoutePlan(reader));
+  const continuity = createPublisherNextContinuityHandler(
+    reader,
+    plan,
+  );
+
+  assert.equal(
+    continuity.handleRequest(
+      new Request(`https://reader.example${stableRoute.path}`),
+    ),
+    undefined,
+  );
+  const alternateEncoding = encodedSegment.replace(
+    /%[0-9A-F]{2}/gu,
+    (escape) => escape.toLowerCase(),
+  );
+  assert.notEqual(alternateEncoding, encodedSegment);
+  const rejected = continuity.handleRequest(
+    new Request(
+      `https://reader.example/unicode/${alternateEncoding}`,
+    ),
+  );
+  assert.ok(rejected instanceof Response);
+  assert.equal(rejected.status, 404);
+  assert.match(
+    await rejected.text(),
+    /data-publisher-attribution="required"/u,
+  );
+});
+
+test("continuity renders renderer-owned attribution and never omits its source link", async () => {
+  const reader = structuredClone(await createFixtureReader());
+  reader.publication.attribution = {
+    placement: "footer",
+    copyright: "Removed",
+    text: "Removed",
+    url: "https://example.test/removed",
+  };
+  const plan = assertValid(createPublisherNextRoutePlan(reader));
+  const continuity = createPublisherNextContinuityHandler(
+    reader,
+    plan,
+  );
+  const response = continuity.handleRequest(
+    new Request(
+      "https://reader.example/works/caf%c3%a9+notes",
+    ),
+  );
+  assert.ok(response instanceof Response);
+  assert.equal(response.status, 404);
+  const html = await response.text();
+  assert.match(html, /Copyright 2026 GENII Foundation/u);
+  assert.match(html, />Published with GENII Publisher</u);
+  assert.match(
+    html,
+    /href="https:\/\/publisher\.genii\.foundation"/u,
+  );
+  assert.match(
+    html,
+    /href="https:\/\/github\.com\/genii-foundation\/publisher"/u,
+  );
+  assert.doesNotMatch(html, />Removed</u);
 });
 
 test("mixed non-root trailing slash policies remain route specific", async () => {

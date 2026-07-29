@@ -29,6 +29,7 @@ import {
   READER_ENVELOPE_SCHEMA_URL,
   READER_SCHEMA_VERSION,
   READER_TEXT_PROFILE,
+  PUBLICATION_PROTOCOL_LIMITS,
   inspectAbsoluteHttpUrl,
   inspectCanonicalUrlFragment,
   isAbsoluteHttpUrl,
@@ -43,8 +44,14 @@ import {
   inspectAbsoluteHttpUrl as inspectRootAbsoluteHttpUrl,
 } from "../schemas/dist/index.js";
 import {
+  snapshotPublicationEnvelopeForValidation,
+} from "../schemas/dist/envelope-resource-limits.js";
+import {
   createPublicationReaderRuntime,
 } from "../packages/reader/dist/runtime.js";
+import {
+  MAXIMUM_READER_DIAGNOSTICS,
+} from "../packages/reader/dist/diagnostics.js";
 
 const DIGEST = `sha256:${"0".repeat(64)}`;
 
@@ -319,7 +326,9 @@ test("a complete reader projection satisfies the public shape contract", () => {
   const result = validateReaderEnvelopeShape(envelope);
 
   assert.equal(result.valid, true, JSON.stringify(result.diagnostics, null, 2));
-  assert.equal(result.value, envelope);
+  assert.deepEqual(result.value, envelope);
+  assert.notEqual(result.value, envelope);
+  assert.equal(Object.isFrozen(result.value), true);
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.diagnostics), true);
 });
@@ -581,12 +590,7 @@ test("exact SemVer schemas stay linear on oversized invalid prereleases", () => 
         code === "schema.max_length" && path === "/engineVersion",
     ),
   );
-  assert.ok(
-    result.diagnostics.some(
-      ({ code, path }) =>
-        code === "schema.pattern" && path === "/engineVersion",
-    ),
-  );
+  assert.equal(result.diagnostics.length, 1);
   assert.ok(
     performance.now() - startedAt < 5_000,
     "Reader SemVer shape validation exceeded the 5 second safety bound.",
@@ -661,6 +665,381 @@ test("progress-group uniqueness is enforced linearly by the reader runtime", () 
   assert.ok(
     elapsed < 5_000,
     `Large progress-group shape validation took ${elapsed.toFixed(1)} ms.`,
+  );
+});
+
+test("reader runtime bounds aggregate collection work references before indexing", () => {
+  const maximumItems =
+    PUBLICATION_PROTOCOL_LIMITS.maximumCollectionWorkReferences;
+  const maximumWorkIds =
+    PUBLICATION_PROTOCOL_LIMITS.maximumWorks;
+  const fullCollectionCount = Math.floor(
+    maximumItems / maximumWorkIds,
+  );
+  const exactBoundaryTail =
+    maximumItems % maximumWorkIds;
+  const envelope = createReaderEnvelope();
+  const baseCollection = envelope.collections[0];
+  const fullCollectionWorkIds = Array.from(
+    { length: maximumWorkIds },
+    (_, index) => `work-${index}`,
+  );
+  envelope.collections = [
+    ...Array.from({ length: fullCollectionCount }, (_, index) => ({
+      ...baseCollection,
+      id: `collection-${index}`,
+      title: `Collection ${index}`,
+      route: `/collections/collection-${index}/`,
+      workIds: fullCollectionWorkIds,
+    })),
+    {
+      ...baseCollection,
+      id: "collection-overflow",
+      title: "Collection overflow",
+      route: "/collections/collection-overflow/",
+      workIds: fullCollectionWorkIds.slice(
+        0,
+        exactBoundaryTail + 1,
+      ),
+    },
+  ];
+  assert.equal(
+    envelope.collections.reduce(
+      (total, collection) => total + collection.workIds.length,
+      0,
+    ),
+    maximumItems + 1,
+  );
+  const shape = validateReaderEnvelopeShape(envelope);
+  assert.equal(
+    shape.valid,
+    false,
+    JSON.stringify(shape.diagnostics, null, 2),
+  );
+  assert.deepEqual(shape.diagnostics, [
+    {
+      code: "schema.resource_limit",
+      severity: "error",
+      path: "/collections",
+      message:
+        `The envelope exceeds the fixed collection work references limit of ${maximumItems.toLocaleString("en-US")}.`,
+      keyword: "maxItems",
+      params: {
+        resource: "collection work references",
+        actualItems: maximumItems + 1,
+        maximumItems,
+      },
+    },
+  ]);
+
+  const result = createPublicationReaderRuntime(envelope);
+  assert.deepEqual(result, {
+    valid: false,
+    diagnostics: [
+      {
+        code: "reader.runtime.resource_limit",
+        severity: "error",
+        path: "/collections",
+        message:
+          `The reader envelope exceeds the fixed collection work references limit of ${maximumItems.toLocaleString("en-US")}.`,
+        keyword: "maxItems",
+        params: {
+          resource: "collectionWorkReferences",
+          actualItems: maximumItems + 1,
+          maximumItems,
+        },
+      },
+    ],
+  });
+});
+
+test("reader envelope resource preflight is deterministic and stops before oversized entries", () => {
+  const maximumAssets =
+    PUBLICATION_PROTOCOL_LIMITS.maximumAssets;
+  const maximumWorks =
+    PUBLICATION_PROTOCOL_LIMITS.maximumWorks;
+  let elementDescriptorInspections = 0;
+  let ownKeyInspections = 0;
+  const oversizedAssets = new Proxy(
+    new Array(maximumAssets + 1),
+    {
+      getOwnPropertyDescriptor(target, key) {
+        if (key !== "length") {
+          elementDescriptorInspections += 1;
+          throw new Error("oversized array element inspected");
+        }
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      ownKeys() {
+        ownKeyInspections += 1;
+        throw new Error("oversized array keys inspected");
+      },
+    },
+  );
+  const hostile = createReaderEnvelope();
+  hostile.assets = oversizedAssets;
+  const hostileResult =
+    createPublicationReaderRuntime(hostile);
+  assert.equal(hostileResult.valid, false);
+  assert.equal(elementDescriptorInspections, 0);
+  assert.equal(ownKeyInspections, 0);
+  assert.deepEqual(hostileResult.diagnostics, [
+    {
+      code: "reader.runtime.resource_limit",
+      severity: "error",
+      path: "/assets",
+      message:
+        `The reader envelope exceeds the fixed assets limit of ${maximumAssets.toLocaleString("en-US")}.`,
+      keyword: "maxItems",
+      params: {
+        resource: "assets",
+        actualItems: maximumAssets + 1,
+        maximumItems: maximumAssets,
+      },
+    },
+  ]);
+
+  const limits = createReaderEnvelope();
+  limits.assets = new Array(maximumAssets + 1);
+  limits.works = new Array(maximumWorks + 1);
+  const forward = validateReaderEnvelopeShape(limits);
+  const reverse = validateReaderEnvelopeShape(
+    Object.fromEntries(Object.entries(limits).reverse()),
+  );
+  assert.equal(forward.valid, false);
+  assert.deepEqual(forward, reverse);
+  assert.deepEqual(
+    forward.diagnostics.map(({ path }) => path),
+    ["/assets", "/works"],
+  );
+});
+
+test("envelope depth counts the root and enforces the exact shared boundary before child inspection", () => {
+  function withContainerDepth(depth, finalContainer = {}) {
+    const root = {};
+    let cursor = root;
+    for (let currentDepth = 2; currentDepth <= depth; currentDepth += 1) {
+      const child =
+        currentDepth === depth ? finalContainer : {};
+      cursor.next = child;
+      cursor = child;
+    }
+    return root;
+  }
+
+  const accepted = snapshotPublicationEnvelopeForValidation(
+    withContainerDepth(
+      PUBLICATION_PROTOCOL_LIMITS.maximumEnvelopeDepth,
+    ),
+    "generic",
+  );
+  assert.equal(accepted.valid, true);
+
+  let prototypeInspections = 0;
+  const hostileChild = new Proxy(
+    {},
+    {
+      getPrototypeOf() {
+        prototypeInspections += 1;
+        throw new Error("over-depth child inspected");
+      },
+    },
+  );
+  const rejected = snapshotPublicationEnvelopeForValidation(
+    withContainerDepth(
+      PUBLICATION_PROTOCOL_LIMITS.maximumEnvelopeDepth + 1,
+      hostileChild,
+    ),
+    "generic",
+  );
+  assert.equal(rejected.valid, false);
+  assert.equal(prototypeInspections, 0);
+  assert.deepEqual(rejected, {
+    valid: false,
+    path: "/next".repeat(
+      PUBLICATION_PROTOCOL_LIMITS.maximumEnvelopeDepth,
+    ),
+    reason: "resourceLimit",
+    violations: [
+      {
+        actualItems:
+          PUBLICATION_PROTOCOL_LIMITS.maximumEnvelopeDepth + 1,
+        keyword: "maximum",
+        maximumItems:
+          PUBLICATION_PROTOCOL_LIMITS.maximumEnvelopeDepth,
+        path: "/next".repeat(
+          PUBLICATION_PROTOCOL_LIMITS.maximumEnvelopeDepth,
+        ),
+        resource: "envelope depth",
+      },
+    ],
+  });
+});
+
+test("reader envelope node limit stops before inspecting a sparse array", () => {
+  let ownKeyInspections = 0;
+  const oversizedNodes = new Proxy(
+    new Array(
+      PUBLICATION_PROTOCOL_LIMITS.maximumEnvelopeNodes + 1,
+    ),
+    {
+      ownKeys() {
+        ownKeyInspections += 1;
+        throw new Error("oversized node array keys inspected");
+      },
+    },
+  );
+  const envelope = createReaderEnvelope();
+  envelope.publication.metadata = { oversizedNodes };
+
+  const result = validateReaderEnvelopeShape(envelope);
+  assert.equal(result.valid, false);
+  assert.equal(ownKeyInspections, 0);
+  const diagnostic = result.diagnostics.find(
+    ({ code }) => code === "schema.resource_limit",
+  );
+  assert.equal(diagnostic?.path, "");
+  assert.equal(diagnostic?.keyword, "maximum");
+  assert.equal(diagnostic?.params.resource, "envelope nodes");
+  assert.equal(
+    diagnostic?.params.maximumItems,
+    PUBLICATION_PROTOCOL_LIMITS.maximumEnvelopeNodes,
+  );
+  assert.ok(
+    diagnostic?.params.actualItems >
+      PUBLICATION_PROTOCOL_LIMITS.maximumEnvelopeNodes,
+  );
+});
+
+test("reader envelope aggregate limits count reused object identities at every serialized occurrence", () => {
+  const envelope = createReaderEnvelope();
+  const sharedWork = {
+    sections: new Array(11).fill(null),
+  };
+  envelope.works = new Array(
+    PUBLICATION_PROTOCOL_LIMITS.maximumWorks,
+  ).fill(sharedWork);
+
+  const result = validateReaderEnvelopeShape(envelope);
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.diagnostics, [
+    {
+      code: "schema.resource_limit",
+      severity: "error",
+      path: "/works",
+      message:
+        `The envelope exceeds the fixed sections limit of ${PUBLICATION_PROTOCOL_LIMITS.maximumSections.toLocaleString("en-US")}.`,
+      keyword: "maxItems",
+      params: {
+        resource: "sections",
+        actualItems:
+          PUBLICATION_PROTOCOL_LIMITS.maximumWorks * 11,
+        maximumItems:
+          PUBLICATION_PROTOCOL_LIMITS.maximumSections,
+      },
+    },
+  ]);
+});
+
+test("reader shape diagnostics retain exact domain totals and fail fast on structural errors", () => {
+  const domainEnvelope = createReaderEnvelope();
+  domainEnvelope.publication.metadata = Object.fromEntries(
+    Array.from(
+      { length: 400 },
+      (_, index) => [`invalid-${index}`, undefined],
+    ),
+  );
+  const domainResult =
+    validateReaderEnvelopeShape(domainEnvelope);
+  assert.equal(domainResult.valid, false);
+  assert.equal(
+    domainResult.diagnostics.length,
+    MAXIMUM_READER_DIAGNOSTICS,
+  );
+  assert.deepEqual(
+    domainResult.diagnostics.find(
+      ({ code }) => code === "schema.diagnostics_truncated",
+    )?.params,
+    {
+      maximumDiagnostics: MAXIMUM_READER_DIAGNOSTICS,
+      omittedDiagnostics: 145,
+    },
+  );
+
+  const schemaEnvelope = createReaderEnvelope();
+  schemaEnvelope.assets = Array.from(
+    {
+      length: PUBLICATION_PROTOCOL_LIMITS.maximumAssets,
+    },
+    () => ({}),
+  );
+  const startedAt = performance.now();
+  const schemaResult =
+    validateReaderEnvelopeShape(schemaEnvelope);
+  const elapsed = performance.now() - startedAt;
+  assert.equal(schemaResult.valid, false);
+  assert.equal(schemaResult.diagnostics.length, 1);
+  assert.equal(schemaResult.diagnostics[0]?.code, "schema.required");
+  assert.equal(schemaResult.diagnostics[0]?.path, "/assets/0/id");
+  assert.ok(
+    elapsed < 5_000,
+    `Near-limit invalid reader shape took ${elapsed.toFixed(1)} ms.`,
+  );
+
+  const propagated =
+    createPublicationReaderRuntime(domainEnvelope);
+  assert.equal(propagated.valid, false);
+  assert.equal(
+    propagated.diagnostics.filter(
+      ({ keyword }) => keyword === "diagnosticLimit",
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    propagated.diagnostics.find(
+      ({ code }) => code === "reader.diagnostics_truncated",
+    )?.params,
+    {
+      maximumDiagnostics: MAXIMUM_READER_DIAGNOSTICS,
+      omittedDiagnostics: 145,
+    },
+  );
+});
+
+test("reader runtime diagnostics retain the deterministic smallest 255 and exact omitted total", () => {
+  const envelope = createReaderEnvelope();
+  envelope.assets = Array.from({ length: 400 }, (_, index) => ({
+    id: `asset-${index}`,
+    workId: `unknown-work-${index}`,
+    href: `/assets/asset-${index}.jpg`,
+    mediaType: "image/jpeg",
+    hash: DIGEST,
+  }));
+
+  const result = createPublicationReaderRuntime(envelope);
+  assert.equal(result.valid, false);
+  assert.equal(
+    result.diagnostics.length,
+    MAXIMUM_READER_DIAGNOSTICS,
+  );
+  assert.equal(
+    result.diagnostics.filter(
+      ({ code }) => code === "reader.diagnostics_truncated",
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    result.diagnostics.find(
+      ({ code }) => code === "reader.diagnostics_truncated",
+    )?.params,
+    {
+      maximumDiagnostics: MAXIMUM_READER_DIAGNOSTICS,
+      omittedDiagnostics: 149,
+    },
+  );
+  assert.deepEqual(
+    result,
+    createPublicationReaderRuntime(structuredClone(envelope)),
   );
 });
 

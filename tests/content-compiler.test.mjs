@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
+  PUBLICATION_PROTOCOL_LIMITS,
   resolvePublicationLayout,
   validateCollectionShape,
   validateContentEnvelopeShape,
@@ -26,6 +27,7 @@ import {
   validateWorkShape,
 } from "../schemas/dist/index.js";
 import {
+  CONTENT_COMPILATION_LIMITS,
   compileMarkdownWork,
   compilePublicationContent,
   CONTENT_COMPILER_VERSION,
@@ -36,6 +38,10 @@ import {
   sha256,
   validatePublicationContentEnvelope,
 } from "../packages/content/dist/index.js";
+import {
+  MAXIMUM_CONTENT_DIAGNOSTICS,
+  sortDiagnostics,
+} from "../packages/content/dist/validation.js";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const repositoryRootPath = fileURLToPath(repositoryRoot);
@@ -539,6 +545,24 @@ test("resolved extensions and source-backed payloads participate in identity", a
     "extension",
   );
 
+  const sharedSource = compile({
+    ...extended,
+    payloads: [
+      ...extended.payloads,
+      {
+        ...extended.payloads[0],
+        id: "coherence-editorial-voice-index",
+      },
+    ],
+  });
+  assert.deepEqual(
+    sharedSource.payloads.map(({ id }) => id),
+    [
+      "coherence-editorial-voice",
+      "coherence-editorial-voice-index",
+    ],
+  );
+
   const versionChanged = compile({
     ...extended,
     extensions: extended.extensions.map((extension) => ({
@@ -712,6 +736,318 @@ test("invalid manifest grants cannot disappear before exact resolution compariso
   }
 });
 
+test("sorted compiler diagnostics retain original caller indexes", async (t) => {
+  await t.test("assets", async () => {
+    const input = await loadCompilationInput("canonical-field-notes");
+    const asset = input.assets[0];
+    const result = compilePublicationContent({
+      ...input,
+      assets: [
+        {
+          ...asset,
+          id: "zeta-scale",
+          href: "/assets/zeta-scale.txt",
+          mediaType: "image/png",
+        },
+        {
+          ...asset,
+          id: "zeta-scale",
+          href: "/assets/zeta-scale.txt",
+        },
+        {
+          ...asset,
+          id: "alpha-scale",
+          href: "/assets/alpha-scale.txt",
+        },
+      ],
+    });
+
+    assert.equal(result.valid, false);
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path, params }) =>
+          code === "content.asset.media_type_mismatch" &&
+          path === "/assets/0/mediaType" &&
+          params.assetId === "zeta-scale",
+      ),
+      validationMessage(result),
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path, params }) =>
+          code === "content.asset.duplicate_id" &&
+          path === "/assets/1/id" &&
+          params.firstIndex === 0 &&
+          params.duplicateIndex === 1,
+      ),
+      validationMessage(result),
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path, params }) =>
+          code === "content.asset.href_collision" &&
+          path === "/assets/1/href" &&
+          params.firstIndex === 0 &&
+          params.duplicateIndex === 1,
+      ),
+      validationMessage(result),
+    );
+  });
+
+  await t.test("extensions", async () => {
+    const input = await loadCompilationInput(
+      "declared-night-dispatch",
+    );
+    const withExtensions = replacePublication(
+      input,
+      (publication) => {
+        publication.extensions = [
+          {
+            id: "zeta-extension",
+            package: "@example/zeta-extension",
+            capabilities: ["content.project"],
+          },
+          {
+            id: "zeta-extension",
+            package: "@example/zeta-extension-copy",
+            capabilities: ["content.project"],
+          },
+          {
+            id: "alpha-extension",
+            package: "@example/alpha-extension",
+            capabilities: ["content.project"],
+          },
+        ];
+        return publication;
+      },
+    );
+    withExtensions.extensions = [
+      {
+        ...withExtensions.publication.extensions[0],
+        version: "v1",
+      },
+      {
+        ...withExtensions.publication.extensions[1],
+        version: "1.0.0",
+      },
+      {
+        ...withExtensions.publication.extensions[2],
+        version: "1.0.0",
+      },
+    ];
+
+    const result = compilePublicationContent(withExtensions);
+    assert.equal(result.valid, false);
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path }) =>
+          code === "content.extension.version_invalid" &&
+          path === "/extensions/0/version",
+      ),
+      validationMessage(result),
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path }) =>
+          code === "content.extension.id_duplicate" &&
+          path === "/extensions/1/id",
+      ),
+      validationMessage(result),
+    );
+  });
+
+  await t.test("payloads and nested source paths", async () => {
+    const input = await loadCompilationInput(
+      "declared-night-dispatch",
+    );
+    const collisionPath = "shared/collision.json";
+    const result = compilePublicationContent({
+      ...input,
+      payloads: [
+        {
+          id: "zeta-payload",
+          extensionId: "unknown-extension",
+          schema: "/relative-schema",
+          sourcePaths: [
+            "shared/zeta.json",
+            "shared/zeta.json",
+            "shared/alpha.json",
+            "../outside.json",
+            collisionPath,
+          ],
+          data: {},
+        },
+        {
+          id: "zeta-payload",
+          extensionId: "margin-notes",
+          schema: "https://example.test/schemas/zeta.json",
+          sourcePaths: [collisionPath],
+          data: {},
+        },
+        {
+          id: "alpha-payload",
+          extensionId: "margin-notes",
+          schema: "https://example.test/schemas/alpha.json",
+          sourcePaths: [],
+          data: {},
+        },
+      ],
+    });
+
+    assert.equal(result.valid, false);
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path }) =>
+          code === "content.payload.extension_unknown" &&
+          path === "/payloads/0/extensionId",
+      ),
+      validationMessage(result),
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path }) =>
+          code === "content.payload.schema_invalid" &&
+          path === "/payloads/0/schema",
+      ),
+      validationMessage(result),
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path, params }) =>
+          code === "content.payload.id_duplicate" &&
+          path === "/payloads/1/id" &&
+          params.firstIndex === 0 &&
+          params.duplicateIndex === 1,
+      ),
+      validationMessage(result),
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path }) =>
+          code === "path.traversal" &&
+          path === "/payloads/0/sourcePaths/3",
+      ),
+      validationMessage(result),
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path, params }) =>
+          code === "content.payload.source_duplicate" &&
+          path === "/payloads/0/sourcePaths/1" &&
+          params.firstIndex === 0 &&
+          params.duplicateIndex === 1,
+      ),
+      validationMessage(result),
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path, params }) =>
+          code === "content.payload.source_owner_collision" &&
+          path === "/payloads/1/sourcePaths/0" &&
+          params.firstExtensionId === "unknown-extension" &&
+          params.duplicateExtensionId === "margin-notes",
+      ),
+      validationMessage(result),
+    );
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, path }) =>
+          code === "content.source.expected_path_collision" &&
+          path === "/payloads/1/sourcePaths/0",
+      ),
+      validationMessage(result),
+    );
+  });
+});
+
+test("asset and payload sorting remains deterministic", async () => {
+  const assetInput = await loadCompilationInput(
+    "canonical-field-notes",
+  );
+  const asset = assetInput.assets[0];
+  const extraAsset = {
+    ...asset,
+    id: "alpha-scale",
+    href: "/assets/alpha-scale.txt",
+  };
+  const assetBaseline = compile({
+    ...assetInput,
+    assets: [asset, extraAsset],
+  });
+  const assetReordered = compile({
+    ...assetInput,
+    assets: [extraAsset, asset],
+  });
+  assert.deepEqual(assetReordered, assetBaseline);
+  assert.deepEqual(
+    assetBaseline.assets.map(({ id }) => id),
+    ["alpha-scale", "gauge-scale"],
+  );
+
+  const payloadInput = await loadCompilationInput(
+    "declared-night-dispatch",
+  );
+  const payloadSources = [
+    {
+      path: "shared/zeta.json",
+      contents: "{\"value\":\"zeta\"}\n",
+    },
+    {
+      path: "shared/beta.json",
+      contents: "{\"value\":\"beta\"}\n",
+    },
+    {
+      path: "shared/alpha.json",
+      contents: "{\"value\":\"alpha\"}\n",
+    },
+  ].map((source) => ({
+    ...source,
+    role: "extension",
+    entityId: "margin-notes",
+    mediaType: "application/json",
+    rawBytes: textBytes(source.contents),
+  }));
+  const zetaPayload = {
+    id: "zeta-payload",
+    extensionId: "margin-notes",
+    schema: "https://example.test/schemas/zeta.json",
+    sourcePaths: ["shared/zeta.json"],
+    data: { value: "zeta" },
+  };
+  const alphaPayload = {
+    id: "alpha-payload",
+    extensionId: "margin-notes",
+    schema: "https://example.test/schemas/alpha.json",
+    sourcePaths: ["shared/beta.json", "shared/alpha.json"],
+    data: { value: "alpha" },
+  };
+  const payloadBaseline = compile({
+    ...payloadInput,
+    sources: [...payloadInput.sources, ...payloadSources],
+    payloads: [zetaPayload, alphaPayload],
+  });
+  const payloadReordered = compile({
+    ...payloadInput,
+    sources: [...payloadInput.sources, ...payloadSources],
+    payloads: [
+      {
+        ...alphaPayload,
+        sourcePaths: [...alphaPayload.sourcePaths].reverse(),
+      },
+      zetaPayload,
+    ],
+  });
+  assert.deepEqual(payloadReordered, payloadBaseline);
+  assert.deepEqual(
+    payloadBaseline.payloads.map(({ id }) => id),
+    ["alpha-payload", "zeta-payload"],
+  );
+  assert.deepEqual(payloadBaseline.payloads[0].sourcePaths, [
+    "shared/alpha.json",
+    "shared/beta.json",
+  ]);
+});
+
 test("custom metric producers preserve legacy counts and exact identity", async () => {
   const input = await loadCompilationInput("canonical-field-notes");
   const customMetrics = {
@@ -863,6 +1199,632 @@ test("text source custody requires exact well-formed UTF-8 bytes", async () => {
     ),
     validationMessage(mismatched),
   );
+});
+
+test("compiler rejects duplicate manifest members before snapshot comparison", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const publicationSource = input.sources.find(
+    ({ role }) => role === "publication-manifest",
+  );
+  assert.ok(publicationSource);
+  assert.equal(typeof publicationSource.contents, "string");
+  const contents = publicationSource.contents.replace(
+    '  "schemaVersion": "1.0",',
+    '  "\\u0073chemaVersion": "1.0",\n  "schemaVersion": "1.0",',
+  );
+  assert.notEqual(contents, publicationSource.contents);
+
+  const result = compilePublicationContent({
+    ...input,
+    sources: input.sources.map((source) =>
+      source === publicationSource
+        ? {
+            ...source,
+            contents,
+            rawBytes: textBytes(contents),
+          }
+        : source,
+    ),
+  });
+  assert.equal(result.valid, false);
+  const duplicate = result.diagnostics.find(
+    ({ code }) =>
+      code === "content.source.manifest_duplicate_member",
+  );
+  assert.ok(duplicate, validationMessage(result));
+  assert.equal(duplicate.path, "/schemaVersion");
+  assert.equal(duplicate.documentPath, "publication.json");
+  assert.equal(
+    duplicate.params.parserCode,
+    "json.duplicate_member",
+  );
+});
+
+test("compiler maps escaped lone surrogates through invalid manifest diagnostics", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const publicationSource = input.sources.find(
+    ({ role }) => role === "publication-manifest",
+  );
+  assert.ok(publicationSource);
+  assert.equal(typeof publicationSource.contents, "string");
+  const contents = publicationSource.contents.replace(
+    '"schemaVersion": "1.0"',
+    '"schemaVersion": "\\ud800"',
+  );
+  assert.notEqual(contents, publicationSource.contents);
+
+  const result = compilePublicationContent({
+    ...input,
+    sources: input.sources.map((source) =>
+      source === publicationSource
+        ? {
+            ...source,
+            contents,
+            rawBytes: textBytes(contents),
+          }
+        : source,
+    ),
+  });
+  assert.equal(result.valid, false);
+  const invalid = result.diagnostics.find(
+    ({ code }) => code === "content.source.manifest_invalid_json",
+  );
+  assert.ok(invalid, validationMessage(result));
+  assert.equal(invalid.path, "/schemaVersion");
+  assert.equal(invalid.documentPath, "publication.json");
+  assert.equal(
+    invalid.params.parserCode,
+    "json.unpaired_surrogate",
+  );
+});
+
+test("compiler rejects source graphs that assign one path to multiple roles", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const [work, ...remainingWorks] = input.sourceGraph.works;
+  assert.ok(work);
+  const collidingManifest = {
+    ...work.manifest,
+    manuscript: {
+      path: work.manifestPath,
+      relativeTo: "repository",
+    },
+  };
+  const result = compilePublicationContent({
+    ...input,
+    sourceGraph: {
+      ...input.sourceGraph,
+      works: [
+        {
+          ...work,
+          manifest: collidingManifest,
+          manuscriptPath: work.manifestPath,
+        },
+        ...remainingWorks,
+      ],
+    },
+  });
+  assert.equal(result.valid, false);
+  assert.ok(
+    diagnosticCodes(result).has(
+      "content.input.source.path_owner_collision",
+    ),
+    validationMessage(result),
+  );
+  assert.ok(
+    diagnosticCodes(result).has(
+      "content.source.expected_path_collision",
+    ),
+    validationMessage(result),
+  );
+});
+
+test("compiler applies portable identity to expected, injected, asset, and extension paths", async (t) => {
+  await t.test("expected and injected paths", async () => {
+    const input = await loadCompilationInput(
+      "canonical-field-notes",
+    );
+    const [work, ...remainingWorks] = input.sourceGraph.works;
+    assert.ok(work);
+    const expectedCollision = compilePublicationContent({
+      ...input,
+      sourceGraph: {
+        ...input.sourceGraph,
+        works: [
+          {
+            ...work,
+            manuscriptPath: work.manifestPath.toUpperCase(),
+          },
+          ...remainingWorks,
+        ],
+      },
+    });
+    assert.equal(expectedCollision.valid, false);
+    assert.equal(
+      diagnosticCodes(expectedCollision).has(
+        "content.source.expected_path_collision",
+      ),
+      true,
+      validationMessage(expectedCollision),
+    );
+
+    const publicationSource = input.sources.find(
+      ({ role }) => role === "publication-manifest",
+    );
+    assert.ok(publicationSource);
+    const injectedCollision = compilePublicationContent({
+      ...input,
+      sources: [
+        ...input.sources,
+        {
+          ...publicationSource,
+          path: publicationSource.path.toUpperCase(),
+        },
+      ],
+    });
+    assert.equal(injectedCollision.valid, false);
+    assert.equal(
+      diagnosticCodes(injectedCollision).has(
+        "content.source.duplicate_path",
+      ),
+      true,
+      validationMessage(injectedCollision),
+    );
+  });
+
+  await t.test("asset path spelling", async () => {
+    const input = await loadCompilationInput(
+      "canonical-field-notes",
+    );
+    const result = compilePublicationContent({
+      ...input,
+      assets: input.assets.map((asset) => ({
+        ...asset,
+        sourcePath: asset.sourcePath.toUpperCase(),
+      })),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      diagnosticCodes(result).has(
+        "content.asset.source_path_spelling_mismatch",
+      ),
+      true,
+      validationMessage(result),
+    );
+  });
+
+  await t.test("extension path spelling", async () => {
+    const input = await loadCompilationInput(
+      "declared-night-dispatch",
+    );
+    const sourcePath =
+      "shared/editorial/coherence-voice.json";
+    const contents = '{"voice":"coherence"}\n';
+    const result = compilePublicationContent({
+      ...input,
+      sources: [
+        ...input.sources,
+        {
+          path: sourcePath.toUpperCase(),
+          role: "extension",
+          entityId: "margin-notes",
+          mediaType: "application/json",
+          contents,
+          rawBytes: textBytes(contents),
+        },
+      ],
+      payloads: [
+        {
+          id: "coherence-editorial-voice",
+          extensionId: "margin-notes",
+          schema:
+            "https://example.test/schemas/editorial-voice.json",
+          sourcePaths: [sourcePath],
+          data: { voice: "coherence" },
+        },
+      ],
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      diagnosticCodes(result).has(
+        "content.source.path_spelling_mismatch",
+      ),
+      true,
+      validationMessage(result),
+    );
+  });
+});
+
+test("compiler caps adversarial diagnostic output deterministically", async () => {
+  const input = await loadCompilationInput(
+    "canonical-field-notes",
+  );
+  const publicationSource = input.sources.find(
+    ({ role }) => role === "publication-manifest",
+  );
+  assert.ok(publicationSource);
+  const result = compilePublicationContent({
+    ...input,
+    sources: [
+      ...input.sources,
+      ...Array.from({ length: 400 }, () => ({
+        ...publicationSource,
+      })),
+    ],
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics.length, 256);
+  assert.equal(
+    diagnosticCodes(result).has(
+      "content.diagnostics_truncated",
+    ),
+    true,
+    validationMessage(result),
+  );
+});
+
+test("content diagnostic retention is independent of producer order", () => {
+  const diagnostics = Array.from({ length: 400 }, (_, index) => ({
+    code: "content.synthetic",
+    severity: "error",
+    path: `/diagnostics/${String(index).padStart(3, "0")}`,
+    message: `Synthetic diagnostic ${index}.`,
+    keyword: "test",
+    params:
+      index % 2 === 0
+        ? { index, category: "synthetic" }
+        : { category: "synthetic", index },
+  }));
+
+  const forward = sortDiagnostics(diagnostics);
+  const reverse = sortDiagnostics([...diagnostics].reverse());
+  assert.equal(forward.length, MAXIMUM_CONTENT_DIAGNOSTICS);
+  assert.deepEqual(forward, reverse);
+  assert.deepEqual(
+    forward.find(
+      ({ code }) => code === "content.diagnostics_truncated",
+    )?.params,
+    {
+      maximumDiagnostics: MAXIMUM_CONTENT_DIAGNOSTICS,
+      omittedDiagnostics: 145,
+    },
+  );
+});
+
+test("content diagnostic retention absorbs one nested truncation sentinel with an exact aggregate total", () => {
+  const retained = Array.from({ length: 255 }, (_, index) => ({
+    code: "schema.synthetic",
+    severity: "error",
+    path: `/schema/${String(index).padStart(3, "0")}`,
+    message: `Schema diagnostic ${index}.`,
+    keyword: "test",
+    params: { index },
+  }));
+  const additional = Array.from({ length: 10 }, (_, index) => ({
+    code: "content.synthetic",
+    severity: "error",
+    path: `/content/${String(index).padStart(3, "0")}`,
+    message: `Content diagnostic ${index}.`,
+    keyword: "test",
+    params: { index },
+  }));
+  const result = sortDiagnostics([
+    ...retained,
+    {
+      code: "schema.diagnostics_truncated",
+      severity: "error",
+      path: "",
+      message: "Further schema diagnostics were omitted.",
+      keyword: "diagnosticLimit",
+      params: {
+        maximumDiagnostics: 256,
+        omittedDiagnostics: 145,
+      },
+    },
+    ...additional,
+  ]);
+  assert.equal(result.length, MAXIMUM_CONTENT_DIAGNOSTICS);
+  assert.equal(
+    result.filter(
+      ({ code }) => code === "content.diagnostics_truncated",
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    result.find(
+      ({ code }) => code === "content.diagnostics_truncated",
+    )?.params,
+    {
+      maximumDiagnostics: MAXIMUM_CONTENT_DIAGNOSTICS,
+      omittedDiagnostics: 155,
+    },
+  );
+});
+
+test("compiler rejects oversized aggregate inputs before content work", async (t) => {
+  const input = await loadCompilationInput(
+    "canonical-field-notes",
+  );
+  const firstWork = input.works[0];
+  assert.ok(firstWork);
+  const firstSection = firstWork.sections[0];
+  assert.ok(firstSection);
+
+  const cases = [
+    {
+      name: "sources",
+      change: {
+        sources: new Array(
+          CONTENT_COMPILATION_LIMITS.maximumSources + 1,
+        ),
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumSources,
+      path: "/sources",
+      resource: "sources",
+    },
+    {
+      name: "works",
+      change: {
+        works: new Array(
+          CONTENT_COMPILATION_LIMITS.maximumWorks + 1,
+        ),
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumWorks,
+      path: "/workInputs",
+      resource: "work inputs",
+    },
+    {
+      name: "sections",
+      change: {
+        works: [
+          {
+            ...firstWork,
+            sections: new Array(
+              CONTENT_COMPILATION_LIMITS.maximumSections + 1,
+            ),
+          },
+        ],
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumSections,
+      path: "/workInputs",
+      resource: "sections",
+    },
+    {
+      name: "blocks",
+      change: {
+        works: [
+          {
+            ...firstWork,
+            sections: [
+              {
+                ...firstSection,
+                blocks: new Array(
+                  CONTENT_COMPILATION_LIMITS.maximumBlocks + 1,
+                ),
+              },
+            ],
+          },
+        ],
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumBlocks,
+      path: "/workInputs",
+      resource: "blocks",
+    },
+    {
+      name: "assets",
+      change: {
+        assets: new Array(
+          CONTENT_COMPILATION_LIMITS.maximumAssets + 1,
+        ),
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumAssets,
+      path: "/assets",
+      resource: "assets",
+    },
+    {
+      name: "links",
+      change: {
+        links: new Array(
+          CONTENT_COMPILATION_LIMITS.maximumLinks + 1,
+        ),
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumLinks,
+      path: "/links",
+      resource: "links",
+    },
+    {
+      name: "extensions",
+      change: {
+        extensions: new Array(
+          CONTENT_COMPILATION_LIMITS.maximumExtensions + 1,
+        ),
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumExtensions,
+      path: "/extensions",
+      resource: "resolved extensions",
+    },
+    {
+      name: "payloads",
+      change: {
+        payloads: new Array(
+          CONTENT_COMPILATION_LIMITS.maximumPayloads + 1,
+        ),
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumPayloads,
+      path: "/payloads",
+      resource: "payloads",
+    },
+    {
+      name: "payload source paths",
+      change: {
+        payloads: [
+          {
+            sourcePaths: new Array(
+              CONTENT_COMPILATION_LIMITS.maximumPayloadSourcePaths +
+                1,
+            ),
+          },
+        ],
+      },
+      maximum:
+        CONTENT_COMPILATION_LIMITS.maximumPayloadSourcePaths,
+      path: "/payloads",
+      resource: "payload source paths",
+    },
+    {
+      name: "collection work references",
+      change: {
+        sourceGraph: {
+          ...input.sourceGraph,
+          collections: [
+            ...Array.from({ length: 20 }, (_, index) => ({
+              ...input.sourceGraph.collections[0],
+              collectionId: `collection-${index}`,
+              manifest: {
+                ...input.sourceGraph.collections[0].manifest,
+                id: `collection-${index}`,
+                workIds: new Array(
+                  PUBLICATION_PROTOCOL_LIMITS.maximumWorks,
+                ),
+              },
+            })),
+            {
+              ...input.sourceGraph.collections[0],
+              collectionId: "collection-overflow",
+              manifest: {
+                ...input.sourceGraph.collections[0].manifest,
+                id: "collection-overflow",
+                workIds: new Array(21),
+              },
+            },
+          ],
+        },
+      },
+      maximum:
+        CONTENT_COMPILATION_LIMITS
+          .maximumCollectionWorkReferences,
+      path: "/sourceGraph/collections",
+      resource: "collection work references",
+    },
+  ];
+
+  for (const item of cases) {
+    await t.test(item.name, () => {
+      const result = compilePublicationContent({
+        ...input,
+        ...item.change,
+      });
+      assert.equal(result.valid, false);
+      assert.deepEqual(result.diagnostics, [
+        {
+          code: "content.resource_limit",
+          severity: "error",
+          path: item.path,
+          message: `Compilation exceeds the fixed ${item.resource} limit of ${item.maximum.toLocaleString("en-US")}.`,
+          keyword: "maxItems",
+          params: {
+            resource: item.resource,
+            actualItems: item.maximum + 1,
+            maximumItems: item.maximum,
+          },
+        },
+      ]);
+    });
+  }
+});
+
+test("envelope validation rejects aggregate collection membership before relationship expansion", async () => {
+  const input = await loadCompilationInput(
+    "canonical-field-notes",
+  );
+  const envelope = structuredClone(
+    assertValid(compilePublicationContent(input)),
+  );
+  const fullWorkIds = Array.from(
+    { length: PUBLICATION_PROTOCOL_LIMITS.maximumWorks },
+    (_, index) => `work-${index}`,
+  );
+  envelope.collections = [
+    ...Array.from({ length: 20 }, (_, index) => ({
+      id: `collection-${index}`,
+      title: `Collection ${index}`,
+      route: `/collections/collection-${index}`,
+      manifestPath:
+        `publication/collections/collection-${index}/collection.json`,
+      workIds: fullWorkIds,
+    })),
+    {
+      id: "collection-overflow",
+      title: "Collection overflow",
+      route: "/collections/collection-overflow",
+      manifestPath:
+        "publication/collections/collection-overflow/collection.json",
+      workIds: fullWorkIds.slice(0, 21),
+    },
+  ];
+
+  const result = validatePublicationContentEnvelope(envelope);
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.diagnostics, [
+    {
+      code: "content.envelope.resource_limit",
+      severity: "error",
+      path: "/collections",
+      message:
+        "The envelope exceeds the fixed collection work references limit of 100,000.",
+      keyword: "maxItems",
+      params: {
+        resource: "collection work references",
+        actualItems: 100_001,
+        maximumItems: 100_000,
+      },
+    },
+  ]);
+});
+
+test("compiler rejects reserved host configuration in asset and extension source roles", async () => {
+  const reservedPath = "publisher.config.ts";
+  for (const role of ["asset", "extension"]) {
+    const input = await loadCompilationInput(
+      "canonical-field-notes",
+    );
+    const reservedSource = {
+      path: reservedPath,
+      role,
+      ...(role === "asset"
+        ? { entityId: "rain-gauge" }
+        : { entityId: "station-index" }),
+      mediaType: "application/json",
+      contents: "{}",
+      rawBytes: textBytes("{}"),
+    };
+    const result = compilePublicationContent({
+      ...input,
+      sources: [...input.sources, reservedSource],
+      ...(role === "extension"
+        ? {
+            payloads: [
+              {
+                id: "reserved-host-config",
+                extensionId: "station-index",
+                schema:
+                  "https://example.invalid/schemas/reserved.json",
+                sourcePaths: [reservedPath],
+                data: {},
+              },
+            ],
+          }
+        : {}),
+    });
+    assert.equal(result.valid, false, role);
+    assert.ok(
+      result.diagnostics.some(
+        ({ code, params }) =>
+          code === "content.source.path_reserved" &&
+          params.role === role,
+      ),
+      `${role}: ${validationMessage(result)}`,
+    );
+  }
 });
 
 test("long Coherence IDs and historical-only lineage survive compilation", async () => {
@@ -2394,6 +3356,75 @@ test("artifact serialization is canonical, valid, and self-consistent", async ()
   );
   assert.deepEqual(JSON.parse(text), envelope);
   assertValid(validateContentEnvelopeShape(JSON.parse(text)));
+});
+
+test("content validation, serialization, and artifacts use one detached Proxy snapshot", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const envelope = compile(input);
+
+  function statefulEnvelope() {
+    const targetEnvelope = structuredClone(envelope);
+    const observed = {
+      descriptors: 0,
+      gets: 0,
+      ownKeys: 0,
+    };
+    const proxy = new Proxy(targetEnvelope, {
+      get(target, key, receiver) {
+        observed.gets += 1;
+        if (key === "artifact") {
+          return {
+            ...target.artifact,
+            outputRoot: "forged-output",
+          };
+        }
+        return Reflect.get(target, key, receiver);
+      },
+      getOwnPropertyDescriptor(target, key) {
+        observed.descriptors += 1;
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      ownKeys(target) {
+        observed.ownKeys += 1;
+        return Reflect.ownKeys(target);
+      },
+    });
+    return { observed, proxy };
+  }
+
+  const validationInput = statefulEnvelope();
+  const validation =
+    validatePublicationContentEnvelope(validationInput.proxy);
+  assert.equal(validation.valid, true, validationMessage(validation));
+  assert.notEqual(validation.value, validationInput.proxy);
+  assert.equal(validationInput.observed.ownKeys, 1);
+  assert.equal(validationInput.observed.gets, 0);
+
+  const serializationInput = statefulEnvelope();
+  const text =
+    serializePublicationContentEnvelope(serializationInput.proxy);
+  assert.equal(
+    JSON.parse(text).artifact.outputRoot,
+    envelope.artifact.outputRoot,
+  );
+  assert.equal(serializationInput.observed.ownKeys, 1);
+  assert.equal(serializationInput.observed.gets, 0);
+
+  const artifactInput = statefulEnvelope();
+  const artifact =
+    createPublicationContentArtifact(artifactInput.proxy);
+  assert.equal(artifact.outputRoot, envelope.artifact.outputRoot);
+  assert.equal(
+    artifact.envelope.artifact.outputRoot,
+    envelope.artifact.outputRoot,
+  );
+  assert.equal(
+    JSON.parse(artifact.text).artifact.outputRoot,
+    envelope.artifact.outputRoot,
+  );
+  assert.deepEqual(JSON.parse(artifact.text), artifact.envelope);
+  assert.equal(artifactInput.observed.ownKeys, 1);
+  assert.equal(artifactInput.observed.gets, 0);
 });
 
 test("hostile accessors fail closed without leaking thrown secrets", () => {

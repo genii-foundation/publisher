@@ -17,8 +17,13 @@ import {
   CONTENT_ENVELOPE_SCHEMA_URL,
   CONTENT_SCHEMA_VERSION,
   EXTENSION_CAPABILITIES,
+  PUBLICATION_PROTOCOL_LIMITS,
   isPathWithinRoot,
+  isReservedHostIntegrationPath,
+  parseJsonWithUniqueObjectKeys,
+  portableRepositoryPathIdentity,
   resolvePublicationSourcesForContentCompilation,
+  STRICT_JSON_DIAGNOSTIC_CODES,
   validateContentEnvelopeShape,
   validateRepositoryRelativePath,
   type CompiledCollection,
@@ -67,6 +72,7 @@ import {
 } from "./types.js";
 import {
   EXACT_SEMVER,
+  createDiagnosticCollector,
   diagnostic,
   sortDiagnostics,
   validateAbsoluteHttpUrl,
@@ -89,6 +95,7 @@ interface NormalizedSource {
 }
 
 interface ExpectedSource {
+  readonly path: string;
   readonly role: SourceProvenance["role"];
   readonly entityId?: string;
   readonly manifest?: unknown;
@@ -112,6 +119,23 @@ const EMPTY_CONTENT_HASH = sha256(new Uint8Array());
 const EXTENSION_CAPABILITY_SET: ReadonlySet<string> = new Set(
   EXTENSION_CAPABILITIES,
 );
+
+export const CONTENT_COMPILATION_LIMITS = Object.freeze({
+  maximumAssets: PUBLICATION_PROTOCOL_LIMITS.maximumAssets,
+  maximumBlocks: PUBLICATION_PROTOCOL_LIMITS.maximumBlocks,
+  maximumCollectionWorkReferences:
+    PUBLICATION_PROTOCOL_LIMITS.maximumCollectionWorkReferences,
+  maximumCollections: PUBLICATION_PROTOCOL_LIMITS.maximumCollections,
+  maximumExtensions: PUBLICATION_PROTOCOL_LIMITS.maximumExtensions,
+  maximumLinks: PUBLICATION_PROTOCOL_LIMITS.maximumLinks,
+  maximumPayloads: PUBLICATION_PROTOCOL_LIMITS.maximumPayloads,
+  maximumPayloadSourcePaths:
+    PUBLICATION_PROTOCOL_LIMITS.maximumPayloadSourcePaths,
+  maximumSections: PUBLICATION_PROTOCOL_LIMITS.maximumSections,
+  maximumSources:
+    PUBLICATION_PROTOCOL_LIMITS.maximumCompilationSources,
+  maximumWorks: PUBLICATION_PROTOCOL_LIMITS.maximumWorks,
+} as const);
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -427,6 +451,24 @@ function normalizeSource(
   diagnostics.push(
     ...validateRepositoryRelativePath(source.path, sourcePath),
   );
+  if (isReservedHostIntegrationPath(source.path)) {
+    diagnostics.push(
+      diagnostic(
+        "content.source.path_reserved",
+        sourcePath,
+        `Host integration path "${source.path}" cannot be injected as publication source.`,
+        "reservedHostIntegrationPath",
+        {
+          sourcePath: source.path,
+          role: source.role,
+          ...(source.entityId === undefined
+            ? {}
+            : { entityId: source.entityId }),
+        },
+        source.path,
+      ),
+    );
+  }
   if (
     typeof source.mediaType !== "string" ||
     source.mediaType.length === 0 ||
@@ -577,38 +619,119 @@ function normalizeSource(
 
 function expectedSources(
   input: CompilePublicationContentInput,
+  diagnostics: Diagnostic[],
 ): ReadonlyMap<string, ExpectedSource> {
   const expected = new Map<string, ExpectedSource>();
-  expected.set(input.sourceGraph.layout.publicationManifestPath, {
-    role: "publication-manifest",
-    manifest: input.publication,
+  const register = (
+    path: string,
+    source: ExpectedSource,
+    pointer: string,
+  ): void => {
+    const identity = portableRepositoryPathIdentity(path);
+    const first = expected.get(identity);
+    if (first !== undefined) {
+      if (
+        first.path === path &&
+        first.role === source.role &&
+        first.entityId === source.entityId
+      ) {
+        return;
+      }
+      diagnostics.push(
+        diagnostic(
+          "content.source.expected_path_collision",
+          pointer,
+          `Expected source path "${path}" has more than one owner.`,
+          "uniqueExpectedSourceOwner",
+          {
+            sourcePath: path,
+            role: source.role,
+            ...(source.entityId === undefined
+              ? {}
+              : { entityId: source.entityId }),
+            firstRole: first.role,
+            ...(first.entityId === undefined
+              ? {}
+              : { firstEntityId: first.entityId }),
+            firstSourcePath: first.path,
+          },
+        ),
+      );
+      return;
+    }
+    expected.set(identity, { ...source, path });
+  };
+
+  register(
+    input.sourceGraph.layout.publicationManifestPath,
+    {
+      path: input.sourceGraph.layout.publicationManifestPath,
+      role: "publication-manifest",
+      manifest: input.publication,
+    },
+    "/sourceGraph/layout/publicationManifestPath",
+  );
+  input.sourceGraph.works.forEach((work, index) => {
+    register(
+      work.manifestPath,
+      {
+        path: work.manifestPath,
+        role: "work-manifest",
+        entityId: work.workId,
+        manifest: work.manifest,
+      },
+      `/sourceGraph/works/${index}/manifestPath`,
+    );
+    register(
+      work.manuscriptPath,
+      {
+        path: work.manuscriptPath,
+        role: "manuscript",
+        entityId: work.workId,
+      },
+      `/sourceGraph/works/${index}/manuscriptPath`,
+    );
   });
-  for (const work of input.sourceGraph.works) {
-    expected.set(work.manifestPath, {
-      role: "work-manifest",
-      entityId: work.workId,
-      manifest: work.manifest,
-    });
-    expected.set(work.manuscriptPath, {
-      role: "manuscript",
-      entityId: work.workId,
-    });
-  }
-  for (const collection of input.sourceGraph.collections) {
-    expected.set(collection.manifestPath, {
-      role: "collection-manifest",
-      entityId: collection.collectionId,
-      manifest: collection.manifest,
-    });
-  }
-  for (const payload of input.payloads ?? []) {
-    for (const sourcePath of payload.sourcePaths) {
-      if (!expected.has(sourcePath)) {
-        expected.set(sourcePath, {
+  input.sourceGraph.collections.forEach((collection, index) => {
+    register(
+      collection.manifestPath,
+      {
+        path: collection.manifestPath,
+        role: "collection-manifest",
+        entityId: collection.collectionId,
+        manifest: collection.manifest,
+      },
+      `/sourceGraph/collections/${index}/manifestPath`,
+    );
+  });
+  const payloads = (input.payloads ?? [])
+    .map((payload, inputIndex) => ({ payload, inputIndex }))
+    .sort(
+      (left, right) =>
+        compareText(left.payload.id, right.payload.id) ||
+        left.inputIndex - right.inputIndex,
+    );
+  for (const { payload, inputIndex } of payloads) {
+    const sourcePaths = payload.sourcePaths
+      .map((sourcePath, sourceIndex) => ({
+        sourcePath,
+        sourceIndex,
+      }))
+      .sort(
+        (left, right) =>
+          compareText(left.sourcePath, right.sourcePath) ||
+          left.sourceIndex - right.sourceIndex,
+      );
+    for (const { sourcePath, sourceIndex } of sourcePaths) {
+      register(
+        sourcePath,
+        {
+          path: sourcePath,
           role: "extension",
           entityId: payload.extensionId,
-        });
-      }
+        },
+        `/payloads/${inputIndex}/sourcePaths/${sourceIndex}`,
+      );
     }
   }
   return expected;
@@ -633,34 +756,59 @@ function compareManifestSource(
     return;
   }
 
-  try {
-    const parsed = JSON.parse(source.contents) as JSONValue;
-    if (
-      canonicalizeJson(parsed) !==
-      canonicalizeJson(asJson(expected))
-    ) {
-      diagnostics.push(
-        diagnostic(
-          "content.source.manifest_mismatch",
-          "",
-          `Injected manifest text at "${source.path}" does not match the validated manifest.`,
-          "sourceSnapshot",
-          { sourcePath: source.path },
-          source.path,
-        ),
-      );
-    }
-  } catch {
+  const parsed = parseJsonWithUniqueObjectKeys(source.contents);
+  if (!parsed.valid) {
+    const parserDiagnostic = parsed.diagnostics[0];
+    const duplicate =
+      parserDiagnostic?.code ===
+      STRICT_JSON_DIAGNOSTIC_CODES.duplicateMember;
+    const limitExceeded =
+      parserDiagnostic?.code ===
+        STRICT_JSON_DIAGNOSTIC_CODES.depthExceeded ||
+      parserDiagnostic?.code ===
+        STRICT_JSON_DIAGNOSTIC_CODES.sizeExceeded ||
+      parserDiagnostic?.code ===
+        STRICT_JSON_DIAGNOSTIC_CODES.tokenLimitExceeded;
     diagnostics.push(
       diagnostic(
-        "content.source.manifest_invalid_json",
-        "",
-        `Manifest source "${source.path}" is not valid JSON.`,
-        "json",
+        duplicate
+          ? "content.source.manifest_duplicate_member"
+          : limitExceeded
+            ? "content.source.manifest_json_limit_exceeded"
+            : "content.source.manifest_invalid_json",
+        parserDiagnostic?.path ?? "",
+        duplicate
+          ? `Manifest source "${source.path}" contains a duplicate JSON object member name.`
+          : limitExceeded
+            ? `Manifest source "${source.path}" exceeds the fixed JSON parser limits.`
+            : `Manifest source "${source.path}" is not valid protocol JSON.`,
+        parserDiagnostic?.keyword ?? "json",
         {
+          ...(parserDiagnostic?.params ?? {
+            reason: "missingParserDiagnostic",
+          }),
           sourcePath: source.path,
-          reason: "invalidJson",
+          ...(parserDiagnostic === undefined
+            ? {}
+            : { parserCode: parserDiagnostic.code }),
         },
+        source.path,
+      ),
+    );
+    return;
+  }
+
+  if (
+    canonicalizeJson(parsed.value) !==
+    canonicalizeJson(asJson(expected))
+  ) {
+    diagnostics.push(
+      diagnostic(
+        "content.source.manifest_mismatch",
+        "",
+        `Injected manifest text at "${source.path}" does not match the validated manifest.`,
+        "sourceSnapshot",
+        { sourcePath: source.path },
         source.path,
       ),
     );
@@ -674,7 +822,7 @@ function compileSources(
   readonly byPath: ReadonlyMap<string, NormalizedSource>;
   readonly provenance: readonly SourceProvenance[];
 } {
-  const expected = expectedSources(input);
+  const expected = expectedSources(input, diagnostics);
   const byPath = new Map<string, NormalizedSource>();
 
   input.sources.forEach((source, index) => {
@@ -682,7 +830,9 @@ function compileSources(
     if (normalized === undefined) {
       return;
     }
-    const first = byPath.get(source.path);
+    const pathIdentity =
+      portableRepositoryPathIdentity(source.path);
+    const first = byPath.get(pathIdentity);
     if (first !== undefined) {
       diagnostics.push(
         diagnostic(
@@ -690,12 +840,15 @@ function compileSources(
           `/sources/${index}/path`,
           `Source path "${source.path}" is injected more than once.`,
           "uniqueSourcePath",
-          { sourcePath: source.path },
+          {
+            sourcePath: source.path,
+            firstSourcePath: first.path,
+          },
         ),
       );
       return;
     }
-    byPath.set(source.path, normalized);
+    byPath.set(pathIdentity, normalized);
 
     for (const outputRoot of input.publication.boundaries.outputRoots) {
       if (isPathWithinRoot(source.path, outputRoot)) {
@@ -711,7 +864,7 @@ function compileSources(
       }
     }
 
-    const required = expected.get(source.path);
+    const required = expected.get(pathIdentity);
     if (required === undefined) {
       if (source.role !== "asset") {
         diagnostics.push(
@@ -725,6 +878,20 @@ function compileSources(
         );
       }
       return;
+    }
+    if (source.path !== required.path) {
+      diagnostics.push(
+        diagnostic(
+          "content.source.path_spelling_mismatch",
+          `/sources/${index}/path`,
+          `Source path "${source.path}" does not match declared spelling "${required.path}".`,
+          "exactSourcePathSpelling",
+          {
+            sourcePath: source.path,
+            expectedPath: required.path,
+          },
+        ),
+      );
     }
     if (
       source.role !== required.role ||
@@ -751,16 +918,16 @@ function compileSources(
     }
   });
 
-  for (const [path, required] of expected) {
-    if (!byPath.has(path)) {
+  for (const [identity, required] of expected) {
+    if (!byPath.has(identity)) {
       diagnostics.push(
         diagnostic(
           "content.source.missing",
           "/sources",
-          `Required ${required.role} source "${path}" was not injected.`,
+          `Required ${required.role} source "${required.path}" was not injected.`,
           "requiredSource",
           {
-            sourcePath: path,
+            sourcePath: required.path,
             role: required.role,
             entityId: required.entityId,
           },
@@ -1466,7 +1633,9 @@ function compileWork(
     readonly sectionId: string;
     readonly start: number;
   }[] = [];
-  const manuscript = sources.get(workSource.manuscriptPath);
+  const manuscript = sources.get(
+    portableRepositoryPathIdentity(workSource.manuscriptPath),
+  );
   if (manuscript !== undefined && typeof manuscript.contents !== "string") {
     diagnostics.push(
       diagnostic(
@@ -1646,7 +1815,11 @@ function compileWork(
       }
       const compiled = compileBlock(
         block,
-        sources.get(block.provenance.sourcePath),
+        sources.get(
+          portableRepositoryPathIdentity(
+            block.provenance.sourcePath,
+          ),
+        ),
         blockPointer,
         customMetrics,
         diagnostics,
@@ -2407,9 +2580,14 @@ function compileAssets(
 ): readonly ResolvedContentAsset[] {
   const firstIndexById = new Map<string, number>();
   const firstIndexByHref = new Map<string, number>();
-  return [...assets]
-    .sort((left, right) => compareText(left.id, right.id))
-    .map((asset, index) => {
+  return assets
+    .map((asset, inputIndex) => ({ asset, inputIndex }))
+    .sort(
+      (left, right) =>
+        compareText(left.asset.id, right.asset.id) ||
+        left.inputIndex - right.inputIndex,
+    )
+    .map(({ asset, inputIndex: index }) => {
       validateStableId(asset.id, `/assets/${index}/id`, diagnostics);
       const firstIndex = firstIndexById.get(asset.id);
       if (firstIndex !== undefined) {
@@ -2470,7 +2648,9 @@ function compileAssets(
           ),
         );
       }
-      const source = sources.get(asset.sourcePath);
+      const source = sources.get(
+        portableRepositoryPathIdentity(asset.sourcePath),
+      );
       if (source === undefined || source.role !== "asset") {
         diagnostics.push(
           diagnostic(
@@ -2482,6 +2662,21 @@ function compileAssets(
           ),
         );
       } else {
+        if (source.path !== asset.sourcePath) {
+          diagnostics.push(
+            diagnostic(
+              "content.asset.source_path_spelling_mismatch",
+              `/assets/${index}/sourcePath`,
+              `Asset source "${source.path}" does not match declared spelling "${asset.sourcePath}".`,
+              "exactSourcePathSpelling",
+              {
+                assetId: asset.id,
+                sourcePath: source.path,
+                expectedPath: asset.sourcePath,
+              },
+            ),
+          );
+        }
         const expectedRoot =
           owningWork?.source.assetsPath ??
           (asset.workId === undefined
@@ -2657,7 +2852,9 @@ function compileLinkOccurrence(
       ),
     );
   }
-  const source = sources.get(range.sourcePath);
+  const source = sources.get(
+    portableRepositoryPathIdentity(range.sourcePath),
+  );
   if (source === undefined || typeof source.contents !== "string") {
     diagnostics.push(
       diagnostic(
@@ -3247,117 +3444,148 @@ function compileExtensionsAndPayloads(
 
   const payloadIdFirstIndex = new Map<string, number>();
   const sourceOwnerByPath = new Map<string, string>();
-  const payloads = [...(input.payloads ?? [])]
-    .sort((left, right) => compareText(left.id, right.id))
-    .map((payload, index): CompiledContentPayload | undefined => {
-      const pointer = `/payloads/${index}`;
-      validateStableId(payload.id, `${pointer}/id`, diagnostics);
-      validateStableId(
-        payload.extensionId,
-        `${pointer}/extensionId`,
-        diagnostics,
-      );
-      const firstIndex = payloadIdFirstIndex.get(payload.id);
-      if (firstIndex !== undefined) {
-        diagnostics.push(
-          diagnostic(
-            "content.payload.id_duplicate",
-            `${pointer}/id`,
-            `Content payload ID "${payload.id}" appears more than once.`,
-            "uniquePayloadId",
-            { firstIndex, duplicateIndex: index },
-          ),
+  const payloads = (input.payloads ?? [])
+    .map((payload, inputIndex) => ({ payload, inputIndex }))
+    .sort(
+      (left, right) =>
+        compareText(left.payload.id, right.payload.id) ||
+        left.inputIndex - right.inputIndex,
+    )
+    .map(
+      (
+        { payload, inputIndex: index },
+      ): CompiledContentPayload | undefined => {
+        const pointer = `/payloads/${index}`;
+        validateStableId(payload.id, `${pointer}/id`, diagnostics);
+        validateStableId(
+          payload.extensionId,
+          `${pointer}/extensionId`,
+          diagnostics,
         );
-      } else {
-        payloadIdFirstIndex.set(payload.id, index);
-      }
-      if (!extensionById.has(payload.extensionId)) {
-        diagnostics.push(
-          diagnostic(
-            "content.payload.extension_unknown",
-            `${pointer}/extensionId`,
-            `Content payload "${payload.id}" names an unknown extension.`,
-            "knownExtension",
-            { extensionId: payload.extensionId },
-          ),
-        );
-      }
-      if (!validateAbsoluteHttpUrl(payload.schema)) {
-        diagnostics.push(
-          diagnostic(
-            "content.payload.schema_invalid",
-            `${pointer}/schema`,
-            "Content payload schemas must use an absolute credential-free HTTP URL.",
-            "absoluteHttpUrl",
-            { schema: payload.schema },
-          ),
-        );
-      }
+        const firstIndex = payloadIdFirstIndex.get(payload.id);
+        if (firstIndex !== undefined) {
+          diagnostics.push(
+            diagnostic(
+              "content.payload.id_duplicate",
+              `${pointer}/id`,
+              `Content payload ID "${payload.id}" appears more than once.`,
+              "uniquePayloadId",
+              { firstIndex, duplicateIndex: index },
+            ),
+          );
+        } else {
+          payloadIdFirstIndex.set(payload.id, index);
+        }
+        if (!extensionById.has(payload.extensionId)) {
+          diagnostics.push(
+            diagnostic(
+              "content.payload.extension_unknown",
+              `${pointer}/extensionId`,
+              `Content payload "${payload.id}" names an unknown extension.`,
+              "knownExtension",
+              { extensionId: payload.extensionId },
+            ),
+          );
+        }
+        if (!validateAbsoluteHttpUrl(payload.schema)) {
+          diagnostics.push(
+            diagnostic(
+              "content.payload.schema_invalid",
+              `${pointer}/schema`,
+              "Content payload schemas must use an absolute credential-free HTTP URL.",
+              "absoluteHttpUrl",
+              { schema: payload.schema },
+            ),
+          );
+        }
 
-      const sourcePaths = [...payload.sourcePaths].sort(compareText);
-      const firstSourceIndex = new Map<string, number>();
-      sourcePaths.forEach((sourcePath, sourceIndex) => {
-        diagnostics.push(
-          ...validateRepositoryRelativePath(
+        const sourcePaths = payload.sourcePaths
+          .map((sourcePath, inputIndex) => ({
             sourcePath,
-            `${pointer}/sourcePaths/${sourceIndex}`,
-          ),
+            inputIndex,
+          }))
+          .sort(
+            (left, right) =>
+              compareText(left.sourcePath, right.sourcePath) ||
+              left.inputIndex - right.inputIndex,
+          );
+        const firstSourceIndex = new Map<string, number>();
+        sourcePaths.forEach(
+          ({ sourcePath, inputIndex: sourceIndex }) => {
+            diagnostics.push(
+              ...validateRepositoryRelativePath(
+                sourcePath,
+                `${pointer}/sourcePaths/${sourceIndex}`,
+              ),
+            );
+            const sourceIdentity =
+              portableRepositoryPathIdentity(sourcePath);
+            const first = firstSourceIndex.get(sourceIdentity);
+            if (first !== undefined) {
+              diagnostics.push(
+                diagnostic(
+                  "content.payload.source_duplicate",
+                  `${pointer}/sourcePaths/${sourceIndex}`,
+                  `Content payload "${payload.id}" repeats source "${sourcePath}".`,
+                  "uniqueItems",
+                  {
+                    firstIndex: first,
+                    duplicateIndex: sourceIndex,
+                  },
+                ),
+              );
+            } else {
+              firstSourceIndex.set(sourceIdentity, sourceIndex);
+            }
+            const firstOwner =
+              sourceOwnerByPath.get(sourceIdentity);
+            if (
+              firstOwner !== undefined &&
+              firstOwner !== payload.extensionId
+            ) {
+              diagnostics.push(
+                diagnostic(
+                  "content.payload.source_owner_collision",
+                  `${pointer}/sourcePaths/${sourceIndex}`,
+                  `Extension source "${sourcePath}" is claimed by more than one extension.`,
+                  "uniqueSourceOwner",
+                  {
+                    firstExtensionId: firstOwner,
+                    duplicateExtensionId: payload.extensionId,
+                  },
+                ),
+              );
+            } else {
+              sourceOwnerByPath.set(
+                sourceIdentity,
+                payload.extensionId,
+              );
+            }
+          },
         );
-        const first = firstSourceIndex.get(sourcePath);
-        if (first !== undefined) {
-          diagnostics.push(
-            diagnostic(
-              "content.payload.source_duplicate",
-              `${pointer}/sourcePaths/${sourceIndex}`,
-              `Content payload "${payload.id}" repeats source "${sourcePath}".`,
-              "uniqueItems",
-              { firstIndex: first, duplicateIndex: sourceIndex },
-            ),
-          );
-        } else {
-          firstSourceIndex.set(sourcePath, sourceIndex);
+        const data = cloneJsonValue(
+          payload.data,
+          `${pointer}/data`,
+          diagnostics,
+        );
+        if (data === undefined) {
+          return undefined;
         }
-        const firstOwner = sourceOwnerByPath.get(sourcePath);
-        if (
-          firstOwner !== undefined &&
-          firstOwner !== payload.extensionId
-        ) {
-          diagnostics.push(
-            diagnostic(
-              "content.payload.source_owner_collision",
-              `${pointer}/sourcePaths/${sourceIndex}`,
-              `Extension source "${sourcePath}" is claimed by more than one extension.`,
-              "uniqueSourceOwner",
-              {
-                firstExtensionId: firstOwner,
-                duplicateExtensionId: payload.extensionId,
-              },
-            ),
-          );
-        } else {
-          sourceOwnerByPath.set(sourcePath, payload.extensionId);
-        }
-      });
-      const data = cloneJsonValue(
-        payload.data,
-        `${pointer}/data`,
-        diagnostics,
-      );
-      if (data === undefined) {
-        return undefined;
-      }
-      const basis = {
-        id: payload.id,
-        extensionId: payload.extensionId,
-        schema: payload.schema,
-        sourcePaths,
-        data,
-      };
-      return {
-        ...basis,
-        contentHash: hashValue(contentPayloadHashBasis(basis)),
-      };
-    })
+        const basis = {
+          id: payload.id,
+          extensionId: payload.extensionId,
+          schema: payload.schema,
+          sourcePaths: sourcePaths.map(
+            ({ sourcePath }) => sourcePath,
+          ),
+          data,
+        };
+        return {
+          ...basis,
+          contentHash: hashValue(contentPayloadHashBasis(basis)),
+        };
+      },
+    )
     .filter(
       (payload): payload is CompiledContentPayload =>
         payload !== undefined,
@@ -3478,10 +3706,227 @@ function validateSourceGraph(
   }
 }
 
+function addBoundedCount(total: number, count: number): number {
+  return total > Number.MAX_SAFE_INTEGER - count
+    ? Number.MAX_SAFE_INTEGER
+    : total + count;
+}
+
+function pushResourceLimitDiagnostic(
+  diagnostics: Diagnostic[],
+  path: string,
+  resource: string,
+  actualItems: number,
+  maximumItems: number,
+): void {
+  if (actualItems <= maximumItems) {
+    return;
+  }
+  diagnostics.push(
+    diagnostic(
+      "content.resource_limit",
+      path,
+      `Compilation exceeds the fixed ${resource} limit of ${maximumItems.toLocaleString("en-US")}.`,
+      "maxItems",
+      { resource, actualItems, maximumItems },
+    ),
+  );
+}
+
+function validateCompilationResourceLimits(
+  input: CompilePublicationContentInput,
+): readonly Diagnostic[] {
+  const diagnostics = createDiagnosticCollector();
+  const extensions = input.extensions ?? [];
+  const payloads = input.payloads ?? [];
+  const assets = input.assets ?? [];
+  const links = input.links ?? [];
+  const publicationCollections =
+    input.publication.collections ?? [];
+  const publicationExtensions =
+    input.publication.extensions ?? [];
+
+  for (const limit of [
+    {
+      actualItems: input.sources.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumSources,
+      path: "/sources",
+      resource: "sources",
+    },
+    {
+      actualItems: input.works.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumWorks,
+      path: "/workInputs",
+      resource: "work inputs",
+    },
+    {
+      actualItems: input.sourceGraph.works.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumWorks,
+      path: "/sourceGraph/works",
+      resource: "resolved works",
+    },
+    {
+      actualItems: input.sourceGraph.collections.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumCollections,
+      path: "/sourceGraph/collections",
+      resource: "resolved collections",
+    },
+    {
+      actualItems: input.publication.works.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumWorks,
+      path: "/publication/works",
+      resource: "publication works",
+    },
+    {
+      actualItems: publicationCollections.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumCollections,
+      path: "/publication/collections",
+      resource: "publication collections",
+    },
+    {
+      actualItems: extensions.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumExtensions,
+      path: "/extensions",
+      resource: "resolved extensions",
+    },
+    {
+      actualItems: publicationExtensions.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumExtensions,
+      path: "/publication/extensions",
+      resource: "publication extensions",
+    },
+    {
+      actualItems: payloads.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumPayloads,
+      path: "/payloads",
+      resource: "payloads",
+    },
+    {
+      actualItems: assets.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumAssets,
+      path: "/assets",
+      resource: "assets",
+    },
+    {
+      actualItems: links.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumLinks,
+      path: "/links",
+      resource: "links",
+    },
+  ] as const) {
+    pushResourceLimitDiagnostic(
+      diagnostics,
+      limit.path,
+      limit.resource,
+      limit.actualItems,
+      limit.maximumItems,
+    );
+  }
+  if (diagnostics.length > 0) {
+    return sortDiagnostics(diagnostics);
+  }
+
+  let collectionWorkReferenceCount = 0;
+  for (const collection of input.sourceGraph.collections) {
+    if (!Array.isArray(collection.manifest.workIds)) {
+      throw new TypeError(
+        "Collection work references must be supplied as an array.",
+      );
+    }
+    collectionWorkReferenceCount = addBoundedCount(
+      collectionWorkReferenceCount,
+      collection.manifest.workIds.length,
+    );
+  }
+  pushResourceLimitDiagnostic(
+    diagnostics,
+    "/sourceGraph/collections",
+    "collection work references",
+    collectionWorkReferenceCount,
+    CONTENT_COMPILATION_LIMITS.maximumCollectionWorkReferences,
+  );
+  if (diagnostics.length > 0) {
+    return sortDiagnostics(diagnostics);
+  }
+
+  let sectionCount = 0;
+  for (const work of input.works) {
+    if (!Array.isArray(work.sections)) {
+      throw new TypeError("Work sections must be supplied as an array.");
+    }
+    sectionCount = addBoundedCount(
+      sectionCount,
+      work.sections.length,
+    );
+  }
+  pushResourceLimitDiagnostic(
+    diagnostics,
+    "/workInputs",
+    "sections",
+    sectionCount,
+    CONTENT_COMPILATION_LIMITS.maximumSections,
+  );
+  if (diagnostics.length > 0) {
+    return sortDiagnostics(diagnostics);
+  }
+
+  let blockCount = 0;
+  for (const work of input.works) {
+    for (const section of work.sections) {
+      if (!Array.isArray(section.blocks)) {
+        throw new TypeError("Section blocks must be supplied as an array.");
+      }
+      blockCount = addBoundedCount(
+        blockCount,
+        section.blocks.length,
+      );
+    }
+  }
+  pushResourceLimitDiagnostic(
+    diagnostics,
+    "/workInputs",
+    "blocks",
+    blockCount,
+    CONTENT_COMPILATION_LIMITS.maximumBlocks,
+  );
+  if (diagnostics.length > 0) {
+    return sortDiagnostics(diagnostics);
+  }
+
+  let payloadSourcePathCount = 0;
+  for (const payload of payloads) {
+    if (!Array.isArray(payload.sourcePaths)) {
+      throw new TypeError(
+        "Payload source paths must be supplied as an array.",
+      );
+    }
+    payloadSourcePathCount = addBoundedCount(
+      payloadSourcePathCount,
+      payload.sourcePaths.length,
+    );
+  }
+  pushResourceLimitDiagnostic(
+    diagnostics,
+    "/payloads",
+    "payload source paths",
+    payloadSourcePathCount,
+    CONTENT_COMPILATION_LIMITS.maximumPayloadSourcePaths,
+  );
+  return sortDiagnostics(diagnostics);
+}
+
 function compilePublicationContentInternal(
   input: CompilePublicationContentInput,
 ): ValidationResult<PublicationContentEnvelope> {
-  const diagnostics: Diagnostic[] = [];
+  const resourceDiagnostics =
+    validateCompilationResourceLimits(input);
+  if (resourceDiagnostics.length > 0) {
+    return immutableSnapshot({
+      valid: false,
+      diagnostics: resourceDiagnostics,
+    });
+  }
+  const diagnostics = createDiagnosticCollector();
   if (!EXACT_SEMVER.test(input.engineVersion)) {
     diagnostics.push(
       diagnostic(
@@ -3588,10 +4033,17 @@ function compilePublicationContentInternal(
   );
 
   const referencedAssetPaths = new Set(
-    (input.assets ?? []).map((asset) => asset.sourcePath),
+    (input.assets ?? []).map((asset) =>
+      portableRepositoryPathIdentity(asset.sourcePath),
+    ),
   );
   for (const source of sources.byPath.values()) {
-    if (source.role === "asset" && !referencedAssetPaths.has(source.path)) {
+    if (
+      source.role === "asset" &&
+      !referencedAssetPaths.has(
+        portableRepositoryPathIdentity(source.path),
+      )
+    ) {
       diagnostics.push(
         diagnostic(
           "content.source.unreferenced_asset",
@@ -3790,7 +4242,9 @@ function validateEnvelopeSources(
 ): ReadonlyMap<string, SourceProvenance> {
   const sourceByPath = new Map<string, SourceProvenance>();
   envelope.sources.forEach((source, index) => {
-    const first = sourceByPath.get(source.path);
+    const sourceIdentity =
+      portableRepositoryPathIdentity(source.path);
+    const first = sourceByPath.get(sourceIdentity);
     if (first !== undefined) {
       diagnostics.push(
         diagnostic(
@@ -3802,7 +4256,7 @@ function validateEnvelopeSources(
         ),
       );
     } else {
-      sourceByPath.set(source.path, source);
+      sourceByPath.set(sourceIdentity, source);
     }
     if (
       (source.rawByteLength === 0 &&
@@ -4032,7 +4486,9 @@ function validateEnvelopeSourceSpan(
   diagnostics: Diagnostic[],
   expectedText?: string,
 ): void {
-  const source = sourceByPath.get(span.sourcePath);
+  const source = sourceByPath.get(
+    portableRepositoryPathIdentity(span.sourcePath),
+  );
   if (source === undefined || source.kind !== "text") {
     diagnostics.push(
       diagnostic(
@@ -4168,7 +4624,11 @@ function validateEnvelopeBlock(
       ),
     );
   }
-  const source = sourceByPath.get(block.provenance.sourcePath);
+  const source = sourceByPath.get(
+    portableRepositoryPathIdentity(
+      block.provenance.sourcePath,
+    ),
+  );
   if (
     source === undefined ||
     source.role !== "manuscript"
@@ -4260,7 +4720,9 @@ function validateEnvelopeWork(
   );
   validateRoute(work.route, `${pointer}/route`, diagnostics);
 
-  const manifestSource = sourceByPath.get(work.source.manifestPath);
+  const manifestSource = sourceByPath.get(
+    portableRepositoryPathIdentity(work.source.manifestPath),
+  );
   if (
     manifestSource?.role !== "work-manifest" ||
     manifestSource.entityId !== work.id
@@ -4275,7 +4737,11 @@ function validateEnvelopeWork(
       ),
     );
   }
-  const manuscriptSource = sourceByPath.get(work.source.manuscriptPath);
+  const manuscriptSource = sourceByPath.get(
+    portableRepositoryPathIdentity(
+      work.source.manuscriptPath,
+    ),
+  );
   if (
     manuscriptSource?.role !== "manuscript" ||
     manuscriptSource.entityId !== work.id
@@ -4638,7 +5104,9 @@ function validateEnvelopeCollections(
     }
     validateStableId(collection.id, `${pointer}/id`, diagnostics);
     validateRoute(collection.route, `${pointer}/route`, diagnostics);
-    const source = sourceByPath.get(collection.manifestPath);
+    const source = sourceByPath.get(
+      portableRepositoryPathIdentity(collection.manifestPath),
+    );
     if (
       source?.role !== "collection-manifest" ||
       source.entityId !== collection.id
@@ -4740,7 +5208,9 @@ function validateEnvelopeAssets(
         ),
       );
     }
-    const source = sourceByPath.get(asset.sourcePath);
+    const source = sourceByPath.get(
+      portableRepositoryPathIdentity(asset.sourcePath),
+    );
     if (
       source?.role !== "asset" ||
       source.entityId !== asset.workId
@@ -5156,7 +5626,10 @@ function validateEnvelopeExtensions(
     const firstSourceIndexByPath = new Map<string, number>();
     payload.sourcePaths.forEach((sourcePath, sourceIndex) => {
       const sourcePointer = `${pointer}/sourcePaths/${sourceIndex}`;
-      const firstSourceIndex = firstSourceIndexByPath.get(sourcePath);
+      const sourceIdentity =
+        portableRepositoryPathIdentity(sourcePath);
+      const firstSourceIndex =
+        firstSourceIndexByPath.get(sourceIdentity);
       if (firstSourceIndex !== undefined) {
         diagnostics.push(
           diagnostic(
@@ -5168,9 +5641,13 @@ function validateEnvelopeExtensions(
           ),
         );
       } else {
-        firstSourceIndexByPath.set(sourcePath, sourceIndex);
+        firstSourceIndexByPath.set(
+          sourceIdentity,
+          sourceIndex,
+        );
       }
-      const firstOwner = sourceOwnerByPath.get(sourcePath);
+      const firstOwner =
+        sourceOwnerByPath.get(sourceIdentity);
       if (
         firstOwner !== undefined &&
         firstOwner !== payload.extensionId
@@ -5188,9 +5665,12 @@ function validateEnvelopeExtensions(
           ),
         );
       } else {
-        sourceOwnerByPath.set(sourcePath, payload.extensionId);
+        sourceOwnerByPath.set(
+          sourceIdentity,
+          payload.extensionId,
+        );
       }
-      const source = sourceByPath.get(sourcePath);
+      const source = sourceByPath.get(sourceIdentity);
       if (
         source?.role !== "extension" ||
         source.entityId !== payload.extensionId
@@ -5552,7 +6032,38 @@ function validateEnvelopeSourceAuthority(
 function validateEnvelopeSemantics(
   envelope: PublicationContentEnvelope,
 ): ValidationResult<PublicationContentEnvelope> {
-  const diagnostics: Diagnostic[] = [];
+  let collectionWorkReferenceCount = 0;
+  for (const collection of envelope.collections) {
+    collectionWorkReferenceCount = addBoundedCount(
+      collectionWorkReferenceCount,
+      collection.workIds.length,
+    );
+  }
+  if (
+    collectionWorkReferenceCount >
+    CONTENT_COMPILATION_LIMITS.maximumCollectionWorkReferences
+  ) {
+    return immutableSnapshot({
+      valid: false,
+      diagnostics: [
+        diagnostic(
+          "content.envelope.resource_limit",
+          "/collections",
+          `Envelope collection work references exceed the fixed limit of ${CONTENT_COMPILATION_LIMITS.maximumCollectionWorkReferences.toLocaleString("en-US")}.`,
+          "maxItems",
+          {
+            resource: "collection work references",
+            actualItems: collectionWorkReferenceCount,
+            maximumItems:
+              CONTENT_COMPILATION_LIMITS
+                .maximumCollectionWorkReferences,
+          },
+        ),
+      ],
+    });
+  }
+
+  const diagnostics = createDiagnosticCollector();
   if (!EXACT_SEMVER.test(envelope.engineVersion)) {
     diagnostics.push(
       diagnostic(
@@ -5767,7 +6278,28 @@ export function validatePublicationContentEnvelope(
   try {
     const shapeResult = validateContentEnvelopeShape(value);
     if (!shapeResult.valid) {
-      return shapeResult;
+      return immutableSnapshot({
+        valid: false,
+        diagnostics: shapeResult.diagnostics.map((item) => {
+          if (item.code !== "schema.resource_limit") {
+            return item;
+          }
+          const resource =
+            typeof item.params.resource === "string"
+              ? item.params.resource
+              : "resources";
+          const maximumItems =
+            typeof item.params.maximumItems === "number"
+              ? item.params.maximumItems
+              : 0;
+          return {
+            ...item,
+            code: "content.envelope.resource_limit",
+            message:
+              `The envelope exceeds the fixed ${resource} limit of ${maximumItems.toLocaleString("en-US")}.`,
+          };
+        }),
+      });
     }
     return validateEnvelopeSemantics(shapeResult.value);
   } catch {
@@ -5786,9 +6318,9 @@ export function validatePublicationContentEnvelope(
   }
 }
 
-export function serializePublicationContentEnvelope(
+function requireValidPublicationContentEnvelope(
   envelope: PublicationContentEnvelope,
-): string {
+): PublicationContentEnvelope {
   const validation = validatePublicationContentEnvelope(envelope);
   if (!validation.valid) {
     throw new TypeError(
@@ -5797,19 +6329,36 @@ export function serializePublicationContentEnvelope(
         .join("; ")}`,
     );
   }
+  return validation.value;
+}
+
+function serializeValidatedPublicationContentEnvelope(
+  envelope: PublicationContentEnvelope,
+): string {
   return `${canonicalizeJson(asJson(envelope))}\n`;
+}
+
+export function serializePublicationContentEnvelope(
+  envelope: PublicationContentEnvelope,
+): string {
+  return serializeValidatedPublicationContentEnvelope(
+    requireValidPublicationContentEnvelope(envelope),
+  );
 }
 
 export function createPublicationContentArtifact(
   envelope: PublicationContentEnvelope,
 ): PublicationContentArtifact {
-  const text = serializePublicationContentEnvelope(envelope);
+  const validated =
+    requireValidPublicationContentEnvelope(envelope);
+  const text =
+    serializeValidatedPublicationContentEnvelope(validated);
   return immutableSnapshot({
-    outputRoot: envelope.artifact.outputRoot,
-    relativePath: envelope.artifact.relativePath,
-    mediaType: envelope.artifact.mediaType,
+    outputRoot: validated.artifact.outputRoot,
+    relativePath: validated.artifact.relativePath,
+    mediaType: validated.artifact.mediaType,
     text,
     hash: sha256(text),
-    envelope,
+    envelope: validated,
   });
 }

@@ -17,7 +17,6 @@ The opinionated default layout is:
 
 ```text
 publication.json
-publisher.config.ts
 publication/
   works/
     <work-id>/
@@ -36,9 +35,11 @@ The root `publication.json` defines publication identity and site-wide behavior.
 
 The default is canonical because all generated examples, initialization commands, documentation, and diagnostics use it. It is not mandatory.
 
-An established publication may declare another layout in `publisher.config.ts`. The declaration maps its repository paths to the same semantic roles: publication manifest, work metadata, manuscripts, work assets, collections, shared assets, and continuity records. Unspecified roles inherit the canonical defaults. Declared layouts are a fully supported product surface. They receive the same validation, compiler behavior, release compatibility, migration coverage, and issue support as the default layout.
+An established publication may declare another layout in the root `publication.json`. The `layout` member maps catalog-owned repository roles: work manifests, collection manifests, shared assets, and continuity records. Each resolved work manifest declares its own manuscript and work assets. Unspecified layout roles inherit the canonical defaults. Declared layouts are versioned protocol data and a fully supported product surface. They receive the same validation, compiler behavior, release compatibility, migration coverage, and issue support as the default layout.
 
-Path resolution ends at one boundary. A layout adapter resolves and validates source files, then produces the normalized content protocol. No compiler, renderer, audio package, sync package, or extension may reopen the repository and infer publication paths independently.
+`publisher.config.ts` is separate host integration. It may configure the consuming application, renderer, theme, and runtime adapters, but it does not declare publication source layout. A source snapshot loader starts with `publication.json` and must never read, import, or evaluate `publisher.config.ts`.
+
+Path resolution ends at one boundary. A source snapshot loader resolves and validates files from manifest-owned protocol data, then produces the normalized content protocol. No compiler, renderer, audio package, sync package, extension, or host configuration may reopen the repository and infer publication paths independently.
 
 The normalized content protocol will be versioned and framework-neutral. Every generated envelope will identify at least:
 
@@ -65,6 +66,7 @@ Works are the durable unit of authorship. Collections express grouping and readi
 
 - A publication can begin with the default layout and later declare a custom layout without changing public work identity.
 - Every declared-layout feature requires contract tests against both the default fixture and at least one nonstandard fixture.
+- Host integration stays outside the source snapshot and cannot change source ownership behind the publication manifest.
 - Continuity data stays in the author repository and participates in host validation.
 - Extensions consume normalized publication data rather than private compiler files.
 - A future renderer must honor protocol compatibility instead of importing the Next.js implementation.

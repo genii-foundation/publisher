@@ -58,7 +58,7 @@
     "build": "node ./scripts/build.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
     "prepack": "node ./scripts/build.mjs",
-    "prepublishOnly": "node ./scripts/check-release-tag.mjs"
+    "prepublishOnly": "node ../../provenance/scripts/reject-directory-publish.mjs"
   },
   "repository": {
     "type": "git",

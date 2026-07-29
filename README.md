@@ -9,7 +9,7 @@ Implementation has begun. The schema runtime, framework-neutral content compiler
 - The engine lives in this repository. A publication lives in a separate, thin host repository.
 - The default layout is canonical and deliberately opinionated.
 - A declared-layout mode is a fully supported escape hatch for established repositories.
-- Publications may override themes and add extensions through explicit capability grants without forking the engine.
+- Publications can inject validated themes now. They can declare extension packages and explicit capability grants, while extension invocation remains 1.0 work.
 - Works and collections are first-class protocol concepts.
 - The initial renderer uses Next.js. The content protocol remains framework neutral.
 - Audio and Supabase synchronization belong to the 1.0 scope as optional capabilities.
@@ -19,9 +19,11 @@ Implementation has begun. The schema runtime, framework-neutral content compiler
 
 ## Ownership boundary
 
-GENII Publisher owns the generic schema, compiler, reader, optional adapters, migration framework, and validation contracts.
+GENII Publisher owns the generic schema, compiler, reader, renderer, optional adapters, migration framework, and validation contracts. The schema, compiler, reader, and initial renderer exist now. Optional adapters and the migration framework remain 1.0 work.
 
 Each publication repository owns its manuscripts, editorial evidence, assets, configuration, route continuity, deployment history, credentials, and provider state. A build or preview may read publication sources, but it must not modify them.
+
+Migration and extraction decisions are recorded in the machine-validated [provenance ledger](provenance/README.md). The ledger distinguishes fresh implementation, preserved source licenses, documented relicensing, host-only creative material, third-party material, and blocked provenance.
 
 ## Planned package surface
 
@@ -36,7 +38,7 @@ Each publication repository owns its manuscripts, editorial evidence, assets, co
 | `@genii-foundation/publisher-sync-supabase` | Optional Supabase synchronization adapter |
 | `@genii-foundation/publisher-updates` | Author-repository history and Updates generation |
 
-The package boundaries will be proven against a neutral fixture before code moves from any existing publication.
+The implemented package boundaries are proven against two invented neutral fixtures. A separate canonical host with its own packaged theme or extension remains a release gate before code moves from an existing publication.
 
 ## Attribution and source
 
@@ -48,13 +50,13 @@ Every rendered publication will retain a persistent footer credit:
 
 The credit links to `https://publisher.genii.foundation`. The license and its populated attribution exhibit define the controlling obligation.
 
-Every graphical renderer must also show the publication manifest's `sourceCodeUrl` as a conspicuous source availability link alongside the persistent footer attribution. Recording the URL in a manifest without rendering it does not satisfy the GENII Publisher interface contract.
+Every graphical renderer must also show the publication manifest's `attribution.sourceCodeUrl` as a conspicuous source availability link alongside the persistent footer attribution. Recording the URL in a manifest without rendering it does not satisfy the GENII Publisher interface contract.
 
 GENII Publisher source code is available at [github.com/genii-foundation/publisher](https://github.com/genii-foundation/publisher).
 
 ## First release gates
 
-The first public package release remains blocked until `publisher.genii.foundation` serves the attribution landing page and stable schema URLs, npm trusted publishing is bound to the release workflow, and the exact prerelease tag is verified. A source package passing local tests is not a public release. Metaphysics has tried this trick before.
+The first public package release remains blocked until `publisher.genii.foundation` serves the attribution landing page and stable schema URLs, npm trusted publishing is bound to the release workflow, and the exact prerelease tag is verified. The release workflow must build, attest, retain, and reverify one exact tarball per package, then upload those same paths without rebuilding. Direct package-directory publication is forbidden. A source package passing local tests is not a public release. Metaphysics has tried this trick before.
 
 ## Coherence migration gate
 

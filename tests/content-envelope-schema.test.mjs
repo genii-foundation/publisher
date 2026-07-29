@@ -265,7 +265,9 @@ test("a minimal content envelope satisfies the public schema", () => {
   const result = validateContentEnvelopeShape(envelope);
 
   assert.equal(result.valid, true, JSON.stringify(result.diagnostics, null, 2));
-  assert.equal(result.value, envelope);
+  assert.deepEqual(result.value, envelope);
+  assert.notEqual(result.value, envelope);
+  assert.equal(Object.isFrozen(result.value), true);
   assert.equal(Object.isFrozen(result), true);
   assert.equal(Object.isFrozen(result.diagnostics), true);
 });
@@ -374,12 +376,7 @@ test("content SemVer validation bounds oversized invalid prereleases", () => {
         code === "schema.max_length" && path === "/engineVersion",
     ),
   );
-  assert.ok(
-    result.diagnostics.some(
-      ({ code, path }) =>
-        code === "schema.pattern" && path === "/engineVersion",
-    ),
-  );
+  assert.equal(result.diagnostics.length, 1);
 
   const elapsed = performance.now() - startedAt;
   assert.ok(

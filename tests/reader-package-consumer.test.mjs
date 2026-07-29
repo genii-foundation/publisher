@@ -422,6 +422,14 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
   assert.equal(readerManifest.publishConfig.access, "public");
   assert.equal(readerManifest.publishConfig.provenance, true);
   assert.equal(
+    readerManifest.scripts.prepublishOnly,
+    "node ../../provenance/scripts/reject-directory-publish.mjs",
+  );
+  assert.equal(
+    readerManifest.scripts.prepack,
+    "node ./scripts/build.mjs && node ./scripts/bundle-dependencies.mjs stage",
+  );
+  assert.equal(
     readerManifest.engines.node,
     ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27",
   );

@@ -22,6 +22,8 @@ The package does not currently export a filesystem loader, extension loader, pro
 
 The compiler requires stable section IDs from author source or an exact-version adapter. It never derives durable identity from a mutable title, route, path, or traversal position. The neutral Markdown helper emits one section and content-addressed block projection IDs. It does not infer a publication hierarchy.
 
+Adapter work records, resolved extension data, payloads, assets, and links are output from explicitly installed in-process producers. They are trusted application code, not an isolation boundary. Aggregate count checks limit accidental expansion after a producer returns. They cannot sandbox a hostile producer that can allocate, loop, read, or terminate the process before returning. Hosts that execute untrusted producers need a separate process boundary with operating-system resource limits.
+
 Every text `CompilationSourceInput` must include `contents` and the exact `rawBytes` from which that string was decoded. The compiler performs a fatal UTF-8 decode and rejects a mismatch. It records raw byte identity, normalizes only CRLF and CR line endings to LF, and records normalized identity separately. Block and link ranges address the normalized string. Their offsets count JavaScript UTF-16 code units, their lines and columns are one-based, and their end positions are exclusive.
 
 Each work records exact adapter and metric producer identities. Omitting `metrics` selects the core producer:
@@ -59,15 +61,17 @@ The package also bundles Unicode 15.1 word-classification data. The supported No
 
 `compileMarkdownWork`, `compilePublicationContent`, and `validatePublicationContentEnvelope` return a discriminated `ValidationResult`. Invalid or uninspectable input returns `valid: false` with deterministic diagnostics and no partial value. These entry points do not throw merely because an input has the wrong shape, contains accessors, or fails semantic validation.
 
+Compilation rejects oversized aggregate input before section, block, asset, link, extension, or payload processing. The fixed ceilings are 20,000 sources, 4,999 works, 9,997 collections, 100,000 collection work references, 50,000 sections, 100,000 blocks, 50,000 assets, 100,000 links, 512 extensions, 10,000 payloads, and 100,000 payload source-path references. The source and collection-membership ceilings are shared with the publication protocol and application loader. Envelope validation captures one frozen detached snapshot and applies the same root counts plus route, nested-reference, depth, and node budgets before full traversal. Generated structural validation uses fail-fast mode and may return the small deterministic error set required by a failed branching keyword. JSON-domain and semantic diagnostics retain at most 256 records in deterministic order and include one exact omitted-count record when further details were omitted. Serialization and artifact construction use the validated snapshot rather than reading caller state again.
+
 Compilation checks supplied `rawBytes` against text before the envelope exists. Public envelope validation proves internal consistency and validates the declared byte and normalized-text geometry retained in the artifact. It cannot decode or hash the original bytes again because the envelope does not contain them. Independent source attestation requires separate access to the original bytes.
 
 Serialization has a stricter contract. `serializePublicationContentEnvelope` throws `TypeError` when validation fails, and `createPublicationContentArtifact` inherits that behavior. Neither function writes output. A future materializer must preserve the last complete artifact when compilation, validation, serialization, or projection fails.
 
 ## Release safety
 
-This package pins its internal schema dependency to one exact version. Prereleases must publish with an explicit `--tag next`. Stable versions may rely on npm's default `latest` tag or pass `--tag latest` explicitly.
+This package pins its internal schema dependency to one exact version. Prereleases require the `next` tag and stable versions use `latest`.
 
-The source package checks the release tag during `prepublishOnly`, but lifecycle scripts are only defense in depth. A trusted release workflow must independently verify the package version, requested tag, exact schema dependency, source revision, and publication order. The referenced schema version must already be available before this package is published.
+The trusted release workflow builds and bundles this package in an owned clean workspace with the exact pinned npm CLI, scans and attests that candidate tarball, validates its archived version and requested tag, and publishes only the same retained file. Direct package-directory publication is forbidden because it would rebuild the package after attestation. Lifecycle scripts remain defense in depth. The workflow must independently verify the exact schema dependency, source revision, and publication order, and the referenced schema version must already be available.
 
 ## License
 

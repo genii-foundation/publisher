@@ -31,7 +31,11 @@ import {
   inspectCanonicalUrlFragment,
 } from "@genii-foundation/publisher-schema/routes";
 
-import { diagnostic, sortDiagnostics } from "./diagnostics.js";
+import {
+  createDiagnosticCollector,
+  diagnostic,
+  sortDiagnostics,
+} from "./diagnostics.js";
 import { immutableSnapshot } from "./immutability.js";
 import type {
   PublicationReaderRuntime,
@@ -2390,13 +2394,39 @@ export function createPublicationReaderRuntime(
   value: unknown,
 ): ValidationResult<PublicationReaderRuntime> {
   try {
-    const snapshot = immutableSnapshot(value);
-    const shape = validateReaderEnvelopeShape(snapshot);
+    const shape = validateReaderEnvelopeShape(value);
     if (!shape.valid) {
-      return failRuntime(shape.diagnostics);
+      return failRuntime(
+        shape.diagnostics.map((item) => {
+          if (item.code !== "schema.resource_limit") {
+            return item;
+          }
+          const resource =
+            typeof item.params.resource === "string"
+              ? item.params.resource
+              : "resources";
+          const maximumItems =
+            typeof item.params.maximumItems === "number"
+              ? item.params.maximumItems
+              : 0;
+          return {
+            ...item,
+            code: "reader.runtime.resource_limit",
+            message:
+              `The reader envelope exceeds the fixed ${resource} limit of ${maximumItems.toLocaleString("en-US")}.`,
+            params: {
+              ...item.params,
+              resource:
+                resource === "collection work references"
+                  ? "collectionWorkReferences"
+                  : resource,
+            },
+          };
+        }),
+      );
     }
     const envelope = shape.value;
-    const diagnostics: Diagnostic[] = [];
+    const diagnostics = createDiagnosticCollector();
     const indexes = buildIndexes(envelope, diagnostics);
     if (diagnostics.length > 0) {
       return failRuntime(diagnostics);

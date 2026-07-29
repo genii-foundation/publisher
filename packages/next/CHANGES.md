@@ -25,3 +25,5 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Proved zero production audit findings, exact patched dependency resolution, loaded libvips, and actual WebP optimization in the clean packed host.
 - Proved that Client Components cannot import the server entry and that attributed browser error chunks contain no manuscript text.
 - Proved attributed static 404 and 500 HTML, forced runtime and root-layout 500 responses without secret leakage, and attributed hydration of both App Router error boundaries in Chrome.
+- Made Exhibit B values renderer owned at runtime, added a branded client-safe error identity validator, removed the raw continuity constructor from the public server entry, and kept a linked canonical source fallback for invalid low-level callers.
+- Required release through an exact provenance-attested tarball and rejected direct package-directory publication.

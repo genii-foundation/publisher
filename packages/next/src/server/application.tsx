@@ -56,6 +56,9 @@ import {
   createPublisherNextConfig,
 } from "../config.js";
 import {
+  createPublisherNextErrorIdentity,
+} from "../error-identity.js";
+import {
   createPublisherNextContinuityHandler,
 } from "../continuity.js";
 import type {
@@ -1487,6 +1490,15 @@ export async function createPublicationNextApplication(
       configuredUpdates = updatesResult.value;
     }
     const resolver = pageResolver(reader, routePlan);
+    const errorIdentityResult =
+      createPublisherNextErrorIdentity({
+        homePath: resolver.homePath,
+        publication: reader.publication,
+        theme: themeResult.value.instance,
+      });
+    if (!errorIdentityResult.valid) {
+      return errorIdentityResult;
+    }
     let updatesState: ResolvedUpdatesState | null = null;
     if (configuredUpdates !== null) {
       const updatesRouteIndex = reader.routes.active.findIndex(
@@ -1607,6 +1619,7 @@ export async function createPublicationNextApplication(
       manifest: artifact.manifest,
       artifact,
       theme: themeResult.value.instance,
+      errorIdentity: errorIdentityResult.value,
       slashPolicy: routePlan.slashPolicy,
       staticParams,
       resolveRoute: resolver.resolve,

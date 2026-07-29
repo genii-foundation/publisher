@@ -189,7 +189,7 @@ test("Next release lifecycle enforces prerelease and stable npm tags", async () 
   );
   assert.equal(
     manifest.scripts.prepublishOnly,
-    "node ./scripts/check-release-tag.mjs",
+    "node ../../provenance/scripts/reject-directory-publish.mjs",
   );
   assert.equal(expectedReleaseTag("1.0.0-alpha.1"), "next");
   assert.equal(expectedReleaseTag("1.0.0"), "latest");

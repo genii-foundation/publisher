@@ -21,3 +21,6 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Snapshotted the explicit projection audience and each public runtime argument record once so stateful accessors or proxies cannot compose one request from conflicting states.
 - Proved reader artifacts omit extension capability grants in both neutral fixture publications.
 - Added a renderer-neutral CommonMark link application boundary with an exact bundled parser closure that preserves visible prose, respects UTF-16 source ranges, and rejects unsafe Markdown contexts.
+- Rejected reader envelopes with more than 100,000 aggregate collection work references before building relational indexes.
+- Added schema-owned preflight before detachment and indexing, shared envelope limits, fail-fast structural validation, and deterministic exact-count runtime diagnostic retention.
+- Built release candidates without PATH-dependent nested npm calls, required the exact provenance-attested tarball, and rejected direct package-directory publication.

@@ -34,6 +34,7 @@
     "works": {
       "type": "array",
       "minItems": 1,
+      "maxItems": 4999,
       "items": {
         "$ref": "#/$defs/workReference"
       }
@@ -41,6 +42,7 @@
     "collections": {
       "type": "array",
       "default": [],
+      "maxItems": 9997,
       "items": {
         "$ref": "#/$defs/collectionReference"
       }
@@ -51,6 +53,7 @@
     "extensions": {
       "type": "array",
       "default": [],
+      "maxItems": 512,
       "items": {
         "$ref": "#/$defs/extension"
       }
@@ -90,7 +93,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 1024,
-      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*[<>:\"|*])(?!.*%[0-9A-Fa-f]{2})(?!.*[?#])(?!.*[\\u0000-\\u001F\\u007F])(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:\\/|$))(?!.*(?:^|/)(?:[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³])(?:\\.[^/]*)?(?:/|$))(?!.*[. ](?:/|$))(?!.*//)(?!.*\\/$).+$"
+      "pattern": "^(?!.*[\\uD800-\\uDFFF])(?!.*[\\u061C\\u200E\\u200F\\u2028-\\u202E\\u2066-\\u2069])(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*[<>:\"|*])(?!.*%[0-9A-Fa-f]{2})(?!.*[?#])(?!.*[\\u0000-\\u001F\\u007F])(?!\\.{1,2}(?:/|$))(?!.*\\/\\.{1,2}(?:\\/|$))(?!.*(?:^|/)(?:[Cc][Oo][Nn]|[Pp][Rr][Nn]|[Aa][Uu][Xx]|[Nn][Uu][Ll]|[Cc][Oo][Mm][1-9¹²³]|[Ll][Pp][Tt][1-9¹²³])(?:\\.[^/]*)?(?:/|$))(?!.*[. ](?:/|$))(?!.*//)(?!.*\\/$).+$"
     },
     "nonRootRoutePath": {
       "type": "string",
@@ -527,6 +530,7 @@
         "redirects": {
           "type": "array",
           "default": [],
+          "maxItems": 10000,
           "items": {
             "$ref": "#/$defs/redirect"
           }
@@ -544,6 +548,7 @@
         "sourceRoots": {
           "type": "array",
           "minItems": 1,
+          "maxItems": 64,
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/relativePath"
@@ -552,6 +557,7 @@
         "outputRoots": {
           "type": "array",
           "minItems": 1,
+          "maxItems": 64,
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/relativePath"

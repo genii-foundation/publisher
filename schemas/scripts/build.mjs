@@ -40,6 +40,11 @@ const distRoot = join(packageRoot, "dist");
 const tsconfigPath = join(packageRoot, "tsconfig.json");
 const packageManifestPath = join(packageRoot, "package.json");
 const sourceNoticePath = join(packageRoot, "SOURCE-NOTICE");
+const caseFoldingGeneratorPath = join(
+  packageRoot,
+  "scripts",
+  "generate-case-folding.mjs",
+);
 const generatedValidatorsPath = join(
   distRoot,
   "generated-validators.js",
@@ -148,6 +153,27 @@ function runCompiler(compilerPath) {
   }
 }
 
+function verifyGeneratedCaseFolding() {
+  const result = spawnSync(
+    process.execPath,
+    [caseFoldingGeneratorPath],
+    {
+      cwd: packageRoot,
+      env: process.env,
+      stdio: "inherit",
+    },
+  );
+
+  if (result.error !== undefined) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(
+      `Unicode case-fold table verification exited with status ${result.status ?? "unknown"}.`,
+    );
+  }
+}
+
 function assertExactDevelopmentDependency(
   packageManifest,
   packageName,
@@ -194,7 +220,12 @@ function licenseComment(packageName, licenseText) {
 
 async function createStandaloneValidators(noticeComment) {
   const ajv = new Ajv2020({
-    allErrors: true,
+    // JSON-domain and semantic collectors provide bounded exact aggregates.
+    // Generated structural validation uses AJV's fail-fast mode so hostile
+    // near-limit arrays cannot materialize a document-wide all-errors graph.
+    // Branching keywords may still report the small deterministic set needed
+    // to explain their failed alternatives.
+    allErrors: false,
     coerceTypes: false,
     code: {
       esm: true,
@@ -337,6 +368,7 @@ const noticeBody = sourceNotice.endsWith("\n")
 const noticeComment = `/*\n${noticeBody}*/\n`;
 
 assertSafeDistPath();
+verifyGeneratedCaseFolding();
 await rm(distRoot, { force: true, recursive: true });
 runCompiler(compilerPath);
 await writeFile(

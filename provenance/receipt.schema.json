@@ -1,0 +1,545 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/provenance-receipt-1.2.0.schema.json",
+  "title": "GENII Publisher provenance audit receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "recordId",
+    "performedAt",
+    "destinationBaseRef",
+    "destinationManifest",
+    "stableClaims",
+    "scanner",
+    "sources",
+    "installedInputs",
+    "scans",
+    "scanExclusions",
+    "verificationCommands",
+    "packageArchives"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/provenance-receipt-1.2.0.schema.json"
+    },
+    "schemaVersion": {
+      "const": "1.2.0"
+    },
+    "recordId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "minLength": 8,
+      "maxLength": 120
+    },
+    "performedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "destinationBaseRef": {
+      "$ref": "#/$defs/exactGitRef"
+    },
+    "destinationManifest": {
+      "$ref": "#/$defs/destinationManifest"
+    },
+    "stableClaims": {
+      "$ref": "#/$defs/stableClaims"
+    },
+    "scanner": {
+      "$ref": "#/$defs/scannerIdentity"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/sourceVerification"
+      }
+    },
+    "installedInputs": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/installedInputVerification"
+      }
+    },
+    "scans": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exactBlob",
+        "normalizedLine",
+        "tokenShingle",
+        "ccPhrase",
+        "packageLeak"
+      ],
+      "properties": {
+        "exactBlob": {
+          "$ref": "#/$defs/scanResult"
+        },
+        "normalizedLine": {
+          "$ref": "#/$defs/scanResult"
+        },
+        "tokenShingle": {
+          "$ref": "#/$defs/scanResult"
+        },
+        "ccPhrase": {
+          "$ref": "#/$defs/scanResult"
+        },
+        "packageLeak": {
+          "$ref": "#/$defs/scanResult"
+        }
+      }
+    },
+    "verificationCommands": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/commandResult"
+      }
+    },
+    "scanExclusions": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/scanExclusion"
+      }
+    },
+    "packageArchives": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/packageArchive"
+      }
+    }
+  },
+  "$defs": {
+    "exactGitRef": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "scannerComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "scannerIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "fileCount",
+        "files",
+        "sha256"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "sha256-scanner-runtime-closure-v1"
+        },
+        "fileCount": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/scannerComponent"
+          }
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^(?!/)(?!.*\\\\\\\\)(?!.*//)(?!.*(?:^|/)\\.\\.?(?:/|$))[^\\u0000]+$"
+    },
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "\\S"
+    },
+    "manifestEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "status",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "status": {
+          "enum": [
+            "present",
+            "deleted"
+          ]
+        },
+        "sha256": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sha256"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "present"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "deleted"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "sha256": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "destinationManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "entryCount",
+        "deletedCount",
+        "sha256",
+        "entries"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "sha256-path-state-content-v2"
+        },
+        "entryCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "deletedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/manifestEntry"
+          }
+        }
+      }
+    },
+    "stableClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "sha256"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "sha256-canonical-json-v1"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "evidenceVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "lineStart",
+        "lineEnd"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "lineStart": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lineEnd": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "sourceVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source",
+        "identity",
+        "verified",
+        "evidence"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "artifact",
+            "git"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "identity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/evidenceVerification"
+          }
+        }
+      }
+    },
+    "installedInputVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installedPath",
+        "sourceRepository",
+        "sourceRef",
+        "sourcePath",
+        "sha256"
+      ],
+      "properties": {
+        "installedPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "sourceRepository": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "sourceRef": {
+          "$ref": "#/$defs/exactGitRef"
+        },
+        "sourcePath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "scanMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "destination",
+        "fingerprint"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "destination": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "scanResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "matchCount",
+        "matches"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "clear",
+            "expected-match",
+            "not-applicable"
+          ]
+        },
+        "matchCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matches": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/scanMatch"
+          }
+        }
+      }
+    },
+    "scanExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "document",
+        "sha256",
+        "reason",
+        "scans"
+      ],
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reason": {
+          "const": "declared-binary-file-type"
+        },
+        "scans": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "normalizedLine",
+              "ccPhrase",
+              "packageLeak"
+            ]
+          }
+        }
+      }
+    },
+    "commandResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv",
+        "exitCode",
+        "stdoutSha256",
+        "stderrSha256"
+      ],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "exitCode": {
+          "type": "integer"
+        },
+        "stdoutSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "stderrSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "packageArchive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "sha256",
+        "fileCount",
+        "files"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fileCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/repositoryPath"
+          }
+        }
+      }
+    }
+  }
+}

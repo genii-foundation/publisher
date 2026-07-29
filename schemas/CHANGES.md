@@ -39,7 +39,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Snapshotted the explicit projection audience and each runtime argument record once so stateful accessors or proxies cannot compose one request from conflicting states.
 - Applied unanchored route ownership to the selected reader address as well as every named section address.
 - Proved the packed reader root and browser entry points, both declaration surfaces, and a byte-identical rebuild from the shipped source.
-- Defined closed extension capability grants, exact ordered host resolution, compiled identity retention, and reader omission.
+- Defined closed extension capability grants, validation of caller-supplied exact ordered resolution, compiled identity retention, and reader omission.
 - Hardened compiler grant matching so invalid manifest members cannot disappear before exact resolution comparison.
 - Added the official Next.js server renderer, closed theme tokens, safe Markdown pages, and deterministic application identity.
 - Bound one validated, frozen Updates view to application identity and kept its markup, metadata, links, and shell under engine control.
@@ -49,3 +49,23 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Proved a clean 17-file Next.js renderer integration with server-rendered manuscript text and no build-time host source mutation.
 - Required consuming roots to lock patched PostCSS and sharp versions because dependency-package overrides do not propagate.
 - Proved zero production audit findings, real WebP optimization, illegal Client Component server-import failure, attributed static error pages, secret-safe runtime errors, manuscript-free browser error chunks, and attributed App Router error hydration in Chrome.
+- Made declared-layout mapping manifest-owned protocol data, excluded host integration configuration from source snapshots, and rejected manuscript paths claimed by multiple works.
+- Added a bounded raw JSON parser that rejects duplicate object member names and unpaired UTF-16 surrogates after escape decoding before shape validation.
+- Added shared protocol and compiler resource ceilings, deterministic 256-record diagnostic caps, and one portable repository path identity.
+- Added the official read-only Publisher source loader, loader-issued compilation authority, repeatable bounded reads, packed offline proof, and focused cross-platform filesystem gates.
+- Replaced the temporary ASCII-only repository path rule with native-script filenames, generated Unicode 15.1 full default case folding, NFC identity, explicit display-control exclusions, and preserved upstream MIT licensing.
+- Pinned repository, decoded route, and decoded fragment NFC to bundled Unicode 15.1 normalization data across supported Node.js majors and aligned raw schemas with a 1,024-scalar repository path ceiling.
+- Preserved pinned UnicodeData and NormalizationTest sources, verified derived tables on every build, and ran the official NFC suite against the compiled public normalizer.
+- Added checked-in provenance records, live receipt validation, deletion tombstones, installed-input proofs, fail-closed scans, and package release gates.
+- Added bounded detached shape snapshots, deterministic fail-fast structural validation, shared envelope traversal limits, and exact nested diagnostic accounting.
+- Centralized renderer-owned attribution constants, validated public error identities at runtime, and removed the raw continuity constructor from the supported server surface.
+- Bound release provenance to the exact lifecycle-built tarballs retained for publication, pinned candidate creation to the invoking npm CLI and Node runtime, required every package-affecting record to be accepted, and rejected direct package-directory publication.
+- Replaced the external archive processes in provenance scanning with one bounded, trusted, single-descriptor streamed package archive reader and removed the per-member machine-time denial of service.
+- Bound retained release candidates to their recorded identity inside the same read that parses them, so no candidate is hashed and then reopened.
+- Refused smuggled post-terminator members, nonzero member padding, missing end-of-archive blocks, archive metadata members, nonregular member types, link targets on regular members, and portable member path collisions.
+- Parsed the packed manifest with fatal UTF-8 decoding and refused byte order marks and duplicate object keys.
+- Bound audit receipts to the composite scanner runtime closure identity, recomputed it after every audit subprocess, and recomputed it again during live receipt validation.
+- Resolved package archive ancestor conflicts by folded path key and refused reserved Windows device names in every member path segment.
+- Made every packed manifest rejection name the archive it refused and fail as a stated rejection rather than a null dereference or a caller-argument diagnostic.
+- Bound the package archive size decoder to the parser's exact numeric field semantics and allowlisted member type flags at the raw layer, closing two cursor desynchronization paths.
+- Required a package archive to be exactly one gzip member ending at end of file, verified against the container's own CRC-32 and length trailer, so bytes hidden after the member can no longer be attested without being examined or scanned.
