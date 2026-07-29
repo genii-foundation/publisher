@@ -29,8 +29,11 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  PUBLISHER_APPLY_RECEIPT_FORMAT,
   PUBLISHER_APPLY_RECEIPT_PATH,
   readApplyReceipt,
+  serializePublisherApplyReceipt,
+  writeApplyReceipt,
 } from "../packages/publisher/dist/node/lifecycle/apply-receipt.js";
 import {
   PUBLISHER_HOST_STATE_PATH,
@@ -402,7 +405,8 @@ test("a receipt naming a short commit is refused", (t) => {
   writeFileSync(
     join(hostRoot, PUBLISHER_APPLY_RECEIPT_PATH),
     `${JSON.stringify({
-      format: "genii-publisher-apply-receipt-1",
+      format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+      host: hostRoot,
       operation: "upgrade",
       planHash: `sha256:${"a".repeat(64)}`,
       baselineCommit: "abc1234",
@@ -425,4 +429,93 @@ test("planning a rollback writes nothing", (t) => {
   const before = snapshot(hostRoot);
   planHostRollback({ hostRoot });
   assert.deepEqual(snapshot(hostRoot), before);
+});
+
+// ---------------------------------------- a receipt belongs to one host
+
+test("a receipt written for another host is refused", (t) => {
+  // Demonstrated before the fix, in the arrangement this project actually uses.
+  // Two worktrees of one repository share an object database, so the recorded
+  // baseline commit resolves in either. Both trees hold byte identical contract
+  // files from the commit, so the recorded digests match too. Rollback in the
+  // second tree accepted the first tree's receipt, planned to remove nineteen
+  // files against another branch's baseline, and exited zero.
+  const { hostRoot } = workspace(t);
+  const elsewhere = join(hostRoot, "..", "other-host");
+  mkdirSync(elsewhere, { recursive: true });
+
+  writeApplyReceipt(elsewhere, {
+    format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+    operation: "initialize",
+    planHash: `sha256:${"a".repeat(64)}`,
+    baselineCommit: "b".repeat(40),
+    renderer: "@example/alpha",
+    fromContractVersion: null,
+    toContractVersion: "0.1.0",
+    files: [{ path: "app/page.tsx", sha256: null }],
+  });
+
+  // Carried across, exactly as copying .publisher between checkouts would.
+  mkdirSync(join(hostRoot, ".publisher"), { recursive: true });
+  writeFileSync(
+    join(hostRoot, PUBLISHER_APPLY_RECEIPT_PATH),
+    readFileSync(join(elsewhere, PUBLISHER_APPLY_RECEIPT_PATH), "utf8"),
+    "utf8",
+  );
+
+  assert.throws(
+    () => readApplyReceipt(hostRoot),
+    (error) => {
+      assert.match(error.message, /written for a different host/u);
+      // Both hosts named, because "wrong host" without saying which two is not
+      // something an author can act on.
+      assert.ok(error.message.includes(elsewhere.replace(/\/\.\.\//u, "/")) || error.message.includes("other-host"));
+      assert.ok(error.message.includes(hostRoot));
+      return true;
+    },
+  );
+});
+
+test("a receipt for this host is accepted", (t) => {
+  const { hostRoot } = workspace(t);
+  writeApplyReceipt(hostRoot, {
+    format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+    operation: "upgrade",
+    planHash: `sha256:${"c".repeat(64)}`,
+    baselineCommit: "d".repeat(40),
+    renderer: "@example/alpha",
+    fromContractVersion: "0.1.0",
+    toContractVersion: "0.2.0",
+    files: [{ path: "app/page.tsx", sha256: null }],
+  });
+  const receipt = readApplyReceipt(hostRoot);
+  assert.ok(receipt);
+  assert.equal(receipt.host, hostRoot);
+  assert.equal(receipt.operation, "upgrade");
+});
+
+test("the serializer carries every field the type requires", (t) => {
+  // The trap that bit me writing this. The serializer rebuilds the object from an
+  // explicit field list rather than spreading it, so a field added to the type and
+  // not added here is dropped on write and then reported as missing on read. The
+  // symptom was that a freshly written receipt was rejected by its own reader.
+  const { hostRoot } = workspace(t);
+  const receipt = {
+    format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+    host: hostRoot,
+    operation: "initialize",
+    planHash: `sha256:${"e".repeat(64)}`,
+    baselineCommit: "f".repeat(40),
+    renderer: "@example/alpha",
+    fromContractVersion: null,
+    toContractVersion: "0.1.0",
+    files: [{ path: "app/page.tsx", sha256: null }],
+  };
+  const written = JSON.parse(serializePublisherApplyReceipt(receipt));
+  for (const key of Object.keys(receipt)) {
+    assert.ok(
+      Object.hasOwn(written, key),
+      `serialization dropped ${key}, which the reader will then reject`,
+    );
+  }
 });
