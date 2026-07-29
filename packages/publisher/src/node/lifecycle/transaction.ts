@@ -70,8 +70,16 @@ export interface HostFileMutation {
    * when the plan expects the file not to exist.
    */
   readonly expected: string | null;
-  /** Exact bytes to write. */
-  readonly contents: string;
+  /**
+   * Exact bytes to write, or null to remove the file.
+   *
+   * Removal exists because a host contract can drop a file between versions, and
+   * an upgrade that only writes would leave an orphan the renderer no longer
+   * owns and the recorded state no longer describes. A removal is still governed
+   * by `expected`, so a file an author has edited is a conflict rather than a
+   * deletion.
+   */
+  readonly contents: string | null;
 }
 
 export type HostFileState =
@@ -88,7 +96,8 @@ export interface HostFileClassification {
   /** Present hash, or null when the file does not exist. */
   readonly present: string | null;
   readonly expected: string | null;
-  readonly intended: string;
+  /** Intended hash, or null when the mutation removes the file. */
+  readonly intended: string | null;
 }
 
 export interface HostTransactionOutcome {
@@ -236,7 +245,10 @@ export function classifyHostMutations(
     }
     seen.add(mutation.path);
     const absolute = resolveHostPath(canonicalRoot, mutation.path);
-    const intended = hashHostFileContents(mutation.contents);
+    const intended =
+      mutation.contents === null
+        ? null
+        : hashHostFileContents(mutation.contents);
     const bytes = readIfPresent(absolute);
     const present = bytes === null ? null : hashBytes(bytes);
     let state: HostFileState;
@@ -313,7 +325,8 @@ interface JournalEntry {
   readonly priorHash: string | null;
   /** Backup file name inside the journal directory, or null when nothing existed. */
   readonly backup: string | null;
-  readonly intended: string;
+  /** Null when the entry removes the file. */
+  readonly intended: string | null;
 }
 
 interface Journal {
@@ -433,7 +446,10 @@ export function applyHostMutations(input: {
       path: mutation.path,
       priorHash: bytes === null ? null : hashBytes(bytes),
       backup: backupName,
-      intended: hashHostFileContents(mutation.contents),
+      intended:
+        mutation.contents === null
+          ? null
+          : hashHostFileContents(mutation.contents),
     });
   }
 
@@ -453,6 +469,18 @@ export function applyHostMutations(input: {
     }
     for (const mutation of ordered) {
       const absolute = join(root, ...mutation.path.split("/"));
+      if (mutation.contents === null) {
+        rmSync(absolute, { force: true });
+        writtenPaths.push(absolute);
+        if (readIfPresent(absolute) !== null) {
+          throw new HostTransactionError(
+            `Host file still exists after being removed: ${mutation.path}`,
+          );
+        }
+        // A directory left empty by a removal is not itself removed. This
+        // transaction did not create it, and an author may be keeping it.
+        continue;
+      }
       const staged = `${absolute}${stagingSuffix}`;
       // Staged in the target's own directory so the rename is a same
       // filesystem operation and therefore atomic.
@@ -493,6 +521,9 @@ function restoreFromJournal(
   for (const entry of [...journal.entries].reverse()) {
     const absolute = join(journal.root, ...entry.path.split("/"));
     if (entry.backup === null) {
+      // Nothing was there before, so restoring means the file should not exist.
+      // That is true whether this entry wrote a new file or removed an absent
+      // one.
       rmSync(absolute, { force: true });
       continue;
     }

@@ -76,3 +76,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Added committed author host integration state and host initialization, with read-only planning, a directory-independent plan hash the apply step must be given, reviewable conflicts over locally modified files, and adoption of an established declared layout without moving any source.
 - Required a clean Git work tree with a commit before any lifecycle apply, recorded the commit a rollback returns to, and proved that returning to it restores the pre-apply tree exactly.
 - Added the genii-publisher executable with init plan, init apply, and recover, resolving the renderer host contract from the author's own installation and refusing to apply a plan hash the operator did not review.
+- Extended the transactional host writer to remove files a host contract no longer owns, governed by the same expected preimage so an author-edited file is a conflict rather than a deletion.

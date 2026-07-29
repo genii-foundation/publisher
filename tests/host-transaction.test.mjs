@@ -282,6 +282,190 @@ test("a duplicated mutation path is refused", (t) => {
   );
 });
 
+// ------------------------------------------------------------- removals
+
+test("a removal deletes a file whose content matches what the engine wrote", (t) => {
+  const { hostRoot, journalDirectory } = workspace(t);
+  writeFileSync(join(hostRoot, "dropped.txt"), "engine wrote this\n", "utf8");
+
+  const result = applyHostMutations({
+    root: hostRoot,
+    journalDirectory,
+    mutations: [
+      {
+        path: "dropped.txt",
+        contents: null,
+        expected: hashHostFileContents("engine wrote this\n"),
+      },
+    ],
+  });
+
+  assert.equal(result.outcome, "applied");
+  assert.deepEqual(result.changed, ["dropped.txt"]);
+  assert.equal(existsSync(join(hostRoot, "dropped.txt")), false);
+  assert.equal(existsSync(journalDirectory), false);
+});
+
+test("a removal of an already absent file reports alreadyApplied", (t) => {
+  const { hostRoot, journalDirectory } = workspace(t);
+  const result = applyHostMutations({
+    root: hostRoot,
+    journalDirectory,
+    mutations: [
+      { path: "never-existed.txt", contents: null, expected: null },
+    ],
+  });
+  assert.equal(result.outcome, "alreadyApplied");
+  assert.deepEqual(result.changed, []);
+});
+
+test("a removal of a locally modified file is a conflict, not a deletion", (t) => {
+  // The case that matters most: an author edited a file the contract dropped.
+  // Deleting it would destroy work that a diff would never show them.
+  const { hostRoot, journalDirectory } = workspace(t);
+  writeFileSync(
+    join(hostRoot, "dropped.txt"),
+    "the author changed this\n",
+    "utf8",
+  );
+  const before = treeSnapshot(hostRoot);
+
+  assert.throws(
+    () =>
+      applyHostMutations({
+        root: hostRoot,
+        journalDirectory,
+        mutations: [
+          {
+            path: "dropped.txt",
+            contents: null,
+            expected: hashHostFileContents("engine wrote this\n"),
+          },
+        ],
+      }),
+    (error) => {
+      assert.match(error.message, /must be reviewed rather than overwritten/u);
+      assert.equal(error.conflicts[0].path, "dropped.txt");
+      assert.equal(error.conflicts[0].intended, null);
+      return true;
+    },
+  );
+  assert.deepEqual(
+    treeSnapshot(hostRoot),
+    before,
+    "the author's file must survive a refused removal",
+  );
+});
+
+test("a failure after a removal restores the removed file", (t) => {
+  const { hostRoot, journalDirectory } = workspace(t);
+  writeFileSync(join(hostRoot, "a-dropped.txt"), "original\n", "utf8");
+  const locked = join(hostRoot, "locked");
+  mkdirSync(locked);
+  if (!lockDirectory(t, locked)) {
+    t.skip("This platform does not enforce directory write permissions.");
+    return;
+  }
+  const before = treeSnapshot(hostRoot);
+
+  assert.throws(() =>
+    applyHostMutations({
+      root: hostRoot,
+      journalDirectory,
+      mutations: [
+        // Sorted first, so the removal happens before the failure.
+        {
+          path: "a-dropped.txt",
+          contents: null,
+          expected: hashHostFileContents("original\n"),
+        },
+        { path: "locked/blocked.txt", contents: "never\n", expected: null },
+      ],
+    }),
+  );
+
+  assert.deepEqual(
+    treeSnapshot(hostRoot),
+    before,
+    "a removed file must come back byte for byte",
+  );
+  assert.equal(
+    readFileSync(join(hostRoot, "a-dropped.txt"), "utf8"),
+    "original\n",
+  );
+});
+
+test("a removal and a write in one set are both applied or neither is", (t) => {
+  const { hostRoot, journalDirectory } = workspace(t);
+  writeFileSync(join(hostRoot, "old.txt"), "old\n", "utf8");
+  const result = applyHostMutations({
+    root: hostRoot,
+    journalDirectory,
+    mutations: [
+      { path: "new.txt", contents: "new\n", expected: null },
+      {
+        path: "old.txt",
+        contents: null,
+        expected: hashHostFileContents("old\n"),
+      },
+    ],
+  });
+  assert.equal(result.outcome, "applied");
+  assert.equal(existsSync(join(hostRoot, "old.txt")), false);
+  assert.equal(readFileSync(join(hostRoot, "new.txt"), "utf8"), "new\n");
+});
+
+test("a removal leaves an emptied directory in place", (t) => {
+  // The transaction did not create it and an author may be keeping it, so
+  // removing it would be destroying something this change never made.
+  const { hostRoot, journalDirectory } = workspace(t);
+  mkdirSync(join(hostRoot, "kept"), { recursive: true });
+  writeFileSync(join(hostRoot, "kept", "only.txt"), "only\n", "utf8");
+  applyHostMutations({
+    root: hostRoot,
+    journalDirectory,
+    mutations: [
+      {
+        path: "kept/only.txt",
+        contents: null,
+        expected: hashHostFileContents("only\n"),
+      },
+    ],
+  });
+  assert.equal(existsSync(join(hostRoot, "kept", "only.txt")), false);
+  assert.equal(
+    existsSync(join(hostRoot, "kept")),
+    true,
+    "an emptied directory is not this transaction's to remove",
+  );
+});
+
+test("classification reports a removal without writing", (t) => {
+  const { hostRoot } = workspace(t);
+  writeFileSync(join(hostRoot, "present.txt"), "engine\n", "utf8");
+  const before = treeSnapshot(hostRoot);
+  const classifications = classifyHostMutations(hostRoot, [
+    {
+      path: "present.txt",
+      contents: null,
+      expected: hashHostFileContents("engine\n"),
+    },
+    { path: "absent.txt", contents: null, expected: null },
+  ]);
+  assert.deepEqual(
+    classifications.map(({ path, state, intended }) => [
+      path,
+      state,
+      intended,
+    ]),
+    [
+      ["absent.txt", "applied", null],
+      ["present.txt", "pending", null],
+    ],
+  );
+  assert.deepEqual(treeSnapshot(hostRoot), before);
+});
+
 // ------------------------------------------------------------ path safety
 
 test("unsafe mutation paths are refused", (t) => {

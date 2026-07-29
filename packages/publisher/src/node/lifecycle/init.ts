@@ -240,7 +240,14 @@ export function planHostInitialization(
   for (const mutation of mutations) {
     hash.update(mutation.path);
     hash.update("\0");
-    hash.update(hashManagedFileContents(mutation.contents));
+    // A removal is distinguished by a marker rather than an absent field, so a
+    // plan that removes a file can never hash the same as one that leaves it
+    // alone. The marker is not a valid digest, so it cannot collide with one.
+    hash.update(
+      mutation.contents === null
+        ? "removed"
+        : hashManagedFileContents(mutation.contents),
+    );
     hash.update("\0");
     hash.update(mutation.expected ?? "");
     hash.update("\0");
