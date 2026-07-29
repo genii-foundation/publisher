@@ -25,6 +25,7 @@ If you wish to allow use of your version of this file only under the terms of th
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -304,6 +305,55 @@ test("a renderer aiming the artifact outside the host is refused", (t) => {
     "host",
     "nothing may be written beside the host root",
   );
+});
+
+test("declared source roots protect the tree with no flag passed", (t) => {
+  const hostRoot = host(t, {
+    readerDataPath: "publication/works/rain-gauge/reader.json",
+  });
+  // The publication lives inside the host, which is the ordinary arrangement and
+  // the one where the hole was live. A publication outside the host is already
+  // unreachable, because the path resolver refuses to write outside it.
+  cpSync(publication("canonical-field-notes"), hostRoot, { recursive: true });
+
+  const built = run(hostRoot, ["build", "--renderer", rendererName]);
+  assert.equal(built.status, 1, `writing into a declared source root must fail:\n${built.stdout}`);
+  assert.match(built.stderr, /inside the declared root publication/u);
+  assert.equal(
+    existsSync(join(hostRoot, "publication", "works", "rain-gauge", "reader.json")),
+    false,
+    "nothing may be written into the author's source tree",
+  );
+  // No flag was passed. The manifest is what protected the tree.
+  assert.equal(built.stderr.includes("--protected-root"), false);
+});
+
+test("build reports an unreadable manifest through the loader", (t) => {
+  const hostRoot = host(t);
+  writeFileSync(join(hostRoot, "publication.json"), "{ not json\n", "utf8");
+  const built = run(hostRoot, ["build", "--renderer", rendererName]);
+  assert.equal(built.status, 1);
+  // The loader gets there first and its diagnostic is the better one, naming the
+  // manifest and the protocol rule. The protected-roots refusal is the operative
+  // guard for init and upgrade, which never load the publication.
+  assert.match(built.stderr, /loader\.manifest\.json_invalid/u);
+  assert.match(built.stderr, /publication\.json/u);
+  assert.equal(existsSync(join(hostRoot, "publication-reader.json")), false);
+});
+
+test("init refuses an unreadable manifest rather than dropping protection", (t) => {
+  const hostRoot = host(t);
+  writeFileSync(join(hostRoot, "publication.json"), "{ not json\n", "utf8");
+  // init never loads the publication, so nothing else would notice. Proceeding
+  // would initialize a host with no idea which paths hold the author's sources.
+  const planned = run(hostRoot, ["init", "plan", "--renderer", rendererName]);
+  assert.equal(planned.status, 1);
+  assert.match(planned.stderr, /which paths hold your sources/u);
+  assert.match(
+    planned.stderr,
+    /rather than treating your publication as unprotected/u,
+  );
+  assert.equal(existsSync(join(hostRoot, "publisher.host.json")), false);
 });
 
 test("a publication that does not compile fails with named diagnostics", (t) => {

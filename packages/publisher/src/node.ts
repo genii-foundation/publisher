@@ -24,6 +24,11 @@ export {
   compileLoadedPublicationContent,
 } from "./node/compile.js";
 export {
+  PUBLICATION_MANIFEST_FILENAME,
+  ProtectedRootsError,
+  resolvePublicationProtectedRoots,
+} from "./node/protected-roots.js";
+export {
   ArtifactDestinationError,
   checkReaderArtifact,
   hashArtifactText,

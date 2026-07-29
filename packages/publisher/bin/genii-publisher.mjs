@@ -51,6 +51,9 @@ import {
   buildPublicationReader,
 } from "../dist/node/build.js";
 import {
+  resolvePublicationProtectedRoots,
+} from "../dist/node/protected-roots.js";
+import {
   checkReaderArtifact,
   resolveArtifactDestination,
   writeReaderArtifact,
@@ -76,8 +79,9 @@ Options
   --layout <mode>         canonical or declared. Defaults to canonical.
   --renderer <package>    Renderer owning the host contract.
                           Defaults to ${defaultRenderer}.
-  --protected-root <dir>  A root holding publication sources or durable state.
-                          Repeatable. Nothing inside one is ever written.
+  --protected-root <dir>  An extra root nothing may be written into. Repeatable.
+                          The publication manifest's declared source roots are
+                          always protected without being named here.
   --plan <hash>           Required by every apply. The plan hash you reviewed.
   --acknowledge-manual-steps
                           Confirms you have read the manual steps an upgrade
@@ -303,9 +307,7 @@ async function runInitPlan(options) {
     template,
     layout: assertLayout(options.layout),
     enginePackages: enginePackagesFor(template),
-    ...(options.protectedRoots.length === 0
-      ? {}
-      : { protectedRoots: options.protectedRoots }),
+    protectedRoots: protectedRootsFor(hostRoot, options),
   });
   if (options.json) {
     process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
@@ -331,9 +333,7 @@ async function runInitApply(options) {
     template,
     layout: assertLayout(options.layout),
     enginePackages: enginePackagesFor(template),
-    ...(options.protectedRoots.length === 0
-      ? {}
-      : { protectedRoots: options.protectedRoots }),
+    protectedRoots: protectedRootsFor(hostRoot, options),
   });
   const result = applyHostInitialization({
     hostRoot,
@@ -364,9 +364,7 @@ function upgradePlanFor(hostRoot, options, template, module) {
     template,
     migrationEdges: migrationEdgesFrom(module, options.renderer),
     enginePackages: enginePackagesFor(template),
-    ...(options.protectedRoots.length === 0
-      ? {}
-      : { protectedRoots: options.protectedRoots }),
+    protectedRoots: protectedRootsFor(hostRoot, options),
   });
 }
 
@@ -617,9 +615,7 @@ async function runBuild(options) {
     hostRoot,
     readerDataPath: template.readerDataPath,
     rendererManagedPaths: template.files.map((file) => file.path),
-    ...(options.protectedRoots.length === 0
-      ? {}
-      : { protectedRoots: options.protectedRoots }),
+    protectedRoots: protectedRootsFor(hostRoot, options),
   });
 
   if (options.check) {
@@ -717,6 +713,23 @@ function assertLayout(value) {
     );
   }
   return value;
+}
+
+/**
+ * The roots nothing may be written into, for one command invocation.
+ *
+ * The manifest is the authority. The flag adds to what it declares rather than
+ * replacing it, so forgetting the flag cannot leave a publication unprotected.
+ */
+function protectedRootsFor(hostRoot, options) {
+  const publicationRoot = resolveHostRoot(
+    options.publication ?? hostRoot,
+  );
+  return resolvePublicationProtectedRoots({
+    hostRoot,
+    publicationRoot,
+    additional: options.protectedRoots,
+  });
 }
 
 function assertAudience(value) {
