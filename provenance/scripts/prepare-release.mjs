@@ -179,7 +179,7 @@ export async function prepareRelease(
       prepared: preparation.archives,
     });
     for (const archive of archives.values()) {
-      assertReleaseTag(archive.version, options.tag);
+      assertReleaseTag(archive.version, options.tag, "the --tag argument");
     }
     const result = await runReleaseGate({
       preparedPackageArchives: archives,

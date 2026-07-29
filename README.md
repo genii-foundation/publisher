@@ -9,6 +9,9 @@ Implementation has begun. The schema runtime, framework-neutral content compiler
 [Publishing a publication](docs/guides/publishing-a-publication.md) is the whole
 author path, with real command output. Start there.
 
+[Rehearsing a release](docs/guides/rehearsing-a-release.md) covers the release
+scripts, what they require, and which gate currently stops them.
+
 ## Product contract
 
 - The engine lives in this repository. A publication lives in a separate, thin host repository.
