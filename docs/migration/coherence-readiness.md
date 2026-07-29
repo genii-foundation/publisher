@@ -106,15 +106,26 @@ that somebody measure it.
 
 Three findings.
 
-**8,007 live routes.** `route-ledger.json` records the current public surface, not
-history. The engine has to generate that many active routes and the reader artifact
-has to carry them. Nothing in the audit says it cannot, but no fixture is within
-three orders of magnitude of it, so it is untested at that scale.
+**8,007 ledger entries, of which 4,518 are routes and 3,489 are aliases.** Broken
+down by kind:
 
-**The redirect count fits, comfortably.** The genuinely redirect-shaped ledgers are
-`route-aliases.json`, `aliases.json`, and `historical-section-mappings.json`,
-totalling 232 entries against the engine's `continuity.redirects` cap of 10,000.
-Capacity is not the problem.
+| Kind | Count |
+| --- | --- |
+| `section-alias` | 3,255 |
+| `section` | 2,194 |
+| `reader` | 1,190 |
+| `chapter` | 960 |
+| `route-alias` | 234 |
+| `part` | 146 |
+| `volume` | 28 |
+
+So the addressable surface is 4,518 routes over 3,300 hierarchical units, and the
+redirect surface is 3,489. Both are under the engine's 10,000 redirect cap.
+
+**Redirect capacity is not the problem.** The curated alias ledgers hold 232
+entries and the generated ledger marks 3,489 routes as aliases. Those are different
+populations and I have not established which is authoritative for a migration, but
+both are well under the cap of 10,000.
 
 **Expressiveness is the problem.** `route-aliases.json` maps `sourceHref` to
 `targetHref` and translates directly. `aliases.json` maps `sourceHref` to a
@@ -131,7 +142,33 @@ and kept both alive: current routes look like `/manuscripts/1/`, while aliases
 reference `/manuscripts/humanitys-most-viable-future/...`. The redirect machinery is
 load-bearing in production today, not a precaution.
 
-### 3. Audio is a schema definition and nothing else
+### 3. A manuscript cannot become more than one section
+
+This is the blocker I had not found, and structurally it is larger than Updates.
+
+Coherence addresses 3,300 hierarchical units: 2,194 sections, 960 chapters, and 146
+parts, inside 28 volume routes. The engine's build path produces exactly one section
+per work, holding every block of the manuscript, with no route of its own. Verified
+on the servable fixture: a manuscript with two headings yields one section, four
+blocks, and an empty `activeRouteNames`.
+
+The good news is where the limitation lives. `WorkContentInput.sections` is an
+array and the compiler accepts many sections per work, so the protocol and the
+compiler are fine. `compileMarkdownWork` is a convenience that makes a one-section
+work from one file, and the build path calls it once per work. The limitation is in
+the build path, which is code written in this repository, not in the protocol. It is
+a fix rather than a redesign.
+
+The workaround of modelling every section as its own work does fit numerically:
+3,300 units against a cap of 4,999 works. It should still be refused. It would
+discard the volume grouping, change every URL, and consume two thirds of the work
+budget on a publication with nine volumes.
+
+What has to be decided is how a manuscript becomes addressable sections: split on
+headings, or declared in the work manifest. Splitting on headings is what Coherence
+does today, which is evidence rather than proof.
+
+### 4. Audio is a schema definition and nothing else
 
 `publication.schema.json` defines an `audio` block with an adapter package and
 config. No implementation exists in the renderer or the reader. Grepping both
@@ -143,7 +180,7 @@ islands are host-retainable. What is not is whatever the artifact must carry to
 align audio with words: if per-word timing has to reach the client, it has to be
 in the reader artifact, and the artifact has no place for it.
 
-### 4. Sync is a schema definition and nothing else
+### 5. Sync is a schema definition and nothing else
 
 Same finding. `SyncConfiguration` exists in the schema. A word-boundary search for
 sync across the renderer and reader returns nothing. My first search returned
@@ -156,11 +193,46 @@ says local progress is private by default and remote sync must not be added
 without explicit product approval, so sync arguably belongs in the host
 permanently. If so, the schema field is misleading and should say what it is for.
 
+## Scale, measured
+
+I ran the pipeline at Coherence's size rather than recommending that somebody do
+it. Each work is a directory with a manifest and a short manuscript, built through
+`buildPublicationReader` on Node 22.12.0.
+
+| Works | Build | Artifact | Active routes | Peak RSS |
+| --- | --- | --- | --- | --- |
+| 100 | 347 ms | 0.2 MB | 101 | 108 MB |
+| 1,000 | 3.1 s | 2.5 MB | 1,001 | 217 MB |
+| 3,300 | 9.0 s | 8.1 MB | 3,301 | 387 MB |
+| 4,999 | 14.0 s | 12.3 MB | 5,000 | 478 MB |
+| 5,000 | refused in 11 ms | none | none | `schema.resource_limit` |
+
+Four things this establishes.
+
+**The pipeline handles Coherence's size.** Roughly 2.8 ms per work, linear across
+the range, and about 9 seconds at 3,300 units. Nothing degrades nonlinearly.
+
+**The ceiling is enforced properly.** One work past the declared cap of 4,999 is
+refused in 11 milliseconds with a named diagnostic, rather than timing out or
+exhausting memory. That is the behaviour a limit should have.
+
+**Memory is the constraint worth watching.** Peak resident set reaches 478 MB at
+the cap and 707 MB across a two-case run. A continuous integration runner with a
+small memory allowance would fail here before anything else did.
+
+**A 12 MB artifact never reaches a browser.** The generated host imports the
+artifact with a JSON import assertion, which would be alarming if any of it shipped
+to a client. It does not: the renderer's server entry point imports `server-only`,
+no client code references the reader, and none of the rendering components are
+client components. Verified rather than assumed, because 12 MB to a phone would end
+the project.
+
 ## What is not blocked
 
 The nine volumes are Markdown manuscripts with per-volume metadata, which is
-exactly the shape the loader and compiler already ingest. Nothing in the audit
-suggests the content pipeline is the problem.
+exactly the shape the loader and compiler already ingest. The content pipeline
+handles the volume of work Coherence represents. Its structure is the problem, not
+its size.
 
 ## Recommended order
 
@@ -177,16 +249,15 @@ suggests the content pipeline is the problem.
 
 Items 2 through 4 are decidable now and none requires a release.
 
-Also worth doing before the migration: build a publication at Coherence's scale.
-The largest fixture has two works, and Coherence has 8,007 routes. Every
-performance and limit characteristic of the loader, compiler, projector, and
-artifact is unmeasured in that region.
+Scale is measured and is not a blocker. Memory at the ceiling is the one operational
+number worth carrying into deployment planning.
 
 ## What this audit does not establish
 
-It counts and classifies. It has not run Coherence against the engine, because the
-engine cannot yet serve an Updates route and Coherence has four of them, so the
-first honest end-to-end attempt is blocked behind item 1.
+It counts, classifies, and measures. It has not run Coherence's own manuscripts
+through the engine, because a manuscript cannot yet become more than one section and
+Coherence needs 3,300 of them. That is the first thing to fix, and the first honest
+end-to-end attempt is behind it.
 
 Every count here came from the repository as it stands. None of it came from
 reading the objective and inferring what must be true.
