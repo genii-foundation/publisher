@@ -142,31 +142,54 @@ and kept both alive: current routes look like `/manuscripts/1/`, while aliases
 reference `/manuscripts/humanitys-most-viable-future/...`. The redirect machinery is
 load-bearing in production today, not a precaution.
 
-### 3. A manuscript cannot become more than one section
+### 3. A section cannot have its own URL
 
-This is the blocker I had not found, and structurally it is larger than Updates.
+This is the blocker, and it is a protocol gap rather than the build-path fix I
+first reported. I established the boundary by running five successive probes and
+reading the exact refusal each time.
 
-Coherence addresses 3,300 hierarchical units: 2,194 sections, 960 chapters, and 146
-parts, inside 28 volume routes. The engine's build path produces exactly one section
-per work, holding every block of the manuscript, with no route of its own. Verified
-on the servable fixture: a manuscript with two headings yields one section, four
-blocks, and an empty `activeRouteNames`.
+What works. A work may carry several sections, and it compiles and projects
+cleanly, on three conditions:
 
-The good news is where the limitation lives. `WorkContentInput.sections` is an
-array and the compiler accepts many sections per work, so the protocol and the
-compiler are fine. `compileMarkdownWork` is a convenience that makes a one-section
-work from one file, and the build path calls it once per work. The limitation is in
-the build path, which is code written in this repository, not in the protocol. It is
-a fix rather than a redesign.
+- every block comes from the work's single resolved manuscript, enforced by
+  `content.block.wrong_manuscript`;
+- exactly one section owns the work's reader address, enforced by
+  `content.reader_address.collision`;
+- every other section is `navigable: false` with `readerLocation: {kind: "none"}`,
+  because `content.section.reader_location_required` refuses a navigable section
+  with no public location.
 
-The workaround of modelling every section as its own work does fit numerically:
-3,300 units against a cap of 4,999 works. It should still be refused. It would
-discard the volume grouping, change every URL, and consume two thirds of the work
-budget on a publication with nine volumes.
+Verified: a two-section work over one manuscript produces
+`first-light-root(2 blocks), low-water(2 blocks)` and active routes of `/`,
+`/works/first-light`, `/collections/mornings`.
 
-What has to be decided is how a manuscript becomes addressable sections: split on
-headings, or declared in the work manifest. Splitting on headings is what Coherence
-does today, which is evidence rather than proof.
+What does not work is the thing Coherence needs. Note that the child section has
+no URL of its own in that list. Giving it one is refused twice over:
+
+```
+content.reader_address.base_route_unresolved
+  A reader address must use an active server route as its base path.
+```
+
+The publication route model declares `home`, `work`, `collection`, and `updates`.
+There is no section route template, so there is no active server route that
+`/works/first-light/low-water` could sit under. A section is addressable by
+anchor within its work page, or not at all.
+
+Coherence addresses 2,194 sections, 960 chapters, and 146 parts at their own
+paths, under `/manuscripts/{volumeId}/{...route}`. None of that is expressible.
+
+So the honest correction to issue #17: I said the compiler and protocol were fine
+and the limitation lived in the build path I wrote. The build path does collapse
+sections, and fixing it would still not produce a single section URL. The route
+model has to grow a section route template first, and that is a change to a
+published protocol surface.
+
+One further observation from the probes. A malformed hand-built input returns
+`content.compile_failed` with `reason: uninspectableInput` and nothing else, from
+the compiler's outermost catch. Three of my five probes died there and I had to
+bisect the input to learn why. Anyone building compiler inputs directly, which is
+what a multi-section build path must do, gets no diagnostic at all.
 
 ### 4. Audio is a schema definition and nothing else
 
@@ -236,18 +259,22 @@ its size.
 
 ## Recommended order
 
-1. Decide the Updates adapter shape, accounting for pagination and a derived
-   view. Issue #16, corrected by this document.
-2. Give redirects an identifier target, or give the engine a way to resolve a
+1. Add a section route template to the publication route model, so a section can
+   have a URL. Nothing structural about the migration can be attempted until this
+   exists, and no build-path change substitutes for it. Issue #17, corrected by
+   this document.
+2. Decide the Updates adapter shape, accounting for pagination and a derived
+   view. Issue #16, also corrected by this document.
+3. Give redirects an identifier target, or give the engine a way to resolve a
    section identifier to its current route while compiling redirects. 136 of
    Coherence's aliases point at section identifiers and cannot be expressed today.
    Measured, not assumed.
-3. Decide whether audio timing data belongs in the reader artifact. That decides
+4. Decide whether audio timing data belongs in the reader artifact. That decides
    whether audio is an engine feature or a host one.
-4. Decide whether sync is engine scope at all, and if not, remove or annotate the
+5. Decide whether sync is engine scope at all, and if not, remove or annotate the
    schema field so it stops implying an implementation.
 
-Items 2 through 4 are decidable now and none requires a release.
+Items 3 through 5 are decidable now and none requires a release.
 
 Scale is measured and is not a blocker. Memory at the ceiling is the one operational
 number worth carrying into deployment planning.
@@ -255,8 +282,8 @@ number worth carrying into deployment planning.
 ## What this audit does not establish
 
 It counts, classifies, and measures. It has not run Coherence's own manuscripts
-through the engine, because a manuscript cannot yet become more than one section and
-Coherence needs 3,300 of them. That is the first thing to fix, and the first honest
+through the engine, because a section cannot yet have a URL and Coherence
+needs 3,300 of them. That is the first thing to fix, and the first honest
 end-to-end attempt is behind it.
 
 Every count here came from the repository as it stands. None of it came from
