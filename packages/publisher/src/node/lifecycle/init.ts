@@ -27,6 +27,10 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
+import {
+  hashReceiptContents,
+  writeApplyReceipt,
+} from "./apply-receipt.js";
 import { resolveGitBaseline } from "./git-baseline.js";
 import {
   PUBLISHER_HOST_STATE_PATH,
@@ -326,6 +330,25 @@ export function applyHostInitialization(
     mutations: input.plan.mutations,
     journalDirectory: input.journalDirectory,
   });
+
+  if (baseline !== null && result.outcome === "applied") {
+    writeApplyReceipt(input.hostRoot, {
+      format: "",
+      operation: "initialize",
+      planHash: input.plan.planHash,
+      baselineCommit: baseline.commit,
+      renderer: input.plan.renderer,
+      fromContractVersion: null,
+      toContractVersion: input.plan.hostContractVersion,
+      files: input.plan.mutations.map((mutation) => ({
+        path: mutation.path,
+        sha256:
+          mutation.contents === null
+            ? null
+            : hashReceiptContents(mutation.contents),
+      })),
+    });
+  }
 
   return Object.freeze({
     outcome: result.outcome,

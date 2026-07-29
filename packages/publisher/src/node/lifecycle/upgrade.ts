@@ -31,6 +31,10 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
+import {
+  hashReceiptContents,
+  writeApplyReceipt,
+} from "./apply-receipt.js";
 import { resolveGitBaseline } from "./git-baseline.js";
 import {
   PUBLISHER_HOST_STATE_PATH,
@@ -336,6 +340,27 @@ export function applyHostUpgrade(
     mutations: input.plan.mutations,
     journalDirectory: input.journalDirectory,
   });
+
+  // Written only after the transaction succeeded, and only when a baseline was
+  // resolved. A receipt naming a commit nobody verified would be worse than none.
+  if (baseline !== null && result.outcome === "applied") {
+    writeApplyReceipt(input.hostRoot, {
+      format: "",
+      operation: "upgrade",
+      planHash: input.plan.planHash,
+      baselineCommit: baseline.commit,
+      renderer: input.plan.renderer,
+      fromContractVersion: input.plan.fromContractVersion,
+      toContractVersion: input.plan.toContractVersion,
+      files: input.plan.mutations.map((mutation) => ({
+        path: mutation.path,
+        sha256:
+          mutation.contents === null
+            ? null
+            : hashReceiptContents(mutation.contents),
+      })),
+    });
+  }
 
   return Object.freeze({
     outcome: result.outcome,
