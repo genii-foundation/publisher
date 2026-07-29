@@ -1155,6 +1155,7 @@ function describeStatus(report) {
 function runRecover(options) {
   const hostRoot = resolveHostRoot(options.host);
   const result = recoverHostTransaction({
+    root: hostRoot,
     journalDirectory: join(hostRoot, journalDirectoryName),
   });
   if (options.json) {

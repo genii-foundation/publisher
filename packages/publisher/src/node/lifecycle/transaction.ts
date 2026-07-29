@@ -630,12 +630,87 @@ function restoreFromJournal(
  * Continuing automatically would mean acting on a plan whose baseline was last
  * verified before a crash.
  */
+/**
+ * Recovers an interrupted transaction, refusing a journal that does not describe
+ * this host.
+ *
+ * The root is required and checked, and it used to be neither. Recovery read
+ * `journal.root` out of the file and wrote there, so a journal naming another
+ * directory made recovery modify that directory instead. Demonstrated: a journal
+ * placed in one host overwrote a file in an unrelated one and reported success,
+ * and an entry path of `../sibling.txt` deleted a file outside the host entirely.
+ *
+ * Every path in a journal is now validated the same way a mutation is, because a
+ * journal is a file on disk and the apply path has always treated paths from
+ * outside itself as untrusted. Recovery is the one place that did not, and it is
+ * the command the tool tells authors to run.
+ *
+ * A repository can force-add `.publisher/transaction/transaction.json` past the
+ * usual ignore rules, so this is reachable by cloning a repository and following
+ * the tool's own advice. The more ordinary case is copying `.publisher` between
+ * checkouts, which used to make recovery operate silently on the wrong tree.
+ */
+/**
+ * Refuses a journal whose paths reach outside the host.
+ *
+ * Entry paths go through the same resolver a mutation uses, so traversal, absolute
+ * paths, and symbolic links are refused identically. Backup names must be plain
+ * filenames, because they are joined into the backups directory and a name
+ * containing a separator would read a file from anywhere.
+ */
+function assertJournalPathsAreInside(
+  journal: Journal,
+  root: string,
+  journalPath: string,
+): void {
+  for (const entry of journal.entries) {
+    try {
+      resolveHostFilePath(root, entry.path);
+    } catch (error) {
+      throw new HostTransactionError(
+        `Journal entry ${JSON.stringify(entry.path)} is not a usable host path, so ${journalPath} will not be recovered: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+    if (entry.backup !== null) {
+      if (
+        typeof entry.backup !== "string" ||
+        entry.backup.length === 0 ||
+        entry.backup.includes("/") ||
+        entry.backup.includes("\\") ||
+        entry.backup === "." ||
+        entry.backup === ".."
+      ) {
+        throw new HostTransactionError(
+          `Journal entry for ${JSON.stringify(entry.path)} names a backup outside the backups directory, so ${journalPath} will not be recovered: ${JSON.stringify(entry.backup)}`,
+        );
+      }
+    }
+  }
+  for (const directory of journal.createdDirectories) {
+    const resolved = resolve(directory);
+    const relativeToRoot = relative(root, resolved);
+    if (
+      relativeToRoot === ".." ||
+      relativeToRoot.startsWith(`..${sep}`) ||
+      isAbsolute(relativeToRoot)
+    ) {
+      throw new HostTransactionError(
+        `Journal names a created directory outside the host, so ${journalPath} will not be recovered: ${directory}`,
+      );
+    }
+  }
+}
+
 export function recoverHostTransaction(input: {
+  readonly root: string;
   readonly journalDirectory: string;
 }): {
   readonly recovered: boolean;
   readonly restored: readonly string[];
 } {
+  const root = assertHostRoot(input.root);
   const journalDirectory = resolve(input.journalDirectory);
   const journalPath = join(journalDirectory, "transaction.json");
   if (!existsSync(journalPath)) {
@@ -649,6 +724,15 @@ export function recoverHostTransaction(input: {
       `Host transaction journal has an unrecognized format ${JSON.stringify(journal.format)}: ${journalPath}`,
     );
   }
+  if (typeof journal.root !== "string" || resolve(journal.root) !== root) {
+    throw new HostTransactionError(
+      `This journal describes a different host and will not be recovered here.\n` +
+        `  journal names: ${String(journal.root)}\n` +
+        `  this host is:  ${root}\n` +
+        `Recover it from the host it belongs to, or delete ${journalDirectory} if it arrived here by accident.`,
+    );
+  }
+  assertJournalPathsAreInside(journal, root, journalPath);
   restoreFromJournal(journal, join(journalDirectory, "backups"));
   rmSync(journalDirectory, { recursive: true, force: true });
   return Object.freeze({

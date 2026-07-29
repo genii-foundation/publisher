@@ -155,7 +155,7 @@ test("recovery removes a staged file a killed apply left behind", (t) => {
     "utf8",
   );
 
-  const result = recoverHostTransaction({ journalDirectory });
+  const result = recoverHostTransaction({ root: hostRoot, journalDirectory });
   assert.equal(result.recovered, true);
 
   assert.equal(
@@ -759,7 +759,7 @@ test("a journal left by a crashed run blocks the next apply until it is recovere
     /did not finish\. Recover it before applying another/u,
   );
 
-  const recovery = recoverHostTransaction({ journalDirectory });
+  const recovery = recoverHostTransaction({ root: hostRoot, journalDirectory });
   assert.equal(recovery.recovered, true);
   assert.deepEqual(
     [...recovery.restored].sort(),
@@ -788,8 +788,8 @@ test("a journal left by a crashed run blocks the next apply until it is recovere
 });
 
 test("recovery is a no-op when no journal exists", (t) => {
-  const { journalDirectory } = workspace(t);
-  const result = recoverHostTransaction({ journalDirectory });
+  const { hostRoot, journalDirectory } = workspace(t);
+  const result = recoverHostTransaction({ root: hostRoot, journalDirectory });
   assert.equal(result.recovered, false);
   assert.deepEqual(result.restored, []);
 });
@@ -807,7 +807,7 @@ test("a journal in an unrecognized format is refused rather than guessed at", (t
     })}\n`,
   );
   assert.throws(
-    () => recoverHostTransaction({ journalDirectory }),
+    () => recoverHostTransaction({ root: hostRoot, journalDirectory }),
     /unrecognized format/u,
   );
 });
@@ -844,4 +844,144 @@ test("classification reports state without writing anything", (t) => {
     before,
     "classification must not write",
   );
+});
+
+// ------------------------------------------ recovery trusts nothing
+
+test("recovery refuses a journal that names a different host", (t) => {
+  // Demonstrated before the fix: a journal placed in one host, naming another
+  // directory as its root, made recovery overwrite a file in that other directory
+  // and report recovered: true. Recovery read the root out of the file and never
+  // learned which host it had been asked about.
+  const { hostRoot, journalDirectory } = workspace(t);
+  const elsewhere = join(hostRoot, "..", "elsewhere");
+  mkdirSync(elsewhere, { recursive: true });
+  const victim = join(elsewhere, "notes.txt");
+  writeFileSync(victim, "another checkout wrote this\n", "utf8");
+
+  mkdirSync(join(journalDirectory, "backups"), { recursive: true });
+  writeFileSync(join(journalDirectory, "backups", "b1"), "REPLACED\n", "utf8");
+  writeFileSync(
+    join(journalDirectory, "transaction.json"),
+    `${JSON.stringify({
+      format: HOST_TRANSACTION_JOURNAL_FORMAT,
+      root: elsewhere,
+      entries: [{ path: "notes.txt", backup: "b1" }],
+      createdDirectories: [],
+    })}\n`,
+    "utf8",
+  );
+
+  assert.throws(
+    () => recoverHostTransaction({ root: hostRoot, journalDirectory }),
+    /describes a different host/u,
+  );
+  assert.equal(
+    readFileSync(victim, "utf8"),
+    "another checkout wrote this\n",
+    "recovery must not have written outside the host it was given",
+  );
+});
+
+test("recovery refuses journal paths that reach outside the host", (t) => {
+  // An entry path of ../sibling.txt deleted a file outside the host entirely,
+  // because restore joined the path without the checks every mutation gets.
+  const { root, hostRoot, journalDirectory } = workspace(t);
+  const sibling = join(root, "sibling.txt");
+  writeFileSync(sibling, "sibling\n", "utf8");
+  mkdirSync(join(journalDirectory, "backups"), { recursive: true });
+
+  for (const hostile of [
+    "../sibling.txt",
+    "../../sibling.txt",
+    "/etc/hosts",
+    "a/../../sibling.txt",
+  ]) {
+    writeFileSync(
+      join(journalDirectory, "transaction.json"),
+      `${JSON.stringify({
+        format: HOST_TRANSACTION_JOURNAL_FORMAT,
+        root: hostRoot,
+        entries: [{ path: hostile, backup: null }],
+        createdDirectories: [],
+      })}\n`,
+      "utf8",
+    );
+    assert.throws(
+      () => recoverHostTransaction({ root: hostRoot, journalDirectory }),
+      /not a usable host path/u,
+      `${hostile} must be refused`,
+    );
+  }
+  assert.equal(existsSync(sibling), true, "nothing outside the host may be removed");
+});
+
+test("recovery refuses a backup name that leaves the backups directory", (t) => {
+  // entry.backup is joined into the backups directory, so a name with a separator
+  // reads a file from anywhere and writes it into the host.
+  const { hostRoot, journalDirectory } = workspace(t);
+  mkdirSync(join(journalDirectory, "backups"), { recursive: true });
+  for (const hostile of ["../../../etc/hosts", "nested/b1", "..", ""]) {
+    writeFileSync(
+      join(journalDirectory, "transaction.json"),
+      `${JSON.stringify({
+        format: HOST_TRANSACTION_JOURNAL_FORMAT,
+        root: hostRoot,
+        entries: [{ path: "ok.txt", backup: hostile }],
+        createdDirectories: [],
+      })}\n`,
+      "utf8",
+    );
+    assert.throws(
+      () => recoverHostTransaction({ root: hostRoot, journalDirectory }),
+      /names a backup outside the backups directory/u,
+      `${JSON.stringify(hostile)} must be refused`,
+    );
+  }
+});
+
+test("recovery refuses a created directory outside the host", (t) => {
+  // The directory pass removes empty directories, so one named outside the host is
+  // a way to remove a directory somewhere else.
+  const { root, hostRoot, journalDirectory } = workspace(t);
+  const outside = join(root, "outside");
+  mkdirSync(outside, { recursive: true });
+  mkdirSync(join(journalDirectory, "backups"), { recursive: true });
+  writeFileSync(
+    join(journalDirectory, "transaction.json"),
+    `${JSON.stringify({
+      format: HOST_TRANSACTION_JOURNAL_FORMAT,
+      root: hostRoot,
+      entries: [],
+      createdDirectories: [outside],
+    })}\n`,
+    "utf8",
+  );
+  assert.throws(
+    () => recoverHostTransaction({ root: hostRoot, journalDirectory }),
+    /created directory outside the host/u,
+  );
+  assert.equal(existsSync(outside), true);
+});
+
+test("a legitimate journal still recovers", (t) => {
+  // The refusals above are only worth having if the ordinary case still works.
+  const { hostRoot, journalDirectory } = workspace(t);
+  mkdirSync(join(journalDirectory, "backups"), { recursive: true });
+  const target = join(hostRoot, "ok.txt");
+  writeFileSync(target, "written by the interrupted apply\n", "utf8");
+  writeFileSync(
+    join(journalDirectory, "transaction.json"),
+    `${JSON.stringify({
+      format: HOST_TRANSACTION_JOURNAL_FORMAT,
+      root: hostRoot,
+      entries: [{ path: "ok.txt", backup: null }],
+      createdDirectories: [],
+    })}\n`,
+    "utf8",
+  );
+  const result = recoverHostTransaction({ root: hostRoot, journalDirectory });
+  assert.equal(result.recovered, true);
+  assert.deepEqual([...result.restored], ["ok.txt"]);
+  assert.equal(existsSync(target), false, "nothing was there before, so it goes");
 });
