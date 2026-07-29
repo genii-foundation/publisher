@@ -85,6 +85,40 @@ A collection lists its works as `workIds: ["rain-gauge"]`, while
 `publication.json` lists works as `works: [{ "id": "rain-gauge" }]`. Two shapes,
 two key names, for what looks like the same thing. Sorry.
 
+## What a manuscript becomes
+
+One page. This surprises people, so it is worth stating before you write anything
+long.
+
+A work's manuscript compiles to a single addressable unit at the work's route. Your
+headings do not become separate pages and do not become separate entries in
+navigation. They stay inside the one page as content.
+
+```
+publication/works/first-light/manuscript.md   ->   /works/first-light
+  ## Low water                                     (a heading inside that page)
+```
+
+Each block, headings included, does get an identifier in the artifact, so a
+renderer can link to a heading within its page. That identifier is derived from the
+block's own content, which has one consequence worth knowing before you rely on it:
+
+```
+heading anchor, original     b-c3752db1c2d4d60975c206cc
+after retitling the heading  b-cb4d3f9e7bcb98d70cc2b7b3   changed
+after editing a paragraph     b-c3752db1c2d4d60975c206cc   same
+```
+
+Rename a heading and any link to it breaks. Editing text elsewhere in the page
+leaves it alone, so the identifier is at least stable against unrelated edits.
+
+Sections addressable at their own paths are expressible in the protocol, and a
+publication assembled directly against the compiler can have them. What does not
+exist yet is a way for an author to declare where a manuscript's sections begin, so
+the build path produces one. If you need per section URLs today, the honest answer
+is that this engine cannot give them to you from a manuscript, and the decision
+about how you would declare them is open.
+
 ## Where you are
 
 Start here, always. On a repository that is not yet a host:

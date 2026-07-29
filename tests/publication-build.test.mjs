@@ -448,3 +448,68 @@ test("a section route without activeRouteNames is refused, and says why", async 
     [...codes].join(","),
   );
 });
+
+// -------------------------- what the guide says a manuscript becomes
+
+test("a manuscript with headings compiles to one addressable unit", async () => {
+  // The guide now tells authors this outright, because it surprises people and
+  // nothing said it. Pinned so the guide and the engine cannot drift apart.
+  const built = await buildPublicationReader({
+    publicationRoot: join(fixtureRoot, "canonical-tide-tables"),
+    audience: "public",
+  });
+  assert.ok(built.valid, diagnosticsText(built));
+  const work = built.value.reader.works[0];
+
+  assert.equal(work.sections.length, 1);
+  assert.ok(
+    work.sections[0].blocks.some((block) => block.kind === "heading"),
+    "the fixture manuscript is supposed to contain a heading",
+  );
+  // The heading is content inside the one page, not a route of its own.
+  assert.equal(
+    built.value.reader.routes.active.filter(
+      (route) => route.target.kind === "section",
+    ).length,
+    0,
+  );
+});
+
+test("a block identifier is derived from that block's own content", async () => {
+  // Measured rather than assumed, and it is the substance of the guide's warning:
+  // renaming a heading breaks a link to it, while editing elsewhere does not. It is
+  // also evidence for the open decision about declaring section boundaries, since
+  // heading derived identity is already unstable here.
+  const anchorFor = (markdown) => {
+    const compiled = compileMarkdownWork({
+      workId: "w",
+      sectionId: "s",
+      title: "T",
+      sourcePath: "publication/works/w/manuscript.md",
+      markdown,
+    });
+    assert.ok(compiled.valid, JSON.stringify(compiled.diagnostics));
+    const heading = compiled.value.work.sections[0].blocks.find(
+      (block) => block.kind === "heading",
+    );
+    assert.ok(heading, "expected a heading block");
+    return heading.anchor;
+  };
+
+  const original = anchorFor("Intro.\n\n## Low water\n\nBody.\n");
+  const retitled = anchorFor("Intro.\n\n## Low water at dawn\n\nBody.\n");
+  const neighbourEdited = anchorFor("Intro, revised.\n\n## Low water\n\nBody.\n");
+
+  assert.notEqual(
+    retitled,
+    original,
+    "renaming a heading must change its identifier, which is why a link to it breaks",
+  );
+  assert.equal(
+    neighbourEdited,
+    original,
+    "editing a neighbouring block must not move a heading's identifier",
+  );
+  // Derived, not a readable slug. An author expecting #low-water will not find it.
+  assert.match(original, /^b-[0-9a-f]{64}$/u);
+});
