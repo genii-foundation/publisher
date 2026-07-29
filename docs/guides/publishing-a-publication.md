@@ -419,4 +419,12 @@ and only one of them is safe to guess at.
 | `rollback apply` | yes | no | a file changed since the apply |
 | `recover` | restores a baseline | no | never |
 
-Add `--json` to any of them for machine readable output.
+Add `--json` to any of them for machine readable output. Stdout is always a JSON
+document, on success and on failure, and the exit code says which. There are two
+shapes: a command reporting its own result emits that result, and a command that
+refuses outright emits `{"valid": false, "error": {...}}`. The human readable
+message goes to stderr either way, so piping stdout into a parser does not hide
+what happened from you.
+
+You never need `--renderer` after initializing. Every command reads the renderer
+your host recorded, and naming a different one is refused rather than obeyed.

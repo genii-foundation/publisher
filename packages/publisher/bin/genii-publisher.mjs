@@ -492,7 +492,15 @@ function describePlan(plan, hostRoot) {
 
 async function runInitPlan(options) {
   const hostRoot = resolveHostRoot(options.host);
-  const { create } = await loadHostTemplate(hostRoot, options.renderer);
+  // An uninitialized host has no record, so the flag or its default decides. An
+  // initialized one does, and reading it keeps init consistent with every other
+  // command: after initializing with a third-party renderer, build, status,
+  // upgrade, and rollback all worked with no flag while init plan went looking for
+  // the default and reported it missing.
+  const { create } = await loadHostTemplate(
+    hostRoot,
+    rendererFor(hostRoot, options, { requireInitialized: false }),
+  );
   const template = create(hostTemplateInput(hostRoot));
   const plan = planHostInitialization({
     hostRoot,
@@ -518,7 +526,10 @@ async function runInitApply(options) {
     );
   }
   const hostRoot = resolveHostRoot(options.host);
-  const { create } = await loadHostTemplate(hostRoot, options.renderer);
+  const { create } = await loadHostTemplate(
+    hostRoot,
+    rendererFor(hostRoot, options, { requireInitialized: false }),
+  );
   const template = create(hostTemplateInput(hostRoot));
   const plan = planHostInitialization({
     hostRoot,
@@ -1324,10 +1335,32 @@ try {
     error instanceof Error && typeof error.name === "string"
       ? error.name
       : "Error";
+  const message =
+    error instanceof Error ? error.message : String(error);
+
+  // The human message always goes to stderr, so it survives a caller piping
+  // stdout into a parser.
   process.stderr.write(
-    `${named === "CommandError" ? "" : `${named}: `}${
-      error instanceof Error ? error.message : String(error)
-    }\n`,
+    `${named === "CommandError" ? "" : `${named}: `}${message}\n`,
   );
+
+  // And --json means stdout carries a JSON document, on every path. It used to
+  // mean that only for refusals a command reported itself; anything reaching this
+  // handler wrote text to stderr and left stdout empty, so a script asking for
+  // machine readable output got nothing and could learn only that something had
+  // failed. Read from argv because this handler sits outside argument parsing, and
+  // an error thrown by parsing itself still has to be reported this way.
+  if (process.argv.includes("--json")) {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          valid: false,
+          error: { name: named, message },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  }
   process.exitCode = 1;
 }
