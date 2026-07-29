@@ -19,3 +19,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Rejected noncanonical publication-root spellings before filesystem inspection so trailing separators and dot segments cannot hide a final directory symlink from `lstat`.
 - Required release through an exact provenance-attested tarball and rejected direct package-directory publication.
 - Added the transactional host writer that lifecycle commands mutate author repositories through, with preimage verification, reviewable conflicts, same-directory atomic replacement, a crash journal, and automatic restore.
+- Added the centralized lifecycle mutation policy, which is default-deny, checks hard-denied categories before any allowlist so declaring a path cannot grant authority over it, and protects publication sources and durable state through the publication's own declared roots.
