@@ -49,6 +49,33 @@ export const PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY = "[...segments]";
 export const PUBLISHER_NEXT_READER_DATA_PATH =
   "publication-reader.json";
 
+export interface PublisherNextHostMigration {
+  /** Contract version this edge starts from. */
+  readonly from: string;
+  /** Contract version this edge arrives at. */
+  readonly to: string;
+  /** One line an author can read to know what changed. */
+  readonly summary: string;
+  /** Steps the tooling refuses to perform, such as a provider setting. */
+  readonly manualSteps?: readonly string[];
+}
+
+/**
+ * Every host contract move this renderer knows how to make.
+ *
+ * Empty because 0.1.0 is the first contract, so no host can be on an earlier
+ * one. An upgrade that does not move contract versions needs no edge, and any
+ * other pair is refused for want of a route, which is the right answer until a
+ * real contract change adds one.
+ *
+ * A renderer with nothing to migrate still exports this, empty, rather than
+ * omitting it. Absent and empty would then be indistinguishable, and a renderer
+ * that misnamed the export would silently upgrade with no route, skipping the
+ * manual steps an edge exists to announce.
+ */
+export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration[] =
+  Object.freeze([]);
+
 export interface PublisherNextHostTemplateInput {
   /** Package name for the generated host manifest. */
   readonly hostPackageName: string;
