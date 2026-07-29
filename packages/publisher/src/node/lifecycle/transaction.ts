@@ -580,6 +580,15 @@ function restoreFromJournal(
   // inside it have been dealt with.
   for (const entry of [...journal.entries].reverse()) {
     const absolute = join(journal.root, ...entry.path.split("/"));
+    // A process killed between staging a file and renaming it leaves the staged
+    // sibling behind. Recovery used to leave it too, exit zero, and report
+    // success, which left the tree dirty over a file the engine had written. The
+    // next apply then refused on the clean tree gate, blaming the author for
+    // something recovery had promised to clean up. It was also why the created
+    // directory pass below did nothing: the directory was not empty.
+    //
+    // The suffix is engine owned, so removing it cannot touch an author's file.
+    rmSync(`${absolute}${stagingSuffix}`, { force: true });
     if (entry.backup === null) {
       // Nothing was there before, so restoring means the file should not exist.
       // That is true whether this entry wrote a new file or removed an absent

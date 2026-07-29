@@ -117,6 +117,66 @@ function lockDirectory(t, path) {
 
 // ------------------------------------------------------------ happy paths
 
+test("recovery removes a staged file a killed apply left behind", (t) => {
+  // Found by killing real applies with SIGKILL at varying delays. A process killed
+  // between staging a file and renaming it leaves <path>.publisher-staged. Recovery
+  // restored the baseline, removed the journal, exited zero, and left the orphan,
+  // so the tree stayed dirty over a file the engine itself had written and the next
+  // apply refused on the clean tree gate. It also explained why the created
+  // directory pass did nothing: the directory was not empty.
+  //
+  // Reconstructed exactly rather than timed, because a kill-based test cannot be
+  // relied on to land in the window.
+  const { hostRoot, journalDirectory } = workspace(t);
+  const generated = join(hostRoot, "generated");
+  mkdirSync(generated, { recursive: true });
+  mkdirSync(join(journalDirectory, "backups"), { recursive: true });
+
+  // One file renamed into place, and the next one staged but not yet renamed.
+  writeFileSync(join(generated, "unit-0000.tsx"), "export default null;\n", "utf8");
+  const orphan = join(generated, "unit-0001.tsx.publisher-staged");
+  writeFileSync(orphan, "export default null;\n", "utf8");
+
+  writeFileSync(
+    join(journalDirectory, "transaction.json"),
+    `${JSON.stringify(
+      {
+        format: HOST_TRANSACTION_JOURNAL_FORMAT,
+        root: hostRoot,
+        entries: [
+          { path: "generated/unit-0000.tsx", backup: null },
+          { path: "generated/unit-0001.tsx", backup: null },
+        ],
+        createdDirectories: [generated],
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
+
+  const result = recoverHostTransaction({ journalDirectory });
+  assert.equal(result.recovered, true);
+
+  assert.equal(
+    existsSync(orphan),
+    false,
+    "the staged file a killed apply left behind must be removed",
+  );
+  assert.equal(
+    existsSync(join(generated, "unit-0000.tsx")),
+    false,
+    "the renamed file must be removed, since nothing was there before",
+  );
+  // And with the orphan gone, the directory the transaction created goes too.
+  assert.equal(
+    existsSync(generated),
+    false,
+    "an empty directory this transaction created must not survive recovery",
+  );
+  assert.equal(existsSync(journalDirectory), false);
+});
+
 test("a clean mutation set is applied and creates missing directories", (t) => {
   const { hostRoot, journalDirectory } = workspace(t);
   const result = applyHostMutations({
