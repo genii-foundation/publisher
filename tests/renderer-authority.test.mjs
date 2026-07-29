@@ -126,6 +126,10 @@ test("an unusable state file is refused rather than read as uninitialized", (t) 
 test("status on a healthy host reports nothing to do and exits zero", (t) => {
   const { hostRoot } = authorHost(t);
   assert.equal(run(hostRoot, ["build"]).status, 0);
+  // Healthy means the artifact has been dealt with. An uncommitted one is a
+  // pending decision, which status reports as an action of its own.
+  git(hostRoot, ["add", "-A"]);
+  git(hostRoot, ["commit", "--quiet", "-m", "the artifact"]);
 
   const status = run(hostRoot, ["status"]);
   assert.equal(status.status, 0, status.stdout);
@@ -213,6 +217,8 @@ test("status writes nothing", (t) => {
 test("status emits machine readable output on request", (t) => {
   const { hostRoot } = authorHost(t);
   assert.equal(run(hostRoot, ["build"]).status, 0);
+  git(hostRoot, ["add", "-A"]);
+  git(hostRoot, ["commit", "--quiet", "-m", "the artifact"]);
 
   const status = run(hostRoot, ["status", "--json"]);
   assert.equal(status.status, 0, status.stdout);
@@ -223,4 +229,81 @@ test("status emits machine readable output on request", (t) => {
   assert.deepEqual(report.conflictedFiles, []);
   assert.deepEqual(report.actions, []);
   assert.equal(report.artifact.outcome, "current");
+  assert.equal(report.artifactTracking, "tracked");
+});
+
+// ------------------------------------------------- artifact tracking
+
+test("status names an artifact that is neither committed nor ignored", (t) => {
+  const { hostRoot } = authorHost(t);
+  assert.equal(run(hostRoot, ["build"]).status, 0);
+
+  // The state every fresh host lands in. Both upgrade and rollback need a clean
+  // tree, and this artifact makes the tree dirty forever, so they would refuse
+  // with a complaint about a file the engine itself wrote.
+  const status = run(hostRoot, ["status"]);
+  assert.equal(status.status, 1);
+  assert.match(status.stdout, /neither committed nor ignored/u);
+  assert.match(
+    status.stdout,
+    /decide whether alpha-reader\.json is committed or ignored/u,
+  );
+  assert.match(status.stdout, /upgrade and rollback need a clean tree/u);
+
+  // And the refusal it predicts is real, not hypothetical.
+  const planned = run(hostRoot, ["upgrade", "plan"]);
+  assert.equal(planned.status, 0, "planning still works, it writes nothing");
+  installRenderer(hostRoot, "@example/alpha", {
+    contractVersion: "0.2.0",
+    version: "2.0.0",
+    migrations: [{ from: "0.1.0", to: "0.2.0", summary: "moves on" }],
+  });
+  const replanned = run(hostRoot, ["upgrade", "plan"]);
+  const hash = /Plan\s+(sha256:[a-f0-9]{64})/u.exec(replanned.stdout)?.[1];
+  assert.ok(hash);
+  const applied = run(hostRoot, ["upgrade", "apply", "--plan", hash]);
+  assert.equal(applied.status, 1);
+  assert.match(applied.stderr, /requires a clean Git tree/u);
+  assert.match(applied.stderr, /alpha-reader\.json/u);
+});
+
+test("committing the artifact clears the tracking action", (t) => {
+  const { hostRoot } = authorHost(t);
+  assert.equal(run(hostRoot, ["build"]).status, 0);
+  git(hostRoot, ["add", "-A"]);
+  git(hostRoot, ["commit", "--quiet", "-m", "the artifact"]);
+
+  const status = run(hostRoot, ["status"]);
+  assert.equal(status.status, 0, status.stdout);
+  assert.equal(status.stdout.includes("neither committed nor ignored"), false);
+  assert.match(status.stdout, /^Nothing to do\.$/mu);
+});
+
+test("ignoring the artifact also clears the tracking action", (t) => {
+  const { hostRoot } = authorHost(t);
+  writeFileSync(
+    join(hostRoot, ".gitignore"),
+    "node_modules/\n.publisher/\nalpha-reader.json\n",
+    "utf8",
+  );
+  git(hostRoot, ["add", "-A"]);
+  git(hostRoot, ["commit", "--quiet", "-m", "ignore the artifact"]);
+  assert.equal(run(hostRoot, ["build"]).status, 0);
+
+  const status = run(hostRoot, ["status"]);
+  assert.equal(status.status, 0, status.stdout);
+  assert.match(status.stdout, /\(ignored by Git\)/u);
+  assert.match(status.stdout, /^Nothing to do\.$/mu);
+
+  // Ignored means the tree stays clean, so an upgrade is not blocked.
+  installRenderer(hostRoot, "@example/alpha", {
+    contractVersion: "0.2.0",
+    version: "2.0.0",
+    migrations: [{ from: "0.1.0", to: "0.2.0", summary: "moves on" }],
+  });
+  const planned = run(hostRoot, ["upgrade", "plan"]);
+  const hash = /Plan\s+(sha256:[a-f0-9]{64})/u.exec(planned.stdout)?.[1];
+  assert.ok(hash);
+  const applied = run(hostRoot, ["upgrade", "apply", "--plan", hash]);
+  assert.equal(applied.status, 0, applied.stderr);
 });

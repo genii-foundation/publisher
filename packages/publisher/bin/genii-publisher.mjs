@@ -24,6 +24,7 @@ If you wish to allow use of your version of this file only under the terms of th
 // depend on a renderer. That also means a third-party renderer shipping the same
 // export works with no change here.
 
+import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
@@ -789,6 +790,7 @@ async function runStatus(options) {
     installedRendererVersion: null,
     installedContractVersion: null,
     upgradeAvailable: false,
+    artifactTracking: null,
     conflictedFiles: [],
     artifact: null,
     pendingRollback: null,
@@ -879,6 +881,24 @@ async function runStatus(options) {
     }
   }
 
+  // The artifact's tracking state, which decides whether upgrade and rollback
+  // will work at all. Both require a clean tree, and an artifact that is neither
+  // committed nor ignored makes the tree permanently dirty after every build. That
+  // is the state a fresh host lands in by default, so it needs saying out loud
+  // rather than being discovered as a refusal weeks later.
+  if (report.artifact !== null && report.artifact.hostRelativePath !== undefined) {
+    const tracking = artifactTracking(
+      hostRoot,
+      report.artifact.hostRelativePath,
+    );
+    report.artifactTracking = tracking;
+    if (tracking === "untrackedAndNotIgnored") {
+      report.actions.push(
+        `decide whether ${report.artifact.hostRelativePath} is committed or ignored, because upgrade and rollback need a clean tree`,
+      );
+    }
+  }
+
   const receipt = planHostRollback({ hostRoot });
   if (receipt.receipt !== null) {
     report.pendingRollback = {
@@ -894,6 +914,35 @@ async function runStatus(options) {
     process.stdout.write(`${describeStatus(report)}\n`);
   }
   return report.actions.length === 0 ? 0 : 1;
+}
+
+/**
+ * Whether Git tracks, ignores, or merely tolerates the artifact.
+ *
+ * Committed and ignored are both coherent choices. Neither is not: the file then
+ * shows up as untracked forever, and every command that needs a clean tree
+ * refuses.
+ */
+function artifactTracking(hostRoot, hostRelativePath) {
+  const git = (args) =>
+    spawnSync("git", args, {
+      cwd: hostRoot,
+      encoding: "utf8",
+      env: { ...process.env, GIT_PAGER: "cat", GIT_TERMINAL_PROMPT: "0" },
+    });
+  const inside = git(["rev-parse", "--is-inside-work-tree"]);
+  if (inside.status !== 0 || (inside.stdout ?? "").trim() !== "true") {
+    return "noRepository";
+  }
+  const tracked = git(["ls-files", "--error-unmatch", "--", hostRelativePath]);
+  if (tracked.status === 0) {
+    return "tracked";
+  }
+  const ignored = git(["check-ignore", "--quiet", "--", hostRelativePath]);
+  if (ignored.status === 0) {
+    return "ignored";
+  }
+  return "untrackedAndNotIgnored";
 }
 
 function describeStatus(report) {
@@ -921,11 +970,19 @@ function describeStatus(report) {
     }${report.upgradeAvailable ? "  (upgrade available)" : ""}`,
   );
   if (report.artifact !== null) {
+    const tracking =
+      report.artifactTracking === null ||
+      report.artifactTracking === "tracked" ||
+      report.artifactTracking === "noRepository"
+        ? ""
+        : report.artifactTracking === "ignored"
+          ? "  (ignored by Git)"
+          : "  (neither committed nor ignored)";
     lines.push(
       `Artifact     ${
         report.artifact.outcome === "publicationInvalid"
           ? "the publication does not compile"
-          : `${report.artifact.hostRelativePath} is ${report.artifact.outcome}`
+          : `${report.artifact.hostRelativePath} is ${report.artifact.outcome}${tracking}`
       }`,
     );
   }
