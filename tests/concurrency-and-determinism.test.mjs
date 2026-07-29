@@ -254,12 +254,30 @@ test("two applies at once never leave the host half done", async (t) => {
   );
 
   // Whichever lost, if one did, was told what happened rather than shown a stack.
+  //
+  // Two refusals are legitimate and which one appears depends on how far the winner
+  // got. If the loser reaches the journal it is told a transaction is in progress.
+  // If the winner finished first, the loser's clean tree gate sees the files the
+  // winner just wrote, still uncommitted, and refuses on those. That second case is
+  // correct: the tree really is dirty and a rollback really could not recover.
+  //
+  // My first version of this assertion allowed only the journal refusal. It passed
+  // eight consecutive local runs and failed on a loaded continuous integration
+  // runner, which is the whole reason this is labelled a smoke test.
   const loser = both.find((r) => r.status !== 0);
   if (loser !== undefined) {
     assert.match(
       loser.stderr,
-      /Another host transaction is already in progress|did not finish/u,
+      /Another host transaction is already in progress|did not finish|requires a clean Git tree/u,
       `the refused apply must explain itself:\n${loser.stderr}`,
+    );
+    // Whichever refusal it is, it must not be a bare filesystem error and must not
+    // blame the author for an engine file. Those were the two real defects here.
+    assert.equal(/ENOENT/u.test(loser.stderr), false, loser.stderr);
+    assert.equal(
+      /publisher-staged/u.test(loser.stderr),
+      false,
+      `the refusal named an engine staged file:\n${loser.stderr}`,
     );
   }
 
