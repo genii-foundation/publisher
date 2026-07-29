@@ -166,10 +166,44 @@ export function resolveArtifactDestination(
   });
 }
 
+/**
+ * Removes a staged artifact left by an interrupted write.
+ *
+ * A missing file is the normal case and not an error. Anything else is reported,
+ * because a staged file that cannot be removed will block every later apply and
+ * the author needs to know which file and why.
+ */
+function removeStagedArtifact(staged: string): void {
+  try {
+    rmSync(staged, { force: true });
+  } catch (error) {
+    throw new ArtifactDestinationError(
+      `A staged artifact from an interrupted build could not be removed: ${staged}\n${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
 export function hashArtifactText(text: string): string {
   return `sha256:${createHash("sha256")
     .update(text, "utf8")
     .digest("hex")}`;
+}
+
+/**
+ * The staged path a write for this destination would use.
+ *
+ * Exported so a reporting command can notice a leftover from an interrupted build
+ * without duplicating how the name is derived.
+ */
+export function stagedArtifactPathFor(
+  destination: ArtifactDestination,
+): string {
+  return join(
+    dirname(destination.absolutePath),
+    `.${hashArtifactText(destination.hostRelativePath).slice(7, 23)}.artifact.tmp`,
+  );
 }
 
 export type ArtifactWriteOutcome = "written" | "current";
@@ -196,6 +230,26 @@ export function writeReaderArtifact(input: {
   const sha256 = hashArtifactText(input.text);
   const bytes = Buffer.byteLength(input.text, "utf8");
 
+  const directory = dirname(absolutePath);
+  // Staged in the destination directory, not a temporary directory, because a
+  // rename across filesystems is a copy and stops being atomic.
+  const staged = join(
+    directory,
+    `.${hashArtifactText(hostRelativePath).slice(7, 23)}.artifact.tmp`,
+  );
+
+  // Removed before anything else, including before the already-current shortcut
+  // below. A build killed between staging and renaming leaves this file, the
+  // catch that would have removed it never runs, and nothing else knows the name.
+  // It is untracked and not ignored, so the tree stays dirty and every later
+  // apply and upgrade refuses over a file the author never created and cannot
+  // interpret.
+  //
+  // Doing it before the shortcut matters: an author whose build was killed runs
+  // build again, and the second run usually finds the artifact already current and
+  // used to return without ever reaching this path.
+  removeStagedArtifact(staged);
+
   let existing: string | null;
   try {
     existing = readFileSync(absolutePath, "utf8");
@@ -211,15 +265,7 @@ export function writeReaderArtifact(input: {
     });
   }
 
-  const directory = dirname(absolutePath);
   mkdirSync(directory, { recursive: true });
-
-  // Staged in the destination directory, not a temporary directory, because a
-  // rename across filesystems is a copy and stops being atomic.
-  const staged = join(
-    directory,
-    `.${hashArtifactText(hostRelativePath).slice(7, 23)}.artifact.tmp`,
-  );
   try {
     const descriptor = openSync(staged, "w", 0o644);
     try {

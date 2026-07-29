@@ -42,6 +42,7 @@ export {
   checkReaderArtifact,
   hashArtifactText,
   resolveArtifactDestination,
+  stagedArtifactPathFor,
   writeReaderArtifact,
 } from "./node/materialize.js";
 export type {

@@ -46,6 +46,7 @@ import {
   checkReaderArtifact,
   hashArtifactText,
   resolveArtifactDestination,
+  stagedArtifactPathFor,
   writeReaderArtifact,
 } from "../packages/publisher/dist/node.js";
 import {
@@ -379,4 +380,81 @@ test("a directory where the artifact belongs reads as missing", (t) => {
   });
   assert.equal(checked.outcome, "missing");
   assert.equal(checked.actual, null);
+});
+
+// ------------------------------------------- interrupted build cleanup
+
+test("a staged artifact left by an interrupted build is cleared", (t) => {
+  // A build killed between staging and renaming leaves this file. The catch that
+  // would have removed it never runs on a signal, and nothing else knows the name.
+  // It is untracked and not ignored, so the tree stays dirty and every later apply
+  // and upgrade refuses over a file the author never created.
+  //
+  // This case passed before the fix as well, because a real write reuses the same
+  // deterministic staged name and renames it away. It is kept to document that,
+  // not as a guard. The test below it is the one that fails without the fix.
+  const hostRoot = host(t);
+  const resolved = destination(hostRoot, "publication-reader.json");
+  const staged = stagedArtifactPathFor(resolved);
+
+  writeFileSync(staged, '{"partial":true}', "utf8");
+  assert.ok(existsSync(staged));
+
+  const written = writeReaderArtifact({
+    destination: resolved,
+    text: '{"v":1}\n',
+  });
+  assert.equal(written.outcome, "written");
+  assert.equal(
+    existsSync(staged),
+    false,
+    "a write must clear a staged file from an interrupted build",
+  );
+  assert.deepEqual(readdirSync(hostRoot), ["publication-reader.json"]);
+});
+
+test("the already current path clears it too", (t) => {
+  // This is the case that matters most. An author whose build was killed runs build
+  // again, and the second run usually finds the artifact already current. Before,
+  // that shortcut returned before reaching any cleanup, so the file survived every
+  // subsequent build and there was no way to get rid of it through the tool.
+  const hostRoot = host(t);
+  const resolved = destination(hostRoot, "publication-reader.json");
+  const text = '{"v":1}\n';
+  assert.equal(
+    writeReaderArtifact({ destination: resolved, text }).outcome,
+    "written",
+  );
+
+  const staged = stagedArtifactPathFor(resolved);
+  writeFileSync(staged, '{"partial":true}', "utf8");
+
+  const second = writeReaderArtifact({ destination: resolved, text });
+  assert.equal(second.outcome, "current", "the artifact is unchanged");
+  assert.equal(
+    existsSync(staged),
+    false,
+    "and the staged leftover is gone even though nothing was written",
+  );
+});
+
+test("the staged path is derived from the destination, not guessed", (t) => {
+  // status has to find this file without duplicating how the name is built, or the
+  // two derivations drift and status stops noticing.
+  const hostRoot = host(t);
+  const resolved = destination(hostRoot, "generated/reader/data.json");
+  const staged = stagedArtifactPathFor(resolved);
+  assert.match(staged, /\.artifact\.tmp$/u);
+  // Beside the artifact, because a rename across filesystems is a copy.
+  assert.equal(
+    staged.startsWith(join(hostRoot, "generated", "reader")),
+    true,
+    `staged file must sit beside the artifact, got ${staged}`,
+  );
+  // And distinct per destination, so two artifacts cannot collide on one staged
+  // name.
+  const other = stagedArtifactPathFor(
+    destination(hostRoot, "publication-reader.json"),
+  );
+  assert.notEqual(staged, other);
 });

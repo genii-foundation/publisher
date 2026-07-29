@@ -62,6 +62,7 @@ import {
   checkReaderArtifact,
   hashArtifactText,
   resolveArtifactDestination,
+  stagedArtifactPathFor,
   writeReaderArtifact,
 } from "../dist/node/materialize.js";
 
@@ -882,6 +883,7 @@ async function runStatus(options) {
     installedContractVersion: null,
     upgradeAvailable: false,
     artifactTracking: null,
+    stagedArtifact: null,
     unservable: [],
     conflictedFiles: [],
     artifact: null,
@@ -986,6 +988,18 @@ async function runStatus(options) {
           report.artifact = checked;
           if (checked.outcome !== "current") {
             report.actions.push("build the reader artifact");
+          }
+          // A build killed between staging and renaming leaves this behind. It is
+          // untracked and not ignored, so it makes the tree dirty and every later
+          // apply refuses over it. Running build again removes it, but an author
+          // whose artifact is already current has no reason to run build, so this
+          // is the command that has to say so.
+          const staged = stagedArtifactPathFor(destination);
+          if (existsSync(staged)) {
+            report.stagedArtifact = staged;
+            report.actions.push(
+              "run build to clear a staged artifact left by an interrupted build, which will otherwise block apply and upgrade",
+            );
           }
         }
       }
@@ -1098,6 +1112,11 @@ function describeStatus(report) {
             : `${report.artifact.hostRelativePath} is ${report.artifact.outcome}${tracking}`
       }`,
     );
+  }
+  if (report.stagedArtifact !== null) {
+    lines.push("");
+    lines.push("Left by an interrupted build");
+    lines.push(`  ${report.stagedArtifact}`);
   }
   if (report.unservable.length > 0) {
     lines.push("");
