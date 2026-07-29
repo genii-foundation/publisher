@@ -1,7 +1,9 @@
 # Rehearsing a release
 
 How to exercise the release path locally without publishing anything. Every
-command and message here came from running it.
+command and message here came from running it. A few output lines are long enough
+to need wrapping for width, and where that happens the continuation is indented;
+nothing else about the output is altered.
 
 This exists because working out how to run `release:prepare` took four failed
 attempts, three of them on argument and environment handling rather than on
@@ -48,7 +50,7 @@ directly rather than through `npm run`.
 And a release tag matching the version:
 
 ```
-the --tag argument did not supply a release tag. Pass --tag next.
+the --tag argument did not supply a release tag. 0.1.0-alpha.0 is a prerelease and requires --tag next.
 ```
 
 The tag is not optional for a prerelease. `0.1.0-alpha.0` must be tagged `next`,

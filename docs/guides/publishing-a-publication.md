@@ -1,7 +1,9 @@
 # Publishing a publication
 
 This is the whole author path, start to finish. Every command and every piece of
-output here was produced by running it, not by reading the code.
+output here was produced by running it, not by reading the code. A few lines are
+long enough to need wrapping for width, and where that happens the continuation is
+indented; nothing else about the output is altered.
 
 If you only remember one thing: run `genii-publisher status`. It tells you what
 your repository is and what to do next, and it never writes anything.

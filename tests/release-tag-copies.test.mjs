@@ -23,6 +23,7 @@ If you wish to allow use of your version of this file only under the terms of th
 // that they were identical. Byte equality is the whole claim.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -238,5 +239,92 @@ test("both copies of the classifier agree", () => {
     bodies[0],
     bodies[1],
     "the two classifiers have drifted apart",
+  );
+});
+
+// ------------------------- the release guide quotes real output
+
+/**
+ * Refusals the release rehearsal guide prints, and the command that produces each.
+ *
+ * The guide quoted a message that never shipped: I changed the remedy wording in the
+ * same run I wrote the guide and the guide kept the intermediate text. It is the same
+ * defect as the fabricated digest in the author guide, and prose asserting output is
+ * only worth having if something runs the command.
+ *
+ * Only the fast argument refusals are covered. The provenance refusal the guide also
+ * quotes depends on whether records have been accepted, so asserting it would break
+ * the moment someone accepts one, which is a legitimate act rather than a regression.
+ */
+const releaseRefusals = Object.freeze([
+  {
+    script: join("provenance", "scripts", "prepare-release.mjs"),
+    args: [],
+    quoted: "Release preparation requires --output <absolute-empty-directory>.",
+  },
+  {
+    script: join("provenance", "scripts", "verify-release.mjs"),
+    args: [],
+    quoted:
+      "Release verification requires --manifest <absolute-release-manifest-path>.",
+  },
+]);
+
+function runScript(relative, args) {
+  const result = spawnSync(
+    process.execPath,
+    [join(repositoryRoot, relative), ...args],
+    {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        NO_COLOR: "1",
+        npm_execpath: process.env.npm_execpath ?? "",
+      },
+    },
+  );
+  return `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+}
+
+test("every refusal the release guide quotes is one the scripts print", () => {
+  const guide = readFileSync(
+    join(repositoryRoot, "docs", "guides", "rehearsing-a-release.md"),
+    "utf8",
+  );
+  for (const refusal of releaseRefusals) {
+    assert.ok(
+      guide.includes(refusal.quoted),
+      `the guide no longer quotes ${JSON.stringify(refusal.quoted)}, so this test is checking nothing`,
+    );
+    const output = runScript(refusal.script, refusal.args);
+    assert.ok(
+      output.includes(refusal.quoted),
+      `${refusal.script} does not print what the guide says it does.\n  guide: ${refusal.quoted}\n  actual: ${output.trim().split("\n")[0]}`,
+    );
+  }
+});
+
+test("the tag refusal the guide quotes is the one the guard produces", async () => {
+  // Built by calling the guard directly rather than by running preparation, which
+  // would need an npm environment and would reach provenance validation.
+  const { assertReleaseTag } = await import(
+    `file://${join(repositoryRoot, "packages", "publisher", "scripts", "check-release-tag.mjs")}`
+  );
+  const guide = readFileSync(
+    join(repositoryRoot, "docs", "guides", "rehearsing-a-release.md"),
+    "utf8",
+  );
+
+  let message = "";
+  try {
+    assertReleaseTag("0.1.0-alpha.0", undefined, "the --tag argument");
+  } catch (error) {
+    message = error.message;
+  }
+  assert.ok(message.length > 0, "the guard was expected to refuse");
+  assert.ok(
+    guide.includes(message),
+    `the guide quotes a tag refusal the guard does not produce.\n  actual: ${message}`,
   );
 });
