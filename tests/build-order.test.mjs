@@ -15,12 +15,16 @@ If you wish to allow use of your version of this file only under the terms of th
 //
 // Each package compiles against its dependencies' emitted declarations, so a
 // package listed before something it depends on fails with "cannot find module",
-// which reads like a missing install rather than a wrong order. That cost real
-// time once. This makes the order a checked property instead of a convention
-// nobody wrote down.
+// which reads like a missing install rather than a wrong order.
+//
+// The order is written down in two places, and the first version of this test
+// only checked one. The package scripts were fixed, this test passed, and the
+// identical failure then landed in the workflow, which builds packages with its
+// own sequence of steps. So both are checked here. A guard that covers one of two
+// places is worse than no guard, because it is believed.
 
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -69,23 +73,79 @@ function scriptedOrder(script) {
   return order;
 }
 
-const buildScripts = (() => {
-  const manifest = manifestAt("package.json");
-  return Object.entries(manifest.scripts).filter(([, value]) =>
-    value.includes("/scripts/build.mjs"),
-  );
-})();
+/**
+ * Every place a package build order is written down.
+ *
+ * Package scripts chain build.mjs invocations. Workflows run per-package build
+ * steps. Both are an order, and both break the same way.
+ */
+function orderedSources() {
+  const sources = [];
 
-test("every script that compiles packages compiles them in dependency order", () => {
+  const manifest = manifestAt("package.json");
+  for (const [name, value] of Object.entries(manifest.scripts)) {
+    if (value.includes("/scripts/build.mjs")) {
+      sources.push({
+        name: `package.json script "${name}"`,
+        order: scriptedOrder(value),
+      });
+    }
+  }
+
+  const workflowDirectory = join(repositoryRoot, ".github", "workflows");
+  if (existsSync(workflowDirectory)) {
+    for (const entry of readdirSync(workflowDirectory)) {
+      if (!entry.endsWith(".yml") && !entry.endsWith(".yaml")) {
+        continue;
+      }
+      const text = readFileSync(join(workflowDirectory, entry), "utf8");
+      // Jobs run independently, so an order only means something within one job.
+      // Splitting on the job key keeps a later job's steps from appearing to
+      // satisfy an earlier job's dependency.
+      for (const [index, job] of text.split(/^  [a-z0-9-]+:$/mu).entries()) {
+        const order = workflowOrder(job);
+        if (order.length > 0) {
+          sources.push({
+            name: `.github/workflows/${entry} job ${index}`,
+            order,
+          });
+        }
+      }
+    }
+  }
+
+  return sources;
+}
+
+/** Package roots built by per-package steps, in the order they appear. */
+function workflowOrder(text) {
+  const order = [];
+  for (const match of text.matchAll(
+    /npm --prefix ((?:packages\/[a-z0-9-]+|schemas)) run build/gu,
+  )) {
+    order.push(match[1]);
+  }
+  return order;
+}
+
+const buildSources = orderedSources();
+
+test("every place that compiles packages compiles them in dependency order", () => {
   const packages = workspacePackages();
   const rootOf = new Map(
     [...packages].map(([name, entry]) => [name, entry.root]),
   );
 
-  assert.ok(buildScripts.length > 0, "expected at least one build script");
+  assert.ok(
+    buildSources.length > 1,
+    "expected both package scripts and workflow steps to be inspected",
+  );
+  assert.ok(
+    buildSources.some((source) => source.name.startsWith(".github/")),
+    "expected at least one workflow to be inspected, or this guard has the same blind spot it was written to close",
+  );
 
-  for (const [scriptName, script] of buildScripts) {
-    const order = scriptedOrder(script);
+  for (const { name: scriptName, order } of buildSources) {
     const position = new Map(
       order.map((root, index) => [root, index]),
     );
