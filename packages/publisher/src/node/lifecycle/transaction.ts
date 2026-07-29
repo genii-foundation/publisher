@@ -350,6 +350,44 @@ interface Journal {
   readonly createdDirectories: readonly string[];
 }
 
+/**
+ * Writes the journal, refusing to overwrite one another process just created.
+ *
+ * The existsSync check above catches a journal left by a crash, and it is the
+ * better message for that case. It cannot catch a second apply that started in the
+ * gap between that check and this write. Two concurrent applies both passed it,
+ * then trampled each other's staged files and died with a raw ENOENT naming an
+ * internal staged path. The tree was restored correctly every time I ran it, so
+ * the safety property held, but neither author was told anything they could act
+ * on.
+ *
+ * Creating the journal exclusively closes the gap: the first apply proceeds and
+ * the second is refused before it writes anything.
+ */
+function createJournalExclusively(path: string, contents: string): void {
+  let descriptor;
+  try {
+    descriptor = openSync(path, "wx", 0o644);
+  } catch (error) {
+    if (
+      error !== null &&
+      typeof error === "object" &&
+      (error as { code?: unknown }).code === "EEXIST"
+    ) {
+      throw new HostTransactionError(
+        `Another host transaction is already in progress. Wait for it to finish, or recover it if it did not: ${path}`,
+      );
+    }
+    throw error;
+  }
+  try {
+    writeSync(descriptor, contents, 0, "utf8");
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+}
+
 function writeFileDurably(path: string, contents: string): void {
   const descriptor = openSync(path, "w", 0o644);
   try {
@@ -480,7 +518,10 @@ export function applyHostMutations(input: {
   };
   // Written and flushed before the first mutation, so a crash always leaves a
   // journal that describes strictly more than what was changed.
-  writeFileDurably(journalPath, `${JSON.stringify(journal, null, 2)}\n`);
+  createJournalExclusively(
+    journalPath,
+    `${JSON.stringify(journal, null, 2)}\n`,
+  );
 
   try {
     for (const path of createdDirectories) {
