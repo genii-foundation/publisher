@@ -32,3 +32,4 @@ This file records changes to the migration provenance system.
 - Made every packed manifest rejection name the archive it refused and fail as a stated rejection rather than a null dereference or a caller-argument diagnostic.
 - Bound the package archive size decoder to the parser's exact numeric field semantics and allowlisted member type flags at the raw layer, closing two cursor desynchronization paths.
 - Required a package archive to be exactly one gzip member ending at end of file, verified against the container's own CRC-32 and length trailer, so bytes hidden after the member can no longer be attested without being examined or scanned.
+- Pinned checked-in line endings so the scanner runtime closure digest and every pinned repository hash reproduce on Windows as well as Linux and macOS.
