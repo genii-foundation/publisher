@@ -26,7 +26,14 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import {
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
@@ -374,6 +381,25 @@ function resolveHostSubpath(packageRoot, manifestPath, renderer) {
       : declared === null || typeof declared !== "object"
         ? undefined
         : (declared.import ?? declared.default ?? declared.node);
+  // A dot-dot segment is refused, matching what the package exports
+  // specification requires and what Node's own resolver enforces. This resolver
+  // replaced createRequire().resolve(), which could not see import-only exports,
+  // and in hand rolling it I lost that check: a target of "./../../planted.js"
+  // passed the prefix test and the engine imported and executed a file outside
+  // the renderer package. Node refuses the same target outright.
+  //
+  // A renderer is code the author installed and this command runs it, so the
+  // package itself is trusted. Reaching outside it is a different claim, and the
+  // package boundary is the thing exports exists to describe.
+  if (
+    typeof target === "string" &&
+    target.split("/").some((segment) => segment === "..")
+  ) {
+    throw new CommandError(
+      `${renderer} exports "./host" as ${target}, which reaches outside the package.\n` +
+        `A package exports target may not contain a ".." segment.`,
+    );
+  }
   if (typeof target !== "string" || !target.startsWith("./")) {
     throw new CommandError(
       `${renderer} does not export a "./host" subpath, so the engine cannot read its host contract.\n` +
@@ -381,6 +407,20 @@ function resolveHostSubpath(packageRoot, manifestPath, renderer) {
     );
   }
   const absolute = join(packageRoot, ...target.slice(2).split("/"));
+  // Belt and braces. The segment check above is the spec rule; this is the
+  // property that actually matters, asserted directly so a future change to the
+  // parsing cannot quietly reintroduce an escape.
+  const containment = relative(packageRoot, absolute);
+  if (
+    containment.length === 0 ||
+    containment === ".." ||
+    containment.startsWith(`..${sep}`) ||
+    isAbsolute(containment)
+  ) {
+    throw new CommandError(
+      `${renderer} exports "./host" as ${target}, which resolves outside the package to ${absolute}.`,
+    );
+  }
   if (!existsSync(absolute)) {
     throw new CommandError(
       `${renderer} exports "./host" as ${target}, but ${absolute} does not exist.\n` +

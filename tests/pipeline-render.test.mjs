@@ -30,6 +30,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -422,4 +423,106 @@ test("a host subpath pointing at a missing file is refused", (t) => {
   assert.equal(planned.status, 1);
   assert.match(planned.stderr, /does not exist/u);
   assert.match(planned.stderr, /may need building or reinstalling/u);
+});
+
+test("an exports target reaching outside the package is refused", (t) => {
+  // A regression I introduced. The resolver that replaced createRequire().resolve()
+  // checked only that the target began with "./", so "./../../planted.js" passed
+  // and the engine imported and executed a file outside the renderer package. Node
+  // refuses the same target with ERR_PACKAGE_PATH_NOT_EXPORTED, so the hand rolled
+  // resolver was more permissive than the specification it replaced.
+  //
+  // A renderer is code the author installed and this command runs it, so the
+  // package is trusted. Reaching outside it is a different claim, and the package
+  // boundary is what exports exists to describe.
+  const root = scratch(t);
+  const hostRoot = join(root, "host");
+  const packageRoot = join(hostRoot, "node_modules", "@example", "sneaky");
+  mkdirSync(packageRoot, { recursive: true });
+  mkdirSync(join(hostRoot, "planted"), { recursive: true });
+
+  const marker = join(root, "executed.txt");
+  writeFileSync(
+    join(hostRoot, "planted", "outside.js"),
+    `import { writeFileSync } from "node:fs";\n` +
+      `writeFileSync(${JSON.stringify(marker)}, "ran\\n");\n` +
+      `export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.1.0";\n`,
+    "utf8",
+  );
+
+  for (const target of [
+    "./../../../planted/outside.js",
+    "./dist/../../../planted/outside.js",
+    "../planted/outside.js",
+  ]) {
+    writeFileSync(
+      join(packageRoot, "package.json"),
+      `${JSON.stringify({
+        name: "@example/sneaky",
+        version: "1.0.0",
+        type: "module",
+        exports: { "./host": { import: target } },
+      })}\n`,
+      "utf8",
+    );
+    const planned = runPublisher(hostRoot, [
+      "init",
+      "plan",
+      "--renderer",
+      "@example/sneaky",
+    ]);
+    assert.equal(planned.status, 1, `${target} must be refused`);
+    assert.match(planned.stderr, /reaches outside the package/u);
+    assert.equal(
+      existsSync(marker),
+      false,
+      `${target} executed code outside the renderer package`,
+    );
+  }
+});
+
+test("a nested exports target inside the package still resolves", (t) => {
+  // The refusal above is only worth having if the ordinary shape works, and the
+  // shipped renderer uses exactly this one.
+  const root = scratch(t);
+  const hostRoot = join(root, "host");
+  const packageRoot = join(hostRoot, "node_modules", "@example", "ok");
+  mkdirSync(join(packageRoot, "dist"), { recursive: true });
+  writeFileSync(
+    join(packageRoot, "dist", "host.js"),
+    [
+      'export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.1.0";',
+      "export const PUBLISHER_NEXT_HOST_MIGRATIONS = [];",
+      'export const PUBLISHER_NEXT_HOST_CAPABILITIES = { routeKinds: ["home"] };',
+      "export function createPublisherNextHostTemplate(input) {",
+      '  return { contractVersion: "0.1.0", renderer: "@example/ok", rendererVersion: "1.0.0",',
+      '    readerDataPath: "publication-reader.json",',
+      '    files: [{ path: "package.json", contents: JSON.stringify({ name: input.hostPackageName }, null, 2) + "\\n" }] };',
+      "}",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+  writeFileSync(
+    join(packageRoot, "package.json"),
+    `${JSON.stringify({
+      name: "@example/ok",
+      version: "1.0.0",
+      type: "module",
+      exports: { "./host": { import: "./dist/host.js" } },
+    })}\n`,
+    "utf8",
+  );
+  const planned = runPublisher(hostRoot, [
+    "init",
+    "plan",
+    "--renderer",
+    "@example/ok",
+  ]);
+  assert.equal(
+    planned.stderr.includes("reaches outside"),
+    false,
+    planned.stderr,
+  );
+  assert.match(planned.stdout, /Renderer\s+@example\/ok/u);
 });
