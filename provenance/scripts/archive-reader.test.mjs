@@ -1626,29 +1626,32 @@ test("a candidate whose descriptor identity changes while it is read is rejected
   const archivePath = writeArchive(root, wellFormedTar());
 
   const realOpen = fileSystemPromises.open;
+  let statCalls = 0;
   fileSystemPromises.open = async (...args) => {
     const handle = await realOpen(...args);
     const stat = handle.stat.bind(handle);
-    let calls = 0;
     handle.stat = async (...statArgs) => {
       const result = await stat(...statArgs);
-      calls += 1;
-      if (calls === 1) {
+      statCalls += 1;
+      if (statCalls === 1) {
         return result;
       }
-      // Report a different inode on the closing identity check only, which is
-      // what a same-path replacement between the open and the last check looks
-      // like from inside the reader.
+      // Report a changed file on the closing identity check only, which is what
+      // a same-path replacement between the open and the last check looks like
+      // from inside the reader.
+      //
+      // The mutated fields have to be provably distinguishable on every
+      // platform. An earlier version bumped `ino` by one, which Windows did not
+      // report as a change, so the reader correctly saw no difference and the
+      // test failed there for a reason that had nothing to do with the reader.
+      // Size and modification time are plain numbers everywhere.
       return {
         dev: result.dev,
-        ino:
-          typeof result.ino === "bigint"
-            ? result.ino + 1n
-            : result.ino + 1,
+        ino: result.ino,
         nlink: result.nlink,
-        size: result.size,
+        size: result.size + 1,
         mode: result.mode,
-        mtimeMs: result.mtimeMs,
+        mtimeMs: result.mtimeMs + 1000,
         ctimeMs: result.ctimeMs,
         isFile: () => true,
       };
@@ -1662,6 +1665,12 @@ test("a candidate whose descriptor identity changes while it is read is rejected
   await assert.rejects(
     async () => readPackageArchive({ archivePath }),
     /changed while it was being read/u,
+  );
+  // Proves the interception itself worked, so a future platform where the patch
+  // silently misses reports that rather than a bare missing rejection.
+  assert.ok(
+    statCalls >= 2,
+    `expected the reader to check descriptor identity at least twice, saw ${statCalls}`,
   );
 });
 
