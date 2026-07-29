@@ -23,112 +23,40 @@ If you wish to allow use of your version of this file only under the terms of th
 // itself.
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   readdirSync,
-  realpathSync,
-  rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
-const executable = fileURLToPath(
-  new URL(
-    "../packages/publisher/bin/genii-publisher.mjs",
-    import.meta.url,
-  ),
-);
-const fixtureRoot = fileURLToPath(new URL("../fixtures/", import.meta.url));
+import {
+  authorHost,
+  publicationFixture as publication,
+  runPublisher as run,
+} from "./author-host-fixture.mjs";
 
-const rendererName = "@example/renderer";
+const rendererName = "@example/alpha";
 
-function run(cwd, args) {
-  const result = spawnSync(process.execPath, [executable, ...args], {
-    cwd,
-    encoding: "utf8",
-    env: { ...process.env, NO_COLOR: "1" },
-  });
-  if (result.error !== undefined) {
-    throw result.error;
-  }
-  return {
-    status: result.status,
-    stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-  };
-}
-
-function installRenderer(hostRoot, { readerDataPath = "publication-reader.json" } = {}) {
-  const packageRoot = join(
-    hostRoot,
-    "node_modules",
-    ...rendererName.split("/"),
-  );
-  mkdirSync(packageRoot, { recursive: true });
-  writeFileSync(
-    join(packageRoot, "package.json"),
-    `${JSON.stringify(
-      {
-        name: rendererName,
-        version: "1.0.0",
-        type: "module",
-        exports: { "./host": "./host.js" },
-      },
-      null,
-      2,
-    )}\n`,
-    "utf8",
-  );
-  writeFileSync(
-    join(packageRoot, "host.js"),
-    [
-      'export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.1.0";',
-      "export const PUBLISHER_NEXT_HOST_MIGRATIONS = [];",
-      "export function createPublisherNextHostTemplate(input) {",
-      "  return {",
-      "    contractVersion: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,",
-      `    renderer: ${JSON.stringify(rendererName)},`,
-      '    rendererVersion: "1.0.0",',
-      `    readerDataPath: ${JSON.stringify(readerDataPath)},`,
-      "    files: [",
-      "      {",
-      '        path: "package.json",',
-      "        contents:",
-      "          JSON.stringify({ name: input.hostPackageName }, null, 2) +",
-      '          "\\n",',
-      "      },",
-      '      { path: "app/page.tsx", contents: "export default null;\\n" },',
-      "    ],",
-      "  };",
-      "}",
-      "",
-    ].join("\n"),
-    "utf8",
-  );
-}
-
+/**
+ * An initialized host, which is what build requires.
+ *
+ * These tests used to build on a bare directory. That arrangement no longer
+ * exists: an uninitialized host has nothing that reads a reader artifact, so the
+ * command refuses it.
+ */
 function host(t, options = {}) {
-  const root = realpathSync(
-    mkdtempSync(join(tmpdir(), "publisher-build-cmd-")),
-  );
-  t.after(() => {
-    rmSync(root, { recursive: true, force: true });
-  });
-  const hostRoot = join(root, "host");
-  mkdirSync(hostRoot);
-  installRenderer(hostRoot, options);
-  return hostRoot;
+  return authorHost(t, {
+    renderers: [rendererName],
+    rendererOptions: { [rendererName]: options },
+    publication: options.publication ?? null,
+    initialize: options.initialize ?? true,
+  }).hostRoot;
 }
-
-const publication = (name) => join(fixtureRoot, name);
 
 // -------------------------------------------------------------- building
 
@@ -143,11 +71,11 @@ for (const fixture of ["canonical-field-notes", "declared-night-dispatch"]) {
       publication(fixture),
     ]);
     assert.equal(built.status, 0, built.stderr);
-    assert.match(built.stdout, /Artifact\s+publication-reader\.json/u);
+    assert.match(built.stdout, /Artifact\s+alpha-reader\.json/u);
     assert.match(built.stdout, /Digest\s+sha256:[a-f0-9]{64}/u);
     assert.match(built.stdout, /^Written\.$/mu);
 
-    const artifact = join(hostRoot, "publication-reader.json");
+    const artifact = join(hostRoot, "alpha-reader.json");
     assert.ok(existsSync(artifact));
     const parsed = JSON.parse(readFileSync(artifact, "utf8"));
     assert.equal(typeof parsed.publicationId, "string");
@@ -186,7 +114,7 @@ test("build emits machine readable output on request", (t) => {
   assert.equal(built.status, 0, built.stderr);
   const report = JSON.parse(built.stdout);
   assert.equal(report.outcome, "written");
-  assert.equal(report.hostRelativePath, "publication-reader.json");
+  assert.equal(report.hostRelativePath, "alpha-reader.json");
   assert.match(report.sha256, /^sha256:[a-f0-9]{64}$/u);
   assert.equal(typeof report.bytes, "number");
 });
@@ -206,8 +134,8 @@ test("the artifact a build writes is byte identical across hosts", (t) => {
   // The artifact must not carry anything about where it was built, or a committed
   // artifact would differ between an author's machine and a build server.
   assert.equal(
-    readFileSync(join(first, "publication-reader.json"), "utf8"),
-    readFileSync(join(second, "publication-reader.json"), "utf8"),
+    readFileSync(join(first, "alpha-reader.json"), "utf8"),
+    readFileSync(join(second, "alpha-reader.json"), "utf8"),
   );
 });
 
@@ -226,7 +154,7 @@ test("check reports missing, then current, and exits accordingly", (t) => {
   assert.equal(missing.status, 1, "a missing artifact must not exit zero");
   assert.match(missing.stdout, /No artifact on disk/u);
   assert.equal(
-    existsSync(join(hostRoot, "publication-reader.json")),
+    existsSync(join(hostRoot, "alpha-reader.json")),
     false,
     "check must write nothing",
   );
@@ -247,7 +175,7 @@ test("check reports a stale artifact and exits nonzero", (t) => {
   ];
   assert.equal(run(hostRoot, ["build", ...base]).status, 0);
   writeFileSync(
-    join(hostRoot, "publication-reader.json"),
+    join(hostRoot, "alpha-reader.json"),
     '{"stale":true}\n',
     "utf8",
   );
@@ -258,7 +186,7 @@ test("check reports a stale artifact and exits nonzero", (t) => {
   // This is the whole point of check in a repository that commits its artifact,
   // so the stale content must survive for the author to inspect.
   assert.equal(
-    readFileSync(join(hostRoot, "publication-reader.json"), "utf8"),
+    readFileSync(join(hostRoot, "alpha-reader.json"), "utf8"),
     '{"stale":true}\n',
   );
 });
@@ -266,7 +194,7 @@ test("check reports a stale artifact and exits nonzero", (t) => {
 // -------------------------------------------------------------- refusals
 
 test("a renderer aiming the artifact at its own contract file is refused", (t) => {
-  const hostRoot = host(t, { readerDataPath: "app/page.tsx" });
+  const hostRoot = host(t, { readerDataPath: "alpha-app.js" });
   // The file has to already exist, with content worth losing. Asserting that a
   // file which never existed still does not exist proves nothing, and the whole
   // point of the refusal is that this content survives.
@@ -338,14 +266,16 @@ test("build reports an unreadable manifest through the loader", (t) => {
   // guard for init and upgrade, which never load the publication.
   assert.match(built.stderr, /loader\.manifest\.json_invalid/u);
   assert.match(built.stderr, /publication\.json/u);
-  assert.equal(existsSync(join(hostRoot, "publication-reader.json")), false);
+  assert.equal(existsSync(join(hostRoot, "alpha-reader.json")), false);
 });
 
 test("init refuses an unreadable manifest rather than dropping protection", (t) => {
-  const hostRoot = host(t);
+  // Deliberately uninitialized, and the manifest is broken before init runs. init
+  // never loads the publication, so nothing else would notice; proceeding would
+  // initialize a host with no idea which paths hold the author's sources.
+  const hostRoot = host(t, { initialize: false });
   writeFileSync(join(hostRoot, "publication.json"), "{ not json\n", "utf8");
-  // init never loads the publication, so nothing else would notice. Proceeding
-  // would initialize a host with no idea which paths hold the author's sources.
+
   const planned = run(hostRoot, ["init", "plan", "--renderer", rendererName]);
   assert.equal(planned.status, 1);
   assert.match(planned.stderr, /which paths hold your sources/u);
@@ -377,7 +307,7 @@ test("a publication that does not compile fails with named diagnostics", (t) => 
   assert.match(built.stderr, /did not compile/u);
   // A code per problem, so an author can search for it rather than reading prose.
   assert.match(built.stderr, /^\s{2}\S+\s/mu);
-  assert.equal(existsSync(join(hostRoot, "publication-reader.json")), false);
+  assert.equal(existsSync(join(hostRoot, "alpha-reader.json")), false);
 });
 
 test("an invalid audience is reported before anything is resolved", (t) => {
@@ -411,10 +341,10 @@ test("preview and public audiences produce different artifacts", (t) => {
   assert.equal(run(previewHost, base("preview")).status, 0);
 
   const asPublic = JSON.parse(
-    readFileSync(join(publicHost, "publication-reader.json"), "utf8"),
+    readFileSync(join(publicHost, "alpha-reader.json"), "utf8"),
   );
   const asPreview = JSON.parse(
-    readFileSync(join(previewHost, "publication-reader.json"), "utf8"),
+    readFileSync(join(previewHost, "alpha-reader.json"), "utf8"),
   );
   assert.equal(asPublic.audience, "public");
   assert.equal(asPreview.audience, "preview");
