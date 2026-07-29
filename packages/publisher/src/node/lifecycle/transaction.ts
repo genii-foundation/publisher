@@ -390,15 +390,20 @@ export function applyHostMutations(input: {
       classifications,
     });
   }
-  if (pending.length !== classifications.length) {
-    const applied = classifications
-      .filter((entry) => entry.state === "applied")
-      .map((entry) => entry.path);
-    throw new HostTransactionError(
-      `The host is partially applied: ${applied.length} file(s) already hold the intended result while ${pending.length} do not. Reapply from a clean baseline rather than completing a partial state.`,
-      classifications.filter((entry) => entry.state !== "pending"),
-    );
-  }
+  // A mix of applied and pending files is completed rather than refused.
+  //
+  // An earlier version refused it, on the reasoning that a half-applied tree
+  // means guessing at intent. That reasoning was wrong, and it made upgrades
+  // impossible: every upgrade leaves most host files unchanged between contract
+  // versions, so a legitimate upgrade is always a mix.
+  //
+  // Nothing is guessed here. Every pending file carries the exact preimage it
+  // must currently have, every applied file already holds the exact bytes this
+  // set intends, and anything matching neither is a conflict and has already been
+  // refused above. Completing the remainder therefore reaches precisely the
+  // intended end state. The dangerous cases the refusal was reaching for are each
+  // covered elsewhere: a run that died midway leaves a journal that blocks the
+  // next apply, and an author's edit is a conflict.
 
   const ordered = [...input.mutations].sort((left, right) =>
     left.path < right.path ? -1 : left.path > right.path ? 1 : 0,

@@ -236,14 +236,45 @@ test("a locally modified file becomes a conflict rather than an overwrite", (t) 
   );
 });
 
-test("a partially applied host is refused rather than completed", (t) => {
+test("a tree where some files already hold the intended result is completed", (t) => {
+  // Every upgrade is this shape: most host files are unchanged between contract
+  // versions, so a legitimate change is always a mix of applied and pending.
+  //
+  // An earlier version refused a mix, reasoning that a half-applied tree meant
+  // guessing at intent. It does not. Every pending file carries the exact
+  // preimage it must have, every applied file already holds the exact intended
+  // bytes, and anything matching neither is a conflict and is refused. Completing
+  // the remainder reaches precisely the intended end state.
   const { hostRoot, journalDirectory } = workspace(t);
   const mutations = [
     mutation("a.txt", "a\n"),
     mutation("b.txt", "b\n"),
   ];
-  // Only one of the two is already in its intended state.
   writeFileSync(join(hostRoot, "a.txt"), "a\n", "utf8");
+
+  const result = applyHostMutations({
+    root: hostRoot,
+    journalDirectory,
+    mutations,
+  });
+
+  assert.equal(result.outcome, "applied");
+  assert.deepEqual(
+    result.classifications.map(({ path, state }) => [path, state]),
+    [
+      ["a.txt", "applied"],
+      ["b.txt", "pending"],
+    ],
+  );
+  assert.equal(readFileSync(join(hostRoot, "a.txt"), "utf8"), "a\n");
+  assert.equal(readFileSync(join(hostRoot, "b.txt"), "utf8"), "b\n");
+});
+
+test("a conflict inside an otherwise partly applied tree is still refused", (t) => {
+  // Completing a mix must not become a way to walk past a conflict.
+  const { hostRoot, journalDirectory } = workspace(t);
+  writeFileSync(join(hostRoot, "a.txt"), "a\n", "utf8");
+  writeFileSync(join(hostRoot, "c.txt"), "the author wrote this\n", "utf8");
   const before = treeSnapshot(hostRoot);
 
   assert.throws(
@@ -251,9 +282,17 @@ test("a partially applied host is refused rather than completed", (t) => {
       applyHostMutations({
         root: hostRoot,
         journalDirectory,
-        mutations,
+        mutations: [
+          mutation("a.txt", "a\n"),
+          mutation("b.txt", "b\n"),
+          mutation(
+            "c.txt",
+            "engine content\n",
+            hashHostFileContents("what the engine last wrote\n"),
+          ),
+        ],
       }),
-    /partially applied/u,
+    /must be reviewed rather than overwritten/u,
   );
   assert.deepEqual(treeSnapshot(hostRoot), before);
 });
