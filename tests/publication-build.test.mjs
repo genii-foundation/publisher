@@ -36,6 +36,15 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  compileMarkdownWork,
+} from "../packages/content/dist/index.js";
+import {
+  compileLoadedPublicationContent,
+} from "../packages/publisher/dist/node.js";
+import {
+  projectPublicationReader,
+} from "../packages/reader/dist/index.js";
+import {
   buildPublicationReader,
   derivePublicationWorkInputs,
   rootSectionIdFor,
@@ -274,4 +283,168 @@ test("an unreadable publication root fails without throwing", async () => {
   });
   assert.equal(result.valid, false);
   assert.ok(result.diagnostics.length > 0);
+});
+
+// ------------------------------------- a section can have its own URL
+
+test("a section route becomes an active server route", async (t) => {
+  // Pinned because I got this wrong twice in opposite directions. I first reported
+  // that the build path collapses sections, which is true. I then "corrected" that
+  // to a claim the route model cannot express a section URL at all, which is false,
+  // on the strength of a probe that set routes and readerLocation but never
+  // activeRouteNames. A section route only becomes an active server route if its
+  // name appears in activeRouteNames, so the refusal I read as "there is no way to
+  // make one active" actually meant "you did not make this one active".
+  //
+  // Coherence addresses 3,300 sections at their own paths. This test is the
+  // evidence that the protocol already allows it, so the remaining work is in the
+  // build path rather than in the route model.
+  const publicationRoot = join(fixtureRoot, "canonical-tide-tables");
+  const loaded = await loadPublicationCompilationSources({ publicationRoot });
+  assert.ok(loaded.valid, diagnosticsText(loaded));
+  const manuscript = loaded.value.sources.find(
+    (source) => source.role === "manuscript",
+  );
+  assert.ok(manuscript);
+
+  const whole = compileMarkdownWork({
+    workId: "first-light",
+    sectionId: "first-light-root",
+    title: "First Light on the Mudflats",
+    sourcePath: manuscript.path,
+    markdown: manuscript.contents,
+  });
+  assert.ok(whole.valid, JSON.stringify(whole.diagnostics));
+  const base = whole.value.work.sections[0];
+  const blocks = base.blocks;
+  const half = Math.ceil(blocks.length / 2);
+
+  const content = compileLoadedPublicationContent({
+    loaded: loaded.value,
+    works: [
+      {
+        ...whole.value.work,
+        sections: [
+          {
+            ...base,
+            id: "first-light-root",
+            blocks: blocks.slice(0, half),
+            continuity: {
+              id: "first-light-root",
+              legacyIds: [],
+              progressGroups: [["first-light-root"]],
+              historicalSectionIds: [],
+            },
+          },
+          {
+            ...base,
+            id: "low-water",
+            title: "Low water",
+            parentId: "first-light-root",
+            blocks: blocks.slice(half),
+            activeRouteNames: ["canonical"],
+            routes: { canonical: { path: "/works/first-light/low-water" } },
+            readerLocation: { kind: "route", routeName: "canonical" },
+            navigable: true,
+            continuity: {
+              id: "low-water",
+              legacyIds: [],
+              progressGroups: [["low-water"]],
+              historicalSectionIds: [],
+            },
+          },
+        ],
+      },
+    ],
+    extensions: [],
+  });
+  assert.ok(content.valid, diagnosticsText(content));
+
+  const reader = projectPublicationReader(content.value, {
+    audience: "public",
+  });
+  assert.ok(reader.valid, diagnosticsText(reader));
+
+  const routed = reader.value.routes.active.find(
+    (route) => route.path === "/works/first-light/low-water",
+  );
+  assert.ok(
+    routed,
+    `expected a section route, got ${reader.value.routes.active
+      .map((route) => route.path)
+      .join(" ")}`,
+  );
+  assert.equal(routed.target.kind, "section");
+  assert.equal(routed.target.sectionId, "low-water");
+
+  // And the work keeps its own address, so the two coexist rather than colliding.
+  assert.ok(
+    reader.value.routes.active.some(
+      (route) =>
+        route.path === "/works/first-light" && route.target.kind === "work",
+    ),
+  );
+});
+
+test("a section route without activeRouteNames is refused, and says why", async () => {
+  // The exact mistake that misled me, kept so the refusal stays legible.
+  const publicationRoot = join(fixtureRoot, "canonical-tide-tables");
+  const loaded = await loadPublicationCompilationSources({ publicationRoot });
+  const manuscript = loaded.value.sources.find(
+    (source) => source.role === "manuscript",
+  );
+  const whole = compileMarkdownWork({
+    workId: "first-light",
+    sectionId: "first-light-root",
+    title: "First Light on the Mudflats",
+    sourcePath: manuscript.path,
+    markdown: manuscript.contents,
+  });
+  const base = whole.value.work.sections[0];
+  const half = Math.ceil(base.blocks.length / 2);
+
+  const content = compileLoadedPublicationContent({
+    loaded: loaded.value,
+    works: [
+      {
+        ...whole.value.work,
+        sections: [
+          {
+            ...base,
+            blocks: base.blocks.slice(0, half),
+            continuity: {
+              id: "first-light-root",
+              legacyIds: [],
+              progressGroups: [["first-light-root"]],
+              historicalSectionIds: [],
+            },
+          },
+          {
+            ...base,
+            id: "low-water",
+            title: "Low water",
+            parentId: "first-light-root",
+            blocks: base.blocks.slice(half),
+            // activeRouteNames deliberately omitted.
+            routes: { canonical: { path: "/works/first-light/low-water" } },
+            readerLocation: { kind: "route", routeName: "canonical" },
+            navigable: true,
+            continuity: {
+              id: "low-water",
+              legacyIds: [],
+              progressGroups: [["low-water"]],
+              historicalSectionIds: [],
+            },
+          },
+        ],
+      },
+    ],
+    extensions: [],
+  });
+  assert.equal(content.valid, false);
+  const codes = new Set(content.diagnostics.map((item) => item.code));
+  assert.ok(
+    codes.has("content.reader_address.base_route_unresolved"),
+    [...codes].join(","),
+  );
 });

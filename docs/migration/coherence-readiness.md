@@ -142,54 +142,44 @@ and kept both alive: current routes look like `/manuscripts/1/`, while aliases
 reference `/manuscripts/humanitys-most-viable-future/...`. The redirect machinery is
 load-bearing in production today, not a precaution.
 
-### 3. A section cannot have its own URL
+### 3. A section can have its own URL, and the build path will not make one
 
-This is the blocker, and it is a protocol gap rather than the build-path fix I
-first reported. I established the boundary by running five successive probes and
-reading the exact refusal each time.
+I have now been wrong about this twice, in opposite directions, so here is what
+running it establishes.
 
-What works. A work may carry several sections, and it compiles and projects
-cleanly, on three conditions:
-
-- every block comes from the work's single resolved manuscript, enforced by
-  `content.block.wrong_manuscript`;
-- exactly one section owns the work's reader address, enforced by
-  `content.reader_address.collision`;
-- every other section is `navigable: false` with `readerLocation: {kind: "none"}`,
-  because `content.section.reader_location_required` refuses a navigable section
-  with no public location.
-
-Verified: a two-section work over one manuscript produces
-`first-light-root(2 blocks), low-water(2 blocks)` and active routes of `/`,
-`/works/first-light`, `/collections/mornings`.
-
-What does not work is the thing Coherence needs. Note that the child section has
-no URL of its own in that list. Giving it one is refused twice over:
+A section route becomes an active server route, and a section is addressable at its
+own path. Verified end to end and pinned in `tests/publication-build.test.mjs`:
 
 ```
-content.reader_address.base_route_unresolved
-  A reader address must use an active server route as its base path.
+/                                 -> home
+/works/first-light                -> work
+/works/first-light/low-water      -> section (low-water)
+/collections/mornings             -> collection
 ```
 
-The publication route model declares `home`, `work`, `collection`, and `updates`.
-There is no section route template, so there is no active server route that
-`/works/first-light/low-water` could sit under. A section is addressable by
-anchor within its work page, or not at all.
+The condition is `activeRouteNames`. A section may declare `routes`, but a route
+only becomes active if its name appears in that section's `activeRouteNames`. My
+earlier probe set `routes` and `readerLocation` and never set that field, so the
+route was never registered and the reader address had no owner. The refusal said a
+reader address must use an active server route, and I read it as "there is no way
+to make one active" rather than "you did not make this one active". The diagnostic
+was correct and my reading was not.
 
-Coherence addresses 2,194 sections, 960 chapters, and 146 parts at their own
-paths, under `/manuscripts/{volumeId}/{...route}`. None of that is expressible.
+So the route model needs no change, and the correction I published to issue #17
+claiming otherwise was wrong. The original framing was right.
 
-So the honest correction to issue #17: I said the compiler and protocol were fine
-and the limitation lived in the build path I wrote. The build path does collapse
-sections, and fixing it would still not produce a single section URL. The route
-model has to grow a section route template first, and that is a change to a
-published protocol surface.
+What remains true is narrower and unchanged since the first report. Every block in
+a work must come from that work's single resolved manuscript, so sections are
+divisions of one file rather than separate files. And the build path produces
+exactly one section per work: `derivePublicationWorkInputs` calls the one-section
+convenience once per work.
 
-One further observation from the probes. A malformed hand-built input returns
-`content.compile_failed` with `reason: uninspectableInput` and nothing else, from
-the compiler's outermost catch. Three of my five probes died there and I had to
-bisect the input to learn why. Anyone building compiler inputs directly, which is
-what a multi-section build path must do, gets no diagnostic at all.
+So the work is in the build path, and the one thing still to decide is how a
+manuscript declares its section boundaries and their routes. Splitting on headings
+couples a URL to prose an author edits. Declaring boundaries in the work manifest is
+a schema addition and holds still when a heading is renamed. That is a smaller
+question than a route model change, and the engine already supports whichever
+answer it gets.
 
 ### 4. Audio is a schema definition and nothing else
 
@@ -259,10 +249,11 @@ its size.
 
 ## Recommended order
 
-1. Add a section route template to the publication route model, so a section can
-   have a URL. Nothing structural about the migration can be attempted until this
-   exists, and no build-path change substitutes for it. Issue #17, corrected by
-   this document.
+1. Decide how a manuscript declares its section boundaries and their routes, then
+   teach the build path to emit them. The route model already serves section URLs,
+   so this is a build path change and one schema question rather than a protocol
+   redesign. Issue #17, corrected twice by this document, most recently back toward
+   its original framing.
 2. Decide the Updates adapter shape, accounting for pagination and a derived
    view. Issue #16, also corrected by this document.
 3. Give redirects an identifier target, or give the engine a way to resolve a
@@ -282,9 +273,9 @@ number worth carrying into deployment planning.
 ## What this audit does not establish
 
 It counts, classifies, and measures. It has not run Coherence's own manuscripts
-through the engine, because a section cannot yet have a URL and Coherence
-needs 3,300 of them. That is the first thing to fix, and the first honest
-end-to-end attempt is behind it.
+through the engine, because the build path emits one section per work
+and Coherence needs 3,300 of them addressed. The protocol serves those addresses
+already; nothing has taught the build path to produce them.
 
 Every count here came from the repository as it stands. None of it came from
 reading the objective and inferring what must be true.
