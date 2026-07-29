@@ -5,6 +5,12 @@ against that repository rather than inferred from the objective.
 
 Read-only. Nothing in the Coherence repository was modified to produce this.
 
+Every count of Coherence below was measured against its commit `87ff7cf7`, dated
+2026-07-27. Those numbers cannot be checked from this repository, because nothing
+here may depend on that one existing, so treat them as a snapshot and remeasure
+before relying on them. The claims about this engine are checked by the test suite
+and are noted as such where they appear.
+
 ## Why this exists
 
 The migration was blocked on two decisions, and "blocked" was doing a lot of work
@@ -219,6 +225,9 @@ it. Each work is a directory with a manifest and a short manuscript, built throu
 | 3,300 | 9.0 s | 8.1 MB | 3,301 | 387 MB |
 | 4,999 | 14.0 s | 12.3 MB | 5,000 | 478 MB |
 | 5,000 | refused in 11 ms | none | none | `schema.resource_limit` |
+
+The cap and the refusal code are checked by the suite. The timings are one machine
+on one day and are recorded to show the shape of the curve, not as a promise.
 
 Four things this establishes.
 

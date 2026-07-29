@@ -27,6 +27,7 @@ import {
   cpSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -513,3 +514,85 @@ test("a block identifier is derived from that block's own content", async () => 
   // Derived, not a readable slug. An author expecting #low-water will not find it.
   assert.match(original, /^b-[0-9a-f]{64}$/u);
 });
+
+// ------------------ the migration audit's engine claims stay true
+
+test("the audit's engine side claims match the schema and the code", async () => {
+  // The migration audit is the document someone reads to decide how Updates and
+  // section boundaries should work, so its numbers had better be right. Its counts
+  // of the Coherence repository cannot be checked here, because nothing in this
+  // repository may depend on that one existing, and they are dated to a revision in
+  // the document instead. Everything it says about this engine is checkable, so it
+  // is checked.
+  const audit = readFileSync(
+    join(repositoryRoot, "docs", "migration", "coherence-readiness.md"),
+    "utf8",
+  );
+  const schema = JSON.parse(
+    readFileSync(
+      join(repositoryRoot, "schemas", "publication.schema.json"),
+      "utf8",
+    ),
+  );
+
+  // Caps the audit quotes when reasoning about whether Coherence fits.
+  assert.equal(schema.properties.works.maxItems, 4999);
+  assert.ok(
+    audit.includes("4,999"),
+    "the audit no longer quotes the works cap, so this check is idle",
+  );
+  assert.equal(
+    schema.$defs.continuity.properties.redirects.maxItems,
+    10000,
+  );
+  assert.ok(
+    audit.includes("10,000"),
+    "the audit no longer quotes the redirect cap, so this check is idle",
+  );
+
+  // Two features the audit reports as schema definitions with no implementation.
+  // If either grows one, the audit is wrong in a way that changes the plan.
+  for (const [word, pattern] of [
+    ["audio", /\baudio\b/iu],
+    ["sync", /\bsync\b/u],
+  ]) {
+    assert.ok(
+      audit.includes(`### ${word === "audio" ? "4" : "5"}. ${
+        word === "audio" ? "Audio" : "Sync"
+      } is a schema definition and nothing else`),
+      `the audit no longer claims ${word} is unimplemented, so this check is idle`,
+    );
+    const implemented = [
+      join("packages", "next", "src"),
+      join("packages", "reader", "src"),
+      join("packages", "content", "src"),
+    ].some((root) => containsPattern(join(repositoryRoot, root), pattern));
+    assert.equal(
+      implemented,
+      false,
+      `${word} now appears in engine source, so the audit's claim that it is schema only is stale`,
+    );
+  }
+});
+
+/** Whether any TypeScript source under a directory matches a pattern. */
+function containsPattern(root, pattern) {
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(path);
+        continue;
+      }
+      if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) {
+        continue;
+      }
+      if (pattern.test(readFileSync(path, "utf8"))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
