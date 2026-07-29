@@ -3427,6 +3427,85 @@ test("content validation, serialization, and artifacts use one detached Proxy sn
   assert.equal(artifactInput.observed.gets, 0);
 });
 
+test("a partly supplied continuity block is named, not swallowed", async () => {
+  // This used to throw inside normalizeSectionContinuity, spreading an undefined
+  // field, and the compiler's outermost catch reported "could not safely inspect
+  // the supplied input" with no path and no field. Three probes of mine died on
+  // that message before I bisected the input by hand.
+  const input = await loadCompilationInput("canonical-field-notes");
+  const invalidInput = replaceWork(input, "rain-gauge", (work) => ({
+    ...work,
+    sections: [
+      {
+        ...work.sections[0],
+        continuity: { id: "rain-gauge-root", legacyIds: [] },
+      },
+    ],
+  }));
+  const result = compilePublicationContent(invalidInput);
+  assert.equal(result.valid, false);
+
+  const named = result.diagnostics.filter(
+    (item) => item.code === "content.continuity.field_unusable",
+  );
+  assert.ok(
+    named.length >= 2,
+    `expected every missing field named, got ${JSON.stringify([
+      ...diagnosticCodes(result),
+    ])}`,
+  );
+  for (const item of named) {
+    assert.match(
+      item.path,
+      /\/continuity\/(progressGroups|historicalSectionIds)$/u,
+    );
+    assert.equal(typeof item.params.field, "string");
+  }
+  // And specifically not the catch-all, which is what made this unactionable.
+  assert.equal(
+    diagnosticCodes(result).has("content.compile_failed"),
+    false,
+  );
+});
+
+test("a hostile continuity accessor still fails closed with no secret", async () => {
+  // The fix reads continuity fields to check their type, so a throwing getter on
+  // one of them now reaches the read. It must still be caught and must still leak
+  // nothing, or the diagnostic improvement bought a disclosure.
+  const secret = "continuity-secret-must-not-escape";
+  const input = await loadCompilationInput("canonical-field-notes");
+  for (const field of [
+    "id",
+    "legacyIds",
+    "progressGroups",
+    "historicalSectionIds",
+  ]) {
+    const continuity = {
+      id: "rain-gauge-root",
+      legacyIds: [],
+      progressGroups: [["rain-gauge-root"]],
+      historicalSectionIds: [],
+    };
+    Object.defineProperty(continuity, field, {
+      enumerable: true,
+      get() {
+        throw new Error(secret);
+      },
+    });
+    const invalidInput = replaceWork(input, "rain-gauge", (work) => ({
+      ...work,
+      sections: [{ ...work.sections[0], continuity }],
+    }));
+    const result = compilePublicationContent(invalidInput);
+    assert.equal(result.valid, false, `${field} must not compile`);
+    assert.equal(
+      JSON.stringify(result).includes(secret),
+      false,
+      `${field} leaked the thrown message`,
+    );
+  }
+});
+
 test("hostile accessors fail closed without leaking thrown secrets", () => {
   const secret = "do-not-leak-this-secret";
   const hostile = {};

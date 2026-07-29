@@ -1228,24 +1228,92 @@ function resolveSectionReaderAddress(
   return null;
 }
 
+/**
+ * Records a continuity field that is missing or the wrong type, and substitutes a
+ * default so compilation can continue and report the rest.
+ *
+ * The thrown value is never involved. A hostile accessor still fails closed
+ * through the compiler's outermost catch, and nothing here can carry a secret out
+ * of one, because this reports the field name it expected rather than what it got.
+ */
+function reportMissingContinuityField<T>(
+  field: string,
+  pointer: string,
+  diagnostics: Diagnostic[],
+  fallback: T,
+): T {
+  diagnostics.push(
+    diagnostic(
+      "content.continuity.field_unusable",
+      `${pointer}/continuity/${field}`,
+      `Section continuity is present but its ${field} is missing or not of the expected type. Supply it, or omit the continuity block entirely to accept defaults.`,
+      "continuityField",
+      { field },
+    ),
+  );
+  return fallback;
+}
+
 function normalizeSectionContinuity(
   sectionId: string,
   continuity: ContentContinuity | undefined,
   pointer: string,
   diagnostics: Diagnostic[],
 ): ContentContinuity {
+  // A continuity block may be absent, in which case every field is defaulted. A
+  // block that is present but incomplete used to throw here, spreading or mapping
+  // an undefined field, and the compiler's outermost catch turned that into
+  // "could not safely inspect the supplied input" with no path and no field name.
+  // Anyone assembling sections directly, which a multi-section build path has to
+  // do, got one opaque refusal for any of a dozen mistakes.
+  //
+  // So each field is checked and reported by name, and a missing one falls back to
+  // the same default the absent case uses so compilation continues and reports
+  // every problem rather than dying on the first.
+  const defaults = {
+    id: sectionId,
+    legacyIds: [] as string[],
+    progressGroups: [[sectionId]] as string[][],
+    historicalSectionIds: [] as string[],
+  };
   const normalized: ContentContinuity = continuity === undefined
-    ? {
-        id: sectionId,
-        legacyIds: [],
-        progressGroups: [[sectionId]],
-        historicalSectionIds: [],
-      }
+    ? defaults
     : {
-        id: continuity.id,
-        legacyIds: [...continuity.legacyIds],
-        progressGroups: continuity.progressGroups.map((group) => [...group]),
-        historicalSectionIds: [...continuity.historicalSectionIds],
+        id:
+          typeof continuity.id === "string"
+            ? continuity.id
+            : reportMissingContinuityField(
+                "id",
+                pointer,
+                diagnostics,
+                defaults.id,
+              ),
+        legacyIds: Array.isArray(continuity.legacyIds)
+          ? [...continuity.legacyIds]
+          : reportMissingContinuityField(
+              "legacyIds",
+              pointer,
+              diagnostics,
+              defaults.legacyIds,
+            ),
+        progressGroups: Array.isArray(continuity.progressGroups)
+          ? continuity.progressGroups.map((group) =>
+              Array.isArray(group) ? [...group] : [],
+            )
+          : reportMissingContinuityField(
+              "progressGroups",
+              pointer,
+              diagnostics,
+              defaults.progressGroups,
+            ),
+        historicalSectionIds: Array.isArray(continuity.historicalSectionIds)
+          ? [...continuity.historicalSectionIds]
+          : reportMissingContinuityField(
+              "historicalSectionIds",
+              pointer,
+              diagnostics,
+              defaults.historicalSectionIds,
+            ),
       };
   validateContentId(normalized.id, `${pointer}/continuity/id`, diagnostics);
 
