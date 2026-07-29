@@ -66,7 +66,13 @@ A manifest that exists but cannot be parsed is refused rather than treated as
 declaring nothing. Returning no protection from an unreadable manifest would turn
 a typo into an unprotected tree.
 
-Two things that catch people, both refused with the file and the field named:
+An Updates route is not servable by the Next renderer. If your manifest declares
+`routes.updates`, `build` refuses before writing anything and names the route,
+because writing the artifact would leave a host that fails to start. Both shipped
+fixtures declare one, so if you copied a fixture as a starting point, remove that
+route. Updates support is a known gap rather than a bug in your manifest.
+
+Three things that catch people, all refused with the file and the field named:
 
 `attribution` must carry the exact required notice. Only `sourceCodeUrl` is
 yours to set. See the attribution section below.
@@ -371,6 +377,28 @@ Be aware of what this currently means: the footer shows the Foundation's
 copyright, and there is no field for your own. If you need your copyright on the
 page, put it in your prose for now. This is a known gap rather than a decision
 anyone is happy with.
+
+## What your renderer can serve
+
+A renderer declares which route kinds its generated host can serve, and `build`
+refuses an artifact containing anything else. That refusal happens before a byte
+is written, because the alternative is a successful build and a host that will not
+boot, which is a much worse place to find out.
+
+```
+/home/you/estuary cannot serve this publication.
+  host.route_kind_unsupported   /routes/active
+    This publication has 1 updates route(s) that @genii-foundation/publisher-next
+    cannot serve: /updates. Writing the artifact would leave a host that fails to
+    start, so nothing has been written. Remove the route from your publication
+    manifest, or use a renderer that serves it.
+```
+
+`status` reports the same thing under "This host cannot serve".
+
+A renderer that declares no capability set at all is refused rather than assumed
+capable. An absent declaration and a claim of full support are different claims,
+and only one of them is safe to guess at.
 
 ## Command summary
 

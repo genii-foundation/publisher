@@ -89,6 +89,7 @@ function installRenderer(hostRoot, name = "@example/renderer") {
     join(packageRoot, "host.js"),
     [
       "export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = \"0.1.0\";",
+      'export const PUBLISHER_NEXT_HOST_CAPABILITIES = { routeKinds: ["home", "work", "collection", "section", "updates"] };',
       "export function createPublisherNextHostTemplate(input) {",
       "  return {",
       "    contractVersion: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,",
@@ -223,7 +224,7 @@ test("a missing renderer produces an instruction rather than a resolution failur
     "@example/renderer",
   ]);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /Could not resolve @example\/renderer\/host/u);
+  assert.match(result.stderr, /Could not find @example\/renderer/u);
   assert.match(result.stderr, /npm install --save-dev @example\/renderer/u);
 });
 

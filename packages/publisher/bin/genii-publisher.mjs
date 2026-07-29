@@ -25,9 +25,8 @@ If you wish to allow use of your version of this file only under the terms of th
 // export works with no change here.
 
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
@@ -55,6 +54,10 @@ import {
 import {
   resolvePublicationProtectedRoots,
 } from "../dist/node/protected-roots.js";
+import {
+  assertHostCanServe,
+  readHostCapabilities,
+} from "../dist/node/host-capabilities.js";
 import {
   checkReaderArtifact,
   hashArtifactText,
@@ -296,19 +299,7 @@ function rendererFor(hostRoot, options, { requireInitialized }) {
  * first-run mistake, so it gets an instruction rather than a resolution failure.
  */
 async function loadHostTemplate(hostRoot, renderer) {
-  const require = createRequire(
-    pathToFileURL(join(hostRoot, "package.json")),
-  );
-  let resolved;
-  try {
-    resolved = require.resolve(`${renderer}/host`);
-  } catch {
-    throw new CommandError(
-      `Could not resolve ${renderer}/host from ${hostRoot}.\n` +
-        `Install the renderer into this host first, for example:\n` +
-        `  npm install --save-dev ${renderer}`,
-    );
-  }
+  const resolved = resolveRendererHostModule(hostRoot, renderer);
   const module = await import(pathToFileURL(resolved).href);
   const create = module.createPublisherNextHostTemplate;
   if (typeof create !== "function") {
@@ -317,6 +308,85 @@ async function loadHostTemplate(hostRoot, renderer) {
     );
   }
   return { create, module };
+}
+
+/**
+ * Finds a renderer's host contract file inside the host's installation.
+ *
+ * Not createRequire().resolve(), which was the first attempt and could not
+ * resolve the engine's own renderer. That applies the "require" condition, and a
+ * renderer is an ESM package whose exports declare only "import", so the subpath
+ * reads as not exported at all. The error told authors to install a package they
+ * had already installed.
+ *
+ * Not import.meta.resolve either. Its parent argument is silently ignored without
+ * an experimental flag, so it resolves from this file rather than from the host
+ * and reports success for a renderer the host does not have. A resolver that
+ * cannot fail is worse than one that fails honestly.
+ *
+ * So the package is located by walking up from the host root, exactly as Node
+ * would, and its exports are read for the one subpath this contract uses.
+ */
+function resolveRendererHostModule(hostRoot, renderer) {
+  const segments = renderer.split("/");
+  let directory = hostRoot;
+  const attempted = [];
+  for (;;) {
+    const candidate = join(directory, "node_modules", ...segments);
+    attempted.push(candidate);
+    const manifestPath = join(candidate, "package.json");
+    if (existsSync(manifestPath)) {
+      return resolveHostSubpath(candidate, manifestPath, renderer);
+    }
+    const parent = dirname(directory);
+    if (parent === directory) {
+      break;
+    }
+    directory = parent;
+  }
+  throw new CommandError(
+    `Could not find ${renderer} from ${hostRoot}.\n` +
+      `Install the renderer into this host first, for example:\n` +
+      `  npm install --save-dev ${renderer}\n` +
+      `Looked in:\n${attempted.map((path) => `  ${path}`).join("\n")}`,
+  );
+}
+
+function resolveHostSubpath(packageRoot, manifestPath, renderer) {
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch (error) {
+    throw new CommandError(
+      `${manifestPath} could not be read as JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  const declared = manifest?.exports?.["./host"];
+  // A string target, or a conditions object. The import condition is what a
+  // renderer's own generated host code is loaded under, so it is the one that
+  // matters; default covers a renderer that does not distinguish.
+  const target =
+    typeof declared === "string"
+      ? declared
+      : declared === null || typeof declared !== "object"
+        ? undefined
+        : (declared.import ?? declared.default ?? declared.node);
+  if (typeof target !== "string" || !target.startsWith("./")) {
+    throw new CommandError(
+      `${renderer} does not export a "./host" subpath, so the engine cannot read its host contract.\n` +
+        `Found ${JSON.stringify(declared)} in ${manifestPath}.`,
+    );
+  }
+  const absolute = join(packageRoot, ...target.slice(2).split("/"));
+  if (!existsSync(absolute)) {
+    throw new CommandError(
+      `${renderer} exports "./host" as ${target}, but ${absolute} does not exist.\n` +
+        "The renderer may need building or reinstalling.",
+    );
+  }
+  return absolute;
 }
 
 /**
@@ -675,7 +745,7 @@ async function runBuild(options) {
   const renderer = rendererFor(hostRoot, options, {
     requireInitialized: true,
   });
-  const { create } = await loadHostTemplate(hostRoot, renderer);
+  const { create, module } = await loadHostTemplate(hostRoot, renderer);
   const template = create(hostTemplateInput(hostRoot));
 
   const built = await buildPublicationReader({
@@ -690,6 +760,27 @@ async function runBuild(options) {
     } else {
       process.stderr.write(
         `${publicationRoot} did not compile.\n${describeDiagnostics(built.diagnostics)}\n`,
+      );
+    }
+    return 1;
+  }
+
+  // Before anything is written. An artifact this host cannot serve produces a
+  // host that fails to start, and a build that reported success would have moved
+  // that failure somewhere much harder to explain.
+  const servable = assertHostCanServe({
+    reader: built.value.reader,
+    capabilities: readHostCapabilities(module),
+    renderer,
+  });
+  if (!servable.valid) {
+    if (options.json) {
+      process.stdout.write(
+        `${JSON.stringify({ valid: false, diagnostics: servable.diagnostics }, null, 2)}\n`,
+      );
+    } else {
+      process.stderr.write(
+        `${hostRoot} cannot serve this publication.\n${describeDiagnostics(servable.diagnostics)}\n`,
       );
     }
     return 1;
@@ -791,6 +882,7 @@ async function runStatus(options) {
     installedContractVersion: null,
     upgradeAvailable: false,
     artifactTracking: null,
+    unservable: [],
     conflictedFiles: [],
     artifact: null,
     pendingRollback: null,
@@ -801,9 +893,11 @@ async function runStatus(options) {
     report.actions.push("initialize this host");
   } else {
     let template = null;
+    let rendererModule = null;
     try {
-      const { create } = await loadHostTemplate(hostRoot, state.renderer);
-      template = create(hostTemplateInput(hostRoot));
+      const loaded = await loadHostTemplate(hostRoot, state.renderer);
+      rendererModule = loaded.module;
+      template = loaded.create(hostTemplateInput(hostRoot));
     } catch (error) {
       report.actions.push(
         `install ${state.renderer}, which this host records but cannot resolve`,
@@ -861,6 +955,23 @@ async function runStatus(options) {
         if (!built.valid) {
           report.artifact = { outcome: "publicationInvalid" };
           report.actions.push("fix the publication, which does not compile");
+        } else if (
+          !assertHostCanServe({
+            reader: built.value.reader,
+            capabilities: readHostCapabilities(rendererModule ?? {}),
+            renderer: state.renderer,
+          }).valid
+        ) {
+          const refusal = assertHostCanServe({
+            reader: built.value.reader,
+            capabilities: readHostCapabilities(rendererModule ?? {}),
+            renderer: state.renderer,
+          });
+          report.artifact = { outcome: "unservable" };
+          report.unservable = refusal.diagnostics.map((item) => item.message);
+          report.actions.push(
+            `remove what ${state.renderer} cannot serve, or this host will not start`,
+          );
         } else {
           const destination = resolveArtifactDestination({
             hostRoot,
@@ -982,9 +1093,18 @@ function describeStatus(report) {
       `Artifact     ${
         report.artifact.outcome === "publicationInvalid"
           ? "the publication does not compile"
-          : `${report.artifact.hostRelativePath} is ${report.artifact.outcome}${tracking}`
+          : report.artifact.outcome === "unservable"
+            ? "this host cannot serve this publication"
+            : `${report.artifact.hostRelativePath} is ${report.artifact.outcome}${tracking}`
       }`,
     );
+  }
+  if (report.unservable.length > 0) {
+    lines.push("");
+    lines.push("This host cannot serve");
+    for (const message of report.unservable) {
+      lines.push(`  ${message}`);
+    }
   }
   if (report.conflictedFiles.length > 0) {
     lines.push("");

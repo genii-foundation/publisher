@@ -24,6 +24,15 @@ export {
   compileLoadedPublicationContent,
 } from "./node/compile.js";
 export {
+  assertHostCanServe,
+  findUnsupportedHostFeatures,
+  readHostCapabilities,
+} from "./node/host-capabilities.js";
+export type {
+  HostCapabilities,
+  UnsupportedHostFeature,
+} from "./node/host-capabilities.js";
+export {
   PUBLICATION_MANIFEST_FILENAME,
   ProtectedRootsError,
   resolvePublicationProtectedRoots,

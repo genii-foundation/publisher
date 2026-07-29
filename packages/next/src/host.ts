@@ -49,6 +49,39 @@ export const PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY = "[...segments]";
 export const PUBLISHER_NEXT_READER_DATA_PATH =
   "publication-reader.json";
 
+export interface PublisherNextHostCapabilities {
+  /**
+   * Route target kinds the generated host can serve.
+   *
+   * A kind absent from this list is one the host cannot serve, and a publication
+   * whose artifact contains it must be refused before anything is written rather
+   * than at server startup.
+   */
+  readonly routeKinds: readonly string[];
+}
+
+/**
+ * What the generated host can actually serve.
+ *
+ * This exists because a publication declaring an Updates route built cleanly and
+ * then produced a host that threw on boot. The generated application is created
+ * with the reader alone, so it has no Updates adapter to give, and the renderer
+ * refuses. The build said "Written." and the site did not run.
+ *
+ * Declared as data rather than as a function the engine calls, for the same
+ * reason migration edges are data: a renderer is a third-party package, and the
+ * engine must be able to decide what a host can serve without executing anything
+ * that package supplies.
+ *
+ * Updates is deliberately absent. Supporting it means deciding how an author
+ * supplies Updates data, which is a product question rather than an omission to
+ * paper over.
+ */
+export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
+  Object.freeze({
+    routeKinds: Object.freeze(["home", "work", "collection", "section"]),
+  });
+
 export interface PublisherNextHostMigration {
   /** Contract version this edge starts from. */
   readonly from: string;
