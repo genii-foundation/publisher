@@ -27,6 +27,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   PUBLISHER_APPLY_RECEIPT_FORMAT,
@@ -518,4 +519,90 @@ test("the serializer carries every field the type requires", (t) => {
       `serialization dropped ${key}, which the reader will then reject`,
     );
   }
+});
+
+// ------------------------ rollback is not a checkout, and is not clean-tree gated
+
+test("rollback works against a dirty tree and keeps unrelated work", (t) => {
+  // ADR 0012 said rollback is a checkout of the recorded pre-apply commit. It is
+  // not. A checkout followed by a clean would delete untracked work the author had
+  // nothing to do with the change, so reverting an apply would be a reason to lose a
+  // scratch file.
+  //
+  // The dirty tree tolerance turned out to be covered already: making rollback
+  // demand a clean tree breaks three existing tests. I had claimed it was untested,
+  // and it was not. What this adds is the combination those tests do not cover, an
+  // untracked file and an uncommitted edit to a committed file surviving together,
+  // which is the case a checkout and clean would destroy.
+  const { hostRoot, journalDirectory } = workspace(t);
+  const applied = initialize(hostRoot, journalDirectory);
+
+  // Work the engine never wrote: one untracked file, one edit to a committed file.
+  const scratch = join(hostRoot, "my-notes.txt");
+  writeFileSync(scratch, "my own scratch\n", "utf8");
+  // A committed file this workspace actually has, edited but not committed.
+  const tracked = join(hostRoot, ".gitignore");
+  const trackedBefore = readFileSync(tracked, "utf8");
+  writeFileSync(tracked, `${trackedBefore}# an edit of my own\n`, "utf8");
+
+  const dirty = git(hostRoot, [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+  ]);
+  assert.ok(
+    dirty.split("\n").filter((line) => line.trim().length > 0).length >= 2,
+    `the tree must be dirty for this test to mean anything: ${dirty}`,
+  );
+
+  const plan = planHostRollback({ hostRoot });
+  assert.equal(plan.outcome, "rollback", JSON.stringify(plan.conflicts));
+  const result = applyHostRollback({
+    hostRoot,
+    plan,
+    journalDirectory: join(hostRoot, ".publisher", "rollback"),
+    expectedPlanHash: plan.planHash,
+  });
+  assert.equal(result.outcome, "applied");
+
+  // What the apply wrote is gone.
+  for (const path of applied.changed) {
+    assert.equal(
+      existsSync(join(hostRoot, ...path.split("/"))),
+      false,
+      `${path} survived the rollback`,
+    );
+  }
+  // What the author wrote is not.
+  assert.equal(readFileSync(scratch, "utf8"), "my own scratch\n");
+  assert.match(readFileSync(tracked, "utf8"), /# an edit of my own/u);
+});
+
+test("ADR 0012 no longer describes rollback as a checkout", () => {
+  // The decision record is quoted as authority in handoffs, so a superseded
+  // statement in it propagates. This is the one claim that was wrong.
+  const adr = readFileSync(
+    fileURLToPath(
+      new URL(
+        "../docs/architecture/0012-author-lifecycle-contracts.md",
+        import.meta.url,
+      ),
+    ),
+    "utf8",
+  );
+  assert.equal(
+    /rollback is a checkout/u.test(adr),
+    false,
+    "ADR 0012 describes rollback as a checkout again",
+  );
+  assert.match(
+    adr,
+    /a checkout is the wrong instrument/u,
+    "ADR 0012 should say why a checkout was rejected",
+  );
+  assert.match(
+    adr,
+    /rollback does not require a clean tree/u,
+    "ADR 0012 should record that rollback is not clean-tree gated",
+  );
 });

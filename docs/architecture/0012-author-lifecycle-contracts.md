@@ -68,7 +68,11 @@ Repeat application reports `alreadyApplied` only when every postimage matches.
 
 This record originally also refused a mixed tree, where some files already hold the intended result and others do not, on the reasoning that a half-applied state means guessing at intent. That was wrong on both counts and is corrected here. It made upgrades impossible, because every upgrade leaves most host files unchanged between contract versions and is therefore always a mix. And nothing is guessed: every pending file carries the exact preimage it must currently have, every applied file already holds the exact intended bytes, and anything matching neither is a conflict that is refused. The cases the refusal was reaching for are each covered elsewhere, by the journal for a run that died midway and by conflict detection for an author's edit.
 
-Git is required. Apply refuses a non-Git or dirty tree, and rollback is a checkout of the recorded pre-apply commit. Git is the rollback authority: the alternative is trusting a backup format we wrote ourselves, with no external verifier, in exactly the situation where our own code has already failed once. Database changes remain a separately authorized forward repair or rollback, never implied by a package rollback.
+Git is required. Apply refuses a non-Git or dirty tree. Git is the rollback authority: the alternative is trusting a backup format we wrote ourselves, with no external verifier, in exactly the situation where our own code has already failed once. Database changes remain a separately authorized forward repair or rollback, never implied by a package rollback.
+
+Corrected in place after implementation. This paragraph described rollback as a checkout of the recorded pre-apply commit. It is not one, and a checkout is the wrong instrument. A checkout of the baseline followed by a clean would also delete untracked work the author had nothing to do with the change, so reverting a lifecycle apply would be a reason to lose an unrelated scratch file. Rollback instead restores exactly the paths its receipt records, to exactly the content the baseline commit held, through the same transaction an apply uses.
+
+That also means rollback does not require a clean tree, unlike apply. The tree is dirty by definition, because it holds the apply being undone. Every other baseline condition still applies, and a recorded file the author has touched since the apply is a conflict rather than something rollback quietly reverts.
 
 ### Migrations
 
