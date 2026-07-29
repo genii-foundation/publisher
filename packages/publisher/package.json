@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "@genii-foundation/publisher-content": "0.1.0-alpha.0",
+    "@genii-foundation/publisher-reader": "0.1.0-alpha.0",
     "@genii-foundation/publisher-schema": "0.1.0-alpha.0"
   },
   "devDependencies": {

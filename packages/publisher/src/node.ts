@@ -12,6 +12,15 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 export {
+  buildPublicationReader,
+  derivePublicationWorkInputs,
+  rootSectionIdFor,
+} from "./node/build.js";
+export type {
+  BuildPublicationReaderInput,
+  BuiltPublicationReader,
+} from "./node/build.js";
+export {
   compileLoadedPublicationContent,
 } from "./node/compile.js";
 export {

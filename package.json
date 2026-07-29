@@ -22,13 +22,13 @@
     "schemas"
   ],
   "scripts": {
-    "build": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/next/scripts/build.mjs",
+    "build": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/next/scripts/build.mjs",
     "provenance:audit": "node provenance/scripts/audit.mjs",
     "provenance:validate": "node provenance/scripts/validate.mjs",
     "release:prepare": "node provenance/scripts/prepare-release.mjs",
     "release:verify": "node provenance/scripts/verify-release.mjs",
-    "test": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/next/scripts/build.mjs && npm run provenance:validate && node --test --test-concurrency=1",
-    "validate": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/next/scripts/build.mjs && npm run provenance:validate && node --test --test-concurrency=1"
+    "test": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/next/scripts/build.mjs && npm run provenance:validate && node --test --test-concurrency=1",
+    "validate": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/next/scripts/build.mjs && npm run provenance:validate && node --test --test-concurrency=1"
   },
   "devDependencies": {
     "ajv": "8.20.0",
