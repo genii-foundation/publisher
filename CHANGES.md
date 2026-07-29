@@ -71,3 +71,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Required a package archive to be exactly one gzip member ending at end of file, verified against the container's own CRC-32 and length trailer, so bytes hidden after the member can no longer be attested without being examined or scanned.
 - Pinned checked-in line endings so preserved upstream datasets, repository file hashes, and the scanner runtime closure digest stay byte-identical on every platform.
 - Extracted the Next renderer host contract into one versioned renderer-owned template that author tooling and the packaged host proof both consume.
+- Added the transactional host writer that lifecycle commands mutate author repositories through, with preimage verification, reviewable conflicts, same-directory atomic replacement, a crash journal, and automatic restore.

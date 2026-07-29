@@ -18,3 +18,4 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Made the public loaded-source type nominal so TypeScript consumers cannot mistake a hand-built object for loader-issued compilation authority.
 - Rejected noncanonical publication-root spellings before filesystem inspection so trailing separators and dot segments cannot hide a final directory symlink from `lstat`.
 - Required release through an exact provenance-attested tarball and rejected direct package-directory publication.
+- Added the transactional host writer that lifecycle commands mutate author repositories through, with preimage verification, reviewable conflicts, same-directory atomic replacement, a crash journal, and automatic restore.
