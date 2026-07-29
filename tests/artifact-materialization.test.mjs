@@ -40,6 +40,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   ArtifactDestinationError,
@@ -457,4 +458,35 @@ test("the staged path is derived from the destination, not guessed", (t) => {
     destination(hostRoot, "publication-reader.json"),
   );
   assert.notEqual(staged, other);
+});
+
+test("ADR 0013 records the ordering that makes the cleanup work", () => {
+  // The decision record described an identical artifact as not being rewritten,
+  // which reads as nothing happening on that path. That reading is exactly how the
+  // staged orphan defect was written: the already-current shortcut returned before
+  // reaching any cleanup. The behaviour is guarded by the test above; this guards
+  // the record, so a future reader does not optimise the ordering away on the
+  // strength of a document that no longer explains it.
+  // Whitespace flexible, because these phrases wrap across lines in the document
+  // and a single line regex silently matched nothing. That is how the paragraph got
+  // inserted twice: the guard said it was missing when it was there.
+  const adr = readFileSync(
+    fileURLToPath(
+      new URL(
+        "../docs/architecture/0013-reader-artifact-materialization.md",
+        import.meta.url,
+      ),
+    ),
+    "utf8",
+  );
+  assert.match(
+    adr,
+    /before deciding the artifact is\s+already current/u,
+    "ADR 0013 must record that cleanup precedes the already-current shortcut",
+  );
+  assert.match(
+    adr,
+    /declared source\s+roots rather than supplied by the caller/u,
+    "ADR 0013 must record where protected roots come from now",
+  );
 });

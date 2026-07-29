@@ -52,6 +52,12 @@ the transaction. The destination is declared by a third-party package, so it
 gets the same hard denials, the same symlink and escape refusals, and the same
 protected roots.
 
+Those protected roots are read from the publication manifest's declared source
+roots rather than supplied by the caller. When this was written they came from a
+command line flag, which meant an author who did not pass it got no protection at
+all, and a renderer aiming its artifact into a manuscript directory was obeyed and
+reported success. The flag still exists and adds to what the manifest declares.
+
 A declared destination that collides with a renderer-managed contract file, or
 with the engine's host state file, is refused. The policy cannot catch this: a
 path in an allowlist is allowed by construction. The comparison is case-folded,
@@ -60,6 +66,24 @@ because on a case-insensitive filesystem a different spelling is the same file.
 Writes are atomic through a staged file renamed within the destination
 directory, and fsynced before the rename. An identical artifact is not
 rewritten, so a watching build tool is not restarted by a byte-identical write.
+
+Added after implementation, because the sentence above invites the mistake. A
+build interrupted between staging and renaming leaves the staged file behind, and
+the catch that would remove it does not run on a signal. That file is untracked
+and not ignored, so it makes the tree dirty and every later apply and upgrade
+refuses over a file the engine wrote.
+
+So a write removes any staged file at its own destination before it does anything
+else, including before deciding the artifact is already current. That ordering is
+the whole fix rather than an implementation detail. An author whose build was
+killed runs build again, and the second run usually finds the artifact unchanged;
+returning early from that path was what left the file there. Reading "an identical
+artifact is not rewritten" as "nothing happens" is how this defect was written in
+the first place.
+
+An author whose artifact is already current has no reason to run build at all, so
+`status` reports a leftover staged file, names it, and says it will block apply and
+upgrade.
 
 A check mode compares the artifact on disk against what a build produces and
 writes nothing. A repository that commits generated output has no other way to
