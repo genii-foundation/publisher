@@ -31,7 +31,6 @@ import { pathToFileURL } from "node:url";
 
 import {
   PUBLISHER_HOST_STATE_PATH,
-  parsePublisherHostState,
 } from "../dist/node/lifecycle/host-state.js";
 import {
   applyHostInitialization,
@@ -234,7 +233,7 @@ function describePlan(plan, hostRoot) {
 async function runInitPlan(options) {
   const hostRoot = resolveHostRoot(options.host);
   const { create } = await loadHostTemplate(hostRoot, options.renderer);
-  const template = create(hostTemplateInput(hostRoot, options));
+  const template = create(hostTemplateInput(hostRoot));
   const plan = planHostInitialization({
     hostRoot,
     template,
@@ -262,7 +261,7 @@ async function runInitApply(options) {
   }
   const hostRoot = resolveHostRoot(options.host);
   const { create } = await loadHostTemplate(hostRoot, options.renderer);
-  const template = create(hostTemplateInput(hostRoot, options));
+  const template = create(hostTemplateInput(hostRoot));
   const plan = planHostInitialization({
     hostRoot,
     template,
@@ -324,10 +323,9 @@ function assertLayout(value) {
   return value;
 }
 
-function hostTemplateInput(hostRoot, options) {
+function hostTemplateInput(hostRoot) {
   // Enough for the contract to produce a host. An existing host keeps its own
   // package name so initializing twice does not rename it.
-  const statePath = join(hostRoot, PUBLISHER_HOST_STATE_PATH);
   let hostPackageName = "publication-host";
   const manifestPath = join(hostRoot, "package.json");
   if (existsSync(manifestPath)) {
@@ -343,14 +341,12 @@ function hostTemplateInput(hostRoot, options) {
       // defaults rather than guessed at.
     }
   }
-  void statePath;
   return {
     hostPackageName,
     dependencies: {},
     devDependencies: {},
     overrides: {},
     errorIdentity: {},
-    ...(options.templateInput ?? {}),
   };
 }
 
