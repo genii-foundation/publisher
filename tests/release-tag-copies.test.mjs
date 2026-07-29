@@ -157,3 +157,86 @@ test("every caller passes the source it actually reads", () => {
     );
   }
 });
+
+// ------------------------------ a registry failure is not an audit finding
+
+/**
+ * The two scripts that audit against the live npm registry.
+ *
+ * Both carry the classifier because they live in different trees and neither can
+ * import from the other. Two copies drift, which is what the byte equality tests
+ * above exist for, so the same property is asserted here: both must classify, and
+ * both must use the same marker set.
+ */
+const auditCallers = Object.freeze([
+  join("packages", "next", "scripts", "packaged-host-proof.mjs"),
+  join("tests", "publisher-package-consumer.test.mjs"),
+]);
+
+test("every script auditing the registry separates a network failure from a finding", () => {
+  // A registry 400 was reported as "dependency audit exited with status 1" and read
+  // as a regression in the change under test, on one runtime out of three, because
+  // the cause was buried in dumped output. An audit that cannot reach the registry
+  // and an audit that found a vulnerability both exit nonzero.
+  for (const relative of auditCallers) {
+    const text = readFileSync(join(repositoryRoot, relative), "utf8");
+    assert.match(
+      text,
+      /function looksLikeRegistryFailure/u,
+      `${relative} audits the registry but cannot tell a network failure from a finding`,
+    );
+    assert.match(
+      text,
+      /The npm registry could not be reached/u,
+      `${relative} does not say so when the registry is unreachable`,
+    );
+    assert.match(
+      text,
+      /rather than a finding about this package/u,
+      `${relative} does not distinguish the two cases in what it reports`,
+    );
+  }
+});
+
+test("the classifier requires a registry marker, so it cannot hide a finding", () => {
+  // The dangerous failure mode of this change. If the classifier matched on a
+  // network word alone, a genuine vulnerability report mentioning, say, a network
+  // library would be reported as a transport problem and ignored.
+  for (const relative of auditCallers) {
+    const text = readFileSync(join(repositoryRoot, relative), "utf8");
+    const body = text.slice(
+      text.indexOf("function looksLikeRegistryFailure"),
+      text.indexOf("function runNpm"),
+    );
+    assert.ok(body.length > 0, `${relative} has no classifier body`);
+    assert.match(
+      body,
+      /registry\.npmjs\.org/u,
+      `${relative} must require a registry marker before blaming the network`,
+    );
+    assert.match(
+      body,
+      /if \(!mentionsRegistry\) \{\s*return false;/u,
+      `${relative} must return false when nothing names the registry`,
+    );
+  }
+});
+
+test("both copies of the classifier agree", () => {
+  // Same discipline as the release tag guard above. Two copies exist because the
+  // scripts cannot import from each other; they must still be one thing.
+  const bodies = auditCallers.map((relative) => {
+    const text = readFileSync(join(repositoryRoot, relative), "utf8");
+    return text
+      .slice(
+        text.indexOf("function looksLikeRegistryFailure"),
+        text.indexOf("function runNpm"),
+      )
+      .trim();
+  });
+  assert.equal(
+    bodies[0],
+    bodies[1],
+    "the two classifiers have drifted apart",
+  );
+});
