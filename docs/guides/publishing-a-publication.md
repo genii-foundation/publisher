@@ -146,35 +146,51 @@ change and writes nothing. `apply` takes the plan's hash and refuses if anything
 moved since you looked.
 
 ```bash
-genii-publisher init plan --renderer @example/renderer
+genii-publisher init plan
 ```
 
 ```
 Host        /home/you/estuary
-Renderer    @example/renderer 1.4.0
+Renderer    @genii-foundation/publisher-next 0.1.0-alpha.0
 Contract    0.1.0
 Layout      canonical
-Plan        sha256:c95b3b451a1e8750bed4d773d11a40fb9db2f244ec208e9dfb6614acf9483048
+Plan        sha256:5e61669d9e3f7e3323f0d1f726677d80a3a9422a56e79cf8ce3a08e030520dac
 
+  write    app/[...segments]/page.tsx
+  write    app/error.tsx
+  write    app/global-error.tsx
+  write    app/layout.tsx
+  write    app/not-found.tsx
   write    app/page.tsx
+  write    next-env.d.ts
+  write    next.config.mjs
   write    package.json
+  write    pages/404.tsx
+  write    pages/500.tsx
+  write    pages/_app.tsx
+  write    pages/_document.tsx
+  write    pages/_error.tsx
+  write    proxy.ts
+  write    publisher-application.js
+  write    publisher-error-identity.ts
   write    publisher.host.json
+  write    tsconfig.json
 
-3 file(s) would be written. Nothing has been yet.
+19 file(s) would be written. Nothing has been yet.
 Apply with:
-  genii-publisher init apply --host /home/you/estuary --plan sha256:c95b3b451a...
+  genii-publisher init apply --host /home/you/estuary --plan sha256:5e61669d9e...
 ```
 
 Read the list. Then apply it:
 
 ```bash
-genii-publisher init apply --renderer @example/renderer --plan sha256:c95b3b451a...
+genii-publisher init apply --plan sha256:5e61669d9e...
 ```
 
 ```
 Initialized /home/you/estuary
-3 file(s) written.
-Baseline commit 9761927eb4904ea695c68c541274e6a74e11ac17
+19 file(s) written.
+Baseline commit 36cc1b554b5fee3b5e9edc9d4915736fa14e6dbf
 Review the change and commit it, including publisher.host.json.
 ```
 
@@ -185,6 +201,10 @@ change you reviewed and applying whatever the situation has become.
 renderer this host uses, which contract version it is on, and the digest of every
 file the engine manages. Commit it. Every later command reads it, which is why
 you never need `--renderer` again.
+
+No `--renderer` above. On a repository that is not yet a host the default is
+`@genii-foundation/publisher-next`; once initialized, every command reads the
+renderer your host recorded.
 
 Adopting an existing repository whose layout is not the canonical one works the
 same way with `--layout declared`. Declare your real paths in `publication.json`
@@ -199,8 +219,8 @@ genii-publisher build
 ```
 Publication  /home/you/estuary
 Artifact     publication-reader.json
-Digest       sha256:6a7dcd825ae631ce7f86d69360e374ee7b75f39854f24076628405044113d0f0
-Size         5,523 bytes
+Digest       sha256:02989c86def31920e6d4ea753e0bd138d54398ae4c30486a706ee053fc53a594
+Size         5,311 bytes
 Written.
 ```
 
@@ -245,8 +265,8 @@ genii-publisher build --check
 ```
 
 ```
-Expected     sha256:ad7b9dad4255bc77912466e9be736d6386e2afa407ef584439bc56168322d17a
-On disk      sha256:6a7dcd825ae631ce7f86d69360e374ee7b75f39854f24076628405044113d0f0
+Expected     sha256:126ee65b6002021f37351a8c5b0f4fab8e9fdc46fbc7f95c398a9dabc6156b4a
+On disk      sha256:02989c86def31920e6d4ea753e0bd138d54398ae4c30486a706ee053fc53a594
 
 The artifact on disk was built from different sources. Run build.
 ```

@@ -1062,7 +1062,17 @@ async function runStatus(options) {
   // committed nor ignored makes the tree permanently dirty after every build. That
   // is the state a fresh host lands in by default, so it needs saying out loud
   // rather than being discovered as a refusal weeks later.
-  if (report.artifact !== null && report.artifact.hostRelativePath !== undefined) {
+  // Only when the artifact is actually there. A missing artifact was being annotated
+  // "neither committed nor ignored" and given an action telling the author to decide
+  // whether to commit a file that does not exist, which is nonsense twice over. The
+  // decision only arises once a build has produced something.
+  if (
+    report.artifact !== null &&
+    report.artifact.hostRelativePath !== undefined &&
+    report.artifact.outcome !== "missing" &&
+    report.artifact.outcome !== "publicationInvalid" &&
+    report.artifact.outcome !== "unservable"
+  ) {
     const tracking = artifactTracking(
       hostRoot,
       report.artifact.hostRelativePath,

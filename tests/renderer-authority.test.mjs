@@ -407,3 +407,53 @@ test("--json still emits each command's own shape on success", (t) => {
     );
   }
 });
+
+test("a missing artifact is not asked to be committed or ignored", (t) => {
+  // Found by re-running the author guide against the shipped renderer. status
+  // reported "publication-reader.json is missing  (neither committed nor ignored)"
+  // and raised an action telling the author to decide whether to commit a file that
+  // does not exist. Nonsense twice over: the decision only arises once a build has
+  // produced something.
+  const { hostRoot } = authorHost(t);
+
+  const before = run(hostRoot, ["status"]);
+  assert.equal(before.status, 1, "an unbuilt artifact still needs building");
+  assert.match(before.stdout, /is missing/u);
+  assert.equal(
+    before.stdout.includes("neither committed nor ignored"),
+    false,
+    `a missing artifact was annotated with a tracking state:\n${before.stdout}`,
+  );
+  assert.equal(
+    before.stdout.includes("committed or ignored, because"),
+    false,
+    `a missing artifact raised a tracking action:\n${before.stdout}`,
+  );
+  assert.match(before.stdout, /build the reader artifact/u);
+
+  // Once it exists and is untracked, the decision is real and is raised.
+  assert.equal(run(hostRoot, ["build"]).status, 0);
+  const after = run(hostRoot, ["status"]);
+  assert.match(after.stdout, /neither committed nor ignored/u);
+  assert.match(after.stdout, /committed or ignored, because/u);
+});
+
+test("an unservable publication is not asked about tracking either", (t) => {
+  // Same defect class. A publication the renderer cannot serve has no artifact, so
+  // asking whether to commit one is noise on top of a refusal.
+  const { hostRoot } = authorHost(t, {
+    publication: "canonical-field-notes",
+    rendererOptions: {
+      "@example/alpha": {
+        capabilities: { routeKinds: ["home", "work", "collection"] },
+      },
+    },
+  });
+  const status = run(hostRoot, ["status"]);
+  assert.equal(status.status, 1);
+  assert.equal(
+    status.stdout.includes("neither committed nor ignored"),
+    false,
+    status.stdout,
+  );
+});
