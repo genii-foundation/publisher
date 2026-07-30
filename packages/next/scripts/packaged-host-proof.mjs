@@ -759,6 +759,40 @@ function createProofPng() {
   ]);
 }
 
+// Host-relative POSIX paths of every source file, so the written host can be
+// compared against the renderer contract plus declared proof scaffolding.
+async function listHostSourcePaths(root) {
+  const paths = [];
+
+  async function visit(directory) {
+    const entries = await readdir(directory, {
+      withFileTypes: true,
+    });
+    for (const entry of entries) {
+      if (
+        entry.isDirectory() &&
+        (entry.name === ".next" ||
+          entry.name === "node_modules")
+      ) {
+        continue;
+      }
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        await visit(path);
+      } else if (entry.isFile()) {
+        paths.push(packagePath(relative(root, path)));
+      } else {
+        throw new Error(
+          `Unexpected non-file host source entry: ${path}`,
+        );
+      }
+    }
+  }
+
+  await visit(root);
+  return paths;
+}
+
 async function hashHostSources(root) {
   const hash = createHash("sha256");
 
@@ -877,7 +911,7 @@ export async function runPackagedHostProof(
     runNpm(["--version"], { label: "npm version check" }),
     workspaceManifest.engines.npm,
   );
-  const [rootApi, defaultThemeApi] = await Promise.all([
+  const [rootApi, defaultThemeApi, hostApi] = await Promise.all([
     import(
       new URL(
         `../dist/index.js?proof=${encodeURIComponent(nextManifest.version)}`,
@@ -887,6 +921,12 @@ export async function runPackagedHostProof(
     import(
       new URL(
         `../dist/theme/default.js?proof=${encodeURIComponent(nextManifest.version)}`,
+        import.meta.url,
+      )
+    ),
+    import(
+      new URL(
+        `../dist/host.js?proof=${encodeURIComponent(nextManifest.version)}`,
         import.meta.url,
       )
     ),
@@ -963,68 +1003,101 @@ export async function runPackagedHostProof(
     const localDependency = (tarball) =>
       `file:${packagePath(relative(hostRoot, tarball))}`;
 
-    await Promise.all([
-      writeJson(join(hostRoot, "package.json"), {
-        name: "genii-publisher-next-host-proof",
-        version: "0.0.0",
-        private: true,
-        type: "module",
-        scripts: {
-          build: "next build",
-          start: "next start",
-        },
-        dependencies: {
-          [schemaManifest.name]: localDependency(schemaTarball),
-          [contentManifest.name]: localDependency(contentTarball),
-          [readerManifest.name]: localDependency(readerTarball),
-          [nextManifest.name]: localDependency(nextTarball),
-          next: nextManifest.peerDependencies.next,
-          react: nextManifest.peerDependencies.react,
-          "react-dom":
-            nextManifest.peerDependencies["react-dom"],
-        },
-        overrides:
-          rootApi.PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES,
-        devDependencies: {
-          "@types/node":
-            nextManifest.devDependencies["@types/node"],
-          "@types/react":
-            nextManifest.devDependencies["@types/react"],
-          "@types/react-dom":
-            nextManifest.devDependencies["@types/react-dom"],
-          typescript: nextManifest.devDependencies.typescript,
-        },
+    // The renderer owns the host contract. This proof applies exactly what an
+    // author would receive, then layers its own scaffolding on top, so the two
+    // cannot drift: a host file this proof writes that the template does not
+    // declare is proof scaffolding by construction, and the assertion below
+    // enforces that.
+    const hostTemplate = hostApi.createPublisherNextHostTemplate({
+      hostPackageName: "genii-publisher-next-host-proof",
+      dependencies: {
+        [schemaManifest.name]: localDependency(schemaTarball),
+        [contentManifest.name]: localDependency(contentTarball),
+        [readerManifest.name]: localDependency(readerTarball),
+        [nextManifest.name]: localDependency(nextTarball),
+        next: nextManifest.peerDependencies.next,
+        react: nextManifest.peerDependencies.react,
+        "react-dom":
+          nextManifest.peerDependencies["react-dom"],
+      },
+      devDependencies: {
+        "@types/node":
+          nextManifest.devDependencies["@types/node"],
+        "@types/react":
+          nextManifest.devDependencies["@types/react"],
+        "@types/react-dom":
+          nextManifest.devDependencies["@types/react-dom"],
+        typescript: nextManifest.devDependencies.typescript,
+      },
+      overrides:
+        rootApi.PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES,
+      errorIdentity,
+    });
+    assert.equal(
+      hostTemplate.contractVersion,
+      hostApi.PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+    );
+    assert.equal(
+      hostTemplate.rendererVersion,
+      nextManifest.version,
+    );
+
+    await Promise.all(
+      hostTemplate.files.map(async (file) => {
+        const target = join(
+          hostRoot,
+          ...file.path.split("/"),
+        );
+        await mkdir(dirname(target), { recursive: true });
+        await writeFile(target, file.contents, "utf8");
       }),
+    );
+
+    // Proof scaffolding. `app/layout.tsx` deliberately replaces the template's
+    // copy with one that throws on demand, which is how the global error
+    // boundary is exercised; an author host must never carry that.
+    // Replaced rather than added, so it must already exist in the contract.
+    const proofOverriddenHostPaths = ["app/layout.tsx"];
+    // Added beyond the contract. The reader artifact is generated publication
+    // data rather than a template file, so it belongs here too.
+    const proofAddedHostPaths = [
+      "declaration-probe.ts",
+      "export-probe.mjs",
+      "server-import-probe.mjs",
+      `app/${basename(runtimeErrorRoot)}/page.tsx`,
+      `app/${basename(globalErrorRoot)}/page.tsx`,
+      `app/${basename(boundaryProofRoot)}/page.tsx`,
+      "public/proof.png",
+      hostTemplate.readerDataPath,
+    ];
+    for (const path of proofOverriddenHostPaths) {
+      assert.ok(
+        hostTemplate.files.some(
+          (file) => file.path === path,
+        ),
+        `the proof overrides ${path}, which the renderer contract no longer declares`,
+      );
+    }
+
+    await Promise.all([
       writeJson(
-        join(hostRoot, "publication-reader.json"),
+        join(hostRoot, hostTemplate.readerDataPath),
         reader,
       ),
       writeFile(
-        join(hostRoot, "publisher-application.js"),
+        join(appRoot, "layout.tsx"),
         [
-          'import reader from "./publication-reader.json" with { type: "json" };',
-          'import { createPublicationNextApplication } from "@genii-foundation/publisher-next/server";',
+          'import "@genii-foundation/publisher-next/styles.css";',
+          'import { application } from "../publisher-application.js";',
           "",
-          "const created = await createPublicationNextApplication({ reader });",
-          "if (!created.valid) {",
-          "  throw new Error(JSON.stringify(created.diagnostics));",
+          "export default function RootLayout(",
+          "  props: Parameters<typeof application.RootLayout>[0],",
+          ") {",
+          '  if (process.env.PUBLISHER_GLOBAL_ERROR_PROOF === "1") {',
+          '    throw new Error("PACKAGED_GLOBAL_ERROR_SECRET");',
+          "  }",
+          "  return application.RootLayout(props);",
           "}",
-          '/** @type {import("@genii-foundation/publisher-next/server").PublicationNextApplication} */',
-          "export const application = created.value;",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(hostRoot, "publisher-error-identity.ts"),
-        [
-          'import { createPublisherNextErrorIdentity } from "@genii-foundation/publisher-next/client";',
-          "",
-          `const result = createPublisherNextErrorIdentity(${JSON.stringify(errorIdentity, null, 2)});`,
-          "if (!result.valid) {",
-          "  throw new Error(JSON.stringify(result.diagnostics));",
-          "}",
-          "export const publisherErrorIdentity = result.value;",
           "",
         ].join("\n"),
         "utf8",
@@ -1093,190 +1166,6 @@ export async function runPackagedHostProof(
         "utf8",
       ),
       writeFile(
-        join(appRoot, "layout.tsx"),
-        [
-          'import "@genii-foundation/publisher-next/styles.css";',
-          'import { application } from "../publisher-application.js";',
-          "",
-          "export default function RootLayout(",
-          "  props: Parameters<typeof application.RootLayout>[0],",
-          ") {",
-          '  if (process.env.PUBLISHER_GLOBAL_ERROR_PROOF === "1") {',
-          '    throw new Error("PACKAGED_GLOBAL_ERROR_SECRET");',
-          "  }",
-          "  return application.RootLayout(props);",
-          "}",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(appRoot, "page.tsx"),
-        [
-          'import { application } from "../publisher-application.js";',
-          "",
-          "export const generateMetadata = application.generateRootMetadata;",
-          "export default application.RootPage;",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(routeRoot, "page.tsx"),
-        [
-          'import { application } from "../../publisher-application.js";',
-          "",
-          "export const dynamicParams = false;",
-          "export const generateStaticParams = application.generateStaticParams;",
-          "export const generateMetadata = application.generateMetadata;",
-          "export default application.Page;",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(appRoot, "not-found.tsx"),
-        [
-          'import { application } from "../publisher-application.js";',
-          "",
-          "export default application.NotFoundPage;",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(appRoot, "error.tsx"),
-        [
-          '"use client";',
-          "",
-          'import { PublisherNextErrorPage, type PublisherNextErrorBoundaryProps } from "@genii-foundation/publisher-next/client";',
-          'import { publisherErrorIdentity } from "../publisher-error-identity";',
-          "",
-          "export default function ErrorBoundary(",
-          "  props: PublisherNextErrorBoundaryProps,",
-          ") {",
-          "  return (",
-          "    <PublisherNextErrorPage",
-          "      {...props}",
-          "      identity={publisherErrorIdentity}",
-          "    />",
-          "  );",
-          "}",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(appRoot, "global-error.tsx"),
-        [
-          '"use client";',
-          "",
-          'import { PublisherNextGlobalErrorPage, type PublisherNextErrorBoundaryProps } from "@genii-foundation/publisher-next/client";',
-          'import { publisherErrorIdentity } from "../publisher-error-identity";',
-          "",
-          "export default function GlobalErrorBoundary(",
-          "  props: PublisherNextErrorBoundaryProps,",
-          ") {",
-          "  return (",
-          "    <PublisherNextGlobalErrorPage",
-          "      {...props}",
-          "      identity={publisherErrorIdentity}",
-          "    />",
-          "  );",
-          "}",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(pagesRoot, "_error.tsx"),
-        [
-          'import { PublisherNextFrameworkErrorPage } from "@genii-foundation/publisher-next/client";',
-          'import { publisherErrorIdentity } from "../publisher-error-identity";',
-          "",
-          "export default function FrameworkError() {",
-          "  return (",
-          "    <PublisherNextFrameworkErrorPage",
-          "      identity={publisherErrorIdentity}",
-          "    />",
-          "  );",
-          "}",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(pagesRoot, "500.tsx"),
-        [
-          'import { PublisherNextFrameworkErrorPage } from "@genii-foundation/publisher-next/client";',
-          'import { publisherErrorIdentity } from "../publisher-error-identity";',
-          "",
-          "export default function FrameworkServerError() {",
-          "  return (",
-          "    <PublisherNextFrameworkErrorPage",
-          "      identity={publisherErrorIdentity}",
-          "    />",
-          "  );",
-          "}",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(pagesRoot, "404.tsx"),
-        [
-          'import { PublisherNextFrameworkErrorPage } from "@genii-foundation/publisher-next/client";',
-          'import { publisherErrorIdentity } from "../publisher-error-identity";',
-          "",
-          "export default function FrameworkNotFound() {",
-          "  return (",
-          "    <PublisherNextFrameworkErrorPage",
-          "      identity={publisherErrorIdentity}",
-          "    />",
-          "  );",
-          "}",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(pagesRoot, "_app.tsx"),
-        [
-          'import "@genii-foundation/publisher-next/styles.css";',
-          'import type { AppProps } from "next/app";',
-          "",
-          "export default function PublisherPagesApp({",
-          "  Component,",
-          "  pageProps,",
-          "}: AppProps) {",
-          "  return <Component {...pageProps} />;",
-          "}",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(pagesRoot, "_document.tsx"),
-        [
-          'import { Head, Html, Main, NextScript } from "next/document";',
-          'import { publisherErrorIdentity } from "../publisher-error-identity";',
-          "",
-          "export default function PublisherDocument() {",
-          "  return (",
-          "    <Html lang={publisherErrorIdentity.publication.language}>",
-          "      <Head />",
-          "      <body>",
-          "        <Main />",
-          "        <NextScript />",
-          "      </body>",
-          "    </Html>",
-          "  );",
-          "}",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
         join(runtimeErrorRoot, "page.tsx"),
         [
           'export const dynamic = "force-dynamic";',
@@ -1317,79 +1206,22 @@ export async function runPackagedHostProof(
         "utf8",
       ),
       writeFile(
-        join(hostRoot, "next.config.mjs"),
-        [
-          'import reader from "./publication-reader.json" with { type: "json" };',
-          'import { createPublisherNextConfig, createPublisherNextRoutePlan } from "@genii-foundation/publisher-next/config";',
-          "",
-          "const routePlan = createPublisherNextRoutePlan(reader);",
-          "if (!routePlan.valid) {",
-          "  throw new Error(JSON.stringify(routePlan.diagnostics));",
-          "}",
-          "export default createPublisherNextConfig(routePlan.value);",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
-        join(hostRoot, "proxy.ts"),
-        [
-          'import { NextResponse, type NextRequest } from "next/server";',
-          'import { application } from "./publisher-application.js";',
-          "",
-          "export function proxy(request: NextRequest) {",
-          "  return application.handleRequest(request) ?? NextResponse.next();",
-          "}",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeJson(join(hostRoot, "tsconfig.json"), {
-        compilerOptions: {
-          target: "ES2017",
-          lib: ["dom", "dom.iterable", "esnext"],
-          allowJs: true,
-          skipLibCheck: true,
-          strict: true,
-          noEmit: true,
-          incremental: false,
-          module: "esnext",
-          esModuleInterop: true,
-          moduleResolution: "bundler",
-          resolveJsonModule: true,
-          isolatedModules: true,
-          jsx: "react-jsx",
-          plugins: [{ name: "next" }],
-        },
-        include: [
-          "next-env.d.ts",
-          ".next/types/**/*.ts",
-          ".next/dev/types/**/*.ts",
-          "**/*.mts",
-          "**/*.ts",
-          "**/*.tsx",
-        ],
-        exclude: ["node_modules"],
-      }),
-      writeFile(
-        join(hostRoot, "next-env.d.ts"),
-        [
-          '/// <reference types="next" />',
-          '/// <reference types="next/image-types/global" />',
-          '/// <reference types="next/navigation-types/compat/navigation" />',
-          'import "./.next/types/routes.d.ts";',
-          "",
-          "// NOTE: This file should not be edited",
-          "// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.",
-          "",
-        ].join("\n"),
-        "utf8",
-      ),
-      writeFile(
         join(publicRoot, "proof.png"),
         createProofPng(),
       ),
     ]);
+
+    // Every host file is either the renderer's or declared proof scaffolding.
+    const writtenHostPaths = (await listHostSourcePaths(hostRoot)).sort();
+    const declaredHostPaths = [
+      ...hostTemplate.files.map(({ path }) => path),
+      ...proofAddedHostPaths,
+    ].sort();
+    assert.deepEqual(
+      writtenHostPaths,
+      declaredHostPaths,
+      "the proof host must contain exactly the renderer contract plus declared proof scaffolding",
+    );
 
     const installEnvironment = {
       ...process.env,

@@ -13,5 +13,6 @@ These records define the accepted foundation of GENII Publisher.
 9. [ADR 0009: Next.js renderer and host continuity boundary](./0009-next-renderer-and-host-continuity-boundary.md)
 10. [ADR 0010: Publication source snapshot boundary](./0010-publication-source-snapshot-boundary.md)
 11. [ADR 0011: Trusted package archive boundary](./0011-trusted-package-archive-boundary.md)
+12. [ADR 0012: Author lifecycle contracts and mutation policy](./0012-author-lifecycle-contracts.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

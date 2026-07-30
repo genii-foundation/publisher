@@ -18,3 +18,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Made the public loaded-source type nominal so TypeScript consumers cannot mistake a hand-built object for loader-issued compilation authority.
 - Rejected noncanonical publication-root spellings before filesystem inspection so trailing separators and dot segments cannot hide a final directory symlink from `lstat`.
 - Required release through an exact provenance-attested tarball and rejected direct package-directory publication.
+- Added the transactional host writer that lifecycle commands mutate author repositories through, with preimage verification, reviewable conflicts, same-directory atomic replacement, a crash journal, and automatic restore.
+- Added the centralized lifecycle mutation policy, which is default-deny, checks hard-denied categories before any allowlist so declaring a path cannot grant authority over it, and protects publication sources and durable state through the publication's own declared roots.
+- Added committed author host integration state and host initialization, with read-only planning, a directory-independent plan hash the apply step must be given, reviewable conflicts over locally modified files, and adoption of an established declared layout without moving any source.
+- Required a clean Git work tree with a commit before any lifecycle apply, recorded the commit a rollback returns to, and proved that returning to it restores the pre-apply tree exactly.
+- Added the genii-publisher executable with init plan, init apply, and recover, resolving the renderer host contract from the author's own installation and refusing to apply a plan hash the operator did not review.
