@@ -49,6 +49,52 @@ export class GitBaselineError extends Error {
   }
 }
 
+/**
+ * Reads one path as it stood at a commit.
+ *
+ * Returns null when the commit did not contain it, which rollback treats as
+ * "this file should not exist afterwards". Distinguishing absent from empty
+ * matters: an empty file at the baseline must come back as an empty file, not be
+ * deleted.
+ */
+export function readFileAtCommit(
+  repositoryRoot: string,
+  commit: string,
+  hostRelativePath: string,
+): string | null {
+  if (!/^[0-9a-f]{40}$/u.test(commit)) {
+    throw new GitBaselineError(
+      `Refusing to read from an unusable commit ${JSON.stringify(commit)}.`,
+    );
+  }
+  const listed = git(repositoryRoot, [
+    "ls-tree",
+    "--name-only",
+    "-z",
+    commit,
+    "--",
+    hostRelativePath,
+  ]);
+  if (listed.status !== 0) {
+    throw new GitBaselineError(
+      `Could not inspect ${hostRelativePath} at ${commit}: ${listed.stderr.trim()}`,
+    );
+  }
+  if (listed.stdout.replace(/\0/gu, "").trim().length === 0) {
+    return null;
+  }
+  const shown = git(repositoryRoot, [
+    "show",
+    `${commit}:${hostRelativePath}`,
+  ]);
+  if (shown.status !== 0) {
+    throw new GitBaselineError(
+      `Could not read ${hostRelativePath} at ${commit}: ${shown.stderr.trim()}`,
+    );
+  }
+  return shown.stdout;
+}
+
 function git(
   cwd: string,
   args: readonly string[],

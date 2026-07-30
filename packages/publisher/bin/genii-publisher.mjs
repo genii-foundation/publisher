@@ -39,6 +39,14 @@ import {
 import {
   recoverHostTransaction,
 } from "../dist/node/lifecycle/transaction.js";
+import {
+  applyHostUpgrade,
+  planHostUpgrade,
+} from "../dist/node/lifecycle/upgrade.js";
+import {
+  applyHostRollback,
+  planHostRollback,
+} from "../dist/node/lifecycle/rollback.js";
 
 const defaultRenderer = "@genii-foundation/publisher-next";
 const journalDirectoryName = join(".publisher", "transaction");
@@ -46,9 +54,13 @@ const journalDirectoryName = join(".publisher", "transaction");
 const usage = `genii-publisher <command>
 
 Commands
-  init plan     Report what initializing this host would change. Writes nothing.
-  init apply    Apply a reviewed plan. Requires a clean Git tree.
-  recover       Restore the baseline left by an interrupted apply.
+  init plan       Report what initializing this host would change. Writes nothing.
+  init apply      Apply a reviewed plan. Requires a clean Git tree.
+  upgrade plan    Report what moving to the installed contract would change.
+  upgrade apply   Apply a reviewed upgrade. Requires a clean Git tree.
+  rollback plan   Report what undoing the last apply would restore.
+  rollback apply  Undo the last apply, restoring its recorded baseline.
+  recover         Restore the baseline left by an interrupted apply.
 
 Options
   --host <dir>            Host root. Defaults to the working directory.
@@ -57,7 +69,10 @@ Options
                           Defaults to ${defaultRenderer}.
   --protected-root <dir>  A root holding publication sources or durable state.
                           Repeatable. Nothing inside one is ever written.
-  --plan <hash>           Required by init apply. The plan hash you reviewed.
+  --plan <hash>           Required by every apply. The plan hash you reviewed.
+  --acknowledge-manual-steps
+                          Confirms you have read the manual steps an upgrade
+                          reports. Required when it reports any.
   --json                  Emit machine readable output.
   --help                  Show this text.
   --version               Show the application package version.
@@ -78,6 +93,7 @@ function parseArguments(argv) {
     renderer: defaultRenderer,
     protectedRoots: [],
     plan: null,
+    acknowledgeManualSteps: false,
     json: false,
     help: false,
     version: false,
@@ -101,6 +117,10 @@ function parseArguments(argv) {
     }
     if (argument === "--json") {
       options.json = true;
+      continue;
+    }
+    if (argument === "--acknowledge-manual-steps") {
+      options.acknowledgeManualSteps = true;
       continue;
     }
     if (argument === "--protected-root") {
@@ -188,6 +208,26 @@ async function loadHostTemplate(hostRoot, renderer) {
     );
   }
   return { create, module };
+}
+
+/**
+ * Reads the renderer's host contract migration registry.
+ *
+ * Required rather than defaulted to empty. Absent and empty would otherwise be
+ * indistinguishable, so a renderer that misnamed the export would upgrade with
+ * no route and skip the manual steps an edge exists to announce. A renderer with
+ * nothing to migrate exports an empty array.
+ */
+function migrationEdgesFrom(module, renderer) {
+  const edges = module.PUBLISHER_NEXT_HOST_MIGRATIONS;
+  if (!Array.isArray(edges)) {
+    throw new CommandError(
+      `${renderer}/host does not export a host contract migration registry.\n` +
+        "A renderer with nothing to migrate exports an empty array, so that a\n" +
+        "missing registry is never mistaken for having no migrations.",
+    );
+  }
+  return edges;
 }
 
 function describePlan(plan, hostRoot) {
@@ -294,6 +334,236 @@ async function runInitApply(options) {
   return 0;
 }
 
+function upgradePlanFor(hostRoot, options, template, module) {
+  return planHostUpgrade({
+    hostRoot,
+    template,
+    migrationEdges: migrationEdgesFrom(module, options.renderer),
+    enginePackages: enginePackagesFor(template),
+    ...(options.protectedRoots.length === 0
+      ? {}
+      : { protectedRoots: options.protectedRoots }),
+  });
+}
+
+/**
+ * Labels one path in a plan listing.
+ *
+ * A conflict outranks a removal. A file can be both, and reporting the removal
+ * would hide the only line telling an author which file blocked the plan, while
+ * the summary counted it. That is worse than saying nothing.
+ */
+function labelFor(entry, removing, symbol) {
+  if (entry.state === "conflicted") {
+    return symbol.conflicted;
+  }
+  return removing.includes(entry.path) ? "remove " : symbol[entry.state];
+}
+
+function describeUpgradePlan(plan, hostRoot) {
+  const lines = [];
+  lines.push(`Host        ${hostRoot}`);
+  lines.push(`Renderer    ${plan.renderer} ${plan.rendererVersion}`);
+  lines.push(
+    `Contract    ${plan.fromContractVersion} to ${plan.toContractVersion}`,
+  );
+  lines.push(`Plan        ${plan.planHash}`);
+  lines.push("");
+  const symbol = {
+    pending: "write  ",
+    applied: "current",
+    conflicted: "CONFLICT",
+  };
+  for (const entry of plan.classifications) {
+    lines.push(`  ${labelFor(entry, plan.removed, symbol)}  ${entry.path}`);
+  }
+  if (plan.migrationPath.edges.length > 0) {
+    lines.push("");
+    lines.push("Route");
+    for (const edge of plan.migrationPath.edges) {
+      lines.push(`  ${edge.from} to ${edge.to}  ${edge.summary}`);
+    }
+  }
+  if (plan.manualSteps.length > 0) {
+    lines.push("");
+    lines.push("Manual steps this tooling will not perform:");
+    for (const step of plan.manualSteps) {
+      lines.push(`  ${step}`);
+    }
+  }
+  lines.push("");
+  if (plan.outcome === "alreadyCurrent") {
+    lines.push("Already on the installed contract. Nothing to apply.");
+  } else if (plan.outcome === "conflicted") {
+    lines.push(
+      `${plan.conflicts.length} file(s) differ from what the engine last wrote.`,
+    );
+    lines.push(
+      "Review them and either restore them or record the change deliberately.",
+    );
+    lines.push("Nothing has been written.");
+  } else {
+    const pending = plan.classifications.filter(
+      (entry) => entry.state === "pending",
+    ).length;
+    lines.push(`${pending} file(s) would be written. Nothing has been yet.`);
+    lines.push("Apply with:");
+    lines.push(
+      `  genii-publisher upgrade apply --host ${hostRoot} --plan ${plan.planHash}` +
+        (plan.manualSteps.length > 0
+          ? " \\\n    --acknowledge-manual-steps"
+          : ""),
+    );
+  }
+  return lines.join("\n");
+}
+
+async function runUpgradePlan(options) {
+  const hostRoot = resolveHostRoot(options.host);
+  const { create, module } = await loadHostTemplate(
+    hostRoot,
+    options.renderer,
+  );
+  const plan = upgradePlanFor(
+    hostRoot,
+    options,
+    create(hostTemplateInput(hostRoot)),
+    module,
+  );
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+  } else {
+    process.stdout.write(`${describeUpgradePlan(plan, hostRoot)}\n`);
+  }
+  return plan.outcome === "conflicted" ? 1 : 0;
+}
+
+async function runUpgradeApply(options) {
+  if (options.plan === null) {
+    throw new CommandError(
+      "upgrade apply requires --plan <hash>, the plan hash reported by upgrade plan.\n" +
+        "Passing it is what proves you are applying the plan you reviewed.",
+    );
+  }
+  const hostRoot = resolveHostRoot(options.host);
+  const { create, module } = await loadHostTemplate(
+    hostRoot,
+    options.renderer,
+  );
+  const plan = upgradePlanFor(
+    hostRoot,
+    options,
+    create(hostTemplateInput(hostRoot)),
+    module,
+  );
+  const result = applyHostUpgrade({
+    hostRoot,
+    plan,
+    journalDirectory: join(hostRoot, journalDirectoryName),
+    expectedPlanHash: options.plan,
+    ...(options.acknowledgeManualSteps
+      ? { acknowledgedManualSteps: true }
+      : {}),
+  });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return 0;
+  }
+  if (result.outcome === "alreadyApplied") {
+    process.stdout.write("Already on the installed contract. Nothing changed.\n");
+    return 0;
+  }
+  process.stdout.write(
+    `Upgraded ${hostRoot}\n` +
+      `Contract ${result.fromContractVersion} to ${result.toContractVersion}\n` +
+      `${result.changed.length} file(s) written.\n` +
+      `Baseline commit ${result.baselineCommit}\n` +
+      `Review the change and commit it, including ${PUBLISHER_HOST_STATE_PATH}.\n` +
+      "Undo it with:\n" +
+      `  genii-publisher rollback plan --host ${hostRoot}\n`,
+  );
+  return 0;
+}
+
+function describeRollbackPlan(plan, hostRoot) {
+  const lines = [];
+  lines.push(`Host        ${hostRoot}`);
+  if (plan.receipt === null) {
+    lines.push("");
+    lines.push("No recorded apply to roll back.");
+    return lines.join("\n");
+  }
+  lines.push(`Undoing     ${plan.receipt.operation} ${plan.receipt.planHash}`);
+  lines.push(`Baseline    ${plan.receipt.baselineCommit}`);
+  lines.push(`Plan        ${plan.planHash}`);
+  lines.push("");
+  const symbol = {
+    pending: "restore",
+    applied: "current",
+    conflicted: "CONFLICT",
+  };
+  for (const entry of plan.classifications) {
+    lines.push(`  ${labelFor(entry, plan.removing, symbol)}  ${entry.path}`);
+  }
+  lines.push("");
+  if (plan.outcome === "nothingToRollBack") {
+    lines.push("Every recorded file already matches the baseline.");
+  } else if (plan.outcome === "conflicted") {
+    lines.push(
+      `${plan.conflicts.length} file(s) have changed since the apply, so rolling`,
+    );
+    lines.push("back would discard that work. Nothing has been written.");
+  } else {
+    lines.push("Apply with:");
+    lines.push(
+      `  genii-publisher rollback apply --host ${hostRoot} --plan ${plan.planHash}`,
+    );
+  }
+  return lines.join("\n");
+}
+
+function runRollbackPlan(options) {
+  const hostRoot = resolveHostRoot(options.host);
+  const plan = planHostRollback({ hostRoot });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+  } else {
+    process.stdout.write(`${describeRollbackPlan(plan, hostRoot)}\n`);
+  }
+  return plan.outcome === "conflicted" ? 1 : 0;
+}
+
+function runRollbackApply(options) {
+  if (options.plan === null) {
+    throw new CommandError(
+      "rollback apply requires --plan <hash>, the plan hash reported by rollback plan.\n" +
+        "Passing it is what proves you are applying the plan you reviewed.",
+    );
+  }
+  const hostRoot = resolveHostRoot(options.host);
+  const plan = planHostRollback({ hostRoot });
+  const result = applyHostRollback({
+    hostRoot,
+    plan,
+    journalDirectory: join(hostRoot, journalDirectoryName),
+    expectedPlanHash: options.plan,
+  });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    return 0;
+  }
+  if (result.outcome === "alreadyApplied") {
+    process.stdout.write("Nothing to roll back.\n");
+    return 0;
+  }
+  process.stdout.write(
+    `Rolled ${hostRoot} back to ${result.baselineCommit}\n` +
+      `${result.restored.length} file(s) restored.\n` +
+      "The recorded apply is no longer in the tree, so review and commit this too.\n",
+  );
+  return 0;
+}
+
 function runRecover(options) {
   const hostRoot = resolveHostRoot(options.host);
   const result = recoverHostTransaction({
@@ -371,6 +641,14 @@ async function main(argv) {
       return await runInitPlan(options);
     case "init apply":
       return await runInitApply(options);
+    case "upgrade plan":
+      return await runUpgradePlan(options);
+    case "upgrade apply":
+      return await runUpgradeApply(options);
+    case "rollback plan":
+      return runRollbackPlan(options);
+    case "rollback apply":
+      return runRollbackApply(options);
     case "recover":
       return runRecover(options);
     default:

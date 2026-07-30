@@ -11,17 +11,21 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-// Host initialization.
+// Host upgrade.
 //
-// Planning is read-only and answers one question: what would change. Applying
-// takes a plan, proves the tree still matches what the plan was computed
-// against, and writes through the transaction. The split exists so an author can
-// read the whole change before any of it happens.
+// An upgrade is the diff between what the engine recorded writing and what the
+// installed contract now produces. That is the whole idea, and it is why nothing
+// executable is needed: the recorded hashes say what the engine put there, the
+// new contract says what belongs there, and the difference is the change.
 //
-// Two repositories are served. An empty one receives the canonical layout. An
-// established one is adopted, which adds host integration and records the layout
-// without moving a single source file. Adoption is not a lesser path: the first
-// real migration target is a repository whose structure predates the engine.
+// The recorded hashes are also what makes local modification detectable. Without
+// them an upgrade could only overwrite blindly or refuse to touch anything, and
+// both are wrong.
+//
+// Files the old contract owned and the new one does not are removed, so an
+// upgraded host does not accumulate orphans the renderer no longer tracks. Those
+// removals carry the recorded hash as their preimage, so a file an author edited
+// after the engine wrote it is a conflict rather than a deletion.
 
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -34,12 +38,17 @@ import {
 import { resolveGitBaseline } from "./git-baseline.js";
 import {
   PUBLISHER_HOST_STATE_PATH,
-  type PublisherHostLayout,
   type PublisherHostState,
   hashManagedFileContents,
   parsePublisherHostState,
   serializePublisherHostState,
 } from "./host-state.js";
+import type { HostContractTemplate } from "./init.js";
+import {
+  type HostContractMigrationEdge,
+  type HostContractMigrationPath,
+  resolveHostContractMigrationPath,
+} from "./migrations.js";
 import {
   assertHostMutationsPermitted,
   createHostMutationAuthority,
@@ -52,104 +61,93 @@ import {
   classifyHostMutations,
 } from "./transaction.js";
 
-/** A renderer host contract, as the renderer's own `./host` export produces it. */
-export interface HostContractTemplate {
-  readonly contractVersion: string;
-  readonly renderer: string;
-  readonly rendererVersion: string;
-  readonly files: readonly {
-    readonly path: string;
-    readonly contents: string;
-  }[];
-}
-
-export interface HostInitializationPlanInput {
+export interface HostUpgradePlanInput {
   /** Absolute, canonical host root. */
   readonly hostRoot: string;
+  /** The contract the installed renderer now produces. */
   readonly template: HostContractTemplate;
-  readonly layout: PublisherHostLayout;
-  /** Exact engine package versions this host will pin. */
+  /** The installed renderer's migration registry. */
+  readonly migrationEdges: readonly HostContractMigrationEdge[];
+  /** Exact engine package versions this host will pin after upgrading. */
   readonly enginePackages: Readonly<Record<string, string>>;
-  /** Roots the publication declares for sources and durable state. */
   readonly protectedRoots?: readonly string[];
 }
 
-export type HostInitializationOutcome =
-  | "initialize"
-  | "alreadyInitialized"
+export type HostUpgradeOutcome =
+  | "upgrade"
+  | "alreadyCurrent"
   | "conflicted";
 
-export interface HostInitializationPlan {
-  readonly outcome: HostInitializationOutcome;
-  /** Stable across directories, so the same host plans identically anywhere. */
+export interface HostUpgradePlan {
+  readonly outcome: HostUpgradeOutcome;
   readonly planHash: string;
-  readonly layout: PublisherHostLayout;
-  readonly hostContractVersion: string;
+  readonly fromContractVersion: string;
+  readonly toContractVersion: string;
   readonly renderer: string;
   readonly rendererVersion: string;
+  readonly migrationPath: HostContractMigrationPath;
+  /** Steps the tooling refuses to perform. A plan carrying any is gated. */
+  readonly manualSteps: readonly string[];
   readonly mutations: readonly HostFileMutation[];
   readonly classifications: readonly HostFileClassification[];
   readonly conflicts: readonly HostFileClassification[];
+  /** Paths the old contract owned that the new one does not. */
+  readonly removed: readonly string[];
 }
 
-export class HostInitializationError extends Error {
+export class HostUpgradeError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = "HostInitializationError";
+    this.name = "HostUpgradeError";
   }
 }
 
-function readHostStateIfPresent(
-  hostRoot: string,
-): PublisherHostState | null {
+function readRecordedState(hostRoot: string): PublisherHostState {
   const path = join(hostRoot, PUBLISHER_HOST_STATE_PATH);
   if (!existsSync(path)) {
-    return null;
+    throw new HostUpgradeError(
+      `This host has no ${PUBLISHER_HOST_STATE_PATH}, so there is nothing to upgrade from. Initialize it first.`,
+    );
   }
   return parsePublisherHostState(readFileSync(path, "utf8"));
 }
 
 /**
- * Computes the mutation set and classifies it, writing nothing.
- *
- * The host state file is part of the mutation set rather than a side effect,
- * so it is subject to the same policy, the same conflict detection, and the same
- * transaction as every other file it describes.
+ * Computes the upgrade mutation set and classifies it, writing nothing.
  */
-export function planHostInitialization(
-  input: HostInitializationPlanInput,
-): HostInitializationPlan {
-  const hostRoot = resolve(input.hostRoot);
+export function planHostUpgrade(
+  input: HostUpgradePlanInput,
+): HostUpgradePlan {
   if (!isAbsolute(input.hostRoot)) {
-    throw new HostInitializationError(
+    throw new HostUpgradeError(
       "Host root must be an absolute path.",
     );
   }
-  if (input.template.files.length === 0) {
-    throw new HostInitializationError(
-      "The renderer host contract declares no files.",
+  const hostRoot = resolve(input.hostRoot);
+  const recorded = readRecordedState(hostRoot);
+
+  if (recorded.renderer !== input.template.renderer) {
+    throw new HostUpgradeError(
+      `This host is integrated with ${recorded.renderer}, so it cannot be upgraded using ${input.template.renderer}. Changing renderer is not an upgrade.`,
     );
   }
 
-  const existing = readHostStateIfPresent(hostRoot);
-  if (
-    existing !== null &&
-    existing.renderer !== input.template.renderer
-  ) {
-    throw new HostInitializationError(
-      `This host is already initialized for ${existing.renderer}, so it cannot be initialized for ${input.template.renderer}.`,
-    );
-  }
+  // Resolved before anything is read from disk, so a host on a version this
+  // target never knew about is told that rather than shown a file diff it cannot
+  // act on.
+  const migrationPath = resolveHostContractMigrationPath({
+    fromVersion: recorded.hostContractVersion,
+    targetVersion: input.template.contractVersion,
+    edges: input.migrationEdges,
+  });
 
-  const priorHashes = new Map(
-    (existing?.managedFiles ?? []).map((file) => [
-      file.path,
-      file.sha256,
-    ]),
+  const recordedHashes = new Map(
+    recorded.managedFiles.map((file) => [file.path, file.sha256]),
+  );
+  const contractPaths = new Set(
+    input.template.files.map((file) => file.path),
   );
 
-  // The state file records the hashes of every other managed file, so it is
-  // computed after them and then included in the same set.
   const managedFiles = input.template.files
     .map((file) => ({
       path: file.path,
@@ -159,35 +157,41 @@ export function planHostInitialization(
       left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
     );
 
-  const state: PublisherHostState = {
+  const nextState: PublisherHostState = {
     format: "",
     renderer: input.template.renderer,
     rendererVersion: input.template.rendererVersion,
     hostContractVersion: input.template.contractVersion,
-    layout: input.layout,
+    layout: recorded.layout,
     enginePackages: input.enginePackages,
     managedFiles,
   } as PublisherHostState;
-  const stateContents = serializePublisherHostState(state);
+
+  const removed = recorded.managedFiles
+    .map((file) => file.path)
+    .filter((path) => !contractPaths.has(path))
+    .sort();
 
   const mutations: HostFileMutation[] = [
     ...input.template.files.map((file) => ({
       path: file.path,
       contents: file.contents,
-      // On a first initialization nothing should exist. On a repeat the expected
-      // preimage is whatever the engine last recorded writing, which is what
-      // turns an author's edit into a conflict instead of an overwrite.
-      expected: priorHashes.get(file.path) ?? null,
+      // A file the engine already wrote carries its recorded hash, which is what
+      // turns an author's later edit into a conflict. A file new in this contract
+      // expects nothing.
+      expected: recordedHashes.get(file.path) ?? null,
+    })),
+    ...removed.map((path) => ({
+      path,
+      contents: null,
+      expected: recordedHashes.get(path) ?? null,
     })),
     {
       path: PUBLISHER_HOST_STATE_PATH,
-      contents: stateContents,
-      expected:
-        existing === null
-          ? null
-          : hashManagedFileContents(
-              serializePublisherHostState(existing),
-            ),
+      contents: serializePublisherHostState(nextState),
+      expected: hashManagedFileContents(
+        serializePublisherHostState(recorded),
+      ),
     },
   ].sort((left, right) =>
     left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
@@ -202,18 +206,16 @@ export function planHostInitialization(
           : ("rendererManaged" as const),
     }));
   const authority = createHostMutationAuthority({
-    rendererManagedPaths: input.template.files.map(
-      (file) => file.path,
-    ),
+    // Both the new contract's paths and the ones being removed. A removed path
+    // was renderer-managed, so removing it is renderer authority, but it is no
+    // longer in the contract and would otherwise be refused as undeclared.
+    // Hard denials and protected roots still apply to both.
+    rendererManagedPaths: [...contractPaths, ...removed],
     engineManagedPaths: [PUBLISHER_HOST_STATE_PATH],
-    // Omitted rather than passed as undefined, because the package compiles with
-    // exact optional property types.
     ...(input.protectedRoots === undefined
       ? {}
       : { protectedRoots: input.protectedRoots }),
   });
-  // Authorized before the tree is even read, so a contract that reached beyond
-  // its authority is refused whatever the host happens to contain.
   assertHostMutationsPermitted(authority, requests);
 
   const classifications = classifyHostMutations(hostRoot, mutations);
@@ -224,29 +226,29 @@ export function planHostInitialization(
     (entry) => entry.state === "pending",
   );
 
-  let outcome: HostInitializationOutcome;
+  let outcome: HostUpgradeOutcome;
   if (conflicts.length > 0) {
     outcome = "conflicted";
   } else if (pending.length === 0) {
-    outcome = "alreadyInitialized";
+    outcome = "alreadyCurrent";
   } else {
-    outcome = "initialize";
+    outcome = "upgrade";
   }
 
-  // Hashed over host-relative paths and content hashes only. No absolute path
-  // participates, so the same host in two checkouts produces the same plan.
   const hash = createHash("sha256");
-  hash.update("genii-publisher-host-initialization-1\n");
+  hash.update("genii-publisher-host-upgrade-1\n");
   hash.update(`${input.template.renderer}\n`);
   hash.update(`${input.template.rendererVersion}\n`);
+  hash.update(`${recorded.hostContractVersion}\n`);
   hash.update(`${input.template.contractVersion}\n`);
-  hash.update(`${input.layout}\n`);
+  // The route is part of what was reviewed. Reaching the same target by a
+  // different chain is a different change, even when the resulting files match.
+  for (const edge of migrationPath.edges) {
+    hash.update(`${edge.from}>${edge.to}\0`);
+  }
   for (const mutation of mutations) {
     hash.update(mutation.path);
     hash.update("\0");
-    // A removal is distinguished by a marker rather than an absent field, so a
-    // plan that removes a file can never hash the same as one that leaves it
-    // alone. The marker is not a valid digest, so it cannot collide with one.
     hash.update(
       mutation.contents === null
         ? "removed"
@@ -260,66 +262,74 @@ export function planHostInitialization(
   return Object.freeze({
     outcome,
     planHash: `sha256:${hash.digest("hex")}`,
-    layout: input.layout,
-    hostContractVersion: input.template.contractVersion,
+    fromContractVersion: recorded.hostContractVersion,
+    toContractVersion: input.template.contractVersion,
     renderer: input.template.renderer,
     rendererVersion: input.template.rendererVersion,
+    migrationPath,
+    manualSteps: migrationPath.manualSteps,
     mutations: Object.freeze(mutations),
     classifications,
     conflicts: Object.freeze(conflicts),
+    removed: Object.freeze(removed),
   });
 }
 
-export interface HostInitializationApplyInput {
+export interface HostUpgradeApplyInput {
   readonly hostRoot: string;
-  readonly plan: HostInitializationPlan;
+  readonly plan: HostUpgradePlan;
   readonly journalDirectory: string;
-  /**
-   * The plan hash the caller intends to apply. Supplying it proves the caller is
-   * applying the plan it reviewed rather than one recomputed since.
-   */
   readonly expectedPlanHash: string;
   /**
-   * Skips the Git baseline gate. Only for exercising the writer in isolation:
-   * every author-facing path leaves it on, because rollback is a checkout of the
-   * commit the gate records.
+   * Confirms the operator has read the manual steps. Required when the plan
+   * carries any.
+   *
+   * The engine cannot verify a database change or a provider setting, so the most
+   * it can honestly do is refuse to continue until told the steps have been seen.
+   * Proceeding silently would report success for work nobody did.
    */
+  readonly acknowledgedManualSteps?: boolean;
+  /** Only for exercising the writer in isolation. */
   readonly skipGitBaseline?: boolean;
 }
 
-export interface HostInitializationApplyResult {
+export interface HostUpgradeApplyResult {
   readonly outcome: "applied" | "alreadyApplied";
   readonly changed: readonly string[];
   readonly planHash: string;
-  /** The commit a rollback returns to, or null when the gate was skipped. */
+  readonly fromContractVersion: string;
+  readonly toContractVersion: string;
   readonly baselineCommit: string | null;
 }
 
-/**
- * Applies a plan.
- *
- * Refuses a plan whose hash does not match what the caller reviewed, and refuses
- * a conflicted plan outright. Everything else goes through the transaction, so a
- * failure restores the tree.
- */
-export function applyHostInitialization(
-  input: HostInitializationApplyInput,
-): HostInitializationApplyResult {
+export function applyHostUpgrade(
+  input: HostUpgradeApplyInput,
+): HostUpgradeApplyResult {
   if (input.plan.planHash !== input.expectedPlanHash) {
-    throw new HostInitializationError(
+    throw new HostUpgradeError(
       `The plan changed since it was reviewed. Expected ${input.expectedPlanHash} but the plan is ${input.plan.planHash}.`,
     );
   }
   if (input.plan.outcome === "conflicted") {
-    throw new HostInitializationError(
+    throw new HostUpgradeError(
       `${input.plan.conflicts.length} host file(s) differ from what the engine last wrote, so they must be reviewed rather than overwritten:\n${input.plan.conflicts
         .map((conflict) => `  ${conflict.path}`)
         .join("\n")}`,
     );
   }
+  if (
+    input.plan.manualSteps.length > 0 &&
+    input.acknowledgedManualSteps !== true
+  ) {
+    throw new HostUpgradeError(
+      `This upgrade requires ${input.plan.manualSteps.length} step(s) the engine will not perform:\n${input.plan.manualSteps
+        .map((step) => `  ${step}`)
+        .join(
+          "\n",
+        )}\nConfirm they have been read before applying.`,
+    );
+  }
 
-  // The gate runs here rather than in the command layer, so calling apply
-  // directly cannot bypass it.
   const baseline =
     input.skipGitBaseline === true
       ? null
@@ -331,15 +341,17 @@ export function applyHostInitialization(
     journalDirectory: input.journalDirectory,
   });
 
+  // Written only after the transaction succeeded, and only when a baseline was
+  // resolved. A receipt naming a commit nobody verified would be worse than none.
   if (baseline !== null && result.outcome === "applied") {
     writeApplyReceipt(input.hostRoot, {
       format: "",
-      operation: "initialize",
+      operation: "upgrade",
       planHash: input.plan.planHash,
       baselineCommit: baseline.commit,
       renderer: input.plan.renderer,
-      fromContractVersion: null,
-      toContractVersion: input.plan.hostContractVersion,
+      fromContractVersion: input.plan.fromContractVersion,
+      toContractVersion: input.plan.toContractVersion,
       files: input.plan.mutations.map((mutation) => ({
         path: mutation.path,
         sha256:
@@ -354,6 +366,8 @@ export function applyHostInitialization(
     outcome: result.outcome,
     changed: result.changed,
     planHash: input.plan.planHash,
+    fromContractVersion: input.plan.fromContractVersion,
+    toContractVersion: input.plan.toContractVersion,
     baselineCommit: baseline === null ? null : baseline.commit,
   });
 }

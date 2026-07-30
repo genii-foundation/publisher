@@ -64,7 +64,9 @@ Resolving an exact target happens inside an owned temporary workspace with lifec
 
 `apply` verifies the plan hash, the exact target CLI, a clean Git baseline, and every preimage before it writes. It rejects symlink and path-alias escapes, stages same-directory replacements, and keeps a crash journal with backups so an interrupted run restores itself.
 
-Repeat application reports `alreadyApplied` only when every postimage and receipt matches. A mixed or partial state is refused rather than repaired in place, because a tool that guesses at a half-applied migration is more dangerous than one that stops.
+Repeat application reports `alreadyApplied` only when every postimage matches.
+
+This record originally also refused a mixed tree, where some files already hold the intended result and others do not, on the reasoning that a half-applied state means guessing at intent. That was wrong on both counts and is corrected here. It made upgrades impossible, because every upgrade leaves most host files unchanged between contract versions and is therefore always a mix. And nothing is guessed: every pending file carries the exact preimage it must currently have, every applied file already holds the exact intended bytes, and anything matching neither is a conflict that is refused. The cases the refusal was reaching for are each covered elsewhere, by the journal for a run that died midway and by conflict detection for an author's edit.
 
 Git is required. Apply refuses a non-Git or dirty tree, and rollback is a checkout of the recorded pre-apply commit. Git is the rollback authority: the alternative is trusting a backup format we wrote ourselves, with no external verifier, in exactly the situation where our own code has already failed once. Database changes remain a separately authorized forward repair or rollback, never implied by a package rollback.
 
