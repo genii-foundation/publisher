@@ -21,9 +21,12 @@ export type {
   BuiltPublicationReader,
 } from "./node/build.js";
 export {
+  buildAudioEnvelope,
   resolvePublicationAudio,
 } from "./node/audio.js";
 export type {
+  BuildAudioEnvelopeInput,
+  BuiltAudioEnvelope,
   ResolvedAudioVoice,
   ResolvedPublicationAudio,
   ResolvePublicationAudioInput,
@@ -47,11 +50,11 @@ export {
 } from "./node/protected-roots.js";
 export {
   ArtifactDestinationError,
-  checkReaderArtifact,
+  checkHostArtifact,
   hashArtifactText,
   resolveArtifactDestination,
   stagedArtifactPathFor,
-  writeReaderArtifact,
+  writeHostArtifact,
 } from "./node/materialize.js";
 export type {
   ArtifactCheckResult,

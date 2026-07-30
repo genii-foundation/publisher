@@ -321,6 +321,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "SOURCE-NOTICE",
       "THIRD_PARTY_NOTICES.md",
       "audio-catalog.schema.json",
+      "audio-envelope.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",
       "dist/SOURCE-NOTICE",
@@ -733,6 +734,7 @@ if (
 
     for (const schemaFileName of [
       "audio-catalog.schema.json",
+      "audio-envelope.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",
       "publication.schema.json",
@@ -748,6 +750,7 @@ if (
       import assert from "node:assert/strict";
       import {
         validateAudioCatalogShape,
+        validateAudioEnvelopeShape,
         validateCollectionShape,
         validateContentEnvelopeShape,
         validatePublicationShape,
@@ -783,6 +786,7 @@ if (
         validateContentEnvelopeShape({}),
         validateReaderEnvelopeShape({}),
         validateAudioCatalogShape({}),
+        validateAudioEnvelopeShape({}),
       ]) {
         assert.equal(result.valid, false);
         assert.ok(result.diagnostics.length > 0);

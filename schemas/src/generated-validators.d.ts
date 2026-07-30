@@ -15,6 +15,7 @@ import type { PublicationContentEnvelope } from "./content-types.js";
 import type { PublicationReaderEnvelope } from "./reader-types.js";
 import type {
   AudioClipCatalog,
+  AudioEnvelope,
   CollectionManifest,
   PublicationManifest,
   WorkManifest,
@@ -39,3 +40,4 @@ export const collectionValidator: StandaloneValidateFunction<CollectionManifest>
 export const contentEnvelopeValidator: StandaloneValidateFunction<PublicationContentEnvelope>;
 export const readerEnvelopeValidator: StandaloneValidateFunction<PublicationReaderEnvelope>;
 export const audioCatalogValidator: StandaloneValidateFunction<AudioClipCatalog>;
+export const audioEnvelopeValidator: StandaloneValidateFunction<AudioEnvelope>;

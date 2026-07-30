@@ -222,7 +222,7 @@ test("a renderer cannot aim its artifact into a declared source root", (t) => {
     () =>
       resolveArtifactDestination({
         hostRoot: root,
-        readerDataPath: "publication/works/first-light/reader.json",
+        declaredArtifactPath: "publication/works/first-light/reader.json",
         rendererManagedPaths: ["package.json", "app/page.tsx"],
         protectedRoots,
       }),
@@ -237,7 +237,7 @@ test("a renderer cannot aim its artifact into a declared source root", (t) => {
   assert.ok(
     resolveArtifactDestination({
       hostRoot: root,
-      readerDataPath: "publication-reader.json",
+      declaredArtifactPath: "publication-reader.json",
       rendererManagedPaths: ["package.json", "app/page.tsx"],
       protectedRoots,
     }),

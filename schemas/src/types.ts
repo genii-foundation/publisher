@@ -141,6 +141,50 @@ export interface AudioClipCatalog {
   readonly voices: readonly AudioCatalogVoice[];
 }
 
+export interface AudioEnvelopeVoice extends AudioCatalogVoice {
+  /** Sections this voice narrates. */
+  readonly narratedSectionCount: number;
+  /** Sections in the publication this voice has no narration for. */
+  readonly unnarratedSectionCount: number;
+}
+
+export interface AudioEnvelopeSource {
+  readonly catalogPath: string;
+  /**
+   * Digest of the exact catalog text this envelope came from.
+   *
+   * A catalog is not a content source, so it never reaches the reader artifact's
+   * identity. This digest is the only thing binding the two, and without it a
+   * catalog could change with nothing downstream noticing.
+   */
+  readonly catalogSha256: string;
+  readonly generatedAt?: string;
+}
+
+export interface AudioEnvelopeStatistics {
+  readonly voiceCount: number;
+  readonly clipCount: number;
+  readonly sectionCount: number;
+}
+
+export interface AudioEnvelope {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/audio-envelope.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly engineVersion: string;
+  /**
+   * The reader artifact's build identity, carried verbatim.
+   *
+   * Both artifacts of one build agree on it, so a client holding two that
+   * disagree knows one is stale without diffing them.
+   */
+  readonly buildId: string;
+  readonly source: AudioEnvelopeSource;
+  readonly voices: readonly AudioEnvelopeVoice[];
+  readonly statistics: AudioEnvelopeStatistics;
+}
+
 export interface SyncConfiguration {
   readonly provider: PackageReference;
   readonly consent: "opt-in";

@@ -74,6 +74,10 @@ const validatorDefinitions = Object.freeze([
     exportName: "audioCatalogValidator",
     fileName: "audio-catalog.schema.json",
   },
+  {
+    exportName: "audioEnvelopeValidator",
+    fileName: "audio-envelope.schema.json",
+  },
 ]);
 const embeddedRuntimeDefinitions = Object.freeze([
   {

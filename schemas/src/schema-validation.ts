@@ -19,6 +19,7 @@ import {
 } from "./envelope-resource-limits.js";
 import {
   audioCatalogValidator,
+  audioEnvelopeValidator,
   collectionValidator,
   contentEnvelopeValidator,
   publicationValidator,
@@ -31,6 +32,7 @@ import type {
 } from "./generated-validators.js";
 import type {
   AudioClipCatalog,
+  AudioEnvelope,
   CollectionManifest,
   Diagnostic,
   ManifestByKind,
@@ -685,6 +687,19 @@ export function validateAudioCatalogShape(
   input: unknown,
 ): ValidationResult<AudioClipCatalog> {
   return validateShape(audioCatalogValidator, input);
+}
+
+/**
+ * Validates a materialized audio envelope.
+ *
+ * The engine writes this one, so validating it is validating the engine's own
+ * output. That is the point: an artifact a client fetches should be refused here
+ * rather than at a reader's browser.
+ */
+export function validateAudioEnvelopeShape(
+  input: unknown,
+): ValidationResult<AudioEnvelope> {
+  return validateShape(audioEnvelopeValidator, input);
 }
 
 export function validateManifestShape<K extends ManifestKind>(

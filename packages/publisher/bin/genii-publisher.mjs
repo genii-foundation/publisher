@@ -66,11 +66,11 @@ import {
   readHostCapabilities,
 } from "../dist/node/host-capabilities.js";
 import {
-  checkReaderArtifact,
+  checkHostArtifact,
   hashArtifactText,
   resolveArtifactDestination,
   stagedArtifactPathFor,
-  writeReaderArtifact,
+  writeHostArtifact,
 } from "../dist/node/materialize.js";
 
 const defaultRenderer = "@genii-foundation/publisher-next";
@@ -840,13 +840,13 @@ async function runBuild(options) {
 
   const destination = resolveArtifactDestination({
     hostRoot,
-    readerDataPath: template.readerDataPath,
+    declaredArtifactPath: template.readerDataPath,
     rendererManagedPaths: template.files.map((file) => file.path),
     protectedRoots: protectedRootsFor(hostRoot, options),
   });
 
   if (options.check) {
-    const checked = checkReaderArtifact({
+    const checked = checkHostArtifact({
       destination,
       text: built.value.text,
     });
@@ -860,7 +860,7 @@ async function runBuild(options) {
     return checked.outcome === "current" ? 0 : 1;
   }
 
-  const written = writeReaderArtifact({
+  const written = writeHostArtifact({
     destination,
     text: built.value.text,
   });
@@ -1028,11 +1028,11 @@ async function runStatus(options) {
         } else {
           const destination = resolveArtifactDestination({
             hostRoot,
-            readerDataPath: template.readerDataPath,
+            declaredArtifactPath: template.readerDataPath,
             rendererManagedPaths: template.files.map((file) => file.path),
             protectedRoots: protectedRootsFor(hostRoot, options),
           });
-          const checked = checkReaderArtifact({
+          const checked = checkHostArtifact({
             destination,
             text: built.value.text,
           });

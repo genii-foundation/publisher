@@ -30,12 +30,14 @@ If you wish to allow use of your version of this file only under the terms of th
 // wiring it the wrong way first and reading the refusal.
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  buildAudioEnvelope,
   buildPublicationReader,
   resolvePublicationAudio,
 } from "../packages/publisher/dist/node.js";
@@ -284,6 +286,102 @@ test("a catalog with no voices at all resolves", () => {
   assert.ok(result.valid, JSON.stringify(result.diagnostics, null, 2));
   assert.equal(result.value.clipCount, 0);
   assert.deepEqual(result.value.voices, []);
+});
+
+// ------------------------------------------------------------- the envelope
+
+async function narratedEnvelope() {
+  const built = await buildPublicationReader({
+    publicationRoot: narratedFixture,
+    audience: "public",
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const catalogText = readFileSync(
+    join(narratedFixture, catalogPath),
+    "utf8",
+  );
+  const envelope = buildAudioEnvelope({
+    audio: built.value.audio,
+    publicationId: built.value.reader.publicationId,
+    buildId: built.value.reader.buildId,
+    catalogText,
+  });
+  assert.ok(envelope.valid, JSON.stringify(envelope.diagnostics, null, 2));
+  return { built, catalogText, envelope: envelope.value };
+}
+
+test("the envelope carries the reader artifact's build identity verbatim", async () => {
+  // The property the whole design turns on. Two artifacts of one build agree on
+  // this, so a client holding two that disagree knows one is stale without having
+  // to diff them. Recomputing it here would produce a second identity for one
+  // build, which is worse than having none.
+  const { built, envelope } = await narratedEnvelope();
+  assert.equal(envelope.envelope.buildId, built.value.reader.buildId);
+  assert.match(envelope.envelope.buildId, /^sha256:[0-9a-f]{64}$/u);
+});
+
+test("the envelope binds the exact catalog it came from", async () => {
+  // A catalog is not a content source, so it does not reach the reader artifact's
+  // identity. This digest is the only thing binding the two, and without it a
+  // catalog could be swapped with nothing downstream noticing.
+  const { catalogText, envelope } = await narratedEnvelope();
+  assert.equal(
+    envelope.envelope.source.catalogSha256,
+    `sha256:${createHash("sha256").update(catalogText, "utf8").digest("hex")}`,
+  );
+  assert.equal(envelope.envelope.source.catalogPath, catalogPath);
+});
+
+test("the envelope is canonical, so a check can compare digests", async () => {
+  const { envelope } = await narratedEnvelope();
+  const keys = [...envelope.text.matchAll(/"(\$?[a-zA-Z]+)":/gu)].map(
+    (match) => match[1],
+  );
+  const topLevel = keys.slice(0, 4);
+  assert.deepEqual(
+    topLevel,
+    [...topLevel].sort(),
+    `top-level keys are not sorted, so the text is not canonical: ${topLevel.join(", ")}`,
+  );
+  assert.ok(envelope.text.endsWith("\n"), "the artifact must end with a newline");
+  // Rebuilding from the same inputs must produce the same bytes, or a check that
+  // compares digests would report a stale artifact on every run.
+  const again = await narratedEnvelope();
+  assert.equal(again.envelope.text, envelope.text);
+});
+
+test("the envelope records coverage so a client need not hold the reader artifact", async () => {
+  const { envelope } = await narratedEnvelope();
+  assert.deepEqual(envelope.envelope.statistics, {
+    voiceCount: 2,
+    clipCount: 2,
+    sectionCount: 1,
+  });
+});
+
+test("the envelope calls them clips, and the catalog still calls them sections", async () => {
+  // Deliberate divergence. The catalog keeps the name published pipelines already
+  // emit so existing catalogs stay valid; the envelope is the engine's own
+  // document and names them for what they are.
+  const { catalogText, envelope } = await narratedEnvelope();
+  assert.ok(JSON.parse(catalogText).voices[0].sections);
+  assert.ok(envelope.envelope.voices[0].clips);
+  assert.equal(envelope.envelope.voices[0].sections, undefined);
+});
+
+test("a build identity that is not a digest is refused", () => {
+  // The envelope is the engine's own output, so a shape error here is the
+  // engine's. Refusing it at the build beats serving it to a browser.
+  const resolved = resolveWith([voice("low-water", [clip()])]);
+  assert.ok(resolved.valid);
+  const result = buildAudioEnvelope({
+    audio: resolved.value,
+    publicationId: "narrated-tides",
+    buildId: "not-a-digest",
+    catalogText: "{}",
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].documentPath, catalogPath);
 });
 
 // -------------------------------------------------- the fixture is what it claims
