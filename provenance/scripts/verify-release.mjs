@@ -167,7 +167,11 @@ export async function verifyRelease(
     prepared: manifest.archives,
   });
   for (const archive of archives.values()) {
-    assertReleaseTag(archive.version, manifest.tag);
+    assertReleaseTag(
+      archive.version,
+      manifest.tag,
+      "the release manifest tag field",
+    );
   }
   const result = await runReleaseGate({
     preparedPackageArchives: archives,

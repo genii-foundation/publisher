@@ -34,10 +34,13 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 
+// Bumped from -1 when the host binding became required. A receipt without one
+// cannot be trusted, and refusing an old one by format is clearer than reading it
+// and guessing which host it described.
 export const PUBLISHER_APPLY_RECEIPT_FORMAT =
-  "genii-publisher-apply-receipt-1";
+  "genii-publisher-apply-receipt-2";
 
 /** Host-relative location, inside the tool's own working directory. */
 export const PUBLISHER_APPLY_RECEIPT_PATH = join(
@@ -53,6 +56,17 @@ export interface PublisherAppliedFile {
 
 export interface PublisherApplyReceipt {
   readonly format: string;
+  /**
+   * The host this receipt was written for, canonical and absolute.
+   *
+   * Recorded because rollback acts on it. A receipt carried into a sibling worktree
+   * of the same repository used to be accepted: the baseline commit resolves, since
+   * worktrees share one object database, and the recorded digests match, since both
+   * trees hold byte identical contract files from the commit. Rollback then planned
+   * to remove nineteen files in the wrong tree against another branch's baseline,
+   * and exited zero.
+   */
+  readonly host: string;
   readonly operation: "initialize" | "upgrade";
   readonly planHash: string;
   /** Commit the tree was at before the apply. Rollback returns here. */
@@ -91,6 +105,11 @@ export function serializePublisherApplyReceipt(
   return `${JSON.stringify(
     {
       format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+      // Listed explicitly, like every other field. The serializer rebuilds the
+      // object rather than spreading it, so a field added to the type and not
+      // added here is silently dropped on write and then reported as missing on
+      // read. That is exactly what happened when this binding was introduced.
+      host: receipt.host,
       operation: receipt.operation,
       planHash: receipt.planHash,
       baselineCommit: receipt.baselineCommit,
@@ -126,7 +145,17 @@ export function parsePublisherApplyReceipt(
   }
   if (parsed.format !== PUBLISHER_APPLY_RECEIPT_FORMAT) {
     throw new PublisherApplyReceiptError(
-      `The apply receipt has format ${JSON.stringify(parsed.format)}, which this engine does not understand.`,
+      `The apply receipt has format ${JSON.stringify(parsed.format)}, which this engine does not understand. ` +
+        `Delete it and apply again if it was written by an older engine.`,
+    );
+  }
+  if (
+    typeof parsed.host !== "string" ||
+    parsed.host.length === 0 ||
+    !isAbsolute(parsed.host)
+  ) {
+    throw new PublisherApplyReceiptError(
+      "The apply receipt does not record which host it was written for, so it cannot be trusted.",
     );
   }
   if (
@@ -213,6 +242,7 @@ export function parsePublisherApplyReceipt(
 
   return Object.freeze({
     format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+    host: parsed.host,
     operation: parsed.operation,
     planHash: parsed.planHash,
     baselineCommit: parsed.baselineCommit,
@@ -227,15 +257,25 @@ export function applyReceiptPath(hostRoot: string): string {
   return join(hostRoot, PUBLISHER_APPLY_RECEIPT_PATH);
 }
 
+/**
+ * Writes the receipt, stamping the host it belongs to.
+ *
+ * The binding is added here rather than asked of callers. Both call sites already
+ * pass the host root, and a field that decides whether a rollback is allowed should
+ * not be something either of them can forget.
+ */
 export function writeApplyReceipt(
   hostRoot: string,
-  receipt: PublisherApplyReceipt,
+  receipt: Omit<PublisherApplyReceipt, "host">,
 ): void {
   const path = applyReceiptPath(hostRoot);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(
     path,
-    serializePublisherApplyReceipt(receipt),
+    serializePublisherApplyReceipt({
+      ...receipt,
+      host: resolve(hostRoot),
+    }),
     "utf8",
   );
 }
@@ -247,7 +287,17 @@ export function readApplyReceipt(
   if (!existsSync(path)) {
     return null;
   }
-  return parsePublisherApplyReceipt(readFileSync(path, "utf8"));
+  const receipt = parsePublisherApplyReceipt(readFileSync(path, "utf8"));
+  const expected = resolve(hostRoot);
+  if (receipt.host !== expected) {
+    throw new PublisherApplyReceiptError(
+      `This receipt was written for a different host and will not be rolled back here.\n` +
+        `  receipt names: ${receipt.host}\n` +
+        `  this host is:  ${expected}\n` +
+        `Roll it back from the host it belongs to, or delete ${path} if it arrived here by accident.`,
+    );
+  }
+  return receipt;
 }
 
 /**

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/publication.schema.json",
+  "schemaVersion": "1.0",
+  "publication": {
+    "id": "tide-tables",
+    "title": "Tide Tables",
+    "description": "Notes kept beside an invented tidal estuary.",
+    "language": "en",
+    "canonicalUrl": "https://tide-tables.example",
+    "publisher": {
+      "name": "Estuary Press",
+      "url": "https://estuary.example"
+    }
+  },
+  "engine": {
+    "compatibility": ">=0.1.0-alpha.0 <2.0.0"
+  },
+  "layout": {
+    "mode": "canonical"
+  },
+  "works": [
+    {
+      "id": "first-light"
+    }
+  ],
+  "collections": [
+    {
+      "id": "mornings"
+    }
+  ],
+  "routes": {
+    "home": "/",
+    "work": "/works/{workId}",
+    "collection": "/collections/{collectionId}"
+  },
+  "boundaries": {
+    "sourceRoots": [
+      "publication"
+    ],
+    "outputRoots": [
+      ".publisher"
+    ]
+  },
+  "attribution": {
+    "placement": "footer",
+    "copyright": "Copyright 2026 GENII Foundation",
+    "text": "Published with GENII Publisher",
+    "url": "https://publisher.genii.foundation",
+    "sourceCodeUrl": "https://github.com/genii-foundation/publisher"
+  }
+}

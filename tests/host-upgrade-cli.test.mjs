@@ -130,6 +130,7 @@ function installRenderer(
       `export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = ${JSON.stringify(
         contractVersion,
       )};`,
+      'export const PUBLISHER_NEXT_HOST_CAPABILITIES = { routeKinds: ["home", "work", "collection", "section", "updates"] };',
       omitMigrations
         ? "// registry deliberately absent"
         : `export const PUBLISHER_NEXT_HOST_MIGRATIONS = ${JSON.stringify(

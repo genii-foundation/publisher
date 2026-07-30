@@ -27,6 +27,7 @@ import {
   cpSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -35,6 +36,15 @@ import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
+import {
+  compileMarkdownWork,
+} from "../packages/content/dist/index.js";
+import {
+  compileLoadedPublicationContent,
+} from "../packages/publisher/dist/node.js";
+import {
+  projectPublicationReader,
+} from "../packages/reader/dist/index.js";
 import {
   buildPublicationReader,
   derivePublicationWorkInputs,
@@ -275,3 +285,314 @@ test("an unreadable publication root fails without throwing", async () => {
   assert.equal(result.valid, false);
   assert.ok(result.diagnostics.length > 0);
 });
+
+// ------------------------------------- a section can have its own URL
+
+test("a section route becomes an active server route", async (t) => {
+  // Pinned because I got this wrong twice in opposite directions. I first reported
+  // that the build path collapses sections, which is true. I then "corrected" that
+  // to a claim the route model cannot express a section URL at all, which is false,
+  // on the strength of a probe that set routes and readerLocation but never
+  // activeRouteNames. A section route only becomes an active server route if its
+  // name appears in activeRouteNames, so the refusal I read as "there is no way to
+  // make one active" actually meant "you did not make this one active".
+  //
+  // Coherence addresses 3,300 sections at their own paths. This test is the
+  // evidence that the protocol already allows it, so the remaining work is in the
+  // build path rather than in the route model.
+  const publicationRoot = join(fixtureRoot, "canonical-tide-tables");
+  const loaded = await loadPublicationCompilationSources({ publicationRoot });
+  assert.ok(loaded.valid, diagnosticsText(loaded));
+  const manuscript = loaded.value.sources.find(
+    (source) => source.role === "manuscript",
+  );
+  assert.ok(manuscript);
+
+  const whole = compileMarkdownWork({
+    workId: "first-light",
+    sectionId: "first-light-root",
+    title: "First Light on the Mudflats",
+    sourcePath: manuscript.path,
+    markdown: manuscript.contents,
+  });
+  assert.ok(whole.valid, JSON.stringify(whole.diagnostics));
+  const base = whole.value.work.sections[0];
+  const blocks = base.blocks;
+  const half = Math.ceil(blocks.length / 2);
+
+  const content = compileLoadedPublicationContent({
+    loaded: loaded.value,
+    works: [
+      {
+        ...whole.value.work,
+        sections: [
+          {
+            ...base,
+            id: "first-light-root",
+            blocks: blocks.slice(0, half),
+            continuity: {
+              id: "first-light-root",
+              legacyIds: [],
+              progressGroups: [["first-light-root"]],
+              historicalSectionIds: [],
+            },
+          },
+          {
+            ...base,
+            id: "low-water",
+            title: "Low water",
+            parentId: "first-light-root",
+            blocks: blocks.slice(half),
+            activeRouteNames: ["canonical"],
+            routes: { canonical: { path: "/works/first-light/low-water" } },
+            readerLocation: { kind: "route", routeName: "canonical" },
+            navigable: true,
+            continuity: {
+              id: "low-water",
+              legacyIds: [],
+              progressGroups: [["low-water"]],
+              historicalSectionIds: [],
+            },
+          },
+        ],
+      },
+    ],
+    extensions: [],
+  });
+  assert.ok(content.valid, diagnosticsText(content));
+
+  const reader = projectPublicationReader(content.value, {
+    audience: "public",
+  });
+  assert.ok(reader.valid, diagnosticsText(reader));
+
+  const routed = reader.value.routes.active.find(
+    (route) => route.path === "/works/first-light/low-water",
+  );
+  assert.ok(
+    routed,
+    `expected a section route, got ${reader.value.routes.active
+      .map((route) => route.path)
+      .join(" ")}`,
+  );
+  assert.equal(routed.target.kind, "section");
+  assert.equal(routed.target.sectionId, "low-water");
+
+  // And the work keeps its own address, so the two coexist rather than colliding.
+  assert.ok(
+    reader.value.routes.active.some(
+      (route) =>
+        route.path === "/works/first-light" && route.target.kind === "work",
+    ),
+  );
+});
+
+test("a section route without activeRouteNames is refused, and says why", async () => {
+  // The exact mistake that misled me, kept so the refusal stays legible.
+  const publicationRoot = join(fixtureRoot, "canonical-tide-tables");
+  const loaded = await loadPublicationCompilationSources({ publicationRoot });
+  const manuscript = loaded.value.sources.find(
+    (source) => source.role === "manuscript",
+  );
+  const whole = compileMarkdownWork({
+    workId: "first-light",
+    sectionId: "first-light-root",
+    title: "First Light on the Mudflats",
+    sourcePath: manuscript.path,
+    markdown: manuscript.contents,
+  });
+  const base = whole.value.work.sections[0];
+  const half = Math.ceil(base.blocks.length / 2);
+
+  const content = compileLoadedPublicationContent({
+    loaded: loaded.value,
+    works: [
+      {
+        ...whole.value.work,
+        sections: [
+          {
+            ...base,
+            blocks: base.blocks.slice(0, half),
+            continuity: {
+              id: "first-light-root",
+              legacyIds: [],
+              progressGroups: [["first-light-root"]],
+              historicalSectionIds: [],
+            },
+          },
+          {
+            ...base,
+            id: "low-water",
+            title: "Low water",
+            parentId: "first-light-root",
+            blocks: base.blocks.slice(half),
+            // activeRouteNames deliberately omitted.
+            routes: { canonical: { path: "/works/first-light/low-water" } },
+            readerLocation: { kind: "route", routeName: "canonical" },
+            navigable: true,
+            continuity: {
+              id: "low-water",
+              legacyIds: [],
+              progressGroups: [["low-water"]],
+              historicalSectionIds: [],
+            },
+          },
+        ],
+      },
+    ],
+    extensions: [],
+  });
+  assert.equal(content.valid, false);
+  const codes = new Set(content.diagnostics.map((item) => item.code));
+  assert.ok(
+    codes.has("content.reader_address.base_route_unresolved"),
+    [...codes].join(","),
+  );
+});
+
+// -------------------------- what the guide says a manuscript becomes
+
+test("a manuscript with headings compiles to one addressable unit", async () => {
+  // The guide now tells authors this outright, because it surprises people and
+  // nothing said it. Pinned so the guide and the engine cannot drift apart.
+  const built = await buildPublicationReader({
+    publicationRoot: join(fixtureRoot, "canonical-tide-tables"),
+    audience: "public",
+  });
+  assert.ok(built.valid, diagnosticsText(built));
+  const work = built.value.reader.works[0];
+
+  assert.equal(work.sections.length, 1);
+  assert.ok(
+    work.sections[0].blocks.some((block) => block.kind === "heading"),
+    "the fixture manuscript is supposed to contain a heading",
+  );
+  // The heading is content inside the one page, not a route of its own.
+  assert.equal(
+    built.value.reader.routes.active.filter(
+      (route) => route.target.kind === "section",
+    ).length,
+    0,
+  );
+});
+
+test("a block identifier is derived from that block's own content", async () => {
+  // Measured rather than assumed, and it is the substance of the guide's warning:
+  // renaming a heading breaks a link to it, while editing elsewhere does not. It is
+  // also evidence for the open decision about declaring section boundaries, since
+  // heading derived identity is already unstable here.
+  const anchorFor = (markdown) => {
+    const compiled = compileMarkdownWork({
+      workId: "w",
+      sectionId: "s",
+      title: "T",
+      sourcePath: "publication/works/w/manuscript.md",
+      markdown,
+    });
+    assert.ok(compiled.valid, JSON.stringify(compiled.diagnostics));
+    const heading = compiled.value.work.sections[0].blocks.find(
+      (block) => block.kind === "heading",
+    );
+    assert.ok(heading, "expected a heading block");
+    return heading.anchor;
+  };
+
+  const original = anchorFor("Intro.\n\n## Low water\n\nBody.\n");
+  const retitled = anchorFor("Intro.\n\n## Low water at dawn\n\nBody.\n");
+  const neighbourEdited = anchorFor("Intro, revised.\n\n## Low water\n\nBody.\n");
+
+  assert.notEqual(
+    retitled,
+    original,
+    "renaming a heading must change its identifier, which is why a link to it breaks",
+  );
+  assert.equal(
+    neighbourEdited,
+    original,
+    "editing a neighbouring block must not move a heading's identifier",
+  );
+  // Derived, not a readable slug. An author expecting #low-water will not find it.
+  assert.match(original, /^b-[0-9a-f]{64}$/u);
+});
+
+// ------------------ the migration audit's engine claims stay true
+
+test("the audit's engine side claims match the schema and the code", async () => {
+  // The migration audit is the document someone reads to decide how Updates and
+  // section boundaries should work, so its numbers had better be right. Its counts
+  // of the Coherence repository cannot be checked here, because nothing in this
+  // repository may depend on that one existing, and they are dated to a revision in
+  // the document instead. Everything it says about this engine is checkable, so it
+  // is checked.
+  const audit = readFileSync(
+    join(repositoryRoot, "docs", "migration", "coherence-readiness.md"),
+    "utf8",
+  );
+  const schema = JSON.parse(
+    readFileSync(
+      join(repositoryRoot, "schemas", "publication.schema.json"),
+      "utf8",
+    ),
+  );
+
+  // Caps the audit quotes when reasoning about whether Coherence fits.
+  assert.equal(schema.properties.works.maxItems, 4999);
+  assert.ok(
+    audit.includes("4,999"),
+    "the audit no longer quotes the works cap, so this check is idle",
+  );
+  assert.equal(
+    schema.$defs.continuity.properties.redirects.maxItems,
+    10000,
+  );
+  assert.ok(
+    audit.includes("10,000"),
+    "the audit no longer quotes the redirect cap, so this check is idle",
+  );
+
+  // Two features the audit reports as schema definitions with no implementation.
+  // If either grows one, the audit is wrong in a way that changes the plan.
+  for (const [word, pattern] of [
+    ["audio", /\baudio\b/iu],
+    ["sync", /\bsync\b/u],
+  ]) {
+    assert.ok(
+      audit.includes(`### ${word === "audio" ? "4" : "5"}. ${
+        word === "audio" ? "Audio" : "Sync"
+      } is a schema definition and nothing else`),
+      `the audit no longer claims ${word} is unimplemented, so this check is idle`,
+    );
+    const implemented = [
+      join("packages", "next", "src"),
+      join("packages", "reader", "src"),
+      join("packages", "content", "src"),
+    ].some((root) => containsPattern(join(repositoryRoot, root), pattern));
+    assert.equal(
+      implemented,
+      false,
+      `${word} now appears in engine source, so the audit's claim that it is schema only is stale`,
+    );
+  }
+});
+
+/** Whether any TypeScript source under a directory matches a pattern. */
+function containsPattern(root, pattern) {
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(path);
+        continue;
+      }
+      if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) {
+        continue;
+      }
+      if (pattern.test(readFileSync(path, "utf8"))) {
+        return true;
+      }
+    }
+  }
+  return false;
+}

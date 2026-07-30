@@ -121,6 +121,33 @@ function git(
   };
 }
 
+/** Suffix the transaction gives a file it has staged but not yet renamed. */
+const STAGING_SUFFIX = ".publisher-staged";
+
+/**
+ * Whether a status line names a file the engine staged rather than author work.
+ *
+ * A staged file exists only between a write and its rename, so a second command
+ * running concurrently can observe one. Counting it as uncommitted work made the
+ * gate refuse and tell the author to commit or stash a file the engine had just
+ * created and was about to remove. Continuous integration found exactly that: one
+ * apply reported writing nineteen files while the other refused, quoting
+ * "?? app/[...segments]/page.tsx.publisher-staged".
+ *
+ * Never author work, because the suffix is engine owned. A leftover from a crash no
+ * longer blocks an apply either, which is the right outcome now that recovery
+ * removes them and a later write to the same path consumes them.
+ *
+ * Porcelain v1 quotes a path containing unusual characters, so both spellings are
+ * accepted here.
+ */
+function namesAnEngineStagedFile(line: string): boolean {
+  return (
+    line.endsWith(STAGING_SUFFIX) ||
+    line.endsWith(`${STAGING_SUFFIX}"`)
+  );
+}
+
 /**
  * Resolves and verifies the Git baseline for a host root.
  *
@@ -187,7 +214,8 @@ export function resolveGitBaseline(hostRoot: string): GitBaseline {
   const dirty = status.stdout
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    .filter((line) => line.length > 0)
+    .filter((line) => !namesAnEngineStagedFile(line));
   if (dirty.length > 0) {
     const shown = dirty.slice(0, 10);
     const remainder =

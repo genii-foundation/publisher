@@ -307,3 +307,153 @@ test("ignoring the artifact also clears the tracking action", (t) => {
   const applied = run(hostRoot, ["upgrade", "apply", "--plan", hash]);
   assert.equal(applied.status, 0, applied.stderr);
 });
+
+// -------------------------------------------------- the json contract
+
+/**
+ * Every command, refused in a way that reaches the top level handler.
+ *
+ * The guide tells authors to add --json to any command for machine readable
+ * output. That was false for anything throwing a CommandError: the message went to
+ * stderr as text and stdout was left empty, so a script asking for machine
+ * readable output learned only that something had failed.
+ */
+test("--json emits a JSON document on stdout even when a command refuses", (t) => {
+  const { hostRoot } = authorHost(t, { initialize: false });
+
+  const refusals = [
+    ["build", ["build"]],
+    ["status", ["status"]],
+    ["init apply without a plan", ["init", "apply"]],
+    ["init plan with a bad layout", ["init", "plan", "--layout", "sideways"]],
+    ["build with a bad audience", ["build", "--audience", "nope"]],
+    ["upgrade plan", ["upgrade", "plan"]],
+    ["upgrade apply without a plan", ["upgrade", "apply"]],
+    ["rollback apply without a plan", ["rollback", "apply"]],
+    ["an unknown command", ["explode"]],
+    ["an unknown option", ["status", "--wat"]],
+    ["a missing renderer", ["init", "plan", "--renderer", "@example/absent"]],
+  ];
+
+  for (const [label, args] of refusals) {
+    const result = run(hostRoot, [...args, "--json"]);
+    assert.notEqual(result.status, 0, `${label} was expected to refuse`);
+    assert.notEqual(
+      result.stdout.trim(),
+      "",
+      `${label} produced no JSON on stdout`,
+    );
+    let parsed;
+    try {
+      parsed = JSON.parse(result.stdout);
+    } catch (error) {
+      assert.fail(
+        `${label} produced unparseable stdout: ${result.stdout.slice(0, 200)}`,
+      );
+    }
+    // Two legitimate shapes. A command that reports its own refusal emits its own
+    // document, such as status reporting actions. A command that throws reaches the
+    // top level handler and gets the error envelope. The contract being tested is
+    // that stdout is always parseable JSON, not that it is always one shape.
+    if (Object.hasOwn(parsed, "error")) {
+      assert.equal(parsed.valid, false, label);
+      assert.equal(typeof parsed.error.name, "string", label);
+      assert.ok(parsed.error.message.length > 0, label);
+      // The human message stays on stderr too, so piping stdout into a parser does
+      // not hide what happened from a person watching. Only the thrown path owes
+      // this: a command reporting its own refusal says everything in its document.
+      assert.notEqual(
+        result.stderr.trim(),
+        "",
+        `${label} threw and said nothing to stderr`,
+      );
+    } else {
+      assert.ok(
+        Object.keys(parsed).length > 0,
+        `${label} emitted an empty JSON document`,
+      );
+    }
+  }
+});
+
+test("--json still emits each command's own shape on success", (t) => {
+  const { hostRoot } = authorHost(t);
+  assert.equal(run(hostRoot, ["build"]).status, 0);
+  git(hostRoot, ["add", "-A"]);
+  git(hostRoot, ["commit", "--quiet", "-m", "the artifact"]);
+
+  // A refusal document must not be mistaken for a report, so the success shapes
+  // are checked to carry their own keys rather than valid/error.
+  const cases = [
+    [["init", "plan"], "outcome"],
+    [["build"], "outcome"],
+    [["build", "--check"], "outcome"],
+    [["status"], "initialized"],
+    [["upgrade", "plan"], "outcome"],
+    [["rollback", "plan"], "outcome"],
+    [["recover"], "recovered"],
+  ];
+  for (const [args, key] of cases) {
+    const result = run(hostRoot, [...args, "--json"]);
+    const parsed = JSON.parse(result.stdout);
+    assert.ok(
+      Object.hasOwn(parsed, key),
+      `${args.join(" ")} --json is missing ${key}: ${Object.keys(parsed).join(",")}`,
+    );
+    assert.equal(
+      Object.hasOwn(parsed, "error"),
+      false,
+      `${args.join(" ")} --json reported an error on a success path`,
+    );
+  }
+});
+
+test("a missing artifact is not asked to be committed or ignored", (t) => {
+  // Found by re-running the author guide against the shipped renderer. status
+  // reported "publication-reader.json is missing  (neither committed nor ignored)"
+  // and raised an action telling the author to decide whether to commit a file that
+  // does not exist. Nonsense twice over: the decision only arises once a build has
+  // produced something.
+  const { hostRoot } = authorHost(t);
+
+  const before = run(hostRoot, ["status"]);
+  assert.equal(before.status, 1, "an unbuilt artifact still needs building");
+  assert.match(before.stdout, /is missing/u);
+  assert.equal(
+    before.stdout.includes("neither committed nor ignored"),
+    false,
+    `a missing artifact was annotated with a tracking state:\n${before.stdout}`,
+  );
+  assert.equal(
+    before.stdout.includes("committed or ignored, because"),
+    false,
+    `a missing artifact raised a tracking action:\n${before.stdout}`,
+  );
+  assert.match(before.stdout, /build the reader artifact/u);
+
+  // Once it exists and is untracked, the decision is real and is raised.
+  assert.equal(run(hostRoot, ["build"]).status, 0);
+  const after = run(hostRoot, ["status"]);
+  assert.match(after.stdout, /neither committed nor ignored/u);
+  assert.match(after.stdout, /committed or ignored, because/u);
+});
+
+test("an unservable publication is not asked about tracking either", (t) => {
+  // Same defect class. A publication the renderer cannot serve has no artifact, so
+  // asking whether to commit one is noise on top of a refusal.
+  const { hostRoot } = authorHost(t, {
+    publication: "canonical-field-notes",
+    rendererOptions: {
+      "@example/alpha": {
+        capabilities: { routeKinds: ["home", "work", "collection"] },
+      },
+    },
+  });
+  const status = run(hostRoot, ["status"]);
+  assert.equal(status.status, 1);
+  assert.equal(
+    status.stdout.includes("neither committed nor ignored"),
+    false,
+    status.stdout,
+  );
+});

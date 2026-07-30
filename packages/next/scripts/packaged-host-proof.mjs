@@ -97,16 +97,67 @@ function runExpectFailure(command, args, options = {}) {
   return [result.stdout, result.stderr].filter(Boolean).join("\n");
 }
 
+/**
+ * Whether npm failed because it could not reach the registry.
+ *
+ * A dependency audit that cannot talk to the registry and an audit that found a
+ * vulnerability both exit nonzero, and reporting them the same way sends the reader
+ * to the wrong place. This happened: a registry 400 was reported as "packed Next
+ * production dependency audit exited with status 1" and read as a regression in the
+ * change under test, on one runtime out of three, because the actual cause was
+ * buried in the dumped output.
+ *
+ * A real finding is never accompanied by a registry transport error, so requiring
+ * one of these markers cannot hide a vulnerability.
+ */
+function looksLikeRegistryFailure(output) {
+  if (typeof output !== "string" || output.length === 0) {
+    return false;
+  }
+  const mentionsRegistry =
+    output.includes("registry.npmjs.org") ||
+    output.includes("/-/npm/v1/security/audits");
+  if (!mentionsRegistry) {
+    return false;
+  }
+  return [
+    "ENOTFOUND",
+    "ETIMEDOUT",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "EAI_AGAIN",
+    "ERR_SOCKET",
+    "network",
+    "Bad Request",
+    "Service Unavailable",
+    "Gateway Time-out",
+    "Too Many Requests",
+    "socket hang up",
+  ].some((marker) => output.includes(marker));
+}
+
 function runNpm(args, options = {}) {
   if (npmExecPath === undefined || npmExecPath.length === 0) {
     throw new Error(
       "The packaged host proof must run through the repository npm CLI.",
     );
   }
-  return run(process.execPath, [npmExecPath, ...args], {
-    ...options,
-    label: options.label ?? `npm ${args[0] ?? ""}`.trim(),
-  });
+  try {
+    return run(process.execPath, [npmExecPath, ...args], {
+      ...options,
+      label: options.label ?? `npm ${args[0] ?? ""}`.trim(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (looksLikeRegistryFailure(message)) {
+      throw new Error(
+        `The npm registry could not be reached, so ${
+          options.label ?? `npm ${args[0] ?? ""}`.trim()
+        } could not complete. This is a network failure rather than a finding about this package.\n${message}`,
+      );
+    }
+    throw error;
+  }
 }
 
 function packagePath(value) {

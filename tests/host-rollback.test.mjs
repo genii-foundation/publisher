@@ -27,10 +27,14 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
+  PUBLISHER_APPLY_RECEIPT_FORMAT,
   PUBLISHER_APPLY_RECEIPT_PATH,
   readApplyReceipt,
+  serializePublisherApplyReceipt,
+  writeApplyReceipt,
 } from "../packages/publisher/dist/node/lifecycle/apply-receipt.js";
 import {
   PUBLISHER_HOST_STATE_PATH,
@@ -402,7 +406,8 @@ test("a receipt naming a short commit is refused", (t) => {
   writeFileSync(
     join(hostRoot, PUBLISHER_APPLY_RECEIPT_PATH),
     `${JSON.stringify({
-      format: "genii-publisher-apply-receipt-1",
+      format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+      host: hostRoot,
       operation: "upgrade",
       planHash: `sha256:${"a".repeat(64)}`,
       baselineCommit: "abc1234",
@@ -425,4 +430,179 @@ test("planning a rollback writes nothing", (t) => {
   const before = snapshot(hostRoot);
   planHostRollback({ hostRoot });
   assert.deepEqual(snapshot(hostRoot), before);
+});
+
+// ---------------------------------------- a receipt belongs to one host
+
+test("a receipt written for another host is refused", (t) => {
+  // Demonstrated before the fix, in the arrangement this project actually uses.
+  // Two worktrees of one repository share an object database, so the recorded
+  // baseline commit resolves in either. Both trees hold byte identical contract
+  // files from the commit, so the recorded digests match too. Rollback in the
+  // second tree accepted the first tree's receipt, planned to remove nineteen
+  // files against another branch's baseline, and exited zero.
+  const { hostRoot } = workspace(t);
+  const elsewhere = join(hostRoot, "..", "other-host");
+  mkdirSync(elsewhere, { recursive: true });
+
+  writeApplyReceipt(elsewhere, {
+    format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+    operation: "initialize",
+    planHash: `sha256:${"a".repeat(64)}`,
+    baselineCommit: "b".repeat(40),
+    renderer: "@example/alpha",
+    fromContractVersion: null,
+    toContractVersion: "0.1.0",
+    files: [{ path: "app/page.tsx", sha256: null }],
+  });
+
+  // Carried across, exactly as copying .publisher between checkouts would.
+  mkdirSync(join(hostRoot, ".publisher"), { recursive: true });
+  writeFileSync(
+    join(hostRoot, PUBLISHER_APPLY_RECEIPT_PATH),
+    readFileSync(join(elsewhere, PUBLISHER_APPLY_RECEIPT_PATH), "utf8"),
+    "utf8",
+  );
+
+  assert.throws(
+    () => readApplyReceipt(hostRoot),
+    (error) => {
+      assert.match(error.message, /written for a different host/u);
+      // Both hosts named, because "wrong host" without saying which two is not
+      // something an author can act on.
+      assert.ok(error.message.includes(elsewhere.replace(/\/\.\.\//u, "/")) || error.message.includes("other-host"));
+      assert.ok(error.message.includes(hostRoot));
+      return true;
+    },
+  );
+});
+
+test("a receipt for this host is accepted", (t) => {
+  const { hostRoot } = workspace(t);
+  writeApplyReceipt(hostRoot, {
+    format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+    operation: "upgrade",
+    planHash: `sha256:${"c".repeat(64)}`,
+    baselineCommit: "d".repeat(40),
+    renderer: "@example/alpha",
+    fromContractVersion: "0.1.0",
+    toContractVersion: "0.2.0",
+    files: [{ path: "app/page.tsx", sha256: null }],
+  });
+  const receipt = readApplyReceipt(hostRoot);
+  assert.ok(receipt);
+  assert.equal(receipt.host, hostRoot);
+  assert.equal(receipt.operation, "upgrade");
+});
+
+test("the serializer carries every field the type requires", (t) => {
+  // The trap that bit me writing this. The serializer rebuilds the object from an
+  // explicit field list rather than spreading it, so a field added to the type and
+  // not added here is dropped on write and then reported as missing on read. The
+  // symptom was that a freshly written receipt was rejected by its own reader.
+  const { hostRoot } = workspace(t);
+  const receipt = {
+    format: PUBLISHER_APPLY_RECEIPT_FORMAT,
+    host: hostRoot,
+    operation: "initialize",
+    planHash: `sha256:${"e".repeat(64)}`,
+    baselineCommit: "f".repeat(40),
+    renderer: "@example/alpha",
+    fromContractVersion: null,
+    toContractVersion: "0.1.0",
+    files: [{ path: "app/page.tsx", sha256: null }],
+  };
+  const written = JSON.parse(serializePublisherApplyReceipt(receipt));
+  for (const key of Object.keys(receipt)) {
+    assert.ok(
+      Object.hasOwn(written, key),
+      `serialization dropped ${key}, which the reader will then reject`,
+    );
+  }
+});
+
+// ------------------------ rollback is not a checkout, and is not clean-tree gated
+
+test("rollback works against a dirty tree and keeps unrelated work", (t) => {
+  // ADR 0012 said rollback is a checkout of the recorded pre-apply commit. It is
+  // not. A checkout followed by a clean would delete untracked work the author had
+  // nothing to do with the change, so reverting an apply would be a reason to lose a
+  // scratch file.
+  //
+  // The dirty tree tolerance turned out to be covered already: making rollback
+  // demand a clean tree breaks three existing tests. I had claimed it was untested,
+  // and it was not. What this adds is the combination those tests do not cover, an
+  // untracked file and an uncommitted edit to a committed file surviving together,
+  // which is the case a checkout and clean would destroy.
+  const { hostRoot, journalDirectory } = workspace(t);
+  const applied = initialize(hostRoot, journalDirectory);
+
+  // Work the engine never wrote: one untracked file, one edit to a committed file.
+  const scratch = join(hostRoot, "my-notes.txt");
+  writeFileSync(scratch, "my own scratch\n", "utf8");
+  // A committed file this workspace actually has, edited but not committed.
+  const tracked = join(hostRoot, ".gitignore");
+  const trackedBefore = readFileSync(tracked, "utf8");
+  writeFileSync(tracked, `${trackedBefore}# an edit of my own\n`, "utf8");
+
+  const dirty = git(hostRoot, [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+  ]);
+  assert.ok(
+    dirty.split("\n").filter((line) => line.trim().length > 0).length >= 2,
+    `the tree must be dirty for this test to mean anything: ${dirty}`,
+  );
+
+  const plan = planHostRollback({ hostRoot });
+  assert.equal(plan.outcome, "rollback", JSON.stringify(plan.conflicts));
+  const result = applyHostRollback({
+    hostRoot,
+    plan,
+    journalDirectory: join(hostRoot, ".publisher", "rollback"),
+    expectedPlanHash: plan.planHash,
+  });
+  assert.equal(result.outcome, "applied");
+
+  // What the apply wrote is gone.
+  for (const path of applied.changed) {
+    assert.equal(
+      existsSync(join(hostRoot, ...path.split("/"))),
+      false,
+      `${path} survived the rollback`,
+    );
+  }
+  // What the author wrote is not.
+  assert.equal(readFileSync(scratch, "utf8"), "my own scratch\n");
+  assert.match(readFileSync(tracked, "utf8"), /# an edit of my own/u);
+});
+
+test("ADR 0012 no longer describes rollback as a checkout", () => {
+  // The decision record is quoted as authority in handoffs, so a superseded
+  // statement in it propagates. This is the one claim that was wrong.
+  const adr = readFileSync(
+    fileURLToPath(
+      new URL(
+        "../docs/architecture/0012-author-lifecycle-contracts.md",
+        import.meta.url,
+      ),
+    ),
+    "utf8",
+  );
+  assert.equal(
+    /rollback is a checkout/u.test(adr),
+    false,
+    "ADR 0012 describes rollback as a checkout again",
+  );
+  assert.match(
+    adr,
+    /a checkout is the wrong instrument/u,
+    "ADR 0012 should say why a checkout was rejected",
+  );
+  assert.match(
+    adr,
+    /rollback does not require a clean tree/u,
+    "ADR 0012 should record that rollback is not clean-tree gated",
+  );
 });

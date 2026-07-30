@@ -26,7 +26,9 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync, realpathSync } from "node:fs";
+
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -206,3 +208,73 @@ test("the guide does not use dashes that read as machine written", () => {
     );
   }
 });
+
+test("every digest the guide prints is one the engine produces", async () => {
+  // The guide opens by promising every value in it came from running the commands.
+  // While regenerating its transcripts I wrote a digest whose first thirty two
+  // characters matched a pinned value and invented the rest, in exactly the document
+  // that makes that promise. Nothing would have caught it.
+  //
+  // So every sha256 the guide prints in full is checked against what the engine
+  // actually produces for the publication the guide tells authors to copy.
+  const { buildPublicationReader } = await import(
+    "../packages/publisher/dist/node.js"
+  );
+  const built = await buildPublicationReader({
+    publicationRoot: realpathSync(
+      fileURLToPath(
+        new URL("../fixtures/canonical-tide-tables", import.meta.url),
+      ),
+    ),
+    audience: "public",
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const real = `sha256:${createHash("sha256")
+    .update(built.value.text, "utf8")
+    .digest("hex")}`;
+  const realBytes = Buffer.byteLength(built.value.text, "utf8").toLocaleString(
+    "en-US",
+  );
+
+  // Full length digests only. Truncated ones ending in an ellipsis are deliberate
+  // abbreviations of a plan hash, which varies with the renderer version.
+  const full = [...guide.matchAll(/sha256:[0-9a-f]{64}/gu)].map(
+    ([value]) => value,
+  );
+  assert.ok(full.length > 0, "expected the guide to print at least one digest");
+
+  // Only the lines showing the artifact as built from the committed fixture. The
+  // Expected line in the check example is deliberately the digest after an edit the
+  // guide describes making, so it must differ from this one.
+  const artifactDigests = full.filter((value) => guideMentionsAsArtifact(value));
+  assert.ok(
+    artifactDigests.length > 0,
+    "expected the guide to print the artifact digest somewhere",
+  );
+  for (const value of artifactDigests) {
+    assert.equal(
+      value,
+      real,
+      `the guide prints an artifact digest the engine does not produce`,
+    );
+  }
+
+  // And the size beside it.
+  const sizes = [...guide.matchAll(/^Size\s+([\d,]+) bytes$/gmu)].map(
+    ([, value]) => value,
+  );
+  for (const size of sizes) {
+    assert.equal(
+      size,
+      realBytes,
+      "the guide prints an artifact size the engine does not produce",
+    );
+  }
+});
+
+/** Whether a digest appears where the guide is showing the artifact's own hash. */
+function guideMentionsAsArtifact(digest) {
+  const index = guide.indexOf(digest);
+  const line = guide.slice(guide.lastIndexOf("\n", index) + 1, index);
+  return /^(Digest|On disk)\s+$/u.test(line);
+}

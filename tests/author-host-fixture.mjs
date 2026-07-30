@@ -100,6 +100,10 @@ export function installRenderer(
     files,
     migrations = [],
     omitMigrations = false,
+    capabilities = {
+      routeKinds: ["collection", "home", "section", "updates", "work"],
+    },
+    omitCapabilities = false,
   } = {},
 ) {
   const short = name.split("/").pop();
@@ -129,6 +133,14 @@ export function installRenderer(
       `export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = ${JSON.stringify(
         contractVersion,
       )};`,
+      // A stub renderer serves nothing, so it claims everything the fixture
+      // publications contain. A real renderer's claim is checked against its own
+      // behaviour in tests/pipeline-render.test.mjs.
+      omitCapabilities
+        ? "// capability set deliberately absent"
+        : `export const PUBLISHER_NEXT_HOST_CAPABILITIES = ${JSON.stringify(
+            capabilities,
+          )};`,
       omitMigrations
         ? "// registry deliberately absent"
         : `export const PUBLISHER_NEXT_HOST_MIGRATIONS = ${JSON.stringify(

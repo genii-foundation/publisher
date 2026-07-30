@@ -1,7 +1,9 @@
 # Publishing a publication
 
 This is the whole author path, start to finish. Every command and every piece of
-output here was produced by running it, not by reading the code.
+output here was produced by running it, not by reading the code. A few lines are
+long enough to need wrapping for width, and where that happens the continuation is
+indented; nothing else about the output is altered.
 
 If you only remember one thing: run `genii-publisher status`. It tells you what
 your repository is and what to do next, and it never writes anything.
@@ -66,7 +68,17 @@ A manifest that exists but cannot be parsed is refused rather than treated as
 declaring nothing. Returning no protection from an unreadable manifest would turn
 a typo into an unprotected tree.
 
-Two things that catch people, both refused with the file and the field named:
+An Updates route is not servable by the Next renderer. If your manifest declares
+`routes.updates`, `build` refuses before writing anything and names the route,
+because writing the artifact would leave a host that fails to start. Updates
+support is a known gap rather than a bug in your manifest.
+
+If you want a working publication to start from, copy `fixtures/canonical-tide-tables`.
+It is the one fixture the shipped renderer can serve end to end. The other two
+declare Updates routes and exist to exercise the protocol rather than to be
+copied.
+
+Three things that catch people, all refused with the file and the field named:
 
 `attribution` must carry the exact required notice. Only `sourceCodeUrl` is
 yours to set. See the attribution section below.
@@ -74,6 +86,40 @@ yours to set. See the attribution section below.
 A collection lists its works as `workIds: ["rain-gauge"]`, while
 `publication.json` lists works as `works: [{ "id": "rain-gauge" }]`. Two shapes,
 two key names, for what looks like the same thing. Sorry.
+
+## What a manuscript becomes
+
+One page. This surprises people, so it is worth stating before you write anything
+long.
+
+A work's manuscript compiles to a single addressable unit at the work's route. Your
+headings do not become separate pages and do not become separate entries in
+navigation. They stay inside the one page as content.
+
+```
+publication/works/first-light/manuscript.md   ->   /works/first-light
+  ## Low water                                     (a heading inside that page)
+```
+
+Each block, headings included, does get an identifier in the artifact, so a
+renderer can link to a heading within its page. That identifier is derived from the
+block's own content, which has one consequence worth knowing before you rely on it:
+
+```
+heading anchor, original     b-c3752db1c2d4d60975c206cc
+after retitling the heading  b-cb4d3f9e7bcb98d70cc2b7b3   changed
+after editing a paragraph     b-c3752db1c2d4d60975c206cc   same
+```
+
+Rename a heading and any link to it breaks. Editing text elsewhere in the page
+leaves it alone, so the identifier is at least stable against unrelated edits.
+
+Sections addressable at their own paths are expressible in the protocol, and a
+publication assembled directly against the compiler can have them. What does not
+exist yet is a way for an author to declare where a manuscript's sections begin, so
+the build path produces one. If you need per section URLs today, the honest answer
+is that this engine cannot give them to you from a manuscript, and the decision
+about how you would declare them is open.
 
 ## Where you are
 
@@ -102,35 +148,51 @@ change and writes nothing. `apply` takes the plan's hash and refuses if anything
 moved since you looked.
 
 ```bash
-genii-publisher init plan --renderer @example/renderer
+genii-publisher init plan
 ```
 
 ```
 Host        /home/you/estuary
-Renderer    @example/renderer 1.4.0
+Renderer    @genii-foundation/publisher-next 0.1.0-alpha.0
 Contract    0.1.0
 Layout      canonical
-Plan        sha256:c95b3b451a1e8750bed4d773d11a40fb9db2f244ec208e9dfb6614acf9483048
+Plan        sha256:5e61669d9e3f7e3323f0d1f726677d80a3a9422a56e79cf8ce3a08e030520dac
 
+  write    app/[...segments]/page.tsx
+  write    app/error.tsx
+  write    app/global-error.tsx
+  write    app/layout.tsx
+  write    app/not-found.tsx
   write    app/page.tsx
+  write    next-env.d.ts
+  write    next.config.mjs
   write    package.json
+  write    pages/404.tsx
+  write    pages/500.tsx
+  write    pages/_app.tsx
+  write    pages/_document.tsx
+  write    pages/_error.tsx
+  write    proxy.ts
+  write    publisher-application.js
+  write    publisher-error-identity.ts
   write    publisher.host.json
+  write    tsconfig.json
 
-3 file(s) would be written. Nothing has been yet.
+19 file(s) would be written. Nothing has been yet.
 Apply with:
-  genii-publisher init apply --host /home/you/estuary --plan sha256:c95b3b451a...
+  genii-publisher init apply --host /home/you/estuary --plan sha256:5e61669d9e...
 ```
 
 Read the list. Then apply it:
 
 ```bash
-genii-publisher init apply --renderer @example/renderer --plan sha256:c95b3b451a...
+genii-publisher init apply --plan sha256:5e61669d9e...
 ```
 
 ```
 Initialized /home/you/estuary
-3 file(s) written.
-Baseline commit 9761927eb4904ea695c68c541274e6a74e11ac17
+19 file(s) written.
+Baseline commit 36cc1b554b5fee3b5e9edc9d4915736fa14e6dbf
 Review the change and commit it, including publisher.host.json.
 ```
 
@@ -141,6 +203,10 @@ change you reviewed and applying whatever the situation has become.
 renderer this host uses, which contract version it is on, and the digest of every
 file the engine manages. Commit it. Every later command reads it, which is why
 you never need `--renderer` again.
+
+No `--renderer` above. On a repository that is not yet a host the default is
+`@genii-foundation/publisher-next`; once initialized, every command reads the
+renderer your host recorded.
 
 Adopting an existing repository whose layout is not the canonical one works the
 same way with `--layout declared`. Declare your real paths in `publication.json`
@@ -155,8 +221,8 @@ genii-publisher build
 ```
 Publication  /home/you/estuary
 Artifact     publication-reader.json
-Digest       sha256:6a7dcd825ae631ce7f86d69360e374ee7b75f39854f24076628405044113d0f0
-Size         5,523 bytes
+Digest       sha256:02989c86def31920e6d4ea753e0bd138d54398ae4c30486a706ee053fc53a594
+Size         5,311 bytes
 Written.
 ```
 
@@ -201,8 +267,8 @@ genii-publisher build --check
 ```
 
 ```
-Expected     sha256:ad7b9dad4255bc77912466e9be736d6386e2afa407ef584439bc56168322d17a
-On disk      sha256:6a7dcd825ae631ce7f86d69360e374ee7b75f39854f24076628405044113d0f0
+Expected     sha256:126ee65b6002021f37351a8c5b0f4fab8e9fdc46fbc7f95c398a9dabc6156b4a
+On disk      sha256:02989c86def31920e6d4ea753e0bd138d54398ae4c30486a706ee053fc53a594
 
 The artifact on disk was built from different sources. Run build.
 ```
@@ -372,6 +438,38 @@ copyright, and there is no field for your own. If you need your copyright on the
 page, put it in your prose for now. This is a known gap rather than a decision
 anyone is happy with.
 
+Editing any of the four fixed fields is refused, and the refusal says why rather
+than only that a constant did not match:
+
+```
+must be equal to constant. This engine is licensed under CPAL 1.0, which requires
+that the Original Developer's attribution be displayed, so the notice is fixed and
+cannot be rewritten. It is not a claim over your work. Your own copyright has no
+field in this manifest yet, and sourceCodeUrl is the one attribution field you set.
+```
+
+## What your renderer can serve
+
+A renderer declares which route kinds its generated host can serve, and `build`
+refuses an artifact containing anything else. That refusal happens before a byte
+is written, because the alternative is a successful build and a host that will not
+boot, which is a much worse place to find out.
+
+```
+/home/you/estuary cannot serve this publication.
+  host.route_kind_unsupported   /routes/active
+    This publication has 1 updates route(s) that @genii-foundation/publisher-next
+    cannot serve: /updates. Writing the artifact would leave a host that fails to
+    start, so nothing has been written. Remove the route from your publication
+    manifest, or use a renderer that serves it.
+```
+
+`status` reports the same thing under "This host cannot serve".
+
+A renderer that declares no capability set at all is refused rather than assumed
+capable. An absent declaration and a claim of full support are different claims,
+and only one of them is safe to guess at.
+
 ## Command summary
 
 | Command | Writes | Needs a clean tree | Exit nonzero when |
@@ -387,4 +485,12 @@ anyone is happy with.
 | `rollback apply` | yes | no | a file changed since the apply |
 | `recover` | restores a baseline | no | never |
 
-Add `--json` to any of them for machine readable output.
+Add `--json` to any of them for machine readable output. Stdout is always a JSON
+document, on success and on failure, and the exit code says which. There are two
+shapes: a command reporting its own result emits that result, and a command that
+refuses outright emits `{"valid": false, "error": {...}}`. The human readable
+message goes to stderr either way, so piping stdout into a parser does not hide
+what happened from you.
+
+You never need `--renderer` after initializing. Every command reads the renderer
+your host recorded, and naming a different one is refused rather than obeyed.

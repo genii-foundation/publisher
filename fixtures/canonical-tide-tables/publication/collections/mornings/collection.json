@@ -1,0 +1,11 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/collection.schema.json",
+  "schemaVersion": "1.0",
+  "id": "mornings",
+  "title": "Mornings",
+  "description": "Entries written before the light turned.",
+  "route": "/collections/mornings",
+  "workIds": [
+    "first-light"
+  ]
+}

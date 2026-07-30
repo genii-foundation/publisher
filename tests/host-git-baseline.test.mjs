@@ -331,3 +331,77 @@ test("a rollback to the recorded baseline restores the pre-apply tree", (t) => {
     "the tree returns to exactly its pre-apply contents",
   );
 });
+
+// ------------------------------- engine staged files are not author work
+
+test("a staged file the engine left does not count as uncommitted work", (t) => {
+  // Found by continuous integration on Node 26, from two concurrent applies. One
+  // reported writing nineteen files while the other refused with
+  // "?? app/[...segments]/page.tsx.publisher-staged", telling the author to commit
+  // or stash a file the engine had created moments earlier and was about to rename
+  // away. A staged file exists only between a write and its rename, so a command
+  // running alongside another can observe one.
+  //
+  // The exclusive journal create fixed the write phase. This gate runs before it,
+  // so the loser never reached that refusal and got a misleading one instead.
+  const { hostRoot } = workspace(t);
+  mkdirSync(join(hostRoot, "app", "[...segments]"), { recursive: true });
+  writeFileSync(
+    join(hostRoot, "app", "[...segments]", "page.tsx.publisher-staged"),
+    "partially written\n",
+    "utf8",
+  );
+
+  const baseline = resolveGitBaseline(hostRoot);
+  assert.match(baseline.commit, /^[0-9a-f]{40}$/u);
+});
+
+test("a staged file with an awkward name is still ignored", (t) => {
+  // Porcelain output quotes a path containing unusual characters, so the check has
+  // to accept both spellings or it silently stops working for exactly the paths a
+  // renderer using a catch-all route segment produces.
+  const { hostRoot } = workspace(t);
+  for (const name of [
+    "plain.tsx.publisher-staged",
+    "with space.tsx.publisher-staged",
+    "wîth-ünicode.tsx.publisher-staged",
+  ]) {
+    writeFileSync(join(hostRoot, name), "partial\n", "utf8");
+  }
+  const quoted = git(hostRoot, [
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+  ]);
+  assert.ok(
+    quoted.includes('"'),
+    `expected Git to quote at least one of these names, got: ${quoted}`,
+  );
+  assert.match(resolveGitBaseline(hostRoot).commit, /^[0-9a-f]{40}$/u);
+});
+
+test("real uncommitted work still refuses, alongside a staged file", (t) => {
+  // The point of the gate. Ignoring engine staged files must not weaken it.
+  const { hostRoot } = workspace(t);
+  writeFileSync(
+    join(hostRoot, "page.tsx.publisher-staged"),
+    "partial\n",
+    "utf8",
+  );
+  writeFileSync(join(hostRoot, "notes.txt"), "my own work\n", "utf8");
+
+  assert.throws(
+    () => resolveGitBaseline(hostRoot),
+    (error) => {
+      assert.match(error.message, /requires a clean Git tree/u);
+      assert.match(error.message, /notes\.txt/u);
+      // And it must not list the engine's own file as something to commit.
+      assert.equal(
+        error.message.includes("publisher-staged"),
+        false,
+        `the refusal named an engine file: ${error.message}`,
+      );
+      return true;
+    },
+  );
+});

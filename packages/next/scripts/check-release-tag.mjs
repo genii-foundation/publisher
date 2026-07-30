@@ -29,7 +29,21 @@ export function expectedReleaseTag(version) {
   return parsedVersion.prerelease.length > 0 ? "next" : "latest";
 }
 
-export function assertReleaseTag(version, actualTag) {
+/**
+ * Refuses a release whose tag does not match its version.
+ *
+ * The tag reaches this function from three different places: npm's own config
+ * when a package lifecycle script runs, a --tag argument when release preparation
+ * runs, and a recorded manifest field when a release is reverified. The message
+ * used to name npm_config_tag in all three, so two thirds of the time it told the
+ * operator to set an environment variable that has no effect. Naming the actual
+ * source is the difference between a refusal and a wild goose chase.
+ */
+export function assertReleaseTag(
+  version,
+  actualTag,
+  tagSource = "npm_config_tag",
+) {
   const expectedTag = expectedReleaseTag(version);
 
   if (actualTag === undefined || actualTag.length === 0) {
@@ -38,7 +52,7 @@ export function assertReleaseTag(version, actualTag) {
     }
 
     throw new Error(
-      `npm_config_tag is required. Publish ${version} with --tag ${expectedTag}.`,
+      `${tagSource} did not supply a release tag. ${version} is a prerelease and requires --tag ${expectedTag}.`,
     );
   }
 

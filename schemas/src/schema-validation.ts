@@ -63,6 +63,49 @@ export const SHAPE_DIAGNOSTIC_CODES = Object.freeze({
 
 export const MAXIMUM_SHAPE_DIAGNOSTICS = 256;
 
+/**
+ * Explanations for refusals whose reason is not visible in the schema.
+ *
+ * Keyed by schema path, because that is what identifies the exact constraint and it
+ * keeps the explanation beside the rule rather than in whichever caller happens to
+ * surface it.
+ *
+ * This exists for one narrow case and should not become a home for restating
+ * ordinary type errors. The attribution constants are fixed for a licensing reason
+ * that nothing in the schema conveys, and "must be equal to constant" alongside
+ * "Copyright 2026 GENII Foundation" reads as the engine demanding an author credit
+ * the Foundation for their own book. That is the first wall a new author meets, and
+ * it was the first thing that stopped me when I authored a publication against this
+ * engine.
+ *
+ * The code, keyword, and params are untouched. Only the sentence a person reads
+ * gains the reason.
+ */
+const SCHEMA_PATH_EXPLANATIONS: Readonly<Record<string, string>> =
+  Object.freeze({
+    "#/$defs/attribution/properties/copyright/const":
+      "This engine is licensed under CPAL 1.0, which requires that the Original Developer's attribution be displayed, so the notice is fixed and cannot be rewritten. It is not a claim over your work. Your own copyright has no field in this manifest yet, and sourceCodeUrl is the one attribution field you set.",
+    "#/$defs/attribution/properties/text/const":
+      "The attribution phrase is part of the CPAL 1.0 notice this engine must display, so it is fixed. sourceCodeUrl is the one attribution field you set.",
+    "#/$defs/attribution/properties/url/const":
+      "The attribution URL is part of the CPAL 1.0 notice this engine must display, so it is fixed. sourceCodeUrl is the one attribution field you set.",
+    "#/$defs/attribution/properties/placement/const":
+      "The attribution notice must appear in the footer, which is where CPAL 1.0 attribution is displayed for this engine.",
+  });
+
+function explainedMessage(
+  message: string,
+  schemaPath: string | undefined,
+): string {
+  const explanation =
+    schemaPath === undefined
+      ? undefined
+      : SCHEMA_PATH_EXPLANATIONS[schemaPath];
+  return explanation === undefined
+    ? message
+    : `${message}. ${explanation}`;
+}
+
 const SCHEMA_CODE_BY_KEYWORD: Readonly<Record<string, string>> = {
   additionalProperties: SHAPE_DIAGNOSTIC_CODES.additionalProperty,
   const: SHAPE_DIAGNOSTIC_CODES.const,
@@ -465,7 +508,10 @@ function createDiagnostics(
         code: diagnosticCode(error.keyword),
         severity: "error",
         path: diagnosticPath(error),
-        message: error.message ?? "The value does not satisfy the schema.",
+        message: explainedMessage(
+          error.message ?? "The value does not satisfy the schema.",
+          error.schemaPath,
+        ),
         keyword: error.keyword,
         params: { ...error.params },
         schemaPath: error.schemaPath,

@@ -1,8 +1,10 @@
 # Protocol fixtures
 
-These directories model two unrelated, invented publications. They exist to prove that GENII Publisher can ingest both its opinionated canonical layout and a declared legacy layout without relying on any particular title, catalog size, route shape, brand, or manuscript structure.
+These directories model three unrelated, invented publications. They exist to prove that GENII Publisher can ingest both its opinionated canonical layout and a declared legacy layout without relying on any particular title, catalog size, route shape, brand, or manuscript structure.
 
 `canonical-field-notes` uses the default roots and manifest names. It also declares a theme, an optional audio adapter, and a `station-index` extension with the single `content.project` grant.
+
+`canonical-tide-tables` is the only one the shipped Next renderer can serve, because it declares no Updates route. The other two do, and that renderer has no way to supply Updates data, so a build against them is refused before anything is written. This is the fixture to copy when starting a publication, and the one the real renderer lifecycle test uses.
 
 `declared-night-dispatch` moves both catalog roots, changes both manifest templates, and gives one work an irregular repository-relative manifest path. It also declares a `margin-notes` extension with ordered `content.project` and `renderer.slot` grants, plus opt-in sync with a local fallback.
 

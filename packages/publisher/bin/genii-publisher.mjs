@@ -25,9 +25,15 @@ If you wish to allow use of your version of this file only under the terms of th
 // export works with no change here.
 
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import {
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
@@ -56,9 +62,14 @@ import {
   resolvePublicationProtectedRoots,
 } from "../dist/node/protected-roots.js";
 import {
+  assertHostCanServe,
+  readHostCapabilities,
+} from "../dist/node/host-capabilities.js";
+import {
   checkReaderArtifact,
   hashArtifactText,
   resolveArtifactDestination,
+  stagedArtifactPathFor,
   writeReaderArtifact,
 } from "../dist/node/materialize.js";
 
@@ -296,19 +307,7 @@ function rendererFor(hostRoot, options, { requireInitialized }) {
  * first-run mistake, so it gets an instruction rather than a resolution failure.
  */
 async function loadHostTemplate(hostRoot, renderer) {
-  const require = createRequire(
-    pathToFileURL(join(hostRoot, "package.json")),
-  );
-  let resolved;
-  try {
-    resolved = require.resolve(`${renderer}/host`);
-  } catch {
-    throw new CommandError(
-      `Could not resolve ${renderer}/host from ${hostRoot}.\n` +
-        `Install the renderer into this host first, for example:\n` +
-        `  npm install --save-dev ${renderer}`,
-    );
-  }
+  const resolved = resolveRendererHostModule(hostRoot, renderer);
   const module = await import(pathToFileURL(resolved).href);
   const create = module.createPublisherNextHostTemplate;
   if (typeof create !== "function") {
@@ -317,6 +316,118 @@ async function loadHostTemplate(hostRoot, renderer) {
     );
   }
   return { create, module };
+}
+
+/**
+ * Finds a renderer's host contract file inside the host's installation.
+ *
+ * Not createRequire().resolve(), which was the first attempt and could not
+ * resolve the engine's own renderer. That applies the "require" condition, and a
+ * renderer is an ESM package whose exports declare only "import", so the subpath
+ * reads as not exported at all. The error told authors to install a package they
+ * had already installed.
+ *
+ * Not import.meta.resolve either. Its parent argument is silently ignored without
+ * an experimental flag, so it resolves from this file rather than from the host
+ * and reports success for a renderer the host does not have. A resolver that
+ * cannot fail is worse than one that fails honestly.
+ *
+ * So the package is located by walking up from the host root, exactly as Node
+ * would, and its exports are read for the one subpath this contract uses.
+ */
+function resolveRendererHostModule(hostRoot, renderer) {
+  const segments = renderer.split("/");
+  let directory = hostRoot;
+  const attempted = [];
+  for (;;) {
+    const candidate = join(directory, "node_modules", ...segments);
+    attempted.push(candidate);
+    const manifestPath = join(candidate, "package.json");
+    if (existsSync(manifestPath)) {
+      return resolveHostSubpath(candidate, manifestPath, renderer);
+    }
+    const parent = dirname(directory);
+    if (parent === directory) {
+      break;
+    }
+    directory = parent;
+  }
+  throw new CommandError(
+    `Could not find ${renderer} from ${hostRoot}.\n` +
+      `Install the renderer into this host first, for example:\n` +
+      `  npm install --save-dev ${renderer}\n` +
+      `Looked in:\n${attempted.map((path) => `  ${path}`).join("\n")}`,
+  );
+}
+
+function resolveHostSubpath(packageRoot, manifestPath, renderer) {
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch (error) {
+    throw new CommandError(
+      `${manifestPath} could not be read as JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  const declared = manifest?.exports?.["./host"];
+  // A string target, or a conditions object. The import condition is what a
+  // renderer's own generated host code is loaded under, so it is the one that
+  // matters; default covers a renderer that does not distinguish.
+  const target =
+    typeof declared === "string"
+      ? declared
+      : declared === null || typeof declared !== "object"
+        ? undefined
+        : (declared.import ?? declared.default ?? declared.node);
+  // A dot-dot segment is refused, matching what the package exports
+  // specification requires and what Node's own resolver enforces. This resolver
+  // replaced createRequire().resolve(), which could not see import-only exports,
+  // and in hand rolling it I lost that check: a target of "./../../planted.js"
+  // passed the prefix test and the engine imported and executed a file outside
+  // the renderer package. Node refuses the same target outright.
+  //
+  // A renderer is code the author installed and this command runs it, so the
+  // package itself is trusted. Reaching outside it is a different claim, and the
+  // package boundary is the thing exports exists to describe.
+  if (
+    typeof target === "string" &&
+    target.split("/").some((segment) => segment === "..")
+  ) {
+    throw new CommandError(
+      `${renderer} exports "./host" as ${target}, which reaches outside the package.\n` +
+        `A package exports target may not contain a ".." segment.`,
+    );
+  }
+  if (typeof target !== "string" || !target.startsWith("./")) {
+    throw new CommandError(
+      `${renderer} does not export a "./host" subpath, so the engine cannot read its host contract.\n` +
+        `Found ${JSON.stringify(declared)} in ${manifestPath}.`,
+    );
+  }
+  const absolute = join(packageRoot, ...target.slice(2).split("/"));
+  // Belt and braces. The segment check above is the spec rule; this is the
+  // property that actually matters, asserted directly so a future change to the
+  // parsing cannot quietly reintroduce an escape.
+  const containment = relative(packageRoot, absolute);
+  if (
+    containment.length === 0 ||
+    containment === ".." ||
+    containment.startsWith(`..${sep}`) ||
+    isAbsolute(containment)
+  ) {
+    throw new CommandError(
+      `${renderer} exports "./host" as ${target}, which resolves outside the package to ${absolute}.`,
+    );
+  }
+  if (!existsSync(absolute)) {
+    throw new CommandError(
+      `${renderer} exports "./host" as ${target}, but ${absolute} does not exist.\n` +
+        "The renderer may need building or reinstalling.",
+    );
+  }
+  return absolute;
 }
 
 /**
@@ -381,7 +492,15 @@ function describePlan(plan, hostRoot) {
 
 async function runInitPlan(options) {
   const hostRoot = resolveHostRoot(options.host);
-  const { create } = await loadHostTemplate(hostRoot, options.renderer);
+  // An uninitialized host has no record, so the flag or its default decides. An
+  // initialized one does, and reading it keeps init consistent with every other
+  // command: after initializing with a third-party renderer, build, status,
+  // upgrade, and rollback all worked with no flag while init plan went looking for
+  // the default and reported it missing.
+  const { create } = await loadHostTemplate(
+    hostRoot,
+    rendererFor(hostRoot, options, { requireInitialized: false }),
+  );
   const template = create(hostTemplateInput(hostRoot));
   const plan = planHostInitialization({
     hostRoot,
@@ -407,7 +526,10 @@ async function runInitApply(options) {
     );
   }
   const hostRoot = resolveHostRoot(options.host);
-  const { create } = await loadHostTemplate(hostRoot, options.renderer);
+  const { create } = await loadHostTemplate(
+    hostRoot,
+    rendererFor(hostRoot, options, { requireInitialized: false }),
+  );
   const template = create(hostTemplateInput(hostRoot));
   const plan = planHostInitialization({
     hostRoot,
@@ -675,7 +797,7 @@ async function runBuild(options) {
   const renderer = rendererFor(hostRoot, options, {
     requireInitialized: true,
   });
-  const { create } = await loadHostTemplate(hostRoot, renderer);
+  const { create, module } = await loadHostTemplate(hostRoot, renderer);
   const template = create(hostTemplateInput(hostRoot));
 
   const built = await buildPublicationReader({
@@ -690,6 +812,27 @@ async function runBuild(options) {
     } else {
       process.stderr.write(
         `${publicationRoot} did not compile.\n${describeDiagnostics(built.diagnostics)}\n`,
+      );
+    }
+    return 1;
+  }
+
+  // Before anything is written. An artifact this host cannot serve produces a
+  // host that fails to start, and a build that reported success would have moved
+  // that failure somewhere much harder to explain.
+  const servable = assertHostCanServe({
+    reader: built.value.reader,
+    capabilities: readHostCapabilities(module),
+    renderer,
+  });
+  if (!servable.valid) {
+    if (options.json) {
+      process.stdout.write(
+        `${JSON.stringify({ valid: false, diagnostics: servable.diagnostics }, null, 2)}\n`,
+      );
+    } else {
+      process.stderr.write(
+        `${hostRoot} cannot serve this publication.\n${describeDiagnostics(servable.diagnostics)}\n`,
       );
     }
     return 1;
@@ -791,6 +934,8 @@ async function runStatus(options) {
     installedContractVersion: null,
     upgradeAvailable: false,
     artifactTracking: null,
+    stagedArtifact: null,
+    unservable: [],
     conflictedFiles: [],
     artifact: null,
     pendingRollback: null,
@@ -801,9 +946,11 @@ async function runStatus(options) {
     report.actions.push("initialize this host");
   } else {
     let template = null;
+    let rendererModule = null;
     try {
-      const { create } = await loadHostTemplate(hostRoot, state.renderer);
-      template = create(hostTemplateInput(hostRoot));
+      const loaded = await loadHostTemplate(hostRoot, state.renderer);
+      rendererModule = loaded.module;
+      template = loaded.create(hostTemplateInput(hostRoot));
     } catch (error) {
       report.actions.push(
         `install ${state.renderer}, which this host records but cannot resolve`,
@@ -861,6 +1008,23 @@ async function runStatus(options) {
         if (!built.valid) {
           report.artifact = { outcome: "publicationInvalid" };
           report.actions.push("fix the publication, which does not compile");
+        } else if (
+          !assertHostCanServe({
+            reader: built.value.reader,
+            capabilities: readHostCapabilities(rendererModule ?? {}),
+            renderer: state.renderer,
+          }).valid
+        ) {
+          const refusal = assertHostCanServe({
+            reader: built.value.reader,
+            capabilities: readHostCapabilities(rendererModule ?? {}),
+            renderer: state.renderer,
+          });
+          report.artifact = { outcome: "unservable" };
+          report.unservable = refusal.diagnostics.map((item) => item.message);
+          report.actions.push(
+            `remove what ${state.renderer} cannot serve, or this host will not start`,
+          );
         } else {
           const destination = resolveArtifactDestination({
             hostRoot,
@@ -876,6 +1040,18 @@ async function runStatus(options) {
           if (checked.outcome !== "current") {
             report.actions.push("build the reader artifact");
           }
+          // A build killed between staging and renaming leaves this behind. It is
+          // untracked and not ignored, so it makes the tree dirty and every later
+          // apply refuses over it. Running build again removes it, but an author
+          // whose artifact is already current has no reason to run build, so this
+          // is the command that has to say so.
+          const staged = stagedArtifactPathFor(destination);
+          if (existsSync(staged)) {
+            report.stagedArtifact = staged;
+            report.actions.push(
+              "run build to clear a staged artifact left by an interrupted build, which will otherwise block apply and upgrade",
+            );
+          }
         }
       }
     }
@@ -886,7 +1062,17 @@ async function runStatus(options) {
   // committed nor ignored makes the tree permanently dirty after every build. That
   // is the state a fresh host lands in by default, so it needs saying out loud
   // rather than being discovered as a refusal weeks later.
-  if (report.artifact !== null && report.artifact.hostRelativePath !== undefined) {
+  // Only when the artifact is actually there. A missing artifact was being annotated
+  // "neither committed nor ignored" and given an action telling the author to decide
+  // whether to commit a file that does not exist, which is nonsense twice over. The
+  // decision only arises once a build has produced something.
+  if (
+    report.artifact !== null &&
+    report.artifact.hostRelativePath !== undefined &&
+    report.artifact.outcome !== "missing" &&
+    report.artifact.outcome !== "publicationInvalid" &&
+    report.artifact.outcome !== "unservable"
+  ) {
     const tracking = artifactTracking(
       hostRoot,
       report.artifact.hostRelativePath,
@@ -982,9 +1168,23 @@ function describeStatus(report) {
       `Artifact     ${
         report.artifact.outcome === "publicationInvalid"
           ? "the publication does not compile"
-          : `${report.artifact.hostRelativePath} is ${report.artifact.outcome}${tracking}`
+          : report.artifact.outcome === "unservable"
+            ? "this host cannot serve this publication"
+            : `${report.artifact.hostRelativePath} is ${report.artifact.outcome}${tracking}`
       }`,
     );
+  }
+  if (report.stagedArtifact !== null) {
+    lines.push("");
+    lines.push("Left by an interrupted build");
+    lines.push(`  ${report.stagedArtifact}`);
+  }
+  if (report.unservable.length > 0) {
+    lines.push("");
+    lines.push("This host cannot serve");
+    for (const message of report.unservable) {
+      lines.push(`  ${message}`);
+    }
   }
   if (report.conflictedFiles.length > 0) {
     lines.push("");
@@ -1016,6 +1216,7 @@ function describeStatus(report) {
 function runRecover(options) {
   const hostRoot = resolveHostRoot(options.host);
   const result = recoverHostTransaction({
+    root: hostRoot,
     journalDirectory: join(hostRoot, journalDirectoryName),
   });
   if (options.json) {
@@ -1144,10 +1345,32 @@ try {
     error instanceof Error && typeof error.name === "string"
       ? error.name
       : "Error";
+  const message =
+    error instanceof Error ? error.message : String(error);
+
+  // The human message always goes to stderr, so it survives a caller piping
+  // stdout into a parser.
   process.stderr.write(
-    `${named === "CommandError" ? "" : `${named}: `}${
-      error instanceof Error ? error.message : String(error)
-    }\n`,
+    `${named === "CommandError" ? "" : `${named}: `}${message}\n`,
   );
+
+  // And --json means stdout carries a JSON document, on every path. It used to
+  // mean that only for refusals a command reported itself; anything reaching this
+  // handler wrote text to stderr and left stdout empty, so a script asking for
+  // machine readable output got nothing and could learn only that something had
+  // failed. Read from argv because this handler sits outside argument parsing, and
+  // an error thrown by parsing itself still has to be reported this way.
+  if (process.argv.includes("--json")) {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          valid: false,
+          error: { name: named, message },
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  }
   process.exitCode = 1;
 }
