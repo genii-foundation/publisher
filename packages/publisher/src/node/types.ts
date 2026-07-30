@@ -12,6 +12,7 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 import type {
+  AudioClipCatalog,
   PublicationManifest,
   ResolvedPublicationSourceGraph,
   ValidationResult,
@@ -25,6 +26,18 @@ import type {
 
 declare const loadedPublicationCompilationSourcesBrand: unique symbol;
 
+/** A loaded clip catalog, with the exact text it was parsed from. */
+export interface LoadedAudioCatalog {
+  /** The path the publication manifest declared, as declared. */
+  readonly path: string;
+  readonly catalog: AudioClipCatalog;
+  /**
+   * Exact text as loaded, so a downstream artifact can bind this catalog by
+   * hash rather than by trusting that the parsed value round-trips.
+   */
+  readonly text: string;
+}
+
 export interface LoadPublicationCompilationSourcesInput {
   readonly publicationRoot: string;
 }
@@ -34,6 +47,20 @@ export interface LoadedPublicationCompilationSources {
   readonly publication: PublicationManifest;
   readonly sourceGraph: ResolvedPublicationSourceGraph;
   readonly sources: readonly CompilationSourceInput[];
+  /**
+   * The published clip catalog, when the publication declares one.
+   *
+   * Loaded here rather than read later by the build path so that it inherits
+   * source containment and the byte ceilings. A file the engine reads behind the
+   * loader's back is a file with no provenance.
+   *
+   * Deliberately not part of `sources`. Those are the documents the content
+   * compiler consumes, and the compiler refuses a source that is not in the
+   * resolved publication graph, correctly: a catalog is narration metadata and
+   * nothing in the reader artifact derives from it. Its own text is carried here
+   * so that the artifact that does depend on it can bind it by hash.
+   */
+  readonly audioCatalog?: LoadedAudioCatalog;
 }
 
 export interface PublicationSourceLoaderLimits {
@@ -44,6 +71,7 @@ export interface PublicationSourceLoaderLimits {
   readonly maximumDirectoryNameBytesTotal: number;
   readonly maximumDirectoryPathBytesTotal: number;
   readonly maximumDirectorySnapshots: number;
+  readonly maximumAudioCatalogBytes: number;
   readonly maximumManifestBytes: number;
   readonly maximumManuscriptBytes: number;
   readonly maximumSourceFiles: number;
@@ -60,6 +88,12 @@ export const PUBLISHER_SOURCE_LOADER_LIMITS =
     maximumDirectoryNameBytesTotal: 16 * 1024 * 1024,
     maximumDirectoryPathBytesTotal: 4 * 1024 * 1024,
     maximumDirectorySnapshots: 20_000,
+    // A catalog is one document covering every narrated section, so it outgrows
+    // the manifest ceiling long before it is unreasonable. A measured catalog of
+    // 551 clips is 278 KB, about 505 bytes per clip, so this admits roughly
+    // 16,000 clips. The total snapshot ceiling binds before the structural cap in
+    // the schema does, which is the same ordering every other source has.
+    maximumAudioCatalogBytes: 8 * 1024 * 1024,
     maximumManifestBytes: 1024 * 1024,
     maximumManuscriptBytes: 16 * 1024 * 1024,
     maximumSourceFiles:

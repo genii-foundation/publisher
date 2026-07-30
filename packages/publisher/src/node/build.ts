@@ -57,6 +57,12 @@ import {
   PUBLISHER_VERSION,
 } from "../index.js";
 import {
+  resolvePublicationAudio,
+} from "./audio.js";
+import type {
+  ResolvedPublicationAudio,
+} from "./audio.js";
+import {
   compileLoadedPublicationContent,
 } from "./compile.js";
 import {
@@ -249,6 +255,14 @@ export interface BuiltPublicationReader {
   readonly reader: PublicationReaderEnvelope;
   /** Canonical JSON text, exactly as it would be written. */
   readonly text: string;
+  /**
+   * Cross-checked narration, when the publication declares a catalog.
+   *
+   * Absent when it declares none, rather than present and empty, so that a
+   * publication with no narration cannot be confused with one whose catalog
+   * resolved to nothing.
+   */
+  readonly audio?: ResolvedPublicationAudio;
 }
 
 /**
@@ -291,6 +305,41 @@ export async function buildPublicationReader(
     return invalidResult(reader.diagnostics);
   }
 
+  // Cross-checked against every section the publication compiled, not against
+  // the audience projection. A catalog describes the publication, so narration
+  // for a section this audience does not see is still narration of a section that
+  // exists, and reporting it as unknown would be a false alarm on every public
+  // build of a publication with drafts.
+  let audio: ResolvedPublicationAudio | undefined;
+  const catalog = loaded.value.audioCatalog;
+  if (catalog !== undefined) {
+    const declaredCatalogPath = loaded.value.publication.audio?.catalog;
+    if (declaredCatalogPath === undefined) {
+      // The loader only reads a catalog because the manifest declared one, so
+      // reaching here means the two disagree. That is an engine defect, and it is
+      // reported rather than assumed away.
+      return invalidResult([
+        buildDiagnostic(
+          "build.audio_catalog_undeclared",
+          "/audio/catalog",
+          "A clip catalog was loaded for a publication whose manifest declares none.",
+          {},
+        ),
+      ]);
+    }
+    const resolved = resolvePublicationAudio({
+      catalog: catalog.catalog,
+      declaredCatalogPath,
+      sectionIds: works.value.flatMap((work) =>
+        work.sections.map((section) => section.id),
+      ),
+    });
+    if (!resolved.valid) {
+      return invalidResult(resolved.diagnostics);
+    }
+    audio = resolved.value;
+  }
+
   let text: string;
   try {
     text = serializePublicationReaderEnvelope(reader.value);
@@ -313,6 +362,7 @@ export async function buildPublicationReader(
       content: content.value,
       reader: reader.value,
       text,
+      ...(audio === undefined ? {} : { audio }),
     }),
     diagnostics: sortAndFreezeDiagnostics([]),
   });
