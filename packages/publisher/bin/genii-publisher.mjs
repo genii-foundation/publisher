@@ -24,6 +24,7 @@ If you wish to allow use of your version of this file only under the terms of th
 // depend on a renderer. That also means a third-party renderer shipping the same
 // export works with no change here.
 
+import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
@@ -31,6 +32,7 @@ import { pathToFileURL } from "node:url";
 
 import {
   PUBLISHER_HOST_STATE_PATH,
+  parsePublisherHostState,
 } from "../dist/node/lifecycle/host-state.js";
 import {
   applyHostInitialization,
@@ -47,6 +49,18 @@ import {
   applyHostRollback,
   planHostRollback,
 } from "../dist/node/lifecycle/rollback.js";
+import {
+  buildPublicationReader,
+} from "../dist/node/build.js";
+import {
+  resolvePublicationProtectedRoots,
+} from "../dist/node/protected-roots.js";
+import {
+  checkReaderArtifact,
+  hashArtifactText,
+  resolveArtifactDestination,
+  writeReaderArtifact,
+} from "../dist/node/materialize.js";
 
 const defaultRenderer = "@genii-foundation/publisher-next";
 const journalDirectoryName = join(".publisher", "transaction");
@@ -60,6 +74,8 @@ Commands
   upgrade apply   Apply a reviewed upgrade. Requires a clean Git tree.
   rollback plan   Report what undoing the last apply would restore.
   rollback apply  Undo the last apply, restoring its recorded baseline.
+  build           Compile the publication and write the reader artifact.
+  status          Report what this host is and what needs doing.
   recover         Restore the baseline left by an interrupted apply.
 
 Options
@@ -67,12 +83,18 @@ Options
   --layout <mode>         canonical or declared. Defaults to canonical.
   --renderer <package>    Renderer owning the host contract.
                           Defaults to ${defaultRenderer}.
-  --protected-root <dir>  A root holding publication sources or durable state.
-                          Repeatable. Nothing inside one is ever written.
+  --protected-root <dir>  An extra root nothing may be written into. Repeatable.
+                          The publication manifest's declared source roots are
+                          always protected without being named here.
   --plan <hash>           Required by every apply. The plan hash you reviewed.
   --acknowledge-manual-steps
                           Confirms you have read the manual steps an upgrade
                           reports. Required when it reports any.
+  --publication <dir>     Publication root holding publication.json.
+                          Defaults to the host root.
+  --audience <mode>       public or preview. Defaults to public.
+  --check                 Report whether the artifact on disk is current and
+                          exit nonzero if it is not. Writes nothing.
   --json                  Emit machine readable output.
   --help                  Show this text.
   --version               Show the application package version.
@@ -91,8 +113,12 @@ function parseArguments(argv) {
     host: process.cwd(),
     layout: "canonical",
     renderer: defaultRenderer,
+    rendererWasGiven: false,
     protectedRoots: [],
     plan: null,
+    publication: null,
+    audience: "public",
+    check: false,
     acknowledgeManualSteps: false,
     json: false,
     help: false,
@@ -101,8 +127,9 @@ function parseArguments(argv) {
   const valued = new Map([
     ["--host", "host"],
     ["--layout", "layout"],
-    ["--renderer", "renderer"],
     ["--plan", "plan"],
+    ["--publication", "publication"],
+    ["--audience", "audience"],
   ]);
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -119,6 +146,10 @@ function parseArguments(argv) {
       options.json = true;
       continue;
     }
+    if (argument === "--check") {
+      options.check = true;
+      continue;
+    }
     if (argument === "--acknowledge-manual-steps") {
       options.acknowledgeManualSteps = true;
       continue;
@@ -129,6 +160,20 @@ function parseArguments(argv) {
         throw new CommandError("--protected-root requires a value.");
       }
       options.protectedRoots.push(value);
+      index += 1;
+      continue;
+    }
+    if (argument === "--renderer") {
+      const value = argv[index + 1];
+      if (value === undefined || value.startsWith("--")) {
+        throw new CommandError("--renderer requires a value.");
+      }
+      options.renderer = value;
+      // Recorded separately from the value. An initialized host records its own
+      // renderer, and the difference between "the author asked for this one" and
+      // "this is the default" decides whether a disagreement is an error or just
+      // something to correct silently.
+      options.rendererWasGiven = true;
       index += 1;
       continue;
     }
@@ -153,6 +198,7 @@ function parseArguments(argv) {
   // resolution. Reporting a bad option only after failing to resolve a renderer
   // tells the author about the wrong problem.
   assertLayout(options.layout);
+  assertAudience(options.audience);
   return options;
 }
 
@@ -178,6 +224,69 @@ function resolveHostRoot(value) {
     return canonical;
   }
   return requested;
+}
+
+/**
+ * Reads the recorded host state, or null when the host is not initialized.
+ *
+ * A state file that exists but does not parse is an error rather than a null.
+ * Treating it as uninitialized would let a corrupted host be initialized over the
+ * top of itself.
+ */
+function readHostState(hostRoot) {
+  const path = join(hostRoot, PUBLISHER_HOST_STATE_PATH);
+  if (!existsSync(path)) {
+    return null;
+  }
+  try {
+    // Takes the text, not a parsed object, and reports its own refusals by
+    // throwing. Both are wrapped here so the author is told which file and what
+    // to do rather than seeing an internal error name.
+    return parsePublisherHostState(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new CommandError(
+      `${path} is not a usable host state file, so the engine cannot tell what this host is.\n` +
+        `${error instanceof Error ? error.message : String(error)}\n` +
+        "Restore it from version control rather than deleting it.",
+    );
+  }
+}
+
+/**
+ * Decides which renderer a command acts through.
+ *
+ * An initialized host records its renderer, and that record is authority. A
+ * command that resolved a different renderer would read that renderer's declared
+ * artifact path, so a build would write the artifact somewhere the host's own
+ * generated code does not import from, and report success. That is worse than a
+ * crash, because the failure surfaces later and somewhere else.
+ *
+ * A disagreement is only an error when the author asked for it. A default that
+ * happens not to match is corrected without comment, because the author never
+ * claimed anything.
+ */
+function rendererFor(hostRoot, options, { requireInitialized }) {
+  const state = readHostState(hostRoot);
+  if (state === null) {
+    if (requireInitialized) {
+      throw new CommandError(
+        `${hostRoot} has no ${PUBLISHER_HOST_STATE_PATH}, so it is not an initialized host.\n` +
+          "Nothing here reads a reader artifact yet. Initialize first:\n" +
+          `  genii-publisher init plan --host ${hostRoot}`,
+      );
+    }
+    return options.renderer;
+  }
+  if (options.rendererWasGiven && options.renderer !== state.renderer) {
+    throw new CommandError(
+      `This host was initialized with ${state.renderer}, and you asked for ${options.renderer}.\n` +
+        "Each renderer declares its own location for the reader artifact, so acting\n" +
+        "through the wrong one writes the artifact where this host's generated code\n" +
+        "does not import it, and reports success.\n" +
+        `Upgrade or reinitialize the host if you mean to change renderer.`,
+    );
+  }
+  return state.renderer;
 }
 
 /**
@@ -279,9 +388,7 @@ async function runInitPlan(options) {
     template,
     layout: assertLayout(options.layout),
     enginePackages: enginePackagesFor(template),
-    ...(options.protectedRoots.length === 0
-      ? {}
-      : { protectedRoots: options.protectedRoots }),
+    protectedRoots: protectedRootsFor(hostRoot, options),
   });
   if (options.json) {
     process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
@@ -307,9 +414,7 @@ async function runInitApply(options) {
     template,
     layout: assertLayout(options.layout),
     enginePackages: enginePackagesFor(template),
-    ...(options.protectedRoots.length === 0
-      ? {}
-      : { protectedRoots: options.protectedRoots }),
+    protectedRoots: protectedRootsFor(hostRoot, options),
   });
   const result = applyHostInitialization({
     hostRoot,
@@ -340,9 +445,7 @@ function upgradePlanFor(hostRoot, options, template, module) {
     template,
     migrationEdges: migrationEdgesFrom(module, options.renderer),
     enginePackages: enginePackagesFor(template),
-    ...(options.protectedRoots.length === 0
-      ? {}
-      : { protectedRoots: options.protectedRoots }),
+    protectedRoots: protectedRootsFor(hostRoot, options),
   });
 }
 
@@ -422,7 +525,7 @@ async function runUpgradePlan(options) {
   const hostRoot = resolveHostRoot(options.host);
   const { create, module } = await loadHostTemplate(
     hostRoot,
-    options.renderer,
+    rendererFor(hostRoot, options, { requireInitialized: true }),
   );
   const plan = upgradePlanFor(
     hostRoot,
@@ -448,7 +551,7 @@ async function runUpgradeApply(options) {
   const hostRoot = resolveHostRoot(options.host);
   const { create, module } = await loadHostTemplate(
     hostRoot,
-    options.renderer,
+    rendererFor(hostRoot, options, { requireInitialized: true }),
   );
   const plan = upgradePlanFor(
     hostRoot,
@@ -564,6 +667,352 @@ function runRollbackApply(options) {
   return 0;
 }
 
+async function runBuild(options) {
+  const hostRoot = resolveHostRoot(options.host);
+  const publicationRoot = resolveHostRoot(
+    options.publication ?? hostRoot,
+  );
+  const renderer = rendererFor(hostRoot, options, {
+    requireInitialized: true,
+  });
+  const { create } = await loadHostTemplate(hostRoot, renderer);
+  const template = create(hostTemplateInput(hostRoot));
+
+  const built = await buildPublicationReader({
+    publicationRoot,
+    audience: assertAudience(options.audience),
+  });
+  if (!built.valid) {
+    if (options.json) {
+      process.stdout.write(
+        `${JSON.stringify({ valid: false, diagnostics: built.diagnostics }, null, 2)}\n`,
+      );
+    } else {
+      process.stderr.write(
+        `${publicationRoot} did not compile.\n${describeDiagnostics(built.diagnostics)}\n`,
+      );
+    }
+    return 1;
+  }
+
+  const destination = resolveArtifactDestination({
+    hostRoot,
+    readerDataPath: template.readerDataPath,
+    rendererManagedPaths: template.files.map((file) => file.path),
+    protectedRoots: protectedRootsFor(hostRoot, options),
+  });
+
+  if (options.check) {
+    const checked = checkReaderArtifact({
+      destination,
+      text: built.value.text,
+    });
+    if (options.json) {
+      process.stdout.write(`${JSON.stringify(checked, null, 2)}\n`);
+    } else {
+      process.stdout.write(
+        `${describeCheck(checked, hostRoot, publicationRoot)}\n`,
+      );
+    }
+    return checked.outcome === "current" ? 0 : 1;
+  }
+
+  const written = writeReaderArtifact({
+    destination,
+    text: built.value.text,
+  });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(written, null, 2)}\n`);
+    return 0;
+  }
+  process.stdout.write(
+    `Publication  ${publicationRoot}\n` +
+      `Artifact     ${written.hostRelativePath}\n` +
+      `Digest       ${written.sha256}\n` +
+      `Size         ${written.bytes.toLocaleString("en-US")} bytes\n` +
+      (written.outcome === "current"
+        ? "Already current. Nothing written.\n"
+        : "Written.\n"),
+  );
+  return 0;
+}
+
+function describeDiagnostics(diagnostics) {
+  const shown = diagnostics.slice(0, 20);
+  const lines = shown.map((item) => {
+    const where = item.documentPath ?? "";
+    const at = item.path === "" ? "" : ` ${item.path}`;
+    return `  ${item.code}  ${where}${at}\n    ${item.message}`;
+  });
+  if (diagnostics.length > shown.length) {
+    lines.push(`  and ${diagnostics.length - shown.length} more`);
+  }
+  return lines.join("\n");
+}
+
+function describeCheck(checked, hostRoot, publicationRoot) {
+  const lines = [];
+  lines.push(`Host         ${hostRoot}`);
+  lines.push(`Publication  ${publicationRoot}`);
+  lines.push(`Artifact     ${checked.hostRelativePath}`);
+  lines.push(`Expected     ${checked.expected}`);
+  lines.push(`On disk      ${checked.actual ?? "absent"}`);
+  lines.push("");
+  if (checked.outcome === "current") {
+    lines.push("The artifact on disk matches this publication.");
+  } else if (checked.outcome === "missing") {
+    lines.push("No artifact on disk. Run build to produce it.");
+  } else {
+    lines.push(
+      "The artifact on disk was built from different sources. Run build.",
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Reports the host's condition without changing anything.
+ *
+ * Everything here was already answerable by running three plan commands and
+ * reading them together. An author should not have to assemble that, and a
+ * command that reports needs-action through its exit code is something a build
+ * script can use.
+ */
+async function runStatus(options) {
+  const hostRoot = resolveHostRoot(options.host);
+  const state = readHostState(hostRoot);
+  const report = {
+    host: hostRoot,
+    initialized: state !== null,
+    renderer: state?.renderer ?? null,
+    recordedRendererVersion: state?.rendererVersion ?? null,
+    recordedContractVersion: state?.hostContractVersion ?? null,
+    installedRendererVersion: null,
+    installedContractVersion: null,
+    upgradeAvailable: false,
+    artifactTracking: null,
+    conflictedFiles: [],
+    artifact: null,
+    pendingRollback: null,
+    actions: [],
+  };
+
+  if (state === null) {
+    report.actions.push("initialize this host");
+  } else {
+    let template = null;
+    try {
+      const { create } = await loadHostTemplate(hostRoot, state.renderer);
+      template = create(hostTemplateInput(hostRoot));
+    } catch (error) {
+      report.actions.push(
+        `install ${state.renderer}, which this host records but cannot resolve`,
+      );
+    }
+    if (template !== null) {
+      report.installedRendererVersion = template.rendererVersion;
+      report.installedContractVersion = template.contractVersion;
+      report.upgradeAvailable =
+        template.contractVersion !== state.hostContractVersion;
+      if (report.upgradeAvailable) {
+        report.actions.push("upgrade to the installed host contract");
+      }
+
+      // Conflicts are read from the managed files the state records, compared
+      // against what the installed contract now produces. That is the same
+      // comparison an upgrade plan makes, without computing a plan.
+      const declared = new Map(
+        template.files.map((file) => [file.path, file.contents]),
+      );
+      for (const managed of state.managedFiles) {
+        const absolute = join(hostRoot, ...managed.path.split("/"));
+        let onDisk;
+        try {
+          onDisk = readFileSync(absolute, "utf8");
+        } catch {
+          report.conflictedFiles.push({ path: managed.path, state: "missing" });
+          continue;
+        }
+        const digest = hashArtifactText(onDisk);
+        const intended = declared.get(managed.path);
+        if (
+          digest !== managed.sha256 &&
+          (intended === undefined || hashArtifactText(intended) !== digest)
+        ) {
+          report.conflictedFiles.push({
+            path: managed.path,
+            state: "modified",
+          });
+        }
+      }
+      if (report.conflictedFiles.length > 0) {
+        report.actions.push(
+          `review ${report.conflictedFiles.length} managed file(s) that no longer match`,
+        );
+      }
+
+      // Artifact currency, when there is a publication to compare against.
+      const publicationRoot = resolveHostRoot(options.publication ?? hostRoot);
+      if (existsSync(join(publicationRoot, "publication.json"))) {
+        const built = await buildPublicationReader({
+          publicationRoot,
+          audience: assertAudience(options.audience),
+        });
+        if (!built.valid) {
+          report.artifact = { outcome: "publicationInvalid" };
+          report.actions.push("fix the publication, which does not compile");
+        } else {
+          const destination = resolveArtifactDestination({
+            hostRoot,
+            readerDataPath: template.readerDataPath,
+            rendererManagedPaths: template.files.map((file) => file.path),
+            protectedRoots: protectedRootsFor(hostRoot, options),
+          });
+          const checked = checkReaderArtifact({
+            destination,
+            text: built.value.text,
+          });
+          report.artifact = checked;
+          if (checked.outcome !== "current") {
+            report.actions.push("build the reader artifact");
+          }
+        }
+      }
+    }
+  }
+
+  // The artifact's tracking state, which decides whether upgrade and rollback
+  // will work at all. Both require a clean tree, and an artifact that is neither
+  // committed nor ignored makes the tree permanently dirty after every build. That
+  // is the state a fresh host lands in by default, so it needs saying out loud
+  // rather than being discovered as a refusal weeks later.
+  if (report.artifact !== null && report.artifact.hostRelativePath !== undefined) {
+    const tracking = artifactTracking(
+      hostRoot,
+      report.artifact.hostRelativePath,
+    );
+    report.artifactTracking = tracking;
+    if (tracking === "untrackedAndNotIgnored") {
+      report.actions.push(
+        `decide whether ${report.artifact.hostRelativePath} is committed or ignored, because upgrade and rollback need a clean tree`,
+      );
+    }
+  }
+
+  const receipt = planHostRollback({ hostRoot });
+  if (receipt.receipt !== null) {
+    report.pendingRollback = {
+      operation: receipt.receipt.operation,
+      baselineCommit: receipt.receipt.baselineCommit,
+      outcome: receipt.outcome,
+    };
+  }
+
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  } else {
+    process.stdout.write(`${describeStatus(report)}\n`);
+  }
+  return report.actions.length === 0 ? 0 : 1;
+}
+
+/**
+ * Whether Git tracks, ignores, or merely tolerates the artifact.
+ *
+ * Committed and ignored are both coherent choices. Neither is not: the file then
+ * shows up as untracked forever, and every command that needs a clean tree
+ * refuses.
+ */
+function artifactTracking(hostRoot, hostRelativePath) {
+  const git = (args) =>
+    spawnSync("git", args, {
+      cwd: hostRoot,
+      encoding: "utf8",
+      env: { ...process.env, GIT_PAGER: "cat", GIT_TERMINAL_PROMPT: "0" },
+    });
+  const inside = git(["rev-parse", "--is-inside-work-tree"]);
+  if (inside.status !== 0 || (inside.stdout ?? "").trim() !== "true") {
+    return "noRepository";
+  }
+  const tracked = git(["ls-files", "--error-unmatch", "--", hostRelativePath]);
+  if (tracked.status === 0) {
+    return "tracked";
+  }
+  const ignored = git(["check-ignore", "--quiet", "--", hostRelativePath]);
+  if (ignored.status === 0) {
+    return "ignored";
+  }
+  return "untrackedAndNotIgnored";
+}
+
+function describeStatus(report) {
+  const lines = [];
+  lines.push(`Host         ${report.host}`);
+  if (!report.initialized) {
+    lines.push("");
+    lines.push("Not an initialized host. No publisher.host.json here.");
+    lines.push("");
+    lines.push("Next");
+    for (const action of report.actions) {
+      lines.push(`  ${action}`);
+    }
+    return lines.join("\n");
+  }
+  lines.push(`Renderer     ${report.renderer}`);
+  lines.push(
+    `Version      recorded ${report.recordedRendererVersion}, installed ${
+      report.installedRendererVersion ?? "not resolvable"
+    }`,
+  );
+  lines.push(
+    `Contract     recorded ${report.recordedContractVersion}, installed ${
+      report.installedContractVersion ?? "not resolvable"
+    }${report.upgradeAvailable ? "  (upgrade available)" : ""}`,
+  );
+  if (report.artifact !== null) {
+    const tracking =
+      report.artifactTracking === null ||
+      report.artifactTracking === "tracked" ||
+      report.artifactTracking === "noRepository"
+        ? ""
+        : report.artifactTracking === "ignored"
+          ? "  (ignored by Git)"
+          : "  (neither committed nor ignored)";
+    lines.push(
+      `Artifact     ${
+        report.artifact.outcome === "publicationInvalid"
+          ? "the publication does not compile"
+          : `${report.artifact.hostRelativePath} is ${report.artifact.outcome}${tracking}`
+      }`,
+    );
+  }
+  if (report.conflictedFiles.length > 0) {
+    lines.push("");
+    lines.push("Managed files that no longer match");
+    for (const entry of report.conflictedFiles) {
+      lines.push(`  ${entry.state.padEnd(9)}${entry.path}`);
+    }
+  }
+  if (report.pendingRollback !== null) {
+    lines.push("");
+    // No article. The operation name is substituted in, and "a initialize" is
+    // what an article gets you.
+    lines.push(
+      `Rollback available: ${report.pendingRollback.operation} at ${report.pendingRollback.baselineCommit}.`,
+    );
+  }
+  lines.push("");
+  if (report.actions.length === 0) {
+    lines.push("Nothing to do.");
+  } else {
+    lines.push("Next");
+    for (const action of report.actions) {
+      lines.push(`  ${action}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 function runRecover(options) {
   const hostRoot = resolveHostRoot(options.host);
   const result = recoverHostTransaction({
@@ -588,6 +1037,32 @@ function assertLayout(value) {
   if (value !== "canonical" && value !== "declared") {
     throw new CommandError(
       `--layout must be canonical or declared, not ${JSON.stringify(value)}.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * The roots nothing may be written into, for one command invocation.
+ *
+ * The manifest is the authority. The flag adds to what it declares rather than
+ * replacing it, so forgetting the flag cannot leave a publication unprotected.
+ */
+function protectedRootsFor(hostRoot, options) {
+  const publicationRoot = resolveHostRoot(
+    options.publication ?? hostRoot,
+  );
+  return resolvePublicationProtectedRoots({
+    hostRoot,
+    publicationRoot,
+    additional: options.protectedRoots,
+  });
+}
+
+function assertAudience(value) {
+  if (value !== "public" && value !== "preview") {
+    throw new CommandError(
+      `--audience must be public or preview, not ${JSON.stringify(value)}.`,
     );
   }
   return value;
@@ -649,6 +1124,10 @@ async function main(argv) {
       return runRollbackPlan(options);
     case "rollback apply":
       return runRollbackApply(options);
+    case "build":
+      return await runBuild(options);
+    case "status":
+      return await runStatus(options);
     case "recover":
       return runRecover(options);
     default:

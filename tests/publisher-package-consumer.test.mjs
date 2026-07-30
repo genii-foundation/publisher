@@ -50,6 +50,7 @@ const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const schemaRoot = join(repositoryRoot, "schemas");
 const contentRoot = join(repositoryRoot, "packages", "content");
 const publisherRoot = join(repositoryRoot, "packages", "publisher");
+const readerRoot = join(repositoryRoot, "packages", "reader");
 const releaseTagScript = join(
   publisherRoot,
   "scripts",
@@ -284,8 +285,12 @@ test("packed Publisher application installs offline and loads an unrelated publi
     node: "./dist/node.js",
   });
   assert.equal(publisherManifest.devDependencies.esbuild, "0.27.0");
+  // Pinned deliberately. The application package's dependency surface is what a
+  // consumer installs, so growing it is an edit somebody makes on purpose rather
+  // than a thing that happens to them.
   assert.deepEqual(publisherManifest.dependencies, {
     "@genii-foundation/publisher-content": "0.1.0-alpha.0",
+    "@genii-foundation/publisher-reader": "0.1.0-alpha.0",
     "@genii-foundation/publisher-schema": "0.1.0-alpha.0",
   });
 
@@ -302,6 +307,7 @@ test("packed Publisher application installs offline and loads an unrelated publi
 
     const schemaPack = packPackage(schemaRoot, packDirectory);
     const contentPack = packPackage(contentRoot, packDirectory);
+    const readerPack = packPackage(readerRoot, packDirectory);
     const publisherPack = packPackage(publisherRoot, packDirectory);
     assert.deepEqual(
       publisherPack.files.map(({ path }) => path).sort(),
@@ -328,6 +334,8 @@ test("packed Publisher application installs offline and loads an unrelated publi
               tarball(publisherPack),
             "@genii-foundation/publisher-content":
               tarball(contentPack),
+            "@genii-foundation/publisher-reader":
+              tarball(readerPack),
             "@genii-foundation/publisher-schema":
               tarball(schemaPack),
           },

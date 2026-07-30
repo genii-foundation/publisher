@@ -137,6 +137,20 @@ function hashBytes(bytes: Buffer): string {
  * the tree the caller authorized, and checking the final component alone is not
  * enough because an intermediate directory can be a link.
  */
+/**
+ * Resolves a host-relative path to an absolute one, refusing anything unsafe.
+ *
+ * Exported because it is the only correct way to turn a declared host path into
+ * a filesystem path, and generated output has to go through the same gate as a
+ * lifecycle mutation. A second implementation would be a second set of bugs.
+ */
+export function resolveHostFilePath(
+  root: string,
+  hostPath: string,
+): string {
+  return resolveHostPath(root, hostPath);
+}
+
 function resolveHostPath(root: string, hostPath: string): string {
   if (
     typeof hostPath !== "string" ||

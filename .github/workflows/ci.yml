@@ -74,6 +74,9 @@ jobs:
       - name: Build content compiler
         run: npm --prefix packages/content run build
 
+      - name: Build reader projector
+        run: npm --prefix packages/reader run build
+
       - name: Build Publisher application
         run: npm --prefix packages/publisher run build
 

@@ -12,8 +12,35 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 export {
+  buildPublicationReader,
+  derivePublicationWorkInputs,
+  rootSectionIdFor,
+} from "./node/build.js";
+export type {
+  BuildPublicationReaderInput,
+  BuiltPublicationReader,
+} from "./node/build.js";
+export {
   compileLoadedPublicationContent,
 } from "./node/compile.js";
+export {
+  PUBLICATION_MANIFEST_FILENAME,
+  ProtectedRootsError,
+  resolvePublicationProtectedRoots,
+} from "./node/protected-roots.js";
+export {
+  ArtifactDestinationError,
+  checkReaderArtifact,
+  hashArtifactText,
+  resolveArtifactDestination,
+  writeReaderArtifact,
+} from "./node/materialize.js";
+export type {
+  ArtifactCheckResult,
+  ArtifactDestination,
+  ArtifactDestinationInput,
+  ArtifactWriteResult,
+} from "./node/materialize.js";
 export {
   loadPublicationCompilationSources,
 } from "./node/loader.js";
