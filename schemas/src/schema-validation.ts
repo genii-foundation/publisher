@@ -18,6 +18,7 @@ import {
   type PublicationEnvelopeKind,
 } from "./envelope-resource-limits.js";
 import {
+  audioCatalogValidator,
   collectionValidator,
   contentEnvelopeValidator,
   publicationValidator,
@@ -29,6 +30,7 @@ import type {
   StandaloneValidateFunction,
 } from "./generated-validators.js";
 import type {
+  AudioClipCatalog,
   CollectionManifest,
   Diagnostic,
   ManifestByKind,
@@ -668,6 +670,21 @@ export function validateReaderEnvelopeShape(
     input,
     "reader",
   );
+}
+
+/**
+ * Validates a published audio clip catalog.
+ *
+ * A source document rather than an engine artifact, so it goes through the
+ * generic snapshot path alongside the manifests instead of the envelope path.
+ * The catalog carries no build identity by design: the engine emits a separate
+ * audio envelope that is bound to a build, and conflating the two would let a
+ * stale catalog claim to describe a publication it predates.
+ */
+export function validateAudioCatalogShape(
+  input: unknown,
+): ValidationResult<AudioClipCatalog> {
+  return validateShape(audioCatalogValidator, input);
 }
 
 export function validateManifestShape<K extends ManifestKind>(

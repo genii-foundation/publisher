@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/audio-catalog.schema.json",
+  "title": "GENII Publisher audio clip catalog",
+  "description": "Published narration clips for one publication, grouped by voice. An audio pipeline authors this file and the engine ingests it. This is a source document rather than an engine artifact, so it carries no build identity: the engine emits a separate audio envelope bound to a build.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "voices"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/audio-catalog.schema.json"
+    },
+    "version": {
+      "const": 1,
+      "description": "Version of the catalog contract accepted by this schema. A number rather than the string schemaVersion used by manifests authored for the engine, because published catalogs already exist in this shape and regenerating them would discard the clip identities they record."
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the pipeline produced this catalog. Advisory only. The engine binds a catalog to a build through content versions, not through this timestamp."
+    },
+    "voices": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/voice"
+      },
+      "description": "Narration voices, in the order a reader should be offered them. An empty array is accepted so that a publication part way through generation still validates."
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "opaqueVersionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "description": "A derived version token, not an authored identifier, so it is bounded separately from stableId. Pipelines compose these by appending a digest to a section identifier, which overruns the 128 character stableId bound whenever the section identifier is long. Measured against a published catalog of 551 clips, four exceeded 128 characters and the longest reached 159. The reserved device name guard is kept because the token appears in the clip filename."
+    },
+    "clipHref": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2048,
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://[^\\s/?#]+/[^\\s]*$",
+          "description": "Absolute https URL. Plain http is refused rather than merely discouraged, because a mixed-content clip on an https page fails to load in every current browser and the failure surfaces as silent audio."
+        },
+        {
+          "type": "string",
+          "pattern": "^/(?!/)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*/$)[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$",
+          "description": "Root-relative path the host serves itself. Refuses a protocol-relative prefix, a traversal segment, and a trailing slash."
+        }
+      ]
+    },
+    "clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sectionId",
+        "audioVersionId",
+        "href"
+      ],
+      "properties": {
+        "sectionId": {
+          "$ref": "#/$defs/stableId",
+          "description": "Section this clip narrates. The engine refuses a catalog naming a section the publication does not contain."
+        },
+        "audioVersionId": {
+          "$ref": "#/$defs/opaqueVersionId",
+          "description": "Identity of the text this clip was generated from. The engine compares it against the section's current audio version and drops a clip that no longer matches, so a reader is never served narration of prose that has since changed."
+        },
+        "href": {
+          "$ref": "#/$defs/clipHref"
+        },
+        "format": {
+          "enum": [
+            "mp3",
+            "opus",
+            "wav"
+          ],
+          "description": "Container the clip is encoded in. Limited to the formats a publishing pipeline is known to produce; adding a codec here without a pipeline that emits it would advertise support that has never been exercised."
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967296
+        },
+        "timingsByteSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 134217728,
+          "description": "Size of the word timing sidecar published beside this clip. Its presence is what tells a reader that timings exist. The sidecar URL is deliberately absent: deriving it from href by replacing the extension keeps a catalog covering thousands of sections small enough to fetch on a page that may never play audio."
+        },
+        "durationSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 86400
+        }
+      }
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "sections"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Name a reader sees when choosing a voice."
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Who generated the narration. Recorded for attribution and for reproducing a run, and never used to resolve anything."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sections": {
+          "type": "array",
+          "maxItems": 50000,
+          "items": {
+            "$ref": "#/$defs/clip"
+          }
+        }
+      }
+    }
+  }
+}

@@ -320,6 +320,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "README.md",
       "SOURCE-NOTICE",
       "THIRD_PARTY_NOTICES.md",
+      "audio-catalog.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",
       "dist/SOURCE-NOTICE",
@@ -731,6 +732,7 @@ if (
     });
 
     for (const schemaFileName of [
+      "audio-catalog.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",
       "publication.schema.json",
@@ -745,6 +747,7 @@ if (
     const isolatedRuntimeProof = `
       import assert from "node:assert/strict";
       import {
+        validateAudioCatalogShape,
         validateCollectionShape,
         validateContentEnvelopeShape,
         validatePublicationShape,
@@ -765,11 +768,21 @@ if (
         true,
         JSON.stringify(validWork.diagnostics),
       );
+      const validCatalog = validateAudioCatalogShape({
+        version: 1,
+        voices: [],
+      });
+      assert.equal(
+        validCatalog.valid,
+        true,
+        JSON.stringify(validCatalog.diagnostics),
+      );
       for (const result of [
         validatePublicationShape({}),
         validateCollectionShape({}),
         validateContentEnvelopeShape({}),
         validateReaderEnvelopeShape({}),
+        validateAudioCatalogShape({}),
       ]) {
         assert.equal(result.valid, false);
         assert.ok(result.diagnostics.length > 0);

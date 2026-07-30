@@ -104,6 +104,43 @@ export interface AudioConfiguration {
   readonly catalog?: string;
 }
 
+export interface AudioClip {
+  readonly sectionId: string;
+  readonly audioVersionId: string;
+  readonly href: string;
+  readonly format?: "mp3" | "opus" | "wav";
+  readonly byteSize?: number;
+  /**
+   * Size of the word timing sidecar beside this clip, or absent when the clip
+   * has no published timings. Presence is the signal; the sidecar URL is derived
+   * from `href` rather than carried, which keeps a catalog spanning thousands of
+   * sections small enough to fetch on a page that may never play audio.
+   */
+  readonly timingsByteSize?: number;
+  readonly durationSeconds?: number;
+}
+
+export interface AudioCatalogVoice {
+  readonly id: string;
+  readonly label: string;
+  readonly provider?: string;
+  readonly model?: string;
+  /**
+   * Clips this voice has recorded, one per section. Named `sections` because
+   * published catalogs already use that name and renaming it would invalidate
+   * every catalog an existing pipeline emits.
+   */
+  readonly sections: readonly AudioClip[];
+}
+
+export interface AudioClipCatalog {
+  readonly $schema?:
+    "https://publisher.genii.foundation/schemas/audio-catalog.schema.json";
+  readonly version: 1;
+  readonly generatedAt?: string;
+  readonly voices: readonly AudioCatalogVoice[];
+}
+
 export interface SyncConfiguration {
   readonly provider: PackageReference;
   readonly consent: "opt-in";

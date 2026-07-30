@@ -46,7 +46,8 @@
     "./work.schema.json": "./work.schema.json",
     "./collection.schema.json": "./collection.schema.json",
     "./content-envelope.schema.json": "./content-envelope.schema.json",
-    "./reader-envelope.schema.json": "./reader-envelope.schema.json"
+    "./reader-envelope.schema.json": "./reader-envelope.schema.json",
+    "./audio-catalog.schema.json": "./audio-catalog.schema.json"
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
