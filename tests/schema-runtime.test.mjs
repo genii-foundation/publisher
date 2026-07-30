@@ -609,7 +609,14 @@ test("host integration configuration is reserved from every manifest-owned sourc
     {
       label: "audio catalog",
       mutate(publication) {
-        publication.audio.catalog = reservedPath;
+        // Constructed rather than mutated. This fixture used to declare an audio
+        // adapter with no catalog, which produced no narration and reported
+        // nothing, so the block is gone. The reserved-path rule still has to hold
+        // for a catalog, and asserting it needs a catalog to exist.
+        publication.audio = {
+          adapter: { package: "@example/audio-file-adapter" },
+          catalog: reservedPath,
+        };
       },
     },
     {

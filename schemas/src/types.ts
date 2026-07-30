@@ -148,7 +148,22 @@ export interface AudioEnvelopeVoice extends AudioCatalogVoice {
   readonly unnarratedSectionCount: number;
 }
 
+export interface AudioEnvelopeAdapterRecord {
+  /**
+   * The pipeline that produced this narration, as declared.
+   *
+   * Recorded, never executed and never resolved. The engine reads no code from
+   * it, for the same reason it reads migration edges and host capabilities as
+   * data: a third-party package is not something to run in order to decide what a
+   * publication is. It is here so that reproducing a narration run does not
+   * require guessing which tool made it.
+   */
+  readonly package: string;
+  readonly config?: Readonly<Record<string, JSONValue>>;
+}
+
 export interface AudioEnvelopeSource {
+  readonly adapter: AudioEnvelopeAdapterRecord;
   readonly catalogPath: string;
   /**
    * Digest of the exact catalog text this envelope came from.

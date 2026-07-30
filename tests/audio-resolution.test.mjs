@@ -31,7 +31,16 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -167,7 +176,16 @@ test("the reader artifact does not carry narration", async () => {
     audience: "public",
   });
   assert.ok(built.valid);
-  for (const marker of ["audioVersionId", "timingsByteSize", "clips.example"]) {
+  // The adapter name is included deliberately. It is recorded in the audio
+  // envelope and must not reach the reader artifact, which is the boundary this
+  // whole arrangement rests on. That coverage used to live on a fixture that
+  // declared an adapter and had no narration, which was the wrong place for it.
+  for (const marker of [
+    "audioVersionId",
+    "timingsByteSize",
+    "clips.narrated-tides",
+    "publisher-audio-clips",
+  ]) {
     assert.equal(
       built.value.text.includes(marker),
       false,
@@ -372,12 +390,94 @@ test("a build identity that is not a digest is refused", () => {
   assert.ok(resolved.valid);
   const result = buildAudioEnvelope({
     audio: resolved.value,
+    adapter: { package: "@example/clips" },
     publicationId: "narrated-tides",
     buildId: "not-a-digest",
     catalogText: "{}",
   });
   assert.equal(result.valid, false);
   assert.equal(result.diagnostics[0].documentPath, catalogPath);
+});
+
+test("a missing adapter is a diagnostic, not an exception", () => {
+  // This module returns diagnostics and never throws. A caller reaching in without
+  // an adapter used to get a TypeError naming an internal field, which is how this
+  // guard was found: a test failed for the wrong reason.
+  const resolved = resolveWith([voice("low-water", [clip()])]);
+  assert.ok(resolved.valid);
+  const result = buildAudioEnvelope({
+    audio: resolved.value,
+    publicationId: "narrated-tides",
+    buildId: `sha256:${"a".repeat(64)}`,
+    catalogText: "{}",
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code, "audio.envelope.adapter_missing");
+});
+
+// ------------------------------------------------------------ the adapter
+
+test("the declared adapter is recorded in the envelope", async () => {
+  const { envelope } = await narratedEnvelope();
+  const manifest = JSON.parse(
+    readFileSync(join(narratedFixture, "publication.json"), "utf8"),
+  );
+  assert.equal(
+    envelope.envelope.source.adapter.package,
+    manifest.audio.adapter.package,
+  );
+});
+
+test("the adapter is recorded, not resolved", async () => {
+  // The load-bearing case, and the fixture is the proof: it names
+  // @genii-foundation/publisher-audio-clips, which does not exist anywhere. The
+  // schema requires an adapter, the renderer has no audio surface at all, and so
+  // there is nothing for the engine to call. Recording it rather than resolving it
+  // is the decision; a build failing here would mean somebody started executing
+  // it.
+  const manifest = JSON.parse(
+    readFileSync(join(narratedFixture, "publication.json"), "utf8"),
+  );
+  const declared = manifest.audio.adapter.package;
+  assert.equal(
+    existsSync(join(repositoryRoot, "node_modules", ...declared.split("/"))),
+    false,
+    `${declared} is now installed, so this test no longer proves the adapter goes unresolved`,
+  );
+  const built = await buildPublicationReader({
+    publicationRoot: narratedFixture,
+    audience: "public",
+  });
+  assert.ok(
+    built.valid,
+    "naming an uninstallable adapter must not fail a build that never executes it",
+  );
+});
+
+test("audio declared with no catalog is refused, and says why", async (t) => {
+  // Before this, the combination produced no narration and reported nothing, so an
+  // author who configured audio got silence with no explanation.
+  const root = realpathSync(
+    mkdtempSync(join(tmpdir(), "publisher-audio-nocatalog-")),
+  );
+  t.after(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+  cpSync(narratedFixture, root, { recursive: true });
+  const manifestPath = join(root, "publication.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  delete manifest.audio.catalog;
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  const built = await buildPublicationReader({
+    publicationRoot: root,
+    audience: "public",
+  });
+  assert.equal(built.valid, false);
+  const [diagnostic] = built.diagnostics;
+  assert.equal(diagnostic.code, "build.audio_catalog_missing");
+  assert.match(diagnostic.message, /never executed/u);
+  assert.match(diagnostic.message, /Add audio\.catalog, or remove the audio block/u);
 });
 
 // -------------------------------------------------- the fixture is what it claims

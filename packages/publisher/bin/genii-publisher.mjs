@@ -897,11 +897,15 @@ async function runBuild(options) {
             text: built.value.audio.text,
           });
     if (options.json) {
+      // Narration is an additive key, not a reshape. A consumer reading `outcome`
+      // must keep working whether or not the publication narrates, and nesting the
+      // reader artifact under a `reader` key made the shape depend on the
+      // publication. That was wrong and an existing test said so.
       process.stdout.write(
         `${JSON.stringify(
           audioChecked === undefined
             ? checked
-            : { reader: checked, audio: audioChecked },
+            : { ...checked, audio: audioChecked },
           null,
           2,
         )}\n`,
@@ -936,7 +940,7 @@ async function runBuild(options) {
       `${JSON.stringify(
         audioWritten === undefined
           ? written
-          : { reader: written, audio: audioWritten },
+          : { ...written, audio: audioWritten },
         null,
         2,
       )}\n`,

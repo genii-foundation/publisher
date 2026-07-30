@@ -83,14 +83,37 @@
         }
       ]
     },
+    "adapterRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package"
+      ],
+      "properties": {
+        "package": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 214,
+          "description": "The pipeline that produced this narration, as the publication declared it. Recorded, never executed, and never resolved: the engine reads no code from it. It is here so that reproducing a narration run does not require guessing which tool made it."
+        },
+        "config": {
+          "type": "object",
+          "description": "Whatever settings the publication recorded for that pipeline, carried verbatim. Useful for reproducing a run and meaningless to the engine."
+        }
+      }
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "adapter",
         "catalogPath",
         "catalogSha256"
       ],
       "properties": {
+        "adapter": {
+          "$ref": "#/$defs/adapterRecord"
+        },
         "catalogPath": {
           "type": "string",
           "minLength": 1,

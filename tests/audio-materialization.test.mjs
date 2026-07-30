@@ -157,7 +157,10 @@ test("check reports both artifacts separately in JSON", (t) => {
   const checked = build(hostRoot, narrated, ["--check", "--json"]);
   assert.equal(checked.status, 0, checked.stderr);
   const parsed = JSON.parse(checked.stdout);
-  assert.equal(parsed.reader.outcome, "current");
+  // The reader artifact's fields stay at the top level and narration is additive,
+  // so a consumer reading `outcome` works whether or not a publication narrates.
+  assert.equal(parsed.outcome, "current");
+  assert.equal(parsed.hostRelativePath, "alpha-reader.json");
   assert.equal(parsed.audio.outcome, "current");
   assert.equal(parsed.audio.hostRelativePath, audioDataPath);
 });
@@ -201,7 +204,7 @@ test("a renderer claiming support but naming no path is refused", (t) => {
   // part of a third-party contract.
   const hostRoot = authorHost(t, {
     renderers: [rendererName],
-    rendererOptions: { [rendererName]: {} },
+    rendererOptions: { [rendererName]: { omitAudioDataPath: true } },
   }).hostRoot;
   const built = build(hostRoot, narrated);
   assert.equal(built.status, 1);
@@ -213,7 +216,7 @@ test("nothing is written when narration is refused", (t) => {
   // build leaves a host half updated.
   const hostRoot = authorHost(t, {
     renderers: [rendererName],
-    rendererOptions: { [rendererName]: {} },
+    rendererOptions: { [rendererName]: { omitAudioDataPath: true } },
   }).hostRoot;
   assert.equal(build(hostRoot, narrated).status, 1);
   assert.equal(

@@ -50,6 +50,7 @@ import type {
   AudioClip,
   AudioClipCatalog,
   AudioEnvelope,
+  AudioEnvelopeAdapterRecord,
   Diagnostic,
   JSONValue,
   ValidationResult,
@@ -273,6 +274,16 @@ export function resolvePublicationAudio(
 
 export interface BuildAudioEnvelopeInput {
   readonly audio: ResolvedPublicationAudio;
+  /**
+   * The pipeline the publication declared, recorded rather than executed.
+   *
+   * The schema requires an adapter and nothing resolved it, so a publication
+   * could name a package that does not exist and build cleanly. It still is not
+   * executed, because the renderer has no audio surface at all and there is
+   * nothing for the engine to call. What it now does is reach the envelope, so a
+   * narration run can be traced to the tool that produced it.
+   */
+  readonly adapter: AudioEnvelopeAdapterRecord;
   readonly publicationId: string;
   /**
    * The reader artifact's build identity, carried verbatim rather than recomputed.
@@ -307,6 +318,30 @@ export function buildAudioEnvelope(
   input: BuildAudioEnvelopeInput,
 ): ValidationResult<BuiltAudioEnvelope> {
   const { audio } = input;
+
+  // Guarded rather than assumed, because this module returns diagnostics and
+  // never throws, and a caller reaching in with a malformed input used to get a
+  // TypeError naming an internal field. Found by a test that failed for the wrong
+  // reason, which is the only way this kind of gap surfaces.
+  if (
+    input.adapter === null ||
+    typeof input.adapter !== "object" ||
+    typeof input.adapter.package !== "string" ||
+    input.adapter.package.length === 0
+  ) {
+    return Object.freeze({
+      valid: false as const,
+      diagnostics: sortAndFreezeDiagnostics([
+        audioDiagnostic(
+          "audio.envelope.adapter_missing",
+          "/source/adapter",
+          "An audio envelope requires the declared adapter, which is recorded for provenance even though it is never executed.",
+          { reason: "missingAdapter" },
+          audio.declaredCatalogPath,
+        ),
+      ]),
+    });
+  }
   const envelope = {
     $schema: AUDIO_ENVELOPE_SCHEMA_URL,
     schemaVersion: AUDIO_ENVELOPE_SCHEMA_VERSION,
@@ -314,6 +349,12 @@ export function buildAudioEnvelope(
     engineVersion: PUBLISHER_VERSION,
     buildId: input.buildId,
     source: {
+      adapter: {
+        package: input.adapter.package,
+        ...(input.adapter.config === undefined
+          ? {}
+          : { config: input.adapter.config }),
+      },
       catalogPath: audio.declaredCatalogPath,
       catalogSha256: `sha256:${createHash("sha256")
         .update(input.catalogText, "utf8")

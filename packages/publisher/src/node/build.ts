@@ -324,13 +324,16 @@ export async function buildPublicationReader(
   // exists, and reporting it as unknown would be a false alarm on every public
   // build of a publication with drafts.
   let audio: BuiltPublicationReader["audio"];
+  const declaredAudio = loaded.value.publication.audio;
   const catalog = loaded.value.audioCatalog;
-  if (catalog !== undefined) {
-    const declaredCatalogPath = loaded.value.publication.audio?.catalog;
-    if (declaredCatalogPath === undefined) {
-      // The loader only reads a catalog because the manifest declared one, so
-      // reaching here means the two disagree. That is an engine defect, and it is
-      // reported rather than assumed away.
+
+  // Both directions in one place, because the two variables carry one invariant
+  // and splitting them left it unprovable. The loader reads a catalog only because
+  // the manifest declared one, so a disagreement either way is worth a name.
+  if (declaredAudio === undefined) {
+    if (catalog !== undefined) {
+      // An engine defect rather than an author mistake, reported instead of
+      // assumed away.
       return invalidResult([
         buildDiagnostic(
           "build.audio_catalog_undeclared",
@@ -340,9 +343,24 @@ export async function buildPublicationReader(
         ),
       ]);
     }
+  } else if (catalog === undefined) {
+    // Declared narration with no catalog produced no narration and said nothing,
+    // which is the worst of the three possible behaviours. The adapter is recorded
+    // rather than executed, so a catalog is the only route by which clips reach the
+    // engine, and an author who declared audio and got silence deserves to be told
+    // why rather than left to infer it.
+    return invalidResult([
+      buildDiagnostic(
+        "build.audio_catalog_missing",
+        "/audio/catalog",
+        `This publication declares audio through ${declaredAudio.adapter.package} but names no catalog. The adapter is recorded for provenance and never executed, so a catalog is the only way narration reaches a build. Add audio.catalog, or remove the audio block.`,
+        { adapterPackage: declaredAudio.adapter.package },
+      ),
+    ]);
+  } else {
     const resolved = resolvePublicationAudio({
       catalog: catalog.catalog,
-      declaredCatalogPath,
+      declaredCatalogPath: catalog.path,
       sectionIds: works.value.flatMap((work) =>
         work.sections.map((section) => section.id),
       ),
@@ -352,6 +370,12 @@ export async function buildPublicationReader(
     }
     const envelope = buildAudioEnvelope({
       audio: resolved.value,
+      adapter: {
+        package: declaredAudio.adapter.package,
+        ...(declaredAudio.adapter.config === undefined
+          ? {}
+          : { config: declaredAudio.adapter.config }),
+      },
       publicationId: reader.value.publicationId,
       // The reader artifact's identity, carried rather than recomputed, so both
       // artifacts of one build agree and a client can tell which is stale.
