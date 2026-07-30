@@ -64,6 +64,19 @@ export const PUBLISHER_NEXT_READER_DATA_PATH =
 export const PUBLISHER_NEXT_AUDIO_DATA_PATH =
   "public/publication-audio.json";
 
+/**
+ * Host-relative location of the sync envelope.
+ *
+ * Under `public/` for the same reason narration is: a client fetches it and the
+ * server never imports it, so adding it changes no generated file.
+ *
+ * It carries no provider configuration. That is enforced by the artifact's schema
+ * rather than by anything here, because this path is public and a config is
+ * author-supplied.
+ */
+export const PUBLISHER_NEXT_SYNC_DATA_PATH =
+  "public/publication-sync.json";
+
 export interface PublisherNextHostCapabilities {
   /**
    * Route target kinds the generated host can serve.
@@ -104,7 +117,7 @@ export interface PublisherNextHostCapabilities {
 export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
   Object.freeze({
     routeKinds: Object.freeze(["home", "work", "collection", "section"]),
-    dataArtifacts: Object.freeze(["audio"]),
+    dataArtifacts: Object.freeze(["audio", "sync"]),
   });
 
 export interface PublisherNextHostMigration {
@@ -165,6 +178,8 @@ export interface PublisherNextHostTemplate {
    * narration declares none and must keep working.
    */
   readonly audioDataPath?: string;
+  /** Where the sync envelope belongs, when this renderer can serve one. */
+  readonly syncDataPath?: string;
   readonly files: readonly PublisherNextHostFile[];
 }
 
@@ -478,6 +493,7 @@ export function createPublisherNextHostTemplate(
     rendererVersion: PUBLISHER_NEXT_VERSION,
     readerDataPath: PUBLISHER_NEXT_READER_DATA_PATH,
     audioDataPath: PUBLISHER_NEXT_AUDIO_DATA_PATH,
+    syncDataPath: PUBLISHER_NEXT_SYNC_DATA_PATH,
     files: Object.freeze(
       files.map((file) => Object.freeze({ ...file })),
     ),

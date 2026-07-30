@@ -200,11 +200,61 @@ export interface AudioEnvelope {
   readonly statistics: AudioEnvelopeStatistics;
 }
 
+/**
+ * What a reader may choose to synchronize.
+ *
+ * A closed vocabulary. It was an open list of identifiers, which validated
+ * anything: a publication could declare a capability no provider implements and
+ * find out only from a reader whose data never arrived.
+ *
+ * Consent is deliberately not one of these. It is a precondition rather than a
+ * feature, since `consent` is pinned to `opt-in` for every synchronizing
+ * publication, so offering it as a choice would misdescribe it.
+ */
+export type SyncCapability =
+  | "account-deletion"
+  | "bookmarks"
+  | "engagement"
+  | "progress";
+
+export const SYNC_CAPABILITIES: readonly SyncCapability[] = Object.freeze([
+  "account-deletion",
+  "bookmarks",
+  "engagement",
+  "progress",
+]);
+
+export interface SyncEnvelopeProvider {
+  /** The provider a publication declared, recorded and never executed. */
+  readonly package: string;
+}
+
+export interface SyncEnvelope {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/sync-envelope.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly engineVersion: string;
+  readonly buildId: string;
+  /**
+   * Carries no configuration, by construction rather than by convention.
+   *
+   * This artifact is served publicly, and a provider config is author-supplied:
+   * it may hold a project reference, an endpoint, or a key nobody meant to
+   * publish. A rule saying "do not copy the config here" is a rule somebody
+   * eventually forgets, so the type and the schema both make it impossible.
+   */
+  readonly provider: SyncEnvelopeProvider;
+  readonly consent: "opt-in";
+  readonly localFallback: true;
+  readonly capabilities: readonly SyncCapability[];
+}
+
 export interface SyncConfiguration {
   readonly provider: PackageReference;
   readonly consent: "opt-in";
   readonly localFallback: true;
-  readonly capabilities: readonly string[];
+  readonly capabilities: readonly SyncCapability[];
 }
 
 export interface PublicationRoutes {

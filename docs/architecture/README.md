@@ -15,6 +15,6 @@ These records define the accepted foundation of GENII Publisher.
 11. [ADR 0011: Trusted package archive boundary](./0011-trusted-package-archive-boundary.md)
 12. [ADR 0012: Author lifecycle contracts and mutation policy](./0012-author-lifecycle-contracts.md)
 13. [ADR 0013: Reader artifact materialization](./0013-reader-artifact-materialization.md)
-14. [ADR 0014: Narration boundary](./0014-narration-boundary.md)
+14. [ADR 0014: Narration and synchronization boundary](./0014-narration-boundary.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

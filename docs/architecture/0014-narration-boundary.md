@@ -1,4 +1,4 @@
-# 0014. Narration boundary
+# 0014. Narration and synchronization boundary
 
 Status: accepted
 
@@ -106,6 +106,70 @@ artifact would exit zero on a host shipping current prose beside narration of te
 that no longer exists, which is worse than a plain failure because nothing looks
 wrong.
 
+## Synchronization
+
+The `sync` block had the same problem narration did, and one worse. No code read
+it, and its capability list accepted any identifier, so a publication could
+declare a capability no provider implements and learn about it from a reader whose
+data never arrived.
+
+**The capability vocabulary is closed**: `progress`, `bookmarks`, `engagement`,
+`account-deletion`. Consent is deliberately not among them. It is a precondition
+rather than a feature, since `consent` is pinned to `opt-in` for every
+synchronizing publication, so offering it as a choice would misdescribe it.
+
+**The privacy default is enforced by shape, not by policy.** `consent` is pinned to
+`opt-in` and `localFallback` to `true` in the manifest, both are re-checked by the
+engine for callers that did not come through a manifest, and both are carried into
+the artifact rather than left implicit, so a client cannot be built against a
+publication that quietly relaxed either.
+
+**The provider is recorded, never executed**, on the same reasoning as the audio
+adapter.
+
+**The sync envelope carries no provider configuration, by construction.** The
+artifact is served publicly and a provider config is author-supplied: it may hold a
+project reference, an endpoint, or a key nobody meant to publish. The schema has no
+field for it and refuses additional properties, and resolution drops it before the
+artifact is built, so the mistake is unavailable rather than discouraged. A rule
+saying "do not copy the config here" is a rule somebody eventually forgets.
+
+**A declaration that reaches nothing is decoration**, which is why the block now
+produces an artifact at all. A host implements the collections it implements; the
+envelope is what stops the manifest and the implementation from disagreeing
+silently, and what lets a provider know which collections to provision.
+
+## What synchronization still needs, and why it is not decided here
+
+Synchronization needs two server routes: an authentication callback and an account
+deletion endpoint. Those determine public URLs, so by the rule above they are
+engine-required rather than host-retainable. They are not implemented, and the
+reason is a constraint worth recording rather than working around.
+
+`init` does not know the publication. It reads the host root and the host's own
+package manifest, nothing else, because a host can be initialized before any
+publication exists. So the host contract cannot generate routes conditioned on
+whether a publication declares synchronization, which is what those routes would
+need.
+
+The options each cost something real:
+
+- Teach `init` about the publication. Changes the lifecycle so that initializing
+  depends on a publication being present and valid.
+- Generate the routes unconditionally and have them refuse when no provider is
+  configured. Puts dead endpoints in every host, including publications that will
+  never synchronize.
+- Have the provider package ship the handlers and the generated host import them.
+  Still needs a generated file at the route path, so it does not avoid the
+  question, only moves it.
+- Leave the routes host-authored against a documented contract. Gives up the
+  engine's claim to own the URL.
+
+Choosing between those is a product decision about what initialization means, not
+an implementation detail, so it is left open deliberately. Until it is answered, a
+publication can declare what it synchronizes and a host must wire the two routes
+itself.
+
 ## Consequences
 
 Playback stays in the host. The player, its word-level interaction, its offline
@@ -128,3 +192,10 @@ Naming an adapter that does not exist builds cleanly. That is intended, and the
 fixture in this repository does it deliberately so the property stays tested. A
 contributor who later wants the adapter executed is changing this decision, not
 completing it.
+
+A publication may declare synchronization before any provider exists. The engine
+validates the declaration, publishes it, and refuses a host that has nowhere to put
+it, but it does not verify that the named provider implements the declared
+capabilities, because it never loads the provider. A provider that ignores a
+declared capability is a provider defect, and the envelope is what makes the
+disagreement visible.

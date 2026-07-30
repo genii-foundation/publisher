@@ -329,6 +329,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "package.json",
       "publication.schema.json",
       "reader-envelope.schema.json",
+      "sync-envelope.schema.json",
       ...expectedScriptPaths,
       ...expectedSourcePaths,
       "third-party-data/NormalizationTest-15.1.0.txt",
@@ -739,6 +740,7 @@ if (
       "content-envelope.schema.json",
       "publication.schema.json",
       "reader-envelope.schema.json",
+      "sync-envelope.schema.json",
       "work.schema.json",
     ]) {
       await rename(
@@ -752,6 +754,7 @@ if (
         validateAudioCatalogShape,
         validateAudioEnvelopeShape,
         validateCollectionShape,
+        validateSyncEnvelopeShape,
         validateContentEnvelopeShape,
         validatePublicationShape,
         validateReaderEnvelopeShape,
@@ -787,6 +790,7 @@ if (
         validateReaderEnvelopeShape({}),
         validateAudioCatalogShape({}),
         validateAudioEnvelopeShape({}),
+        validateSyncEnvelopeShape({}),
       ]) {
         assert.equal(result.valid, false);
         assert.ok(result.diagnostics.length > 0);

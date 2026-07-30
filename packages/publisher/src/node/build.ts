@@ -51,6 +51,7 @@ import type {
   PublicationManifest,
   PublicationReaderEnvelope,
   ReaderAudience,
+  SyncEnvelope,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
 
@@ -64,6 +65,13 @@ import {
 import type {
   ResolvedPublicationAudio,
 } from "./audio.js";
+import {
+  buildSyncEnvelope,
+  resolvePublicationSync,
+} from "./sync.js";
+import type {
+  ResolvedPublicationSync,
+} from "./sync.js";
 import {
   compileLoadedPublicationContent,
 } from "./compile.js";
@@ -276,6 +284,18 @@ export interface BuiltPublicationReader {
     /** Canonical JSON text, exactly as it would be written. */
     readonly text: string;
   };
+  /**
+   * What this publication offers to synchronize, when it declares any.
+   *
+   * Absent when it declares none. Nothing here carries provider configuration:
+   * the artifact is served publicly and a config is author-supplied.
+   */
+  readonly sync?: {
+    readonly resolved: ResolvedPublicationSync;
+    readonly envelope: SyncEnvelope;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
 }
 
 /**
@@ -392,6 +412,28 @@ export async function buildPublicationReader(
     });
   }
 
+  let sync: BuiltPublicationReader["sync"];
+  const declaredSync = loaded.value.publication.sync;
+  if (declaredSync !== undefined) {
+    const resolvedSync = resolvePublicationSync(declaredSync);
+    if (!resolvedSync.valid) {
+      return invalidResult(resolvedSync.diagnostics);
+    }
+    const envelope = buildSyncEnvelope({
+      sync: resolvedSync.value,
+      publicationId: reader.value.publicationId,
+      buildId: reader.value.buildId,
+    });
+    if (!envelope.valid) {
+      return invalidResult(envelope.diagnostics);
+    }
+    sync = Object.freeze({
+      resolved: resolvedSync.value,
+      envelope: envelope.value.envelope,
+      text: envelope.value.text,
+    });
+  }
+
   let text: string;
   try {
     text = serializePublicationReaderEnvelope(reader.value);
@@ -415,6 +457,7 @@ export async function buildPublicationReader(
       reader: reader.value,
       text,
       ...(audio === undefined ? {} : { audio }),
+      ...(sync === undefined ? {} : { sync }),
     }),
     diagnostics: sortAndFreezeDiagnostics([]),
   });

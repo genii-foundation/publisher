@@ -99,12 +99,14 @@ export function installRenderer(
     readerDataPath,
     audioDataPath,
     omitAudioDataPath = false,
+    syncDataPath,
+    omitSyncDataPath = false,
     files,
     migrations = [],
     omitMigrations = false,
     capabilities = {
       routeKinds: ["collection", "home", "section", "updates", "work"],
-      dataArtifacts: ["audio"],
+      dataArtifacts: ["audio", "sync"],
     },
     omitCapabilities = false,
   } = {},
@@ -117,6 +119,9 @@ export function installRenderer(
   const audioPath = omitAudioDataPath
     ? undefined
     : (audioDataPath ?? `public/${short}-audio.json`);
+  const syncPath = omitSyncDataPath
+    ? undefined
+    : (syncDataPath ?? `public/${short}-sync.json`);
   const declared =
     files ??
     [
@@ -167,6 +172,9 @@ export function installRenderer(
       ...(audioPath === undefined
         ? []
         : [`    audioDataPath: ${JSON.stringify(audioPath)},`]),
+      ...(syncPath === undefined
+        ? []
+        : [`    syncDataPath: ${JSON.stringify(syncPath)},`]),
       "    files: [",
       '      { path: "package.json", contents: JSON.stringify({ name: input.hostPackageName }, null, 2) + "\\n" },',
       `      ...${JSON.stringify(declared)},`,
@@ -177,7 +185,12 @@ export function installRenderer(
     ].join("\n"),
     "utf8",
   );
-  return { artifactPath, audioDataPath: audioPath, generatedPath: `${short}-app.js` };
+  return {
+    artifactPath,
+    audioDataPath: audioPath,
+    syncDataPath: syncPath,
+    generatedPath: `${short}-app.js`,
+  };
 }
 
 export function planHashFrom(stdout) {

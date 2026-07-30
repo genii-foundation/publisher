@@ -32,6 +32,16 @@ export type {
   ResolvePublicationAudioInput,
 } from "./node/audio.js";
 export {
+  SYNC_DATA_ARTIFACT,
+  buildSyncEnvelope,
+  resolvePublicationSync,
+} from "./node/sync.js";
+export type {
+  BuildSyncEnvelopeInput,
+  BuiltSyncEnvelope,
+  ResolvedPublicationSync,
+} from "./node/sync.js";
+export {
   compileLoadedPublicationContent,
 } from "./node/compile.js";
 export {

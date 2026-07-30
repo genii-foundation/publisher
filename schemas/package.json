@@ -48,7 +48,8 @@
     "./content-envelope.schema.json": "./content-envelope.schema.json",
     "./reader-envelope.schema.json": "./reader-envelope.schema.json",
     "./audio-catalog.schema.json": "./audio-catalog.schema.json",
-    "./audio-envelope.schema.json": "./audio-envelope.schema.json"
+    "./audio-envelope.schema.json": "./audio-envelope.schema.json",
+    "./sync-envelope.schema.json": "./sync-envelope.schema.json"
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",

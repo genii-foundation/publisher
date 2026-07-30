@@ -24,6 +24,7 @@ import {
   contentEnvelopeValidator,
   publicationValidator,
   readerEnvelopeValidator,
+  syncEnvelopeValidator,
   workValidator,
 } from "./generated-validators.js";
 import type {
@@ -38,6 +39,7 @@ import type {
   ManifestByKind,
   ManifestKind,
   PublicationManifest,
+  SyncEnvelope,
   ValidationResult,
   WorkManifest,
 } from "./types.js";
@@ -700,6 +702,18 @@ export function validateAudioEnvelopeShape(
   input: unknown,
 ): ValidationResult<AudioEnvelope> {
   return validateShape(audioEnvelopeValidator, input);
+}
+
+/**
+ * Validates a materialized sync envelope.
+ *
+ * The engine writes this one and serves it publicly, so refusing a bad shape here
+ * beats discovering it in a browser.
+ */
+export function validateSyncEnvelopeShape(
+  input: unknown,
+): ValidationResult<SyncEnvelope> {
+  return validateShape(syncEnvelopeValidator, input);
 }
 
 export function validateManifestShape<K extends ManifestKind>(

@@ -78,6 +78,10 @@ const validatorDefinitions = Object.freeze([
     exportName: "audioEnvelopeValidator",
     fileName: "audio-envelope.schema.json",
   },
+  {
+    exportName: "syncEnvelopeValidator",
+    fileName: "sync-envelope.schema.json",
+  },
 ]);
 const embeddedRuntimeDefinitions = Object.freeze([
   {

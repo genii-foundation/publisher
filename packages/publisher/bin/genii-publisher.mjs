@@ -68,6 +68,9 @@ import {
   readHostCapabilities,
 } from "../dist/node/host-capabilities.js";
 import {
+  SYNC_DATA_ARTIFACT,
+} from "../dist/node/sync.js";
+import {
   checkHostArtifact,
   hashArtifactText,
   resolveArtifactDestination,
@@ -840,15 +843,53 @@ async function runBuild(options) {
     return 1;
   }
 
-  // Also before anything is written. A publication declaring narration against a
+  // Every generated artifact beyond the reader artifact, in one list. Two of these
+  // exist now and the branch was already duplicated once; a third copy would be
+  // where they quietly diverge.
+  const extraArtifacts = [
+    built.value.audio === undefined
+      ? null
+      : {
+          id: AUDIO_DATA_ARTIFACT,
+          noun: "narration",
+          label: "Narration",
+          declaredPath: template.audioDataPath,
+          text: built.value.audio.text,
+          detail: [
+            `Voices       ${built.value.audio.resolved.voices.length.toLocaleString("en-US")}`,
+            `Clips        ${built.value.audio.resolved.clipCount.toLocaleString("en-US")}`,
+            // Coverage is reported rather than enforced. A publication part way
+            // through generating narration is a normal state, and this is the line
+            // that tells an author how far through they are.
+            `Coverage     ${describeCoverage(built.value.audio.resolved)}`,
+          ],
+        },
+    built.value.sync === undefined
+      ? null
+      : {
+          id: SYNC_DATA_ARTIFACT,
+          noun: "synchronization",
+          label: "Sync",
+          declaredPath: template.syncDataPath,
+          text: built.value.sync.text,
+          detail: [
+            `Provider     ${built.value.sync.resolved.providerPackage}`,
+            `Capabilities ${built.value.sync.resolved.capabilities.join(", ")}`,
+            "Consent      opt-in, with local reading unaffected",
+          ],
+        },
+  ].filter(Boolean);
+
+  // Before anything is written. A publication declaring an artifact against a
   // renderer with nowhere to put it would otherwise have the file written to a
   // path of the engine's invention, which the host would never serve.
-  if (built.value.audio !== undefined) {
+  const capabilities = readHostCapabilities(module);
+  for (const artifact of extraArtifacts) {
     const carriable = assertHostCanCarryDataArtifact({
-      artifact: AUDIO_DATA_ARTIFACT,
-      capabilities: readHostCapabilities(module),
+      artifact: artifact.id,
+      capabilities,
       renderer,
-      declaredPath: template.audioDataPath,
+      declaredPath: artifact.declaredPath,
     });
     if (!carriable.valid) {
       if (options.json) {
@@ -857,7 +898,7 @@ async function runBuild(options) {
         );
       } else {
         process.stderr.write(
-          `${hostRoot} cannot carry this publication's narration.\n${describeDiagnostics(carriable.diagnostics)}\n`,
+          `${hostRoot} cannot carry this publication's ${artifact.noun}.\n${describeDiagnostics(carriable.diagnostics)}\n`,
         );
       }
       return 1;
@@ -872,40 +913,38 @@ async function runBuild(options) {
     rendererManagedPaths,
     protectedRoots,
   });
-  // Resolved even in check mode, because a renderer aiming narration at one of its
-  // own contract files must be refused whether or not this run would write.
-  const audioDestination =
-    built.value.audio === undefined
-      ? undefined
-      : resolveArtifactDestination({
-          hostRoot,
-          declaredArtifactPath: template.audioDataPath,
-          rendererManagedPaths,
-          protectedRoots,
-        });
+  // Resolved even in check mode, because a renderer aiming an artifact at one of
+  // its own contract files must be refused whether or not this run would write.
+  const resolved = extraArtifacts.map((artifact) => ({
+    ...artifact,
+    destination: resolveArtifactDestination({
+      hostRoot,
+      declaredArtifactPath: artifact.declaredPath,
+      rendererManagedPaths,
+      protectedRoots,
+    }),
+  }));
 
   if (options.check) {
-    const checked = checkHostArtifact({
-      destination,
-      text: built.value.text,
-    });
-    const audioChecked =
-      audioDestination === undefined
-        ? undefined
-        : checkHostArtifact({
-            destination: audioDestination,
-            text: built.value.audio.text,
-          });
+    const checked = checkHostArtifact({ destination, text: built.value.text });
+    const extras = resolved.map((artifact) => ({
+      ...artifact,
+      checked: checkHostArtifact({
+        destination: artifact.destination,
+        text: artifact.text,
+      }),
+    }));
     if (options.json) {
-      // Narration is an additive key, not a reshape. A consumer reading `outcome`
-      // must keep working whether or not the publication narrates, and nesting the
-      // reader artifact under a `reader` key made the shape depend on the
-      // publication. That was wrong and an existing test said so.
+      // Additive keys, not a reshape. A consumer reading `outcome` must keep
+      // working whether or not a publication declares these.
       process.stdout.write(
         `${JSON.stringify(
-          audioChecked === undefined
-            ? checked
-            : { ...checked, audio: audioChecked },
+          {
+            ...checked,
+            ...Object.fromEntries(
+              extras.map((artifact) => [artifact.id, artifact.checked]),
+            ),
+          },
           null,
           2,
         )}\n`,
@@ -914,33 +953,36 @@ async function runBuild(options) {
       process.stdout.write(
         `${describeCheck(checked, hostRoot, publicationRoot)}\n`,
       );
-      if (audioChecked !== undefined) {
-        process.stdout.write(`${describeCheck(audioChecked)}\n`);
+      for (const artifact of extras) {
+        process.stdout.write(`${describeCheck(artifact.checked)}\n`);
       }
     }
     // Stale either way is stale. Reporting only the reader artifact would let a
     // host ship current prose beside narration of text that no longer exists.
-    const outcomes = [checked, ...(audioChecked === undefined ? [] : [audioChecked])];
-    return outcomes.every((item) => item.outcome === "current") ? 0 : 1;
+    return [checked, ...extras.map((artifact) => artifact.checked)].every(
+      (item) => item.outcome === "current",
+    )
+      ? 0
+      : 1;
   }
 
-  const written = writeHostArtifact({
-    destination,
-    text: built.value.text,
-  });
-  const audioWritten =
-    audioDestination === undefined
-      ? undefined
-      : writeHostArtifact({
-          destination: audioDestination,
-          text: built.value.audio.text,
-        });
+  const written = writeHostArtifact({ destination, text: built.value.text });
+  const extras = resolved.map((artifact) => ({
+    ...artifact,
+    written: writeHostArtifact({
+      destination: artifact.destination,
+      text: artifact.text,
+    }),
+  }));
   if (options.json) {
     process.stdout.write(
       `${JSON.stringify(
-        audioWritten === undefined
-          ? written
-          : { ...written, audio: audioWritten },
+        {
+          ...written,
+          ...Object.fromEntries(
+            extras.map((artifact) => [artifact.id, artifact.written]),
+          ),
+        },
         null,
         2,
       )}\n`,
@@ -956,20 +998,14 @@ async function runBuild(options) {
         ? "Already current. Nothing written.\n"
         : "Written.\n"),
   );
-  if (audioWritten !== undefined) {
-    const { resolved } = built.value.audio;
+  for (const artifact of extras) {
     process.stdout.write(
       `\n` +
-        `Narration    ${audioWritten.hostRelativePath}\n` +
-        `Digest       ${audioWritten.sha256}\n` +
-        `Size         ${audioWritten.bytes.toLocaleString("en-US")} bytes\n` +
-        `Voices       ${resolved.voices.length.toLocaleString("en-US")}\n` +
-        `Clips        ${resolved.clipCount.toLocaleString("en-US")}\n` +
-        // Coverage is reported rather than enforced. A publication part way
-        // through generating narration is a normal state, and this is the line
-        // that tells an author how far through they are.
-        `Coverage     ${describeCoverage(resolved)}\n` +
-        (audioWritten.outcome === "current"
+        `${artifact.label.padEnd(12)} ${artifact.written.hostRelativePath}\n` +
+        `Digest       ${artifact.written.sha256}\n` +
+        `Size         ${artifact.written.bytes.toLocaleString("en-US")} bytes\n` +
+        `${artifact.detail.join("\n")}\n` +
+        (artifact.written.outcome === "current"
           ? "Already current. Nothing written.\n"
           : "Written.\n"),
     );

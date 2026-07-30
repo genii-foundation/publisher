@@ -455,10 +455,20 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": {
-            "$ref": "#/$defs/stableId"
-          }
+            "$ref": "#/$defs/syncCapability"
+          },
+          "description": "What a reader may choose to synchronize. A closed vocabulary, because an unrecognized entry previously validated and then meant nothing: a publication could declare a capability no provider implements and learn only from a reader whose data never arrived."
         }
       }
+    },
+    "syncCapability": {
+      "enum": [
+        "account-deletion",
+        "bookmarks",
+        "engagement",
+        "progress"
+      ],
+      "description": "Consent is deliberately absent. It is a precondition rather than a feature: the consent field above is pinned to opt-in, so every synchronizing publication requires it and none may offer it as a choice."
     },
     "routes": {
       "type": "object",
