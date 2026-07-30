@@ -187,17 +187,45 @@ a schema addition and holds still when a heading is renamed. That is a smaller
 question than a route model change, and the engine already supports whichever
 answer it gets.
 
-### 4. Audio is a schema definition and nothing else
+### 4. Audio now has a contract, and the timing question was answered wrongly here
 
-`publication.schema.json` defines an `audio` block with an adapter package and
-config. No implementation exists in the renderer or the reader. Grepping both
-packages for audio returns exactly one hit, in the schema.
+The `audio` block declares an adapter package and a catalog path, and a layout
+rule validates that path. Nothing read the file. `audio-catalog.schema.json` now
+defines what the file is, taken from a catalog already in production rather than
+from the type that described it.
 
-Coherence has an audio player with word-level interaction, which is two islands
-plus supporting library code, and published audio under `publishing/audio`. The
-islands are host-retainable. What is not is whatever the artifact must carry to
-align audio with words: if per-word timing has to reach the client, it has to be
-in the reader artifact, and the artifact has no place for it.
+**This section previously claimed that per-word timing has to reach the reader
+artifact and that the artifact has no place for it. That is wrong, and the
+correction changes the design.** Reading how the published player actually loads
+its data shows a two-tier arrangement that the engine should adopt rather than
+replace:
+
+- The catalog is fetched once as a public static file, lazily and memoized, and
+  is not embedded in any page payload.
+- Per-clip word timings live in a sidecar beside each clip and are fetched only
+  when a reader plays that clip.
+- The catalog records only the sidecar's byte size, never its URL, which is
+  derived from the clip href. Carrying the URL per clip measured about 88 KB of
+  added weight on a document every page fetches.
+- Word anchors are computed on the client from the rendered text, so no per-word
+  data is transmitted at all.
+
+So the reader artifact needs to carry one thing for audio: each section's current
+audio version, so a clip generated from prose that has since changed is ignored.
+That is a small addition rather than the structural problem this document
+described. The measured catalog is 278 KB for 551 clips, which belongs in a file
+fetched on demand and would not belong in a page payload.
+
+The two islands and the supporting library code stay host-retainable, unchanged.
+
+One further measurement, which is a migration constraint rather than an audio
+one. Across every section identifier in the continuity ledgers and the audio
+catalog, 682 distinct identifiers, exactly one exceeds the engine's 128 character
+`stableId` bound, at 142 characters, and none fails the pattern. Only two exceed
+120, so this is a lone outlier and not a systemic mismatch. Because a section
+identifier reaches a public URL, it cannot be silently truncated, so that one
+section needs either a raised bound or a rename carrying a redirect. The redirect
+machinery is already load-bearing here, as recorded above.
 
 ### 5. Sync is a schema definition and nothing else
 
@@ -209,8 +237,29 @@ caution about this kind of audit.
 Coherence has `src/lib/reader-sync.ts`, Supabase browser and server clients, an
 auth callback route, and an account API route. The engine's own interface rule
 says local progress is private by default and remote sync must not be added
-without explicit product approval, so sync arguably belongs in the host
-permanently. If so, the schema field is misleading and should say what it is for.
+without explicit product approval, so this document previously left open whether
+sync belongs in the engine at all.
+
+**That approval has since been given, so sync is in scope.** The privacy default
+is preserved by construction rather than by policy: the schema pins consent to
+`opt-in` and `localFallback` to `true`, and a provider that cannot be configured
+resolves to nothing, which is how the published implementation already behaves
+when its environment variables are absent.
+
+The split follows the same rule as everything else here. What determines a server
+route is engine-required: the auth callback and the account deletion endpoint. The
+per-user document shapes are host concerns, so the engine's contract is a declared
+capability list rather than a fixed set of tables. The five capabilities the
+published implementation uses are progress, bookmarks, consent, engagement, and
+account deletion.
+
+Worth recording about the database half, because it is easy to underestimate: the
+migrations carry row level security, a pinned trigger `search_path`, column and
+payload size bounds, per-user event retention, explicit Data API grants that keep
+anonymous readers out, and a lock-taking merge function that exists because a
+whole-row upsert loses bookmarks when two devices write. None of that is
+incidental, and a provider package that ports the tables without them would be a
+downgrade wearing the same interface.
 
 ## Scale, measured
 
@@ -269,12 +318,18 @@ its size.
    section identifier to its current route while compiling redirects. 136 of
    Coherence's aliases point at section identifiers and cannot be expressed today.
    Measured, not assumed.
-4. Decide whether audio timing data belongs in the reader artifact. That decides
-   whether audio is an engine feature or a host one.
-5. Decide whether sync is engine scope at all, and if not, remove or annotate the
-   schema field so it stops implying an implementation.
+4. Answered. Timing data does not belong in the reader artifact. The artifact
+   carries each section's current audio version, the catalog is a public file
+   fetched once, and timings are per-clip sidecars fetched on demand. Audio is an
+   engine feature for resolution and materialization, and a host feature for
+   playback.
+5. Answered. Sync is engine scope, with the privacy default enforced by the
+   schema rather than by policy. The engine owns the provider contract, the
+   capability vocabulary, and the two server routes. The document shapes stay with
+   the host.
 
-Items 3 through 5 are decidable now and none requires a release.
+Item 3 is decidable now and does not require a release. Items 4 and 5 are decided
+and their implementation is underway.
 
 Scale is measured and is not a blocker. Memory at the ceiling is the one operational
 number worth carrying into deployment planning.
