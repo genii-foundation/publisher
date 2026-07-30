@@ -334,6 +334,39 @@ and their implementation is underway.
 Scale is measured and is not a blocker. Memory at the ceiling is the one operational
 number worth carrying into deployment planning.
 
+## Parity, enumerated
+
+"No functionality is lost" is a claim, and a claim about dozens of features is worth
+nothing unless something enumerates them. The ledger in
+`tests/coherence-parity-ledger.mjs` names every narration and synchronization
+capability the deployed publication has and where each one lives now. Each entry
+carries its own evidence and a test verifies the evidence exists, so an engine claim
+names a real export or schema and a provider claim names a real migration.
+
+27 capabilities, 14 for narration and 13 for synchronization:
+
+| Status | Count |
+| --- | --- |
+| 17 preserved | works as before, wherever it now lives |
+| 4 upgraded | works better, with the reason recorded per entry |
+| 4 added | did not exist before |
+| 2 blocked | cannot work yet, each naming the decision it waits on |
+
+By owner: 8 in the engine, 8 in the reference provider, 9 retained by the author's
+own application, 2 in author tooling outside any package.
+
+Nine capabilities staying with the host is not a euphemism. Playback, word
+highlighting, voice preference, and offline caching are client code an author owns,
+and moving them into the engine would take control away for no benefit. What matters
+is that the engine supplies what that code needs, so every host entry records what
+that is, and "the host keeps it" cannot become a place to hide something the engine
+failed to provide.
+
+The two blocked capabilities are both authentication-shaped: signing in, and deleting
+the account itself. Both need a server route, both determine a public URL, and both
+wait on the same decision recorded above. The database half of deletion is done, so a
+reader can already remove every row they own.
+
 ## What this audit does not establish
 
 It counts, classifies, and measures. It has not run Coherence's own manuscripts
