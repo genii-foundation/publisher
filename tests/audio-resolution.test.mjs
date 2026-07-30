@@ -85,7 +85,7 @@ test("a publication declaring narration resolves it through the build", async ()
     audience: "public",
   });
   assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
-  const { audio } = built.value;
+  const audio = built.value.audio?.resolved;
   assert.ok(audio, "the build resolved no audio for a publication that declares it");
   assert.equal(audio.declaredCatalogPath, catalogPath);
   assert.equal(audio.clipCount, 2);
@@ -106,7 +106,7 @@ test("both a hosted clip and a host-served clip resolve", async () => {
     audience: "public",
   });
   assert.ok(built.valid);
-  const hrefs = built.value.audio.voices.flatMap((entry) =>
+  const hrefs = built.value.audio.resolved.voices.flatMap((entry) =>
     entry.clips.map((item) => item.href),
   );
   assert.equal(hrefs.filter((href) => href.startsWith("https://")).length, 1);
@@ -121,7 +121,7 @@ test("a clip without timings resolves, and says so by omission", async () => {
     audience: "public",
   });
   assert.ok(built.valid);
-  const [withTimings, withoutTimings] = built.value.audio.voices;
+  const [withTimings, withoutTimings] = built.value.audio.resolved.voices;
   assert.equal(typeof withTimings.clips[0].timingsByteSize, "number");
   assert.equal(withoutTimings.clips[0].timingsByteSize, undefined);
 });
@@ -300,14 +300,10 @@ async function narratedEnvelope() {
     join(narratedFixture, catalogPath),
     "utf8",
   );
-  const envelope = buildAudioEnvelope({
-    audio: built.value.audio,
-    publicationId: built.value.reader.publicationId,
-    buildId: built.value.reader.buildId,
-    catalogText,
-  });
-  assert.ok(envelope.valid, JSON.stringify(envelope.diagnostics, null, 2));
-  return { built, catalogText, envelope: envelope.value };
+  // Produced by the build itself, not rebuilt here. A caller that re-read the
+  // catalog to build the envelope could read a different file than the build
+  // cross-checked, and the digest binding the two would certify the wrong thing.
+  return { built, catalogText, envelope: built.value.audio };
 }
 
 test("the envelope carries the reader artifact's build identity verbatim", async () => {

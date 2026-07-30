@@ -35,6 +35,8 @@ export {
   compileLoadedPublicationContent,
 } from "./node/compile.js";
 export {
+  AUDIO_DATA_ARTIFACT,
+  assertHostCanCarryDataArtifact,
   assertHostCanServe,
   findUnsupportedHostFeatures,
   readHostCapabilities,

@@ -44,6 +44,7 @@ import {
   serializePublicationReaderEnvelope,
 } from "@genii-foundation/publisher-reader";
 import type {
+  AudioEnvelope,
   Diagnostic,
   ExtensionReference,
   PublicationContentEnvelope,
@@ -57,6 +58,7 @@ import {
   PUBLISHER_VERSION,
 } from "../index.js";
 import {
+  buildAudioEnvelope,
   resolvePublicationAudio,
 } from "./audio.js";
 import type {
@@ -256,13 +258,24 @@ export interface BuiltPublicationReader {
   /** Canonical JSON text, exactly as it would be written. */
   readonly text: string;
   /**
-   * Cross-checked narration, when the publication declares a catalog.
+   * Cross-checked narration and its artifact, when the publication declares a
+   * catalog.
    *
    * Absent when it declares none, rather than present and empty, so that a
    * publication with no narration cannot be confused with one whose catalog
    * resolved to nothing.
+   *
+   * The envelope text is produced here rather than by the caller. A caller that
+   * had to re-read the catalog to build it could read a different file than the
+   * one this build cross-checked, and the digest binding the two would then
+   * certify the wrong thing.
    */
-  readonly audio?: ResolvedPublicationAudio;
+  readonly audio?: {
+    readonly resolved: ResolvedPublicationAudio;
+    readonly envelope: AudioEnvelope;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
 }
 
 /**
@@ -310,7 +323,7 @@ export async function buildPublicationReader(
   // for a section this audience does not see is still narration of a section that
   // exists, and reporting it as unknown would be a false alarm on every public
   // build of a publication with drafts.
-  let audio: ResolvedPublicationAudio | undefined;
+  let audio: BuiltPublicationReader["audio"];
   const catalog = loaded.value.audioCatalog;
   if (catalog !== undefined) {
     const declaredCatalogPath = loaded.value.publication.audio?.catalog;
@@ -337,7 +350,22 @@ export async function buildPublicationReader(
     if (!resolved.valid) {
       return invalidResult(resolved.diagnostics);
     }
-    audio = resolved.value;
+    const envelope = buildAudioEnvelope({
+      audio: resolved.value,
+      publicationId: reader.value.publicationId,
+      // The reader artifact's identity, carried rather than recomputed, so both
+      // artifacts of one build agree and a client can tell which is stale.
+      buildId: reader.value.buildId,
+      catalogText: catalog.text,
+    });
+    if (!envelope.valid) {
+      return invalidResult(envelope.diagnostics);
+    }
+    audio = Object.freeze({
+      resolved: resolved.value,
+      envelope: envelope.value.envelope,
+      text: envelope.value.text,
+    });
   }
 
   let text: string;

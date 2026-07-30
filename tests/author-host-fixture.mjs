@@ -97,11 +97,13 @@ export function installRenderer(
     contractVersion = "0.1.0",
     version = "1.0.0",
     readerDataPath,
+    audioDataPath,
     files,
     migrations = [],
     omitMigrations = false,
     capabilities = {
       routeKinds: ["collection", "home", "section", "updates", "work"],
+      dataArtifacts: ["audio"],
     },
     omitCapabilities = false,
   } = {},
@@ -152,6 +154,12 @@ export function installRenderer(
       `    renderer: ${JSON.stringify(name)},`,
       `    rendererVersion: ${JSON.stringify(version)},`,
       `    readerDataPath: ${JSON.stringify(artifactPath)},`,
+      // Omitted entirely when the caller gives none, so a renderer with no place
+      // for narration is expressible. Declaring it as undefined would be a
+      // different claim from not declaring it at all.
+      ...(audioDataPath === undefined
+        ? []
+        : [`    audioDataPath: ${JSON.stringify(audioDataPath)},`]),
       "    files: [",
       '      { path: "package.json", contents: JSON.stringify({ name: input.hostPackageName }, null, 2) + "\\n" },',
       `      ...${JSON.stringify(declared)},`,
@@ -162,7 +170,7 @@ export function installRenderer(
     ].join("\n"),
     "utf8",
   );
-  return { artifactPath, generatedPath: `${short}-app.js` };
+  return { artifactPath, audioDataPath, generatedPath: `${short}-app.js` };
 }
 
 export function planHashFrom(stdout) {

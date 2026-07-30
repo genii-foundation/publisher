@@ -62,6 +62,8 @@ import {
   resolvePublicationProtectedRoots,
 } from "../dist/node/protected-roots.js";
 import {
+  AUDIO_DATA_ARTIFACT,
+  assertHostCanCarryDataArtifact,
   assertHostCanServe,
   readHostCapabilities,
 } from "../dist/node/host-capabilities.js";
@@ -838,34 +840,107 @@ async function runBuild(options) {
     return 1;
   }
 
+  // Also before anything is written. A publication declaring narration against a
+  // renderer with nowhere to put it would otherwise have the file written to a
+  // path of the engine's invention, which the host would never serve.
+  if (built.value.audio !== undefined) {
+    const carriable = assertHostCanCarryDataArtifact({
+      artifact: AUDIO_DATA_ARTIFACT,
+      capabilities: readHostCapabilities(module),
+      renderer,
+      declaredPath: template.audioDataPath,
+    });
+    if (!carriable.valid) {
+      if (options.json) {
+        process.stdout.write(
+          `${JSON.stringify({ valid: false, diagnostics: carriable.diagnostics }, null, 2)}\n`,
+        );
+      } else {
+        process.stderr.write(
+          `${hostRoot} cannot carry this publication's narration.\n${describeDiagnostics(carriable.diagnostics)}\n`,
+        );
+      }
+      return 1;
+    }
+  }
+
+  const rendererManagedPaths = template.files.map((file) => file.path);
+  const protectedRoots = protectedRootsFor(hostRoot, options);
   const destination = resolveArtifactDestination({
     hostRoot,
     declaredArtifactPath: template.readerDataPath,
-    rendererManagedPaths: template.files.map((file) => file.path),
-    protectedRoots: protectedRootsFor(hostRoot, options),
+    rendererManagedPaths,
+    protectedRoots,
   });
+  // Resolved even in check mode, because a renderer aiming narration at one of its
+  // own contract files must be refused whether or not this run would write.
+  const audioDestination =
+    built.value.audio === undefined
+      ? undefined
+      : resolveArtifactDestination({
+          hostRoot,
+          declaredArtifactPath: template.audioDataPath,
+          rendererManagedPaths,
+          protectedRoots,
+        });
 
   if (options.check) {
     const checked = checkHostArtifact({
       destination,
       text: built.value.text,
     });
+    const audioChecked =
+      audioDestination === undefined
+        ? undefined
+        : checkHostArtifact({
+            destination: audioDestination,
+            text: built.value.audio.text,
+          });
     if (options.json) {
-      process.stdout.write(`${JSON.stringify(checked, null, 2)}\n`);
+      process.stdout.write(
+        `${JSON.stringify(
+          audioChecked === undefined
+            ? checked
+            : { reader: checked, audio: audioChecked },
+          null,
+          2,
+        )}\n`,
+      );
     } else {
       process.stdout.write(
         `${describeCheck(checked, hostRoot, publicationRoot)}\n`,
       );
+      if (audioChecked !== undefined) {
+        process.stdout.write(`${describeCheck(audioChecked)}\n`);
+      }
     }
-    return checked.outcome === "current" ? 0 : 1;
+    // Stale either way is stale. Reporting only the reader artifact would let a
+    // host ship current prose beside narration of text that no longer exists.
+    const outcomes = [checked, ...(audioChecked === undefined ? [] : [audioChecked])];
+    return outcomes.every((item) => item.outcome === "current") ? 0 : 1;
   }
 
   const written = writeHostArtifact({
     destination,
     text: built.value.text,
   });
+  const audioWritten =
+    audioDestination === undefined
+      ? undefined
+      : writeHostArtifact({
+          destination: audioDestination,
+          text: built.value.audio.text,
+        });
   if (options.json) {
-    process.stdout.write(`${JSON.stringify(written, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(
+        audioWritten === undefined
+          ? written
+          : { reader: written, audio: audioWritten },
+        null,
+        2,
+      )}\n`,
+    );
     return 0;
   }
   process.stdout.write(
@@ -877,7 +952,38 @@ async function runBuild(options) {
         ? "Already current. Nothing written.\n"
         : "Written.\n"),
   );
+  if (audioWritten !== undefined) {
+    const { resolved } = built.value.audio;
+    process.stdout.write(
+      `\n` +
+        `Narration    ${audioWritten.hostRelativePath}\n` +
+        `Digest       ${audioWritten.sha256}\n` +
+        `Size         ${audioWritten.bytes.toLocaleString("en-US")} bytes\n` +
+        `Voices       ${resolved.voices.length.toLocaleString("en-US")}\n` +
+        `Clips        ${resolved.clipCount.toLocaleString("en-US")}\n` +
+        // Coverage is reported rather than enforced. A publication part way
+        // through generating narration is a normal state, and this is the line
+        // that tells an author how far through they are.
+        `Coverage     ${describeCoverage(resolved)}\n` +
+        (audioWritten.outcome === "current"
+          ? "Already current. Nothing written.\n"
+          : "Written.\n"),
+    );
+  }
   return 0;
+}
+
+/** Narrated sections against the publication's total, per voice. */
+function describeCoverage(resolved) {
+  if (resolved.voices.length === 0) {
+    return "no voices";
+  }
+  return resolved.voices
+    .map(
+      (voice) =>
+        `${voice.id} ${voice.narratedSectionCount.toLocaleString("en-US")}/${resolved.sectionCount.toLocaleString("en-US")}`,
+    )
+    .join(", ");
 }
 
 function describeDiagnostics(diagnostics) {
@@ -895,8 +1001,13 @@ function describeDiagnostics(diagnostics) {
 
 function describeCheck(checked, hostRoot, publicationRoot) {
   const lines = [];
-  lines.push(`Host         ${hostRoot}`);
-  lines.push(`Publication  ${publicationRoot}`);
+  // Omitted for a second artifact in the same run, which shares the host and
+  // publication already printed above it. Repeating them would read as a second
+  // check of a different publication.
+  if (hostRoot !== undefined) {
+    lines.push(`Host         ${hostRoot}`);
+    lines.push(`Publication  ${publicationRoot}`);
+  }
   lines.push(`Artifact     ${checked.hostRelativePath}`);
   lines.push(`Expected     ${checked.expected}`);
   lines.push(`On disk      ${checked.actual ?? "absent"}`);
