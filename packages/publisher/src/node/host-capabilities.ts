@@ -42,7 +42,18 @@ import {
 
 export interface HostCapabilities {
   readonly routeKinds: readonly string[];
+  /**
+   * Generated data artifacts beyond the reader artifact that this host can serve.
+   *
+   * Read as optional, unlike routeKinds, because renderers predating narration
+   * declare no such field and must keep resolving. Absent yields an empty list,
+   * so absence still means no support rather than assumed support.
+   */
+  readonly dataArtifacts: readonly string[];
 }
+
+/** The data artifact identifier narration is published under. */
+export const AUDIO_DATA_ARTIFACT = "audio";
 
 export interface UnsupportedHostFeature {
   /** What the artifact contains that the host cannot serve. */
@@ -75,7 +86,79 @@ export function readHostCapabilities(
     }
     kinds.push(kind);
   }
-  return Object.freeze({ routeKinds: Object.freeze(kinds.sort()) });
+
+  // Optional, so a renderer that predates data artifacts still resolves. Present
+  // and malformed is a different claim from absent, though, and is refused: a
+  // renderer that meant to declare support and got the shape wrong must not be
+  // read as declaring none.
+  const declaredArtifacts = (declared as { dataArtifacts?: unknown })
+    .dataArtifacts;
+  const artifacts: string[] = [];
+  if (declaredArtifacts !== undefined) {
+    if (!Array.isArray(declaredArtifacts)) {
+      return null;
+    }
+    for (const artifact of declaredArtifacts) {
+      if (typeof artifact !== "string" || artifact.length === 0) {
+        return null;
+      }
+      artifacts.push(artifact);
+    }
+  }
+
+  return Object.freeze({
+    routeKinds: Object.freeze(kinds.sort()),
+    dataArtifacts: Object.freeze(artifacts.sort()),
+  });
+}
+
+/**
+ * Decides whether this host can carry a generated data artifact.
+ *
+ * Separate from assertHostCanServe because the question is different. That one
+ * asks whether the artifact's contents are servable; this asks whether the host
+ * has anywhere to put a second file at all. A renderer with no declared place for
+ * narration would otherwise have it written to a path of the engine's invention.
+ */
+export function assertHostCanCarryDataArtifact(input: {
+  readonly artifact: string;
+  readonly capabilities: HostCapabilities | null;
+  readonly renderer: string;
+  readonly declaredPath: string | undefined;
+}): ValidationResult<true> {
+  const supported =
+    input.capabilities !== null &&
+    input.capabilities.dataArtifacts.includes(input.artifact);
+  const hasPath =
+    typeof input.declaredPath === "string" && input.declaredPath.length > 0;
+
+  if (supported && hasPath) {
+    return Object.freeze({
+      valid: true as const,
+      value: true as const,
+      diagnostics: Object.freeze([]),
+    });
+  }
+
+  // One refusal covering both halves, because an author cannot act on them
+  // differently: either way this renderer cannot take this artifact, and the fix
+  // is a renderer that can.
+  const reason = supported
+    ? `declares it can carry the ${input.artifact} artifact but names no path for it`
+    : `does not declare that it can carry the ${input.artifact} artifact`;
+  return invalidResult([
+    loaderDiagnostic(
+      "host.data_artifact_unsupported",
+      "",
+      `The renderer ${input.renderer} ${reason}. This publication declares ${input.artifact}, so building it would write a file the host has no way to serve. Use a renderer that supports it, or remove the declaration.`,
+      "dataArtifacts",
+      {
+        artifact: input.artifact,
+        renderer: input.renderer,
+        declaredArtifacts: input.capabilities?.dataArtifacts ?? null,
+      },
+    ),
+  ]);
 }
 
 /**

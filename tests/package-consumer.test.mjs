@@ -320,6 +320,8 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "README.md",
       "SOURCE-NOTICE",
       "THIRD_PARTY_NOTICES.md",
+      "audio-catalog.schema.json",
+      "audio-envelope.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",
       "dist/SOURCE-NOTICE",
@@ -327,6 +329,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "package.json",
       "publication.schema.json",
       "reader-envelope.schema.json",
+      "sync-envelope.schema.json",
       ...expectedScriptPaths,
       ...expectedSourcePaths,
       "third-party-data/NormalizationTest-15.1.0.txt",
@@ -731,10 +734,13 @@ if (
     });
 
     for (const schemaFileName of [
+      "audio-catalog.schema.json",
+      "audio-envelope.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",
       "publication.schema.json",
       "reader-envelope.schema.json",
+      "sync-envelope.schema.json",
       "work.schema.json",
     ]) {
       await rename(
@@ -745,7 +751,10 @@ if (
     const isolatedRuntimeProof = `
       import assert from "node:assert/strict";
       import {
+        validateAudioCatalogShape,
+        validateAudioEnvelopeShape,
         validateCollectionShape,
+        validateSyncEnvelopeShape,
         validateContentEnvelopeShape,
         validatePublicationShape,
         validateReaderEnvelopeShape,
@@ -765,11 +774,23 @@ if (
         true,
         JSON.stringify(validWork.diagnostics),
       );
+      const validCatalog = validateAudioCatalogShape({
+        version: 1,
+        voices: [],
+      });
+      assert.equal(
+        validCatalog.valid,
+        true,
+        JSON.stringify(validCatalog.diagnostics),
+      );
       for (const result of [
         validatePublicationShape({}),
         validateCollectionShape({}),
         validateContentEnvelopeShape({}),
         validateReaderEnvelopeShape({}),
+        validateAudioCatalogShape({}),
+        validateAudioEnvelopeShape({}),
+        validateSyncEnvelopeShape({}),
       ]) {
         assert.equal(result.valid, false);
         assert.ok(result.diagnostics.length > 0);

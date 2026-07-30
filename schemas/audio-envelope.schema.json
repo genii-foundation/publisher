@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/audio-envelope.schema.json",
+  "title": "GENII Publisher audio envelope",
+  "description": "Deterministic narration data for one publication build, materialized for a client to fetch. Derived from a published clip catalog and bound to the build that resolved it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "publicationId",
+    "engineVersion",
+    "buildId",
+    "source",
+    "voices",
+    "statistics"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/audio-envelope.schema.json"
+    },
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "publicationId": {
+      "$ref": "#/$defs/stableId"
+    },
+    "engineVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "buildId": {
+      "$ref": "#/$defs/sha256Digest",
+      "description": "The reader artifact's build identity, carried verbatim. Both artifacts of one build therefore agree on it, and a client holding two that disagree knows one is stale without needing to diff them."
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "voices": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/voice"
+      }
+    },
+    "statistics": {
+      "$ref": "#/$defs/statistics"
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "opaqueVersionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "description": "Carried verbatim from the catalog. The engine does not derive or interpret this token, because the pipeline that generated the narration owns what counts as a change worth re-recording."
+    },
+    "sha256Digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "clipHref": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 2048,
+      "oneOf": [
+        {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://[^\\s/?#]+/[^\\s]*$"
+        },
+        {
+          "type": "string",
+          "pattern": "^/(?!/)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*/$)[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$"
+        }
+      ]
+    },
+    "adapterRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "package"
+      ],
+      "properties": {
+        "package": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 214,
+          "description": "The pipeline that produced this narration, as the publication declared it. Recorded, never executed, and never resolved: the engine reads no code from it. It is here so that reproducing a narration run does not require guessing which tool made it."
+        },
+        "config": {
+          "type": "object",
+          "description": "Whatever settings the publication recorded for that pipeline, carried verbatim. Useful for reproducing a run and meaningless to the engine."
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter",
+        "catalogPath",
+        "catalogSha256"
+      ],
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/adapterRecord"
+        },
+        "catalogPath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "The catalog path the publication manifest declared, as declared."
+        },
+        "catalogSha256": {
+          "$ref": "#/$defs/sha256Digest",
+          "description": "Digest of the exact catalog text this envelope was derived from. A catalog is not a content source, so it does not reach the reader artifact's identity, and this is the only thing that binds the two."
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Carried from the catalog when it recorded one. Advisory."
+        }
+      }
+    },
+    "clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sectionId",
+        "audioVersionId",
+        "href"
+      ],
+      "properties": {
+        "sectionId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "audioVersionId": {
+          "$ref": "#/$defs/opaqueVersionId"
+        },
+        "href": {
+          "$ref": "#/$defs/clipHref"
+        },
+        "format": {
+          "enum": [
+            "mp3",
+            "opus",
+            "wav"
+          ]
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967296
+        },
+        "timingsByteSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 134217728,
+          "description": "Present only when a word timing sidecar was published beside this clip. The sidecar URL stays derived from href rather than carried, because a URL per clip measured about 88 KB of added weight on a document every page fetches."
+        },
+        "durationSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 86400
+        }
+      }
+    },
+    "voice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "clips",
+        "narratedSectionCount",
+        "unnarratedSectionCount"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "clips": {
+          "type": "array",
+          "maxItems": 50000,
+          "items": {
+            "$ref": "#/$defs/clip"
+          }
+        },
+        "narratedSectionCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unnarratedSectionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sections this voice has no narration for. Recorded rather than refused, because a publication part way through generating narration is a normal state and refusing it would make the first run impossible."
+        }
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "voiceCount",
+        "clipCount",
+        "sectionCount"
+      ],
+      "properties": {
+        "voiceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clipCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sectionCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sections the publication compiled, narrated or not, so a client can report coverage without holding the reader artifact."
+        }
+      }
+    }
+  }
+}

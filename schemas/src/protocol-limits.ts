@@ -14,6 +14,9 @@ If you wish to allow use of your version of this file only under the terms of th
 export const PUBLICATION_PROTOCOL_LIMITS = Object.freeze({
   maximumActiveRoutes: 100_000,
   maximumAssets: 50_000,
+  maximumAudioClips: 200_000,
+  maximumAudioClipsPerVoice: 50_000,
+  maximumAudioVoices: 64,
   maximumBlocks: 100_000,
   maximumCollections: 9_997,
   maximumCollectionWorkReferences: 100_000,

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/audio-catalog.schema.json",
+  "version": 1,
+  "generatedAt": "2026-07-25T18:13:00.000Z",
+  "voices": [
+    {
+      "id": "low-water",
+      "label": "Low Water",
+      "provider": "example-narration",
+      "model": "estuary-1",
+      "sections": [
+        {
+          "sectionId": "first-light-root",
+          "audioVersionId": "first-light-root-19f0907742968693",
+          "href": "https://clips.narrated-tides.example/low-water/first-light-root-19f0907742968693.opus",
+          "format": "opus",
+          "byteSize": 2668193,
+          "durationSeconds": 78.94,
+          "timingsByteSize": 27943
+        }
+      ]
+    },
+    {
+      "id": "spring-tide",
+      "label": "Spring Tide",
+      "provider": "example-narration",
+      "model": "estuary-1",
+      "sections": [
+        {
+          "sectionId": "first-light-root",
+          "audioVersionId": "first-light-root-19f0907742968693",
+          "href": "/audio/spring-tide/first-light-root-19f0907742968693.mp3",
+          "format": "mp3",
+          "byteSize": 4112004,
+          "durationSeconds": 79.12
+        }
+      ]
+    }
+  ]
+}

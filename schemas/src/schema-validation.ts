@@ -18,10 +18,13 @@ import {
   type PublicationEnvelopeKind,
 } from "./envelope-resource-limits.js";
 import {
+  audioCatalogValidator,
+  audioEnvelopeValidator,
   collectionValidator,
   contentEnvelopeValidator,
   publicationValidator,
   readerEnvelopeValidator,
+  syncEnvelopeValidator,
   workValidator,
 } from "./generated-validators.js";
 import type {
@@ -29,11 +32,14 @@ import type {
   StandaloneValidateFunction,
 } from "./generated-validators.js";
 import type {
+  AudioClipCatalog,
+  AudioEnvelope,
   CollectionManifest,
   Diagnostic,
   ManifestByKind,
   ManifestKind,
   PublicationManifest,
+  SyncEnvelope,
   ValidationResult,
   WorkManifest,
 } from "./types.js";
@@ -668,6 +674,46 @@ export function validateReaderEnvelopeShape(
     input,
     "reader",
   );
+}
+
+/**
+ * Validates a published audio clip catalog.
+ *
+ * A source document rather than an engine artifact, so it goes through the
+ * generic snapshot path alongside the manifests instead of the envelope path.
+ * The catalog carries no build identity by design: the engine emits a separate
+ * audio envelope that is bound to a build, and conflating the two would let a
+ * stale catalog claim to describe a publication it predates.
+ */
+export function validateAudioCatalogShape(
+  input: unknown,
+): ValidationResult<AudioClipCatalog> {
+  return validateShape(audioCatalogValidator, input);
+}
+
+/**
+ * Validates a materialized audio envelope.
+ *
+ * The engine writes this one, so validating it is validating the engine's own
+ * output. That is the point: an artifact a client fetches should be refused here
+ * rather than at a reader's browser.
+ */
+export function validateAudioEnvelopeShape(
+  input: unknown,
+): ValidationResult<AudioEnvelope> {
+  return validateShape(audioEnvelopeValidator, input);
+}
+
+/**
+ * Validates a materialized sync envelope.
+ *
+ * The engine writes this one and serves it publicly, so refusing a bad shape here
+ * beats discovering it in a browser.
+ */
+export function validateSyncEnvelopeShape(
+  input: unknown,
+): ValidationResult<SyncEnvelope> {
+  return validateShape(syncEnvelopeValidator, input);
 }
 
 export function validateManifestShape<K extends ManifestKind>(

@@ -104,11 +104,157 @@ export interface AudioConfiguration {
   readonly catalog?: string;
 }
 
+export interface AudioClip {
+  readonly sectionId: string;
+  readonly audioVersionId: string;
+  readonly href: string;
+  readonly format?: "mp3" | "opus" | "wav";
+  readonly byteSize?: number;
+  /**
+   * Size of the word timing sidecar beside this clip, or absent when the clip
+   * has no published timings. Presence is the signal; the sidecar URL is derived
+   * from `href` rather than carried, which keeps a catalog spanning thousands of
+   * sections small enough to fetch on a page that may never play audio.
+   */
+  readonly timingsByteSize?: number;
+  readonly durationSeconds?: number;
+}
+
+export interface AudioCatalogVoice {
+  readonly id: string;
+  readonly label: string;
+  readonly provider?: string;
+  readonly model?: string;
+  /**
+   * Clips this voice has recorded, one per section. Named `sections` because
+   * published catalogs already use that name and renaming it would invalidate
+   * every catalog an existing pipeline emits.
+   */
+  readonly sections: readonly AudioClip[];
+}
+
+export interface AudioClipCatalog {
+  readonly $schema?:
+    "https://publisher.genii.foundation/schemas/audio-catalog.schema.json";
+  readonly version: 1;
+  readonly generatedAt?: string;
+  readonly voices: readonly AudioCatalogVoice[];
+}
+
+export interface AudioEnvelopeVoice extends AudioCatalogVoice {
+  /** Sections this voice narrates. */
+  readonly narratedSectionCount: number;
+  /** Sections in the publication this voice has no narration for. */
+  readonly unnarratedSectionCount: number;
+}
+
+export interface AudioEnvelopeAdapterRecord {
+  /**
+   * The pipeline that produced this narration, as declared.
+   *
+   * Recorded, never executed and never resolved. The engine reads no code from
+   * it, for the same reason it reads migration edges and host capabilities as
+   * data: a third-party package is not something to run in order to decide what a
+   * publication is. It is here so that reproducing a narration run does not
+   * require guessing which tool made it.
+   */
+  readonly package: string;
+  readonly config?: Readonly<Record<string, JSONValue>>;
+}
+
+export interface AudioEnvelopeSource {
+  readonly adapter: AudioEnvelopeAdapterRecord;
+  readonly catalogPath: string;
+  /**
+   * Digest of the exact catalog text this envelope came from.
+   *
+   * A catalog is not a content source, so it never reaches the reader artifact's
+   * identity. This digest is the only thing binding the two, and without it a
+   * catalog could change with nothing downstream noticing.
+   */
+  readonly catalogSha256: string;
+  readonly generatedAt?: string;
+}
+
+export interface AudioEnvelopeStatistics {
+  readonly voiceCount: number;
+  readonly clipCount: number;
+  readonly sectionCount: number;
+}
+
+export interface AudioEnvelope {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/audio-envelope.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly engineVersion: string;
+  /**
+   * The reader artifact's build identity, carried verbatim.
+   *
+   * Both artifacts of one build agree on it, so a client holding two that
+   * disagree knows one is stale without diffing them.
+   */
+  readonly buildId: string;
+  readonly source: AudioEnvelopeSource;
+  readonly voices: readonly AudioEnvelopeVoice[];
+  readonly statistics: AudioEnvelopeStatistics;
+}
+
+/**
+ * What a reader may choose to synchronize.
+ *
+ * A closed vocabulary. It was an open list of identifiers, which validated
+ * anything: a publication could declare a capability no provider implements and
+ * find out only from a reader whose data never arrived.
+ *
+ * Consent is deliberately not one of these. It is a precondition rather than a
+ * feature, since `consent` is pinned to `opt-in` for every synchronizing
+ * publication, so offering it as a choice would misdescribe it.
+ */
+export type SyncCapability =
+  | "account-deletion"
+  | "bookmarks"
+  | "engagement"
+  | "progress";
+
+export const SYNC_CAPABILITIES: readonly SyncCapability[] = Object.freeze([
+  "account-deletion",
+  "bookmarks",
+  "engagement",
+  "progress",
+]);
+
+export interface SyncEnvelopeProvider {
+  /** The provider a publication declared, recorded and never executed. */
+  readonly package: string;
+}
+
+export interface SyncEnvelope {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/sync-envelope.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly engineVersion: string;
+  readonly buildId: string;
+  /**
+   * Carries no configuration, by construction rather than by convention.
+   *
+   * This artifact is served publicly, and a provider config is author-supplied:
+   * it may hold a project reference, an endpoint, or a key nobody meant to
+   * publish. A rule saying "do not copy the config here" is a rule somebody
+   * eventually forgets, so the type and the schema both make it impossible.
+   */
+  readonly provider: SyncEnvelopeProvider;
+  readonly consent: "opt-in";
+  readonly localFallback: true;
+  readonly capabilities: readonly SyncCapability[];
+}
+
 export interface SyncConfiguration {
   readonly provider: PackageReference;
   readonly consent: "opt-in";
   readonly localFallback: true;
-  readonly capabilities: readonly string[];
+  readonly capabilities: readonly SyncCapability[];
 }
 
 export interface PublicationRoutes {

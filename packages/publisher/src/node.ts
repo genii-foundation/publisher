@@ -21,9 +21,32 @@ export type {
   BuiltPublicationReader,
 } from "./node/build.js";
 export {
+  buildAudioEnvelope,
+  resolvePublicationAudio,
+} from "./node/audio.js";
+export type {
+  BuildAudioEnvelopeInput,
+  BuiltAudioEnvelope,
+  ResolvedAudioVoice,
+  ResolvedPublicationAudio,
+  ResolvePublicationAudioInput,
+} from "./node/audio.js";
+export {
+  SYNC_DATA_ARTIFACT,
+  buildSyncEnvelope,
+  resolvePublicationSync,
+} from "./node/sync.js";
+export type {
+  BuildSyncEnvelopeInput,
+  BuiltSyncEnvelope,
+  ResolvedPublicationSync,
+} from "./node/sync.js";
+export {
   compileLoadedPublicationContent,
 } from "./node/compile.js";
 export {
+  AUDIO_DATA_ARTIFACT,
+  assertHostCanCarryDataArtifact,
   assertHostCanServe,
   findUnsupportedHostFeatures,
   readHostCapabilities,
@@ -39,11 +62,11 @@ export {
 } from "./node/protected-roots.js";
 export {
   ArtifactDestinationError,
-  checkReaderArtifact,
+  checkHostArtifact,
   hashArtifactText,
   resolveArtifactDestination,
   stagedArtifactPathFor,
-  writeReaderArtifact,
+  writeHostArtifact,
 } from "./node/materialize.js";
 export type {
   ArtifactCheckResult,
