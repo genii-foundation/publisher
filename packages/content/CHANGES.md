@@ -26,3 +26,9 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Applied the same unanchored ownership rule to the selected reader address so forged envelopes cannot bypass named-route authority.
 - Required exact ordered extension capability grants and bound them to content and build identity.
 - Hardened raw manifest grant validation so invalid members cannot disappear before exact resolution comparison.
+- Rejected malformed, duplicate-member, and over-limit raw manifest snapshots before canonical source comparison.
+- Added shared finite compilation resource ceilings and deterministic diagnostic retention capped at 256 records.
+- Capped publication-wide collection membership at 100,000 references and retained only the deterministic reportable diagnostic set during semantic work.
+- Added one bounded detached envelope snapshot, fail-fast structural validation, exact nested diagnostic accounting, and snapshot-only serialization and artifact construction.
+- Documented in-process adapters and extensions as trusted producer code that requires process isolation when a host does not trust it.
+- Built release candidates without PATH-dependent nested npm calls, required the exact provenance-attested tarball, and rejected direct package-directory publication.

@@ -136,11 +136,11 @@ Supply one public, manuscript-free identity for every framework error surface. I
 ```ts
 // publisher-error-identity.ts
 import {
+  createPublisherNextErrorIdentity,
+} from "@genii-foundation/publisher-next/client";
+import {
   defaultPublisherNextTheme,
 } from "@genii-foundation/publisher-next/theme/default";
-import type {
-  PublisherNextErrorIdentity,
-} from "@genii-foundation/publisher-next/client";
 
 const theme = defaultPublisherNextTheme.configure({});
 
@@ -148,7 +148,7 @@ if (!theme.valid) {
   throw new Error(JSON.stringify(theme.diagnostics));
 }
 
-export const publisherErrorIdentity = Object.freeze({
+const identity = createPublisherNextErrorIdentity({
   homePath: "/",
   publication: {
     id: "example-publication",
@@ -169,10 +169,16 @@ export const publisherErrorIdentity = Object.freeze({
     }
   },
   theme: theme.value
-} as const) satisfies PublisherNextErrorIdentity;
+});
+
+if (!identity.valid) {
+  throw new Error(JSON.stringify(identity.diagnostics));
+}
+
+export const publisherErrorIdentity = identity.value;
 ```
 
-Keep those public values synchronized with the validated reader and resolved theme. Author tooling may serialize the already configured theme tokens into this module to avoid shipping theme configuration code in the browser boundary.
+Generate those public values from `publisher.errorIdentity`, which is derived from the validated reader and resolved theme. The client-safe factory rejects changed attribution, missing or unsafe source URLs, malformed home routes, and invalid theme tokens. Author tooling may serialize the already configured identity into this module, then pass the serialized data through the factory without shipping manuscript data or server configuration into the browser boundary.
 
 Expose the client-safe App Router error boundaries:
 
@@ -568,11 +574,11 @@ Historical URLs outside the canonical route grammar cannot enter that manifest. 
 
 ## Low-level server API
 
-The supported author integration is `createPublicationNextApplication` from `@genii-foundation/publisher-next/server`. The root entry contains browser-safe constants and theme APIs, but no server APIs. The `/server` entry also exports route-plan, continuity, and Next-config factories for server adapters and focused tests. It imports `server-only`, so Client Components cannot cross that boundary.
+The supported author integration is `createPublicationNextApplication` from `@genii-foundation/publisher-next/server`. The root entry contains browser-safe constants and theme APIs, but no server APIs. The `/server` entry also exports route-plan and Next-config factories for server adapters and focused tests. It imports `server-only`, so Client Components cannot cross that boundary.
 
 `next.config.mjs` must import `createPublisherNextRoutePlan` and `createPublisherNextConfig` from `@genii-foundation/publisher-next/config`, not from `/server`. The config entry is safe in the ordinary Node configuration process and does not expose application rendering. Its helpers do not repeat full reader validation.
 
-Build route plans only from an already validated generated reader artifact. Pair a plan with the same reader build when constructing continuity or configuration. `resolveRoute` consumes logical framework segments, while `handleRequest` owns raw request paths and must run before route rendering. Pass `renderPage` only a page returned by the same application's `resolveRoute`.
+Build route plans only from an already validated generated reader artifact. The raw continuity constructor is internal; use the validated application's `handleRequest` so route planning and continuity share one exact reader snapshot. `resolveRoute` consumes logical framework segments, while `handleRequest` owns raw request paths and must run before route rendering. Pass `renderPage` only a page returned by the same application's `resolveRoute`.
 
 Client error components and their types live only at `@genii-foundation/publisher-next/client`. They accept the fixed public error identity described above. They never accept a reader envelope or server application.
 
@@ -582,7 +588,7 @@ Every publication page and the engine-owned not-found page display:
 
 > Copyright 2026 GENII Foundation. Published with GENII Publisher.
 
-The credit links to `https://publisher.genii.foundation`. The footer also exposes the reader envelope attribution field `sourceCodeUrl` as a conspicuous publication source link. Themes cannot remove either element through the supported API. The same renderer-owned interface appears on attributed static framework 404 and 500 pages and on hydrated App Router error boundaries.
+The credit links to `https://publisher.genii.foundation`. The renderer reads the fixed Exhibit B values from its own constants rather than trusting caller data. The footer also exposes the validated reader envelope attribution field `sourceCodeUrl` as a conspicuous publication source link. Invalid low-level caller data falls back to the canonical GENII Publisher source instead of removing either link. Themes cannot remove either element through the supported API. The same renderer-owned interface appears on attributed static framework 404 and 500 pages and on hydrated App Router error boundaries.
 
 Raw App Router error HTTP shells remain framework-generic before hydration. Next.js emits those bytes before the client boundary can render. The user-visible hydrated `app/error.tsx` and `app/global-error.tsx` surfaces display the required linked attribution and source URL. This is a graphical interface guarantee, not a claim that every intermediate framework shell contains Publisher markup.
 

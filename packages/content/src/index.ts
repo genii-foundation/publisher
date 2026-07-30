@@ -12,6 +12,7 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 export {
+  CONTENT_COMPILATION_LIMITS,
   compilePublicationContent,
   createPublicationContentArtifact,
   serializePublicationContentEnvelope,

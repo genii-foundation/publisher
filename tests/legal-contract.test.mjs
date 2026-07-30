@@ -12,6 +12,7 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -36,6 +37,11 @@ const packageDefinitions = [
     label: "content",
     root: "packages/content/",
     manifestPath: "packages/content/package.json",
+  },
+  {
+    label: "publisher",
+    root: "packages/publisher/",
+    manifestPath: "packages/publisher/package.json",
   },
   {
     label: "reader",
@@ -77,12 +83,14 @@ const [
   workspacePackage,
   schemaPackage,
   contentPackage,
+  publisherPackage,
   readerPackage,
   nextPackage,
 ] = packages;
 assert.ok(workspacePackage);
 assert.ok(schemaPackage);
 assert.ok(contentPackage);
+assert.ok(publisherPackage);
 assert.ok(readerPackage);
 assert.ok(nextPackage);
 
@@ -112,6 +120,7 @@ test("workspace and public package metadata identify CPAL 1.0", () => {
   for (const packageDefinition of [
     schemaPackage,
     contentPackage,
+    publisherPackage,
     readerPackage,
     nextPackage,
   ]) {
@@ -170,6 +179,17 @@ test("public packages carry exact license, legal, and source notice copies", () 
   }
 });
 
+test("workspace and schema package changes remain byte-identical", async () => {
+  const [
+    workspaceChanges,
+    schemaChanges,
+  ] = await Promise.all([
+    read("CHANGES.md"),
+    read("schemas/CHANGES.md"),
+  ]);
+  assert.equal(schemaChanges, workspaceChanges);
+});
+
 test("Exhibit B and every public package preserve the fixed credit", () => {
   for (const packageDefinition of packages) {
     for (const [artifact, text] of [
@@ -218,6 +238,105 @@ test("public documentation identifies the canonical source repository", () => {
       packageDefinition.label,
     );
   }
+});
+
+test("schema package preserves the portable Unicode data licenses", async () => {
+  assert.ok(
+    schemaPackage.manifest.files.includes("THIRD_PARTY_NOTICES.md"),
+  );
+  assert.ok(schemaPackage.manifest.files.includes("third-party-data"));
+  assert.ok(schemaPackage.manifest.files.includes("third-party-licenses"));
+  assert.equal(
+    schemaPackage.manifest.devDependencies[
+      "@unicode/unicode-15.1.0"
+    ],
+    "1.6.17",
+  );
+
+  const [
+    thirdPartyNotices,
+    caseFoldingLicense,
+    normalizationLicense,
+    normalizationDataText,
+    unicodeDataSource,
+    normalizationTestSource,
+    generatedTable,
+  ] =
+    await Promise.all([
+      read("schemas/THIRD_PARTY_NOTICES.md"),
+      read(
+        "schemas/third-party-licenses/unicode-15.1.0-LICENSE-MIT.txt",
+      ),
+      read(
+        "schemas/third-party-licenses/unicode-data-LICENSE.txt",
+      ),
+      read(
+        "schemas/third-party-data/unicode-normalization-15.1.0.json",
+      ),
+      read(
+        "schemas/third-party-data/UnicodeData-15.1.0.txt",
+      ),
+      read(
+        "schemas/third-party-data/NormalizationTest-15.1.0.txt",
+      ),
+      read("schemas/src/generated-unicode-case-folding.ts"),
+    ]);
+  const normalizationData = JSON.parse(normalizationDataText);
+  assert.match(thirdPartyNotices, /CaseFolding statuses C and F/);
+  assert.match(thirdPartyNotices, /Turkic mappings are not included/);
+  assert.match(thirdPartyNotices, /Unicode Character Database/);
+  assert.match(thirdPartyNotices, /Unicode License V3/);
+  assert.match(
+    thirdPartyNotices,
+    /2fc713e6a31a87c4850a37fe2caffa4218180fadb5de86b43a143ddb4581fb86/,
+  );
+  assert.match(
+    thirdPartyNotices,
+    /871238e37e3be0696ec2bd0891119a041b052da1a84485eda05a5438724b223e/,
+  );
+  assert.match(thirdPartyNotices, /not GENII\s+Publisher Original Code/);
+  assert.match(caseFoldingLicense, /^Copyright Mathias Bynens/m);
+  assert.match(caseFoldingLicense, /Permission is hereby granted/);
+  assert.match(normalizationLicense, /^UNICODE LICENSE V3$/m);
+  assert.match(normalizationLicense, /Permission is hereby granted/);
+  assert.equal(
+    createHash("sha256")
+      .update(normalizationLicense)
+      .digest("hex"),
+    "e7a93b009565cfce55919a381437ac4db883e9da2126fa28b91d12732bc53d96",
+  );
+  assert.equal(
+    createHash("sha256")
+      .update(unicodeDataSource)
+      .digest("hex"),
+    "2fc713e6a31a87c4850a37fe2caffa4218180fadb5de86b43a143ddb4581fb86",
+  );
+  assert.equal(
+    createHash("sha256")
+      .update(normalizationTestSource)
+      .digest("hex"),
+    "871238e37e3be0696ec2bd0891119a041b052da1a84485eda05a5438724b223e",
+  );
+  assert.equal(normalizationData.unicodeVersion, "15.1.0");
+  assert.deepEqual(normalizationData.source, {
+    sha256:
+      "2fc713e6a31a87c4850a37fe2caffa4218180fadb5de86b43a143ddb4581fb86",
+    url: "https://www.unicode.org/Public/15.1.0/ucd/UnicodeData.txt",
+  });
+  assert.ok(normalizationData.canonicalCombiningClasses.length > 0);
+  assert.ok(normalizationData.canonicalDecompositions.length > 0);
+  assert.match(
+    generatedTable,
+    /@unicode\/unicode-15\.1\.0 version 1\.6\.17/,
+  );
+  assert.match(
+    generatedTable,
+    /third-party-licenses\/unicode-data-LICENSE\.txt/,
+  );
+  assert.match(
+    generatedTable,
+    /source SHA-256 2fc713e6a31a87c4850a37fe2caffa4218180fadb5de86b43a143ddb4581fb86/,
+  );
 });
 
 test("content package includes notices for its third-party dependencies", async () => {

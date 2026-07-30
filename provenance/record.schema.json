@@ -1,0 +1,1015 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/provenance-record-1.2.0.schema.json",
+  "title": "GENII Publisher migration provenance record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "recordId",
+    "status",
+    "classification",
+    "recordedAt",
+    "batch",
+    "auditedSource",
+    "additionalSources",
+    "specifications",
+    "audit",
+    "treatment",
+    "scans",
+    "review",
+    "documentation"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/provenance-record-1.2.0.schema.json"
+    },
+    "schemaVersion": {
+      "const": "1.2.0"
+    },
+    "recordId": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "minLength": 8,
+      "maxLength": 120
+    },
+    "status": {
+      "enum": [
+        "draft",
+        "accepted",
+        "blocked"
+      ]
+    },
+    "classification": {
+      "enum": [
+        "fresh-cpal",
+        "apache-preserved",
+        "relicensed-cpal",
+        "cc-host-only",
+        "third-party-preserved",
+        "blocked"
+      ]
+    },
+    "recordedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "batch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batchId",
+        "destinationRepository",
+        "destinationBaseRef",
+        "destinationPaths",
+        "summary"
+      ],
+      "properties": {
+        "batchId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "minLength": 8,
+          "maxLength": 120
+        },
+        "destinationRepository": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "destinationBaseRef": {
+          "$ref": "#/$defs/exactGitRef"
+        },
+        "destinationPaths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/repositoryPath"
+          },
+          "uniqueItems": true,
+          "maxItems": 256
+        },
+        "summary": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "auditedSource": {
+      "$ref": "#/$defs/repositoryEvidence"
+    },
+    "additionalSources": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/additionalSource"
+      }
+    },
+    "specifications": {
+      "$ref": "#/$defs/repositoryEvidence"
+    },
+    "audit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coverageMode",
+        "destinationManifest",
+        "receipt",
+        "ccSourcePaths",
+        "packageRoots",
+        "forbiddenPackagePatterns",
+        "verificationCommands",
+        "installedInputs"
+      ],
+      "properties": {
+        "coverageMode": {
+          "enum": [
+            "historical",
+            "working-tree"
+          ]
+        },
+        "destinationManifest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/destinationManifest"
+            }
+          ]
+        },
+        "receipt": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/receiptReference"
+            }
+          ]
+        },
+        "ccSourcePaths": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repositoryPath"
+          }
+        },
+        "packageRoots": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repositoryPath"
+          }
+        },
+        "forbiddenPackagePatterns": {
+          "type": "array",
+          "maxItems": 128,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "verificationCommands": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/verificationCommand"
+          }
+        },
+        "installedInputs": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/installedInput"
+          }
+        }
+      }
+    },
+    "treatment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "copiedSource",
+        "copiedTests",
+        "implementationAccess",
+        "sourceLicenseTreatment",
+        "rightsDocument",
+        "blocker"
+      ],
+      "properties": {
+        "summary": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "copiedSource": {
+          "type": "boolean"
+        },
+        "copiedTests": {
+          "type": "boolean"
+        },
+        "implementationAccess": {
+          "enum": [
+            "none",
+            "observed",
+            "unknown"
+          ]
+        },
+        "sourceLicenseTreatment": {
+          "enum": [
+            "not-applicable",
+            "preserved",
+            "relicensed",
+            "host-only",
+            "third-party-preserved",
+            "blocked"
+          ]
+        },
+        "rightsDocument": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/rightsDocument"
+            }
+          ]
+        },
+        "blocker": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "scans": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "performedAt",
+        "scope",
+        "exactBlob",
+        "normalizedLine",
+        "tokenShingle",
+        "ccPhrase",
+        "packageLeak"
+      ],
+      "properties": {
+        "performedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "scope": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "exactBlob": {
+          "$ref": "#/$defs/scanOutcome"
+        },
+        "normalizedLine": {
+          "$ref": "#/$defs/scanOutcome"
+        },
+        "tokenShingle": {
+          "$ref": "#/$defs/scanOutcome"
+        },
+        "ccPhrase": {
+          "$ref": "#/$defs/scanOutcome"
+        },
+        "packageLeak": {
+          "$ref": "#/$defs/scanOutcome"
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "reviewerType",
+        "reviewerId",
+        "reviewedAt",
+        "releaseApprovalRequired",
+        "notes"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "accepted",
+            "pending",
+            "rejected"
+          ]
+        },
+        "reviewerType": {
+          "enum": [
+            "automated",
+            "maintainer",
+            "legal",
+            "human"
+          ]
+        },
+        "reviewerId": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "minLength": 4,
+          "maxLength": 120
+        },
+        "reviewedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "releaseApprovalRequired": {
+          "type": "boolean"
+        },
+        "notes": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "documentation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "notice",
+        "legal",
+        "changes",
+        "thirdPartyNotices"
+      ],
+      "properties": {
+        "notice": {
+          "$ref": "#/$defs/documentationOutcome"
+        },
+        "legal": {
+          "$ref": "#/$defs/documentationOutcome"
+        },
+        "changes": {
+          "$ref": "#/$defs/documentationOutcome"
+        },
+        "thirdPartyNotices": {
+          "$ref": "#/$defs/documentationOutcome"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "classification": {
+            "const": "fresh-cpal"
+          }
+        },
+        "required": [
+          "classification"
+        ]
+      },
+      "then": {
+        "properties": {
+          "batch": {
+            "type": "object",
+            "properties": {
+              "destinationPaths": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          },
+          "treatment": {
+            "type": "object",
+            "properties": {
+              "copiedSource": {
+                "const": false
+              },
+              "copiedTests": {
+                "const": false
+              },
+              "sourceLicenseTreatment": {
+                "const": "not-applicable"
+              },
+              "rightsDocument": {
+                "type": "null"
+              },
+              "blocker": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "classification": {
+            "const": "apache-preserved"
+          }
+        },
+        "required": [
+          "classification"
+        ]
+      },
+      "then": {
+        "properties": {
+          "batch": {
+            "type": "object",
+            "properties": {
+              "destinationPaths": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          },
+          "treatment": {
+            "type": "object",
+            "properties": {
+              "sourceLicenseTreatment": {
+                "const": "preserved"
+              },
+              "rightsDocument": {
+                "type": "null"
+              },
+              "blocker": {
+                "type": "null"
+              }
+            },
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "copiedSource": {
+                    "const": true
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "copiedTests": {
+                    "const": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "classification": {
+            "const": "relicensed-cpal"
+          }
+        },
+        "required": [
+          "classification"
+        ]
+      },
+      "then": {
+        "properties": {
+          "batch": {
+            "type": "object",
+            "properties": {
+              "destinationPaths": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          },
+          "treatment": {
+            "type": "object",
+            "properties": {
+              "sourceLicenseTreatment": {
+                "const": "relicensed"
+              },
+              "rightsDocument": {
+                "$ref": "#/$defs/rightsDocument"
+              },
+              "blocker": {
+                "type": "null"
+              }
+            },
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "copiedSource": {
+                    "const": true
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "copiedTests": {
+                    "const": true
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "classification": {
+            "const": "cc-host-only"
+          }
+        },
+        "required": [
+          "classification"
+        ]
+      },
+      "then": {
+        "properties": {
+          "batch": {
+            "type": "object",
+            "properties": {
+              "destinationPaths": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          },
+          "treatment": {
+            "type": "object",
+            "properties": {
+              "copiedSource": {
+                "const": false
+              },
+              "copiedTests": {
+                "const": false
+              },
+              "sourceLicenseTreatment": {
+                "const": "host-only"
+              },
+              "rightsDocument": {
+                "type": "null"
+              },
+              "blocker": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "classification": {
+            "const": "third-party-preserved"
+          }
+        },
+        "required": [
+          "classification"
+        ]
+      },
+      "then": {
+        "properties": {
+          "batch": {
+            "type": "object",
+            "properties": {
+              "destinationPaths": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          },
+          "treatment": {
+            "type": "object",
+            "properties": {
+              "sourceLicenseTreatment": {
+                "const": "third-party-preserved"
+              },
+              "rightsDocument": {
+                "type": "null"
+              },
+              "blocker": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "classification": {
+            "const": "blocked"
+          }
+        },
+        "required": [
+          "classification"
+        ]
+      },
+      "then": {
+        "properties": {
+          "treatment": {
+            "type": "object",
+            "properties": {
+              "sourceLicenseTreatment": {
+                "const": "blocked"
+              },
+              "blocker": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "review": {
+            "type": "object",
+            "properties": {
+              "decision": {
+                "enum": [
+                  "pending",
+                  "rejected"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "\\S"
+    },
+    "exactGitRef": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "httpsUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://"
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^(?!/)(?!.*\\\\\\\\)(?!.*//)(?!.*(?:^|/)\\.\\.?(?:/|$))[^\\u0000]+$"
+    },
+    "destinationManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "entryCount",
+        "deletedCount",
+        "sha256"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "sha256-path-state-content-v2"
+        },
+        "entryCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "deletedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "receiptReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "verificationCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv",
+        "description"
+      ],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "installedInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "installedPath",
+        "sourceRepository",
+        "sourceRef",
+        "sourcePath"
+      ],
+      "properties": {
+        "installedPath": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "sourceRepository": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "sourceRef": {
+          "$ref": "#/$defs/exactGitRef"
+        },
+        "sourcePath": {
+          "$ref": "#/$defs/repositoryPath"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "role",
+        "license",
+        "lineStart",
+        "lineEnd",
+        "description"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "role": {
+          "enum": [
+            "license-map",
+            "software-license",
+            "content-license",
+            "architecture",
+            "migration-inventory",
+            "source-code",
+            "test",
+            "third-party-license",
+            "authorship-history",
+            "other"
+          ]
+        },
+        "license": {
+          "enum": [
+            "Apache-2.0",
+            "CC-BY-SA-4.0",
+            "CPAL-1.0",
+            "mixed",
+            "third-party",
+            "not-applicable"
+          ]
+        },
+        "lineStart": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lineEnd": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "repositoryEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "ref",
+        "evidence"
+      ],
+      "properties": {
+        "repository": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "ref": {
+          "$ref": "#/$defs/exactGitRef"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "additionalSource": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/gitAdditionalSource"
+        },
+        {
+          "$ref": "#/$defs/artifactAdditionalSource"
+        }
+      ]
+    },
+    "gitAdditionalSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "repository",
+        "ref",
+        "evidence"
+      ],
+      "properties": {
+        "kind": {
+          "const": "git"
+        },
+        "repository": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "ref": {
+          "$ref": "#/$defs/exactGitRef"
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        }
+      }
+    },
+    "artifactAdditionalSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "url",
+        "version",
+        "sha256",
+        "license",
+        "description"
+      ],
+      "properties": {
+        "kind": {
+          "const": "artifact"
+        },
+        "url": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "version": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "license": {
+          "enum": [
+            "Apache-2.0",
+            "CC-BY-SA-4.0",
+            "CPAL-1.0",
+            "mixed",
+            "third-party",
+            "not-applicable"
+          ]
+        },
+        "description": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "rightsDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "documentId",
+        "sha256",
+        "issuedAt",
+        "scope",
+        "authorizingParties",
+        "secureCustodian"
+      ],
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]+(?:-[A-Z0-9]+)*$",
+          "minLength": 8,
+          "maxLength": 120
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "issuedAt": {
+          "type": "string",
+          "format": "date"
+        },
+        "scope": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "authorizingParties": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/nonEmptyText"
+          }
+        },
+        "secureCustodian": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "scanOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "matchCount",
+        "method",
+        "evidence"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": [
+            "clear",
+            "expected-match",
+            "blocked",
+            "not-applicable"
+          ]
+        },
+        "matchCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "method": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "documentationOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "paths",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "updated",
+            "not-needed",
+            "pending"
+          ]
+        },
+        "paths": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repositoryPath"
+          }
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    }
+  }
+}

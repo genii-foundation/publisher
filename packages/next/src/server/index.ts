@@ -20,12 +20,6 @@ export {
   createPublisherNextConfig,
 } from "../config.js";
 export {
-  createPublisherNextContinuityHandler,
-} from "../continuity.js";
-export type {
-  PublisherNextContinuityHandler,
-} from "../continuity.js";
-export {
   createPublisherNextRoutePlan,
 } from "../routes.js";
 export type {

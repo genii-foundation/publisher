@@ -1,0 +1,271 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/provenance-record-1.2.0.schema.json",
+  "schemaVersion": "1.2.0",
+  "recordId": "2026-07-28-publisher-source-loader",
+  "status": "draft",
+  "classification": "fresh-cpal",
+  "recordedAt": "2026-07-28T20:32:06Z",
+  "batch": {
+    "batchId": "2026-07-28-publisher-source-loader",
+    "destinationRepository": "https://github.com/genii-foundation/publisher",
+    "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
+    "destinationPaths": [
+      ".github/workflows/ci.yml",
+      "CHANGES.md",
+      "README.md",
+      "docs/architecture/",
+      "docs/protocol/",
+      "fixtures/",
+      "package.json",
+      "packages/content/",
+      "packages/next/",
+      "packages/publisher/",
+      "packages/reader/",
+      "provenance/",
+      "schemas/CHANGES.md",
+      "schemas/README.md",
+      "schemas/collection.schema.json",
+      "schemas/content-envelope.schema.json",
+      "schemas/publication.schema.json",
+      "schemas/reader-envelope.schema.json",
+      "schemas/scripts/build.mjs",
+      "schemas/scripts/generate-case-folding.mjs",
+      "schemas/src/envelope-resource-limits.ts",
+      "schemas/src/index.ts",
+      "schemas/src/layout.ts",
+      "schemas/src/portable-unicode.ts",
+      "schemas/src/protocol-limits.ts",
+      "schemas/src/reader.ts",
+      "schemas/src/routes.ts",
+      "schemas/src/schema-validation.ts",
+      "schemas/src/semantic-validation.ts",
+      "schemas/src/strict-json.ts",
+      "schemas/work.schema.json",
+      "tests/"
+    ],
+    "summary": "Records the fresh CPAL implementation of the secure publication source loader, normalized source snapshot boundary, compiler integration, portable path enforcement, resource limits, tests, and supporting governance. Separately licensed Unicode data and license artifacts are excluded into their own preservation record."
+  },
+  "auditedSource": {
+    "repository": "https://github.com/genii-foundation/coherence-thesis",
+    "ref": "d000fe50882c4664f96dccdea38b4b370dfb368d",
+    "evidence": [
+      {
+        "path": "NOTICE",
+        "sha256": "sha256:5800675e0b42df3ee09a0c8c5136ae9820390dbfaa49ec5636ef8716d67a01c5",
+        "role": "license-map",
+        "license": "mixed",
+        "lineStart": 6,
+        "lineEnd": 48,
+        "description": "Maps Coherence software to Apache 2.0, creative material to CC BY-SA 4.0, and generated files to their sources."
+      },
+      {
+        "path": "LICENSE",
+        "sha256": "sha256:37f6b7d766eb6791edb89211111a48e3e12ff5cb06578299019bb009fd5be44c",
+        "role": "software-license",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 201,
+        "description": "Contains the Apache License 2.0 terms governing the audited Coherence software."
+      },
+      {
+        "path": "LICENSE-content",
+        "sha256": "sha256:0b2b284b6ddb08aa7fc3f75ff47b034cfe719ccf2fc8d4f9af8e03c9898a2cce",
+        "role": "content-license",
+        "license": "CC-BY-SA-4.0",
+        "lineStart": 1,
+        "lineEnd": 35,
+        "description": "Contains the CC BY-SA 4.0 terms governing the audited Coherence creative material."
+      },
+      {
+        "path": "scripts/manuscripts/io.ts",
+        "sha256": "sha256:3ba438982c829ee036fbdca93c71963fc5dddb71f103bd7d98a608f8084c85e7",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 20,
+        "lineEnd": 43,
+        "description": "Shows the Coherence file-reading, hashing, and newline-normalization behavior that was inspected before writing neutral source snapshot primitives."
+      },
+      {
+        "path": "scripts/repository/source-boundary.ts",
+        "sha256": "sha256:5fc8c70fda202f71f0bfd7f8f45756aa1f19f0ff436e5d4240cdb42960897e7d",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 16,
+        "lineEnd": 113,
+        "description": "Shows Coherence-specific canonical, durable, legacy, and disposable path classifications that informed the generic host boundary."
+      },
+      {
+        "path": "scripts/repository/layout.ts",
+        "sha256": "sha256:a8d32dceb012a22b7576fdc86199be5322b3280abba01418076d8e91b992a39d",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 86,
+        "lineEnd": 185,
+        "description": "Shows Coherence layout inspection, symbolic-link rejection, tree walking, and duplicate filesystem identity checks whose behavior was independently generalized."
+      },
+      {
+        "path": "scripts/repository/layout.test.ts",
+        "sha256": "sha256:b4c5c560eb16d903c8f5c1f143e8792c7af436fcb95d2a6a4dd195813713f4db",
+        "role": "test",
+        "license": "Apache-2.0",
+        "lineStart": 198,
+        "lineEnd": 243,
+        "description": "Shows Coherence symlink and duplicate filesystem identity expectations that were observed without copying its tests."
+      }
+    ]
+  },
+  "additionalSources": [],
+  "specifications": {
+    "repository": "https://github.com/genii-foundation/publisher",
+    "ref": "2116921e5bf079aceff25575fa9932d2f41c05e8",
+    "evidence": [
+      {
+        "path": "docs/architecture/0002-publication-structure-and-content-protocol.md",
+        "sha256": "sha256:12c020710bc432d1091739163185ae7591a859bce0a95fc7a7e68a0059f973fe",
+        "role": "architecture",
+        "license": "CPAL-1.0",
+        "lineStart": 8,
+        "lineEnd": 71,
+        "description": "Defines hybrid canonical and declared layouts, one resolution boundary, normalized protocol output, and host-owned durable state."
+      },
+      {
+        "path": "docs/migration/coherence-extraction-inventory.md",
+        "sha256": "sha256:cab6937ad3083e31ec129a9625c508194b48df84e1a8a632eeb44334e313fc53",
+        "role": "migration-inventory",
+        "license": "CPAL-1.0",
+        "lineStart": 23,
+        "lineEnd": 296,
+        "description": "Defines generic extraction candidates, author-owned boundaries, optional capabilities, disposable output, license hazards, and dependency inversions."
+      },
+      {
+        "path": "docs/architecture/0004-license-attribution-and-source-availability.md",
+        "sha256": "sha256:6a5d72c4552b10dcebfc2d890f3ab25147f3d12e2502bc4eb71be463c58c4c06",
+        "role": "architecture",
+        "license": "CPAL-1.0",
+        "lineStart": 12,
+        "lineEnd": 50,
+        "description": "Defines CPAL coverage, persistent attribution, network source availability, and the separation of publication content."
+      }
+    ]
+  },
+  "audit": {
+    "coverageMode": "working-tree",
+    "destinationManifest": null,
+    "receipt": null,
+    "ccSourcePaths": [
+      "editorial/audits/",
+      "editorial/debt/",
+      "editorial/reviews/",
+      "editorial/schemas/",
+      "editorial/sources/",
+      "editorial/standards/",
+      "editorial/templates/",
+      "publishing/continuity/",
+      "publishing/audio/manifest.json"
+    ],
+    "packageRoots": [
+      "schemas/",
+      "packages/content/",
+      "packages/next/",
+      "packages/reader/",
+      "packages/publisher/"
+    ],
+    "forbiddenPackagePatterns": [
+      "The Coherence Thesis",
+      "coherence-thesis",
+      "coherence.genii.foundation",
+      "editorial/sources/",
+      "publishing/continuity/",
+      "publishing/audio/",
+      "generated/",
+      "public/data/",
+      "public/downloads/"
+    ],
+    "verificationCommands": [],
+    "installedInputs": []
+  },
+  "treatment": {
+    "summary": "The destination implementation was written as new neutral expression after inspecting Coherence behavior and boundaries. No Coherence source code, tests, manuscripts, editorial material, generated output, art, or durable publication state was copied. Unicode data and license artifacts are excluded from this classification and recorded separately.",
+    "copiedSource": false,
+    "copiedTests": false,
+    "implementationAccess": "observed",
+    "sourceLicenseTreatment": "not-applicable",
+    "rightsDocument": null,
+    "blocker": null
+  },
+  "scans": {
+    "performedAt": "2026-07-28T20:32:06Z",
+    "scope": "Draft scan scope covers the current working-tree files declared by this record against the exact audited Coherence ref. Final outcomes require a deterministic receipt bound to the stable destination manifest.",
+    "exactBlob": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compare SHA-256 content identities for every audited Coherence blob and every selected destination file.",
+      "evidence": "Pending the stable destination manifest and final audit receipt."
+    },
+    "normalizedLine": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compare whitespace-normalized UTF-8 lines containing at least 60 characters.",
+      "evidence": "Pending the stable destination manifest and final audit receipt."
+    },
+    "tokenShingle": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compare significant contiguous 16-token code windows after removing comments and literal bodies, normalizing numbers, and requiring at least six distinct nonnumeric identifiers.",
+      "evidence": "Pending the stable destination manifest and final audit receipt."
+    },
+    "ccPhrase": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compare exact contiguous eight-word windows against the explicitly declared CC-mapped Coherence paths.",
+      "evidence": "Pending the stable destination manifest and final audit receipt."
+    },
+    "packageLeak": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Build every affected publishable package through its full lifecycle in an owned clean workspace with the exact pinned npm CLI, hash and inspect the retained candidate archive, and reject declared Coherence names, paths, URLs, generated output, and durable publication state. An accepted candidate is the exact tarball supplied to publication.",
+      "evidence": "Pending packed archive digests and the final audit receipt."
+    }
+  },
+  "review": {
+    "decision": "pending",
+    "reviewerType": "automated",
+    "reviewerId": "publisher-provenance-audit-2026-07-28",
+    "reviewedAt": "2026-07-28T20:32:06Z",
+    "releaseApprovalRequired": true,
+    "notes": "This draft records the intended fresh neutral implementation classification, not a formal clean-room claim or legal opinion. It requires final deterministic scans, maintainer review, human release approval, and counsel review before the first 1.0 release."
+  },
+  "documentation": {
+    "notice": {
+      "status": "updated",
+      "paths": [
+        "packages/publisher/NOTICE.md"
+      ],
+      "reason": "The new Publisher package carries the project attribution, source availability, and third-party boundary notices."
+    },
+    "legal": {
+      "status": "updated",
+      "paths": [
+        "packages/publisher/LEGAL"
+      ],
+      "reason": "The new Publisher package carries the required CPAL legal disclosure file."
+    },
+    "changes": {
+      "status": "updated",
+      "paths": [
+        "CHANGES.md",
+        "packages/content/CHANGES.md",
+        "packages/publisher/CHANGES.md",
+        "packages/reader/CHANGES.md",
+        "schemas/CHANGES.md",
+        "provenance/CHANGES.md"
+      ],
+      "reason": "Affected package and provenance change records describe the loader, compiler, path, resource-limit, and governance work."
+    },
+    "thirdPartyNotices": {
+      "status": "not-needed",
+      "paths": [],
+      "reason": "This record covers only fresh GENII-authored expression. Preserved Unicode material is isolated in a separate record."
+    }
+  }
+}

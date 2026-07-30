@@ -39,6 +39,9 @@ import {
   PublisherNextFrameworkErrorPage,
   PublisherNextGlobalErrorPage,
 } from "../packages/next/dist/client/error.js";
+import {
+  createPublisherNextErrorIdentity,
+} from "../packages/next/dist/error-identity.js";
 
 import {
   createFixtureReader,
@@ -456,11 +459,13 @@ test("the engine-owned not-found page preserves attribution", async () => {
 
 test("client-safe error boundaries preserve attribution without leaking errors", async () => {
   const application = await createApplication();
-  const identity = {
+  const identityResult = createPublisherNextErrorIdentity({
     homePath: "/",
     publication: application.reader.publication,
     theme: application.theme,
-  };
+  });
+  const identity = assertValid(identityResult);
+  assert.deepEqual(identity, application.errorIdentity);
   const error = Object.assign(
     new Error("private rendering detail"),
     { digest: "private-digest" },
@@ -488,6 +493,79 @@ test("client-safe error boundaries preserve attribution without leaking errors",
     assert.doesNotMatch(html, /private rendering detail/u);
     assert.doesNotMatch(html, /private-digest/u);
   }
+});
+
+test("public error identity rejects attribution bypasses and the renderer fails closed to GENII credit", async () => {
+  const application = await createApplication();
+  const validInput = {
+    homePath: "/",
+    publication: application.reader.publication,
+    theme: application.theme,
+  };
+  const cases = [
+    {
+      label: "rewritten attribution",
+      mutate(input) {
+        input.publication.attribution.text = "Removed";
+      },
+    },
+    {
+      label: "missing source",
+      mutate(input) {
+        delete input.publication.attribution.sourceCodeUrl;
+      },
+    },
+    {
+      label: "unsafe source",
+      mutate(input) {
+        input.publication.attribution.sourceCodeUrl =
+          "javascript:removed";
+      },
+    },
+    {
+      label: "malformed home route",
+      mutate(input) {
+        input.homePath = "//removed.example";
+      },
+    },
+    {
+      label: "invalid theme",
+      mutate(input) {
+        input.theme.tokens.color.canvas = "transparent";
+      },
+    },
+  ];
+  for (const { label, mutate } of cases) {
+    const input = structuredClone(validInput);
+    mutate(input);
+    const result = createPublisherNextErrorIdentity(input);
+    assert.equal(result.valid, false, label);
+  }
+
+  const forged = structuredClone(validInput);
+  forged.publication.title = "Removed";
+  forged.publication.attribution = {
+    placement: "footer",
+    copyright: "Removed",
+    text: "Removed",
+    url: "https://example.test/removed",
+  };
+  const html = renderToStaticMarkup(
+    PublisherNextFrameworkErrorPage({
+      identity: forged,
+    }),
+  );
+  assert.match(html, /Copyright 2026 GENII Foundation/u);
+  assert.match(html, />Published with GENII Publisher</u);
+  assert.match(
+    html,
+    /href="https:\/\/publisher\.genii\.foundation"/u,
+  );
+  assert.match(
+    html,
+    /href="https:\/\/github\.com\/genii-foundation\/publisher"/u,
+  );
+  assert.doesNotMatch(html, />Removed</u);
 });
 
 test("Updates configuration is required exactly when its route exists", async () => {

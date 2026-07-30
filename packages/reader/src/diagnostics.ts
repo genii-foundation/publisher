@@ -38,6 +38,89 @@ function stableParams(
   return JSON.stringify(sanitizeParams(value));
 }
 
+function compareDiagnostics(left: Diagnostic, right: Diagnostic): number {
+  return (
+    compareText(
+      left.documentPath ?? "",
+      right.documentPath ?? "",
+    ) ||
+    compareText(left.path, right.path) ||
+    compareText(left.code, right.code) ||
+    compareText(left.keyword, right.keyword) ||
+    compareText(left.message, right.message) ||
+    compareText(
+      stableParams(left.params),
+      stableParams(right.params),
+    )
+  );
+}
+
+export const MAXIMUM_READER_DIAGNOSTICS = 256;
+
+const diagnosticCollectorTotals =
+  new WeakMap<readonly Diagnostic[], number>();
+
+export function createDiagnosticCollector(): Diagnostic[] {
+  const retained: Diagnostic[] = [];
+  diagnosticCollectorTotals.set(retained, 0);
+  Object.defineProperty(retained, "push", {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: (...items: Diagnostic[]): number => {
+      const maximumDetails = MAXIMUM_READER_DIAGNOSTICS - 1;
+      let total =
+        diagnosticCollectorTotals.get(retained) ??
+        retained.length;
+      for (const item of items) {
+        const nestedOmitted =
+          item.keyword === "diagnosticLimit" &&
+          typeof item.params.omittedDiagnostics === "number" &&
+          Number.isSafeInteger(item.params.omittedDiagnostics) &&
+          item.params.omittedDiagnostics >= 0
+            ? item.params.omittedDiagnostics
+            : undefined;
+        if (nestedOmitted !== undefined) {
+          total += nestedOmitted;
+          continue;
+        }
+        total += 1;
+        let low = 0;
+        let high = retained.length;
+        while (low < high) {
+          const middle = Math.floor((low + high) / 2);
+          const current = retained[middle];
+          if (
+            current !== undefined &&
+            compareDiagnostics(current, item) < 0
+          ) {
+            low = middle + 1;
+          } else {
+            high = middle;
+          }
+        }
+        if (low >= maximumDetails) {
+          continue;
+        }
+        if (retained.length < maximumDetails) {
+          retained.length += 1;
+        }
+        for (
+          let index = retained.length - 1;
+          index > low;
+          index -= 1
+        ) {
+          retained[index] = retained[index - 1] as Diagnostic;
+        }
+        retained[low] = item;
+      }
+      diagnosticCollectorTotals.set(retained, total);
+      return retained.length;
+    },
+  });
+  return retained;
+}
+
 export function diagnostic(
   code: string,
   path: string,
@@ -58,24 +141,51 @@ export function diagnostic(
 export function sortDiagnostics(
   diagnostics: readonly Diagnostic[],
 ): readonly Diagnostic[] {
-  return diagnostics
+  const maximumDetails = MAXIMUM_READER_DIAGNOSTICS - 1;
+  let ordinaryDiagnosticCount = 0;
+  let nestedOmittedDiagnostics = 0;
+  for (const item of diagnostics) {
+    const nestedOmitted =
+      item.keyword === "diagnosticLimit" &&
+      typeof item.params.omittedDiagnostics === "number" &&
+      Number.isSafeInteger(item.params.omittedDiagnostics) &&
+      item.params.omittedDiagnostics >= 0
+        ? item.params.omittedDiagnostics
+        : undefined;
+    if (nestedOmitted === undefined) {
+      ordinaryDiagnosticCount += 1;
+    } else {
+      nestedOmittedDiagnostics += nestedOmitted;
+    }
+  }
+  const totalDiagnostics =
+    diagnosticCollectorTotals.get(diagnostics) ??
+    ordinaryDiagnosticCount + nestedOmittedDiagnostics;
+  const sorted = diagnostics
     .map((item) => ({
       ...item,
       params: sanitizeParams(item.params),
     }))
-    .sort(
-      (left, right) =>
-        compareText(
-          left.documentPath ?? "",
-          right.documentPath ?? "",
-        ) ||
-        compareText(left.path, right.path) ||
-        compareText(left.code, right.code) ||
-        compareText(left.keyword, right.keyword) ||
-        compareText(left.message, right.message) ||
-        compareText(
-          stableParams(left.params),
-          stableParams(right.params),
-        ),
+    .filter((item) => item.keyword !== "diagnosticLimit")
+    .sort(compareDiagnostics);
+  const omittedDiagnostics = Math.max(
+    0,
+    totalDiagnostics - maximumDetails,
+  );
+  const bounded = sorted.slice(0, maximumDetails);
+  if (omittedDiagnostics > 0) {
+    bounded.push(
+      diagnostic(
+        "reader.diagnostics_truncated",
+        "",
+        "Further reader diagnostics were omitted after the fixed reporting limit.",
+        "diagnosticLimit",
+        {
+          maximumDiagnostics: MAXIMUM_READER_DIAGNOSTICS,
+          omittedDiagnostics,
+        },
+      ),
     );
+  }
+  return bounded.sort(compareDiagnostics);
 }

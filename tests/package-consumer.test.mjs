@@ -200,6 +200,10 @@ test("packed schema tarball installs and works in an offline consumer", async ()
   );
   assert.equal(schemaPackageManifest.publishConfig.access, "public");
   assert.equal(schemaPackageManifest.publishConfig.provenance, true);
+  assert.equal(
+    schemaPackageManifest.scripts.prepublishOnly,
+    "node ../provenance/scripts/reject-directory-publish.mjs",
+  );
   assert.deepEqual(schemaPackageManifest.dependencies, {
     semver: "7.8.5",
   });
@@ -207,6 +211,12 @@ test("packed schema tarball installs and works in an offline consumer", async ()
   assert.equal(
     schemaPackageManifest.devDependencies["ajv-formats"],
     "3.0.1",
+  );
+  assert.equal(
+    schemaPackageManifest.devDependencies[
+      "@unicode/unicode-15.1.0"
+    ],
+    "1.6.17",
   );
   assert.equal(
     Object.hasOwn(schemaPackageManifest.publishConfig, "tag"),
@@ -309,6 +319,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "NOTICE.md",
       "README.md",
       "SOURCE-NOTICE",
+      "THIRD_PARTY_NOTICES.md",
       "collection.schema.json",
       "content-envelope.schema.json",
       "dist/SOURCE-NOTICE",
@@ -318,6 +329,11 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "reader-envelope.schema.json",
       ...expectedScriptPaths,
       ...expectedSourcePaths,
+      "third-party-data/NormalizationTest-15.1.0.txt",
+      "third-party-data/UnicodeData-15.1.0.txt",
+      "third-party-data/unicode-normalization-15.1.0.json",
+      "third-party-licenses/unicode-15.1.0-LICENSE-MIT.txt",
+      "third-party-licenses/unicode-data-LICENSE.txt",
       "tsconfig.json",
       "work.schema.json",
     ].sort();
@@ -442,6 +458,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
     for (const buildOnlyPackage of [
       "ajv",
       "ajv-formats",
+      "@unicode/unicode-15.1.0",
       "fast-deep-equal",
       "fast-uri",
     ]) {
@@ -502,10 +519,15 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       import assert from "node:assert/strict";
       import {
         EXTENSION_CAPABILITIES,
+        PORTABLE_REPOSITORY_CASE_FOLDING_VERSION,
+        PORTABLE_REPOSITORY_NORMALIZATION_VERSION,
         inspectCanonicalRoutePath,
         isCanonicalRoutePath,
+        normalizePortableRepositoryText,
+        portableRepositoryPathIdentity,
         validateContentEnvelopeShape,
         validatePublicationShape,
+        validateRepositoryRelativePath,
         validateWorkShape,
       } from "@genii-foundation/publisher-schema";
       import {
@@ -535,6 +557,32 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         "host.route",
         "host.handler",
       ]);
+      assert.equal(PORTABLE_REPOSITORY_CASE_FOLDING_VERSION, "15.1.0");
+      assert.equal(PORTABLE_REPOSITORY_NORMALIZATION_VERSION, "15.1.0");
+      assert.equal(
+        portableRepositoryPathIdentity("Werke/Straße.md"),
+        portableRepositoryPathIdentity("WERKE/STRASSE.MD"),
+      );
+      const unicodeVersionDrift = "q\\u{1ACF}\\u0323";
+      assert.equal(
+        normalizePortableRepositoryText(unicodeVersionDrift),
+        unicodeVersionDrift,
+      );
+      assert.equal(
+        portableRepositoryPathIdentity(unicodeVersionDrift),
+        unicodeVersionDrift,
+      );
+      assert.deepEqual(
+        validateRepositoryRelativePath(
+          \`publication/\${unicodeVersionDrift}.md\`,
+          "/path",
+        ),
+        [],
+      );
+      assert.deepEqual(
+        validateRepositoryRelativePath("出版/作品/第一章.md", "/path"),
+        [],
+      );
       assert.deepEqual(inspectCanonicalRoutePath("/caf%C3%A9/"), {
         valid: true,
         value: "/caf%C3%A9/",
@@ -573,7 +621,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         title: "Installed Proof",
         language: "en",
         publicationState: "draft",
-        manuscript: "manuscript.md",
+        manuscript: "原稿/第一章.md",
       });
       assert.equal(result.valid, true, JSON.stringify(result.diagnostics));
     `;
@@ -605,7 +653,82 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         /\brequire\s*\(/,
         `${path} must not contain unresolved CommonJS module loads.`,
       );
+      assert.doesNotMatch(
+        contents,
+        /@unicode\/unicode-15\.1\.0\/Case_Folding/,
+        `${path} must not load the Unicode data package at runtime.`,
+      );
+      assert.doesNotMatch(
+        contents,
+        /\.normalize\s*\(/,
+        `${path} must not consult host Unicode normalization tables.`,
+      );
     }
+
+    const browserEntryPath = join(
+      consumerDirectory,
+      "browser-case-folding-proof.mjs",
+    );
+    const browserBundlePath = join(
+      consumerDirectory,
+      "browser-case-folding-proof.bundle.mjs",
+    );
+    await writeFile(
+      browserEntryPath,
+      `
+import {
+  normalizePortableRepositoryText,
+  portableRepositoryPathIdentity,
+  validateRepositoryRelativePath,
+} from "@genii-foundation/publisher-schema";
+
+const unicodeVersionDrift = "q\\u{1ACF}\\u0323";
+if (
+  portableRepositoryPathIdentity("Werke/Straße.md") !==
+  portableRepositoryPathIdentity("WERKE/STRASSE.MD")
+) {
+  throw new Error("Unicode case-fold identity failed.");
+}
+if (
+  normalizePortableRepositoryText(unicodeVersionDrift) !==
+    unicodeVersionDrift ||
+  portableRepositoryPathIdentity(unicodeVersionDrift) !==
+    unicodeVersionDrift
+) {
+  throw new Error("Pinned Unicode 15.1 normalization failed.");
+}
+if (
+  validateRepositoryRelativePath("出版/作品/第一章.md", "/path").length !== 0
+) {
+  throw new Error("Native-script repository path failed.");
+}
+`,
+      "utf8",
+    );
+    run(
+      join(repositoryRoot, "node_modules", "esbuild", "bin", "esbuild"),
+      [
+        browserEntryPath,
+        "--bundle",
+        "--format=esm",
+        "--platform=browser",
+        `--outfile=${browserBundlePath}`,
+      ],
+      {
+        cwd: consumerDirectory,
+        label: "packed schema browser bundle proof",
+      },
+    );
+    const browserBundle = await readFile(browserBundlePath, "utf8");
+    assert.doesNotMatch(browserBundle, /\bnode:/);
+    assert.doesNotMatch(
+      browserBundle,
+      /@unicode\/unicode-15\.1\.0\/Case_Folding/,
+    );
+    run(process.execPath, [browserBundlePath], {
+      cwd: consumerDirectory,
+      label: "packed schema browser bundle execution",
+    });
 
     for (const schemaFileName of [
       "collection.schema.json",
@@ -663,8 +786,12 @@ test("packed schema tarball installs and works in an offline consumer", async ()
 
     const typeConsumer = `
       import {
+        PORTABLE_REPOSITORY_CASE_FOLDING_VERSION,
+        PORTABLE_REPOSITORY_NORMALIZATION_VERSION,
         inspectCanonicalRoutePath,
         isCanonicalRoutePath,
+        normalizePortableRepositoryText,
+        portableRepositoryPathIdentity,
         validateContentEnvelopeShape,
         validatePublicationShape,
         validateReaderEnvelopeShape,
@@ -689,6 +816,10 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       declare const publication: PublicationManifest;
       const capability: ExtensionCapability = "renderer.slot";
       void capability;
+      void PORTABLE_REPOSITORY_CASE_FOLDING_VERSION;
+      void PORTABLE_REPOSITORY_NORMALIZATION_VERSION;
+      void normalizePortableRepositoryText("Cafe\\u0301");
+      void portableRepositoryPathIdentity("Werke/Straße.md");
       const result: ValidationResult<PublicationManifest> =
         validatePublicationShape(publication);
       void result;

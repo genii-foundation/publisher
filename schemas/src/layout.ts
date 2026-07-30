@@ -18,7 +18,22 @@ import type {
   ValidationResult,
   WorkManifest,
 } from "./types.js";
+import {
+  UNICODE_DEFAULT_CASE_FOLDING_VERSION,
+  unicodeFullDefaultCaseFold,
+} from "./generated-unicode-case-folding.js";
 import { immutableSnapshot } from "./immutability.js";
+import {
+  normalizePortableRepositoryText,
+  PORTABLE_REPOSITORY_NORMALIZATION_VERSION,
+} from "./portable-unicode.js";
+import { PUBLICATION_PROTOCOL_LIMITS } from "./protocol-limits.js";
+
+export {
+  normalizePortableRepositoryText,
+  PORTABLE_REPOSITORY_NORMALIZATION_VERSION,
+} from "./portable-unicode.js";
+export { PUBLICATION_PROTOCOL_LIMITS } from "./protocol-limits.js";
 
 export const CANONICAL_PUBLICATION_MANIFEST_PATH = "publication.json";
 export const CANONICAL_WORKS_ROOT = "publication/works";
@@ -29,6 +44,50 @@ export const CANONICAL_COLLECTION_MANIFEST_TEMPLATE =
 export const CANONICAL_ASSETS_ROOT = "publication/assets";
 export const CANONICAL_CONTINUITY_ROOT = "publication/continuity";
 export const CANONICAL_OUTPUT_ROOT = ".publisher";
+export const RESERVED_HOST_INTEGRATION_PATHS = Object.freeze([
+  "publisher.config.ts",
+] as const);
+
+export const MAXIMUM_PROTOCOL_DIAGNOSTICS = 256;
+export const PORTABLE_REPOSITORY_CASE_FOLDING_VERSION =
+  UNICODE_DEFAULT_CASE_FOLDING_VERSION;
+
+/**
+ * Returns the filesystem-independent identity used for every repository path
+ * comparison in the protocol. It applies the bundled Unicode 15.1 full
+ * default case fold, using CaseFolding statuses C and F without locale or
+ * Turkic mappings, then normalizes the result to NFC.
+ */
+export function portableRepositoryPathIdentity(
+  path: string,
+): string {
+  return normalizePortableRepositoryText(
+    unicodeFullDefaultCaseFold(path),
+  );
+}
+
+/**
+ * Returns the cross-filesystem identity of one repository path segment.
+ * Folding remains a separate protocol decision in
+ * portableRepositoryPathIdentity. The target-filesystem layer then removes
+ * trailing dots and spaces, which Win32 ignores when resolving ordinary path
+ * components.
+ */
+export function portableRepositorySegmentIdentity(
+  segment: string,
+): string {
+  return portableRepositoryPathIdentity(segment).replace(/[. ]+$/u, "");
+}
+
+export function isReservedHostIntegrationPath(
+  path: string,
+): boolean {
+  const identity = portableRepositoryPathIdentity(path);
+  return RESERVED_HOST_INTEGRATION_PATHS.some(
+    (reservedPath) =>
+      portableRepositoryPathIdentity(reservedPath) === identity,
+  );
+}
 
 export const CANONICAL_LAYOUT = Object.freeze({
   publicationManifestPath: CANONICAL_PUBLICATION_MANIFEST_PATH,
@@ -70,11 +129,46 @@ export interface ResolvedPublicationLayout {
 
 const WINDOWS_OR_POSIX_ABSOLUTE_PATH = /^(?:[A-Za-z]:|\\\\|\/\/|\/)/;
 const ASCII_CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
+const BIDIRECTIONAL_CONTROL_CHARACTER =
+  /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
+const UNICODE_LINE_OR_PARAGRAPH_SEPARATOR = /[\u2028\u2029]/u;
 const PERCENT_ENCODED_OCTET = /%[0-9a-f]{2}/i;
 const URL_QUERY_OR_FRAGMENT_METACHARACTER = /[?#]/;
 const WINDOWS_FORBIDDEN_FILENAME_CHARACTER = /[<>:"|?*]/;
 const WINDOWS_RESERVED_DEVICE_BASENAME =
   /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])(?:\..*)?$/i;
+const MAX_REPOSITORY_PATH_SCALARS = 1024;
+const MAX_REPOSITORY_PATH_CODE_UNITS = 2048;
+const MAX_REPOSITORY_PATH_BYTES = 4096;
+const MAX_REPOSITORY_PATH_SEGMENTS = 256;
+const MAX_REPOSITORY_SEGMENT_BYTES = 255;
+const pathEncoder = new TextEncoder();
+
+function isWellFormedUnicode(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        return false;
+      }
+      index += 1;
+      continue;
+    }
+    if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function unicodeScalarCount(value: string): number {
+  let count = 0;
+  for (const _character of value) {
+    count += 1;
+  }
+  return count;
+}
 
 function diagnostic(
   code: string,
@@ -92,15 +186,83 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(",")}]`;
+  }
+
+  const record = value as Readonly<Record<string, unknown>>;
+  return `{${Object.keys(record)
+    .sort()
+    .map(
+      (key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`,
+    )
+    .join(",")}}`;
+}
+
+function compareDiagnostics(left: Diagnostic, right: Diagnostic): number {
+  return (
+    compareText(left.documentPath ?? "", right.documentPath ?? "") ||
+    compareText(left.path, right.path) ||
+    compareText(left.code, right.code) ||
+    compareText(left.schemaPath ?? "", right.schemaPath ?? "") ||
+    compareText(left.keyword, right.keyword) ||
+    compareText(left.message, right.message) ||
+    compareText(left.severity, right.severity) ||
+    compareText(stableSerialize(left.params), stableSerialize(right.params))
+  );
+}
+
 function sortDiagnostics(
   diagnostics: readonly Diagnostic[],
 ): readonly Diagnostic[] {
-  return [...diagnostics].sort(
-    (left, right) =>
-      compareText(left.documentPath ?? "", right.documentPath ?? "") ||
-      compareText(left.path, right.path) ||
-      compareText(left.code, right.code) ||
-      compareText(left.message, right.message),
+  const maximumDetails = MAXIMUM_PROTOCOL_DIAGNOSTICS - 1;
+  const sorted = [...diagnostics].sort(compareDiagnostics);
+  const omittedDiagnostics = Math.max(
+    0,
+    sorted.length - maximumDetails,
+  );
+  const bounded = sorted.slice(0, maximumDetails);
+  if (omittedDiagnostics > 0) {
+    bounded.push(
+      diagnostic(
+        "validation.diagnostics_truncated",
+        "",
+        "Further protocol diagnostics were omitted after the fixed reporting limit.",
+        "diagnosticLimit",
+        {
+          maximumDiagnostics:
+            MAXIMUM_PROTOCOL_DIAGNOSTICS,
+          omittedDiagnostics,
+        },
+      ),
+    );
+  }
+  return bounded.sort(compareDiagnostics);
+}
+
+function validateReservedHostIntegrationUse(
+  sourcePath: string,
+  pointer: string,
+  role: string,
+  diagnostics: Diagnostic[],
+  documentPath = CANONICAL_PUBLICATION_MANIFEST_PATH,
+): void {
+  if (!isReservedHostIntegrationPath(sourcePath)) {
+    return;
+  }
+  diagnostics.push(
+    diagnostic(
+      "source.path_reserved",
+      pointer,
+      `Host integration path "${sourcePath}" cannot be used as publication source.`,
+      "reservedHostIntegrationPath",
+      { sourcePath, role },
+      documentPath,
+    ),
   );
 }
 
@@ -128,8 +290,141 @@ export function validateRepositoryRelativePath(
     );
     return diagnostics;
   }
+  if (value.length > MAX_REPOSITORY_PATH_CODE_UNITS) {
+    diagnostics.push(
+      diagnostic(
+        "path.length",
+        pointer,
+        "Repository paths must not exceed 2,048 UTF-16 code units.",
+        "portableRelativePath",
+        {
+          actualCodeUnits: value.length,
+          maximumCodeUnits: MAX_REPOSITORY_PATH_CODE_UNITS,
+        },
+        documentPath,
+      ),
+    );
+    return immutableSnapshot(sortDiagnostics(diagnostics));
+  }
+  if (!isWellFormedUnicode(value)) {
+    diagnostics.push(
+      diagnostic(
+        "path.invalid_unicode",
+        pointer,
+        "Repository paths must contain only well-formed Unicode scalar values.",
+        "portableRelativePath",
+        {},
+        documentPath,
+      ),
+    );
+    return immutableSnapshot(sortDiagnostics(diagnostics));
+  }
+  const scalarCount = unicodeScalarCount(value);
+  if (scalarCount > MAX_REPOSITORY_PATH_SCALARS) {
+    diagnostics.push(
+      diagnostic(
+        "path.scalar_length",
+        pointer,
+        "Repository paths must not exceed 1,024 Unicode scalar values.",
+        "portableRelativePath",
+        {
+          actualScalars: scalarCount,
+          maximumScalars: MAX_REPOSITORY_PATH_SCALARS,
+        },
+        documentPath,
+      ),
+    );
+  }
+  if (normalizePortableRepositoryText(value) !== value) {
+    diagnostics.push(
+      diagnostic(
+        "path.not_nfc",
+        pointer,
+        "Repository paths must use Unicode NFC.",
+        "portableRelativePath",
+        {},
+        documentPath,
+      ),
+    );
+  }
+  if (BIDIRECTIONAL_CONTROL_CHARACTER.test(value)) {
+    diagnostics.push(
+      diagnostic(
+        "path.bidi_control",
+        pointer,
+        "Repository paths must not contain bidirectional control characters.",
+        "portableRelativePath",
+        {},
+        documentPath,
+      ),
+    );
+  }
+  if (UNICODE_LINE_OR_PARAGRAPH_SEPARATOR.test(value)) {
+    diagnostics.push(
+      diagnostic(
+        "path.unicode_line_separator",
+        pointer,
+        "Repository paths must not contain Unicode line or paragraph separators.",
+        "portableRelativePath",
+        {},
+        documentPath,
+      ),
+    );
+  }
+  const encodedPathBytes = pathEncoder.encode(value).byteLength;
+  if (encodedPathBytes > MAX_REPOSITORY_PATH_BYTES) {
+    diagnostics.push(
+      diagnostic(
+        "path.byte_length",
+        pointer,
+        "Repository paths must not exceed 4,096 UTF-8 bytes.",
+        "portableRelativePath",
+        {
+          actualBytes: encodedPathBytes,
+          maximumBytes: MAX_REPOSITORY_PATH_BYTES,
+        },
+        documentPath,
+      ),
+    );
+  }
 
   const segments = value.split("/");
+  if (segments.length > MAX_REPOSITORY_PATH_SEGMENTS) {
+    diagnostics.push(
+      diagnostic(
+        "path.segment_count",
+        pointer,
+        "Repository paths must not exceed 256 segments.",
+        "portableRelativePath",
+        {
+          actualSegments: segments.length,
+          maximumSegments: MAX_REPOSITORY_PATH_SEGMENTS,
+        },
+        documentPath,
+      ),
+    );
+  }
+  const oversizedSegmentIndexes = segments
+    .map((segment, index) => ({
+      index,
+      bytes: pathEncoder.encode(segment).byteLength,
+    }))
+    .filter(({ bytes }) => bytes > MAX_REPOSITORY_SEGMENT_BYTES);
+  if (oversizedSegmentIndexes.length > 0) {
+    diagnostics.push(
+      diagnostic(
+        "path.segment_byte_length",
+        pointer,
+        "Repository path segments must not exceed 255 UTF-8 bytes.",
+        "portableRelativePath",
+        {
+          segments: oversizedSegmentIndexes,
+          maximumBytes: MAX_REPOSITORY_SEGMENT_BYTES,
+        },
+        documentPath,
+      ),
+    );
+  }
   if (segments.includes(".")) {
     diagnostics.push(
       diagnostic(
@@ -267,7 +562,9 @@ export function validateRepositoryRelativePath(
   }
 
   const windowsTrailingSegments = segments.filter(
-    (segment) => segment.endsWith(".") || segment.endsWith(" "),
+    (segment) =>
+      portableRepositorySegmentIdentity(segment) !==
+      portableRepositoryPathIdentity(segment),
   );
   if (windowsTrailingSegments.length > 0) {
     diagnostics.push(
@@ -286,7 +583,12 @@ export function validateRepositoryRelativePath(
 }
 
 export function isPathWithinRoot(path: string, root: string): boolean {
-  return path === root || path.startsWith(`${root}/`);
+  const pathIdentity = portableRepositoryPathIdentity(path);
+  const rootIdentity = portableRepositoryPathIdentity(root);
+  return (
+    pathIdentity === rootIdentity ||
+    pathIdentity.startsWith(`${rootIdentity}/`)
+  );
 }
 
 export function joinRepositoryPath(root: string, child: string): string {
@@ -361,6 +663,22 @@ export function resolveWorkSourcePaths(
     work.assets === undefined
       ? undefined
       : resolveSourcePath(work.assets, "/assets", manifestPath, diagnostics);
+  validateReservedHostIntegrationUse(
+    manuscriptPath,
+    "/manuscript",
+    "manuscript",
+    diagnostics,
+    manifestPath,
+  );
+  if (assetsPath !== undefined) {
+    validateReservedHostIntegrationUse(
+      assetsPath,
+      "/assets",
+      "workAssets",
+      diagnostics,
+      manifestPath,
+    );
+  }
 
   if (diagnostics.length > 0) {
     return immutableSnapshot({
@@ -463,6 +781,12 @@ function validatePublicationBoundaries(
     );
     diagnostics.push(...pathDiagnostics);
     if (pathDiagnostics.length === 0) {
+      validateReservedHostIntegrationUse(
+        sourceRoot,
+        `/boundaries/sourceRoots/${index}`,
+        "sourceRoot",
+        diagnostics,
+      );
       sourceRoots.push(sourceRoot);
     }
   });
@@ -476,6 +800,12 @@ function validatePublicationBoundaries(
     );
     diagnostics.push(...pathDiagnostics);
     if (pathDiagnostics.length === 0) {
+      validateReservedHostIntegrationUse(
+        outputRoot,
+        `/boundaries/outputRoots/${index}`,
+        "outputRoot",
+        diagnostics,
+      );
       outputRoots.push(outputRoot);
     }
   });
@@ -543,6 +873,12 @@ function validatePublicationBoundaries(
     },
   ] as const;
   for (const source of roleSources) {
+    validateReservedHostIntegrationUse(
+      source.path,
+      source.pointer,
+      source.role,
+      diagnostics,
+    );
     validateSourceContainment(
       source.path,
       source.pointer,
@@ -553,27 +889,42 @@ function validatePublicationBoundaries(
   }
 
   layout.works.manifests.forEach((reference) => {
+    const pointer = `${reference.referencePointer}${
+      publication.works[reference.referenceIndex]?.manifest ===
+      undefined
+        ? "/id"
+        : "/manifest"
+    }`;
+    validateReservedHostIntegrationUse(
+      reference.manifestPath,
+      pointer,
+      "workManifest",
+      diagnostics,
+    );
     validateSourceContainment(
       reference.manifestPath,
-      `${reference.referencePointer}${
-        publication.works[reference.referenceIndex]?.manifest === undefined
-          ? "/id"
-          : "/manifest"
-      }`,
+      pointer,
       sourceRoots,
       diagnostics,
       { kind: "workManifest", id: reference.id },
     );
   });
   layout.collections.manifests.forEach((reference) => {
+    const pointer = `${reference.referencePointer}${
+      publication.collections?.[reference.referenceIndex]?.manifest ===
+      undefined
+        ? "/id"
+        : "/manifest"
+    }`;
+    validateReservedHostIntegrationUse(
+      reference.manifestPath,
+      pointer,
+      "collectionManifest",
+      diagnostics,
+    );
     validateSourceContainment(
       reference.manifestPath,
-      `${reference.referencePointer}${
-        publication.collections?.[reference.referenceIndex]?.manifest ===
-        undefined
-          ? "/id"
-          : "/manifest"
-      }`,
+      pointer,
       sourceRoots,
       diagnostics,
       { kind: "collectionManifest", id: reference.id },
@@ -588,6 +939,12 @@ function validatePublicationBoundaries(
     );
     diagnostics.push(...audioDiagnostics);
     if (audioDiagnostics.length === 0) {
+      validateReservedHostIntegrationUse(
+        publication.audio.catalog,
+        "/audio/catalog",
+        "audioCatalog",
+        diagnostics,
+      );
       validateSourceContainment(
         publication.audio.catalog,
         "/audio/catalog",
@@ -635,9 +992,12 @@ function validateUniqueManifestPaths(
   ];
 
   for (const reference of references) {
-    const first = firstByPath.get(reference.manifestPath);
+    const pathIdentity = portableRepositoryPathIdentity(
+      reference.manifestPath,
+    );
+    const first = firstByPath.get(pathIdentity);
     if (first === undefined) {
-      firstByPath.set(reference.manifestPath, {
+      firstByPath.set(pathIdentity, {
         id: reference.id,
         kind: reference.kind,
         pointer: reference.pointer,
@@ -717,9 +1077,81 @@ function resolveReferences(
   });
 }
 
+export function validatePublicationResourceLimits(
+  publication: PublicationManifest,
+): readonly Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  const limits = [
+    {
+      actual: publication.works.length,
+      maximum: PUBLICATION_PROTOCOL_LIMITS.maximumWorks,
+      path: "/works",
+      resource: "works",
+    },
+    {
+      actual: publication.collections?.length ?? 0,
+      maximum: PUBLICATION_PROTOCOL_LIMITS.maximumCollections,
+      path: "/collections",
+      resource: "collections",
+    },
+    {
+      actual: publication.extensions?.length ?? 0,
+      maximum: PUBLICATION_PROTOCOL_LIMITS.maximumExtensions,
+      path: "/extensions",
+      resource: "extensions",
+    },
+    {
+      actual: publication.continuity?.redirects.length ?? 0,
+      maximum: PUBLICATION_PROTOCOL_LIMITS.maximumRedirects,
+      path: "/continuity/redirects",
+      resource: "redirects",
+    },
+    {
+      actual: publication.boundaries.sourceRoots.length,
+      maximum: PUBLICATION_PROTOCOL_LIMITS.maximumSourceRoots,
+      path: "/boundaries/sourceRoots",
+      resource: "sourceRoots",
+    },
+    {
+      actual: publication.boundaries.outputRoots.length,
+      maximum: PUBLICATION_PROTOCOL_LIMITS.maximumOutputRoots,
+      path: "/boundaries/outputRoots",
+      resource: "outputRoots",
+    },
+  ] as const;
+  for (const limit of limits) {
+    if (limit.actual <= limit.maximum) {
+      continue;
+    }
+    diagnostics.push(
+      diagnostic(
+        "publication.resource_limit",
+        limit.path,
+        `Publication ${limit.resource} exceed the protocol limit of ${limit.maximum.toLocaleString("en-US")}.`,
+        "maxItems",
+        {
+          resource: limit.resource,
+          actualItems: limit.actual,
+          maximumItems: limit.maximum,
+        },
+        CANONICAL_PUBLICATION_MANIFEST_PATH,
+      ),
+    );
+  }
+  return immutableSnapshot(sortDiagnostics(diagnostics));
+}
+
 export function resolvePublicationLayout(
   publication: PublicationManifest,
 ): ValidationResult<ResolvedPublicationLayout> {
+  const resourceDiagnostics =
+    validatePublicationResourceLimits(publication);
+  if (resourceDiagnostics.length > 0) {
+    return immutableSnapshot({
+      valid: false,
+      diagnostics: resourceDiagnostics,
+    });
+  }
   const diagnostics: Diagnostic[] = [];
   const declaredOverrides =
     publication.layout.mode === "declared"

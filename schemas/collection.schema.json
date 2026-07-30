@@ -44,6 +44,7 @@
     "workIds": {
       "type": "array",
       "minItems": 1,
+      "maxItems": 4999,
       "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/stableId"

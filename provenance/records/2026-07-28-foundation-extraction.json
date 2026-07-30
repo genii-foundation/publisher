@@ -1,0 +1,190 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/provenance-record-1.2.0.schema.json",
+  "schemaVersion": "1.2.0",
+  "recordId": "2026-07-28-foundation-extraction",
+  "status": "draft",
+  "classification": "fresh-cpal",
+  "recordedAt": "2026-07-28T18:53:14Z",
+  "batch": {
+    "batchId": "2026-07-28-foundation-extraction",
+    "destinationRepository": "https://github.com/genii-foundation/publisher",
+    "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
+    "destinationPaths": [
+      "schemas/",
+      "packages/content/",
+      "packages/reader/",
+      "packages/next/"
+    ],
+    "summary": "Records the initial neutral GENII Publisher foundations and the Coherence source audit used to define their boundaries."
+  },
+  "auditedSource": {
+    "repository": "https://github.com/genii-foundation/coherence-thesis",
+    "ref": "d000fe50882c4664f96dccdea38b4b370dfb368d",
+    "evidence": [
+      {
+        "path": "NOTICE",
+        "sha256": "sha256:5800675e0b42df3ee09a0c8c5136ae9820390dbfaa49ec5636ef8716d67a01c5",
+        "role": "license-map",
+        "license": "mixed",
+        "lineStart": 6,
+        "lineEnd": 48,
+        "description": "Maps Coherence software to Apache 2.0, creative material to CC BY-SA 4.0, and generated files to their sources."
+      },
+      {
+        "path": "LICENSE",
+        "sha256": "sha256:37f6b7d766eb6791edb89211111a48e3e12ff5cb06578299019bb009fd5be44c",
+        "role": "software-license",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 201,
+        "description": "Contains the Apache License 2.0 terms governing the audited Coherence software."
+      },
+      {
+        "path": "LICENSE-content",
+        "sha256": "sha256:0b2b284b6ddb08aa7fc3f75ff47b034cfe719ccf2fc8d4f9af8e03c9898a2cce",
+        "role": "content-license",
+        "license": "CC-BY-SA-4.0",
+        "lineStart": 1,
+        "lineEnd": 35,
+        "description": "Contains the CC BY-SA 4.0 terms governing the audited Coherence creative material."
+      }
+    ]
+  },
+  "additionalSources": [],
+  "specifications": {
+    "repository": "https://github.com/genii-foundation/publisher",
+    "ref": "2116921e5bf079aceff25575fa9932d2f41c05e8",
+    "evidence": [
+      {
+        "path": "docs/migration/coherence-extraction-inventory.md",
+        "sha256": "sha256:cab6937ad3083e31ec129a9625c508194b48df84e1a8a632eeb44334e313fc53",
+        "role": "migration-inventory",
+        "license": "CPAL-1.0",
+        "lineStart": 15,
+        "lineEnd": 255,
+        "description": "Defines extraction classifications, author-owned boundaries, optional capability boundaries, excluded output, and mixed-license hazards."
+      },
+      {
+        "path": "docs/architecture/0004-license-attribution-and-source-availability.md",
+        "sha256": "sha256:6a5d72c4552b10dcebfc2d890f3ab25147f3d12e2502bc4eb71be463c58c4c06",
+        "role": "architecture",
+        "license": "CPAL-1.0",
+        "lineStart": 12,
+        "lineEnd": 50,
+        "description": "Defines CPAL coverage, persistent attribution, source availability, and the separation of publication content."
+      }
+    ]
+  },
+  "audit": {
+    "coverageMode": "historical",
+    "destinationManifest": null,
+    "receipt": null,
+    "ccSourcePaths": [
+      "editorial/audits/",
+      "editorial/debt/",
+      "editorial/reviews/",
+      "editorial/schemas/",
+      "editorial/sources/",
+      "editorial/standards/",
+      "editorial/templates/",
+      "publishing/continuity/",
+      "publishing/audio/manifest.json"
+    ],
+    "packageRoots": [
+      "packages/content/",
+      "packages/reader/",
+      "packages/next/"
+    ],
+    "forbiddenPackagePatterns": [
+      "The Coherence Thesis",
+      "coherence-thesis",
+      "editorial/sources/",
+      "publishing/continuity/",
+      "publishing/audio/",
+      "generated/",
+      "public/data/",
+      "public/downloads/"
+    ],
+    "verificationCommands": [],
+    "installedInputs": []
+  },
+  "treatment": {
+    "summary": "The GENII-authored portions of the destination implementation were written as new neutral expression after inspecting Coherence behavior and boundaries. No Coherence source code, tests, manuscripts, editorial material, generated output, art, or durable publication state was copied. Separately licensed dependencies and notices already present in the package trees require their own preserved-material review before this record can be accepted.",
+    "copiedSource": false,
+    "copiedTests": false,
+    "implementationAccess": "observed",
+    "sourceLicenseTreatment": "not-applicable",
+    "rightsDocument": null,
+    "blocker": null
+  },
+  "scans": {
+    "performedAt": "2026-07-28T18:45:00Z",
+    "scope": "Compared the audited Coherence ref with the destination base ref across the declared destination paths and license-sensitive Coherence paths.",
+    "exactBlob": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compared tracked file content hashes across the audited source and declared destination trees.",
+      "evidence": "The earlier result was not bound to an immutable destination manifest or reproducible receipt and must be rerun."
+    },
+    "normalizedLine": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compared whitespace-normalized nonempty lines containing at least 60 characters.",
+      "evidence": "The earlier result was not bound to an immutable destination manifest or reproducible receipt and must be rerun."
+    },
+    "tokenShingle": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compared exact contiguous eight-token code shingles after lexical normalization.",
+      "evidence": "The earlier method was not executable from the repository and produced no reviewable match receipt."
+    },
+    "ccPhrase": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compared exact contiguous eight-word prose windows against CC-mapped Coherence material.",
+      "evidence": "The earlier result was not bound to an immutable destination manifest or reproducible receipt and must be rerun."
+    },
+    "packageLeak": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Inspected destination package sources for Coherence manuscripts, editorial material, assets, generated output, and durable publication state.",
+      "evidence": "The earlier check did not retain the packed artifact digests and file inventory required for reproduction."
+    }
+  },
+  "review": {
+    "decision": "pending",
+    "reviewerType": "automated",
+    "reviewerId": "publisher-provenance-audit-2026-07-28",
+    "reviewedAt": "2026-07-28T18:53:14Z",
+    "releaseApprovalRequired": true,
+    "notes": "This draft retains the intended fresh neutral implementation classification, not a formal clean-room claim or legal opinion. It requires a byte-bound receipt, explicit third-party preservation records, human release review, and counsel review before acceptance."
+  },
+  "documentation": {
+    "notice": {
+      "status": "not-needed",
+      "paths": [],
+      "reason": "No Apache or third-party source was copied into the batch."
+    },
+    "legal": {
+      "status": "not-needed",
+      "paths": [],
+      "reason": "The batch introduced no new preserved license boundary or known third-party requirement."
+    },
+    "changes": {
+      "status": "updated",
+      "paths": [
+        "provenance/CHANGES.md"
+      ],
+      "reason": "The provenance subsystem change record identifies the schema, validator, and initial audit record."
+    },
+    "thirdPartyNotices": {
+      "status": "pending",
+      "paths": [
+        "packages/content/THIRD_PARTY_NOTICES.md",
+        "packages/reader/THIRD_PARTY_NOTICES.md",
+        "packages/next/THIRD_PARTY_NOTICES.md"
+      ],
+      "reason": "The declared package trees already contain separately licensed dependencies and notices. Their exact preserved-material provenance must be recorded before this historical draft can be accepted."
+    }
+  }
+}

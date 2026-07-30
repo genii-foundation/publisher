@@ -13,6 +13,11 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import { immutableSnapshot } from "./immutability.js";
 import {
+  snapshotPublicationEnvelopeForValidation,
+  type EnvelopeResourceLimitViolation,
+  type PublicationEnvelopeKind,
+} from "./envelope-resource-limits.js";
+import {
   collectionValidator,
   contentEnvelopeValidator,
   publicationValidator,
@@ -41,6 +46,7 @@ export const SHAPE_DIAGNOSTIC_CODES = Object.freeze({
   enum: "schema.enum",
   format: "schema.format",
   invalid: "schema.invalid",
+  maxItems: "schema.max_items",
   maxLength: "schema.max_length",
   minItems: "schema.min_items",
   minLength: "schema.min_length",
@@ -52,13 +58,17 @@ export const SHAPE_DIAGNOSTIC_CODES = Object.freeze({
   required: "schema.required",
   type: "schema.type",
   uniqueItems: "schema.unique_items",
+  truncated: "schema.diagnostics_truncated",
 });
+
+export const MAXIMUM_SHAPE_DIAGNOSTICS = 256;
 
 const SCHEMA_CODE_BY_KEYWORD: Readonly<Record<string, string>> = {
   additionalProperties: SHAPE_DIAGNOSTIC_CODES.additionalProperty,
   const: SHAPE_DIAGNOSTIC_CODES.const,
   enum: SHAPE_DIAGNOSTIC_CODES.enum,
   format: SHAPE_DIAGNOSTIC_CODES.format,
+  maxItems: SHAPE_DIAGNOSTIC_CODES.maxItems,
   maxLength: SHAPE_DIAGNOSTIC_CODES.maxLength,
   minItems: SHAPE_DIAGNOSTIC_CODES.minItems,
   minLength: SHAPE_DIAGNOSTIC_CODES.minLength,
@@ -119,13 +129,119 @@ function compareText(left: string, right: string): number {
   return 0;
 }
 
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(",")}]`;
+  }
+
+  const record = value as Readonly<Record<string, unknown>>;
+  return `{${Object.keys(record)
+    .sort()
+    .map(
+      (key) => `${JSON.stringify(key)}:${stableSerialize(record[key])}`,
+    )
+    .join(",")}}`;
+}
+
 function compareDiagnostics(left: Diagnostic, right: Diagnostic): number {
   return (
+    compareText(left.documentPath ?? "", right.documentPath ?? "") ||
     compareText(left.path, right.path) ||
     compareText(left.code, right.code) ||
     compareText(left.schemaPath ?? "", right.schemaPath ?? "") ||
-    compareText(left.message, right.message)
+    compareText(left.keyword, right.keyword) ||
+    compareText(left.message, right.message) ||
+    compareText(left.severity, right.severity) ||
+    compareText(stableSerialize(left.params), stableSerialize(right.params))
   );
+}
+
+const boundedDiagnosticTotals =
+  new WeakMap<readonly Diagnostic[], number>();
+
+function createBoundedDiagnosticCollector(): Diagnostic[] {
+  const retained: Diagnostic[] = [];
+  boundedDiagnosticTotals.set(retained, 0);
+  Object.defineProperty(retained, "push", {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: (...items: Diagnostic[]): number => {
+      const maximumDetails = MAXIMUM_SHAPE_DIAGNOSTICS - 1;
+      let total =
+        boundedDiagnosticTotals.get(retained) ??
+        retained.length;
+      for (const item of items) {
+        total += 1;
+        let low = 0;
+        let high = retained.length;
+        while (low < high) {
+          const middle = Math.floor((low + high) / 2);
+          const current = retained[middle];
+          if (
+            current !== undefined &&
+            compareDiagnostics(current, item) < 0
+          ) {
+            low = middle + 1;
+          } else {
+            high = middle;
+          }
+        }
+        if (low >= maximumDetails) {
+          continue;
+        }
+        if (retained.length < maximumDetails) {
+          retained.length += 1;
+        }
+        for (
+          let index = retained.length - 1;
+          index > low;
+          index -= 1
+        ) {
+          retained[index] = retained[index - 1] as Diagnostic;
+        }
+        retained[low] = item;
+      }
+      boundedDiagnosticTotals.set(retained, total);
+      return retained.length;
+    },
+  });
+  return retained;
+}
+
+function boundedDiagnostics(
+  diagnostics: readonly Diagnostic[],
+  omittedDiagnostics = 0,
+): readonly Diagnostic[] {
+  const maximumDetails = MAXIMUM_SHAPE_DIAGNOSTICS - 1;
+  const sorted = [...diagnostics].sort(compareDiagnostics);
+  const totalDiagnostics =
+    boundedDiagnosticTotals.get(diagnostics) ??
+    diagnostics.length;
+  const omitted =
+    omittedDiagnostics +
+    Math.max(0, totalDiagnostics - maximumDetails);
+  if (omitted === 0) {
+    return sorted;
+  }
+  return [
+    ...sorted.slice(0, maximumDetails),
+    {
+      code: SHAPE_DIAGNOSTIC_CODES.truncated,
+      severity: "error" as const,
+      path: "",
+      message:
+        "Further schema diagnostics were omitted after the fixed reporting limit.",
+      keyword: "diagnosticLimit",
+      params: {
+        maximumDiagnostics: MAXIMUM_SHAPE_DIAGNOSTICS,
+        omittedDiagnostics: omitted,
+      },
+    },
+  ].sort(compareDiagnostics);
 }
 
 interface JsonTraversalFrame {
@@ -151,7 +267,7 @@ function nonJsonDiagnostic(
 }
 
 function createJsonDomainDiagnostics(input: unknown): readonly Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
+  const diagnostics = createBoundedDiagnosticCollector();
   const active = new WeakSet<object>();
   const completed = new WeakSet<object>();
   const stack: JsonTraversalFrame[] = [{ path: "", value: input }];
@@ -222,7 +338,19 @@ function createJsonDomainDiagnostics(input: unknown): readonly Diagnostic[] {
     stack.push({ ...frame, exit: true });
 
     let arrayIndexCount = 0;
-    for (const key of Reflect.ownKeys(objectValue)) {
+    const keys = Reflect.ownKeys(objectValue).sort((left, right) => {
+      if (typeof left === "symbol") {
+        return typeof right === "symbol"
+          ? compareText(String(left), String(right))
+          : -1;
+      }
+      if (typeof right === "symbol") {
+        return 1;
+      }
+      return compareText(left, right);
+    });
+    const childFrames: JsonTraversalFrame[] = [];
+    for (const key of keys) {
       if (arrayValue && key === "length") {
         continue;
       }
@@ -269,10 +397,17 @@ function createJsonDomainDiagnostics(input: unknown): readonly Diagnostic[] {
         arrayIndexCount += 1;
       }
 
-      stack.push({
+      childFrames.push({
         path: appendJsonPointerToken(frame.path, key),
         value: descriptor.value,
       });
+    }
+
+    for (let index = childFrames.length - 1; index >= 0; index -= 1) {
+      const childFrame = childFrames[index];
+      if (childFrame !== undefined) {
+        stack.push(childFrame);
+      }
     }
 
     if (
@@ -285,7 +420,27 @@ function createJsonDomainDiagnostics(input: unknown): readonly Diagnostic[] {
     }
   }
 
-  return diagnostics.sort(compareDiagnostics);
+  return boundedDiagnostics(diagnostics);
+}
+
+function envelopeResourceDiagnostic(
+  violation: EnvelopeResourceLimitViolation,
+  kind: PublicationEnvelopeKind,
+): Diagnostic {
+  const subject = kind === "generic" ? "manifest" : "envelope";
+  return {
+    code: "schema.resource_limit",
+    severity: "error",
+    path: violation.path,
+    message:
+      `The ${subject} exceeds the fixed ${violation.resource} limit of ${violation.maximumItems.toLocaleString("en-US")}.`,
+    keyword: violation.keyword,
+    params: {
+      resource: violation.resource,
+      actualItems: violation.actualItems,
+      maximumItems: violation.maximumItems,
+    },
+  };
 }
 
 function createDiagnostics(
@@ -304,9 +459,9 @@ function createDiagnostics(
     ];
   }
 
-  return errors
-    .map(
-      (error): Diagnostic => ({
+  const diagnostics = createBoundedDiagnosticCollector();
+  for (const error of errors) {
+    diagnostics.push({
         code: diagnosticCode(error.keyword),
         severity: "error",
         path: diagnosticPath(error),
@@ -314,12 +469,12 @@ function createDiagnostics(
         keyword: error.keyword,
         params: { ...error.params },
         schemaPath: error.schemaPath,
-      }),
-    )
-    .sort(compareDiagnostics);
+      });
+  }
+  return boundedDiagnostics(diagnostics);
 }
 
-function validateShape<T>(
+function validatePreparedShape<T>(
   validator: StandaloneValidateFunction<T>,
   input: unknown,
 ): ValidationResult<T> {
@@ -361,6 +516,76 @@ function validateShape<T>(
   });
 }
 
+function invalidSnapshotResult(
+  snapshot: {
+    readonly path: string;
+    readonly reason:
+      | "cyclicReference"
+      | "resourceLimit"
+      | "uninspectableEnvelope";
+    readonly violations: readonly EnvelopeResourceLimitViolation[];
+  },
+  input: unknown,
+  kind: PublicationEnvelopeKind,
+): ValidationResult<never> {
+  if (snapshot.reason === "resourceLimit") {
+    return immutableSnapshot({
+      valid: false,
+      diagnostics: snapshot.violations
+        .map((violation) => envelopeResourceDiagnostic(violation, kind))
+        .sort(compareDiagnostics),
+    });
+  }
+  if (snapshot.reason === "cyclicReference") {
+    return immutableSnapshot({
+      valid: false,
+      diagnostics: [
+        nonJsonDiagnostic(
+          snapshot.path,
+          "cyclicReference",
+          "object",
+        ),
+      ],
+    });
+  }
+  return immutableSnapshot({
+    valid: false,
+    diagnostics: [
+      nonJsonDiagnostic(
+        snapshot.path,
+        "uninspectableValue",
+        typeof input,
+      ),
+    ],
+  });
+}
+
+function validateShape<T>(
+  validator: StandaloneValidateFunction<T>,
+  input: unknown,
+): ValidationResult<T> {
+  const snapshot = snapshotPublicationEnvelopeForValidation(
+    input,
+    "generic",
+  );
+  if (!snapshot.valid) {
+    return invalidSnapshotResult(snapshot, input, "generic");
+  }
+  return validatePreparedShape(validator, snapshot.value);
+}
+
+function validateEnvelopeShape<T>(
+  validator: StandaloneValidateFunction<T>,
+  input: unknown,
+  kind: PublicationEnvelopeKind,
+): ValidationResult<T> {
+  const snapshot = snapshotPublicationEnvelopeForValidation(input, kind);
+  if (!snapshot.valid) {
+    return invalidSnapshotResult(snapshot, input, kind);
+  }
+  return validatePreparedShape(validator, snapshot.value);
+}
+
 export function validatePublicationShape(
   input: unknown,
 ): ValidationResult<PublicationManifest> {
@@ -382,13 +607,21 @@ export function validateCollectionShape(
 export function validateContentEnvelopeShape(
   input: unknown,
 ): ValidationResult<PublicationContentEnvelope> {
-  return validateShape(contentEnvelopeValidator, input);
+  return validateEnvelopeShape(
+    contentEnvelopeValidator,
+    input,
+    "content",
+  );
 }
 
 export function validateReaderEnvelopeShape(
   input: unknown,
 ): ValidationResult<PublicationReaderEnvelope> {
-  return validateShape(readerEnvelopeValidator, input);
+  return validateEnvelopeShape(
+    readerEnvelopeValidator,
+    input,
+    "reader",
+  );
 }
 
 export function validateManifestShape<K extends ManifestKind>(

@@ -1,0 +1,64 @@
+{
+  "name": "@genii-foundation/publisher",
+  "version": "0.1.0-alpha.0",
+  "description": "The browser-safe public entry point and Node.js orchestration boundary for GENII Publisher.",
+  "license": "CPAL-1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27"
+  },
+  "files": [
+    "CHANGES.md",
+    "LEGAL",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md",
+    "SOURCE-NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "dist",
+    "scripts",
+    "src",
+    "tsconfig.json"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "node": "./dist/node.js"
+    }
+  },
+  "scripts": {
+    "build": "node ./scripts/build.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "prepack": "node ./scripts/build.mjs",
+    "prepublishOnly": "node ../../provenance/scripts/reject-directory-publish.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/genii-foundation/publisher.git",
+    "directory": "packages/publisher"
+  },
+  "homepage": "https://publisher.genii.foundation",
+  "bugs": {
+    "url": "https://github.com/genii-foundation/publisher/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "dependencies": {
+    "@genii-foundation/publisher-content": "0.1.0-alpha.0",
+    "@genii-foundation/publisher-schema": "0.1.0-alpha.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "esbuild": "0.27.0",
+    "semver": "7.8.5",
+    "typescript": "7.0.2"
+  }
+}

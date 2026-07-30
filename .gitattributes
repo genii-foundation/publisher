@@ -1,0 +1,16 @@
+# Every checked-in file must arrive byte-identical on every platform.
+#
+# Provenance pins SHA-256 hashes of repository files, of preserved upstream
+# datasets, and of the scanner's own runtime closure. A platform that rewrites
+# line endings on checkout therefore breaks those hashes rather than merely
+# changing whitespace: a Windows runner with the default core.autocrlf produced
+# UnicodeData-15.1.0.txt as eb82eed7... instead of the pinned 2fc713e6..., and
+# the generated case-fold verification refused it. The same translation would
+# give the scanner runtime closure a different composite digest on Windows than
+# on Linux, so receipts would not be reproducible across platforms.
+* text=auto eol=lf
+
+# Preserved upstream material is never translated at all. Its bytes are the
+# artifact being attested, not a convenience for an editor.
+schemas/third-party-data/** -text
+schemas/third-party-licenses/** -text

@@ -11,31 +11,41 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-import type {
-  ReaderPublicationIdentity,
-} from "@genii-foundation/publisher-schema";
+import {
+  GENII_PUBLISHER_SOURCE_CODE_URL,
+  REQUIRED_ATTRIBUTION,
+} from "@genii-foundation/publisher-schema/attribution";
+import {
+  inspectAbsoluteHttpUrl,
+} from "@genii-foundation/publisher-schema/routes";
 import type { ReactElement } from "react";
 
 export interface PublisherAttributionProps {
-  readonly publication: ReaderPublicationIdentity;
+  readonly sourceCodeUrl: unknown;
 }
 
 export function PublisherAttribution({
-  publication,
+  sourceCodeUrl,
 }: PublisherAttributionProps): ReactElement {
-  const attribution = publication.attribution;
+  const inspectedSourceCodeUrl =
+    inspectAbsoluteHttpUrl(sourceCodeUrl);
+  const linkedSourceCodeUrl = inspectedSourceCodeUrl.valid
+    ? inspectedSourceCodeUrl.value
+    : GENII_PUBLISHER_SOURCE_CODE_URL;
   return (
     <footer
       className="publisher-attribution"
       data-publisher-attribution="required"
       lang="en"
     >
-      <p>{attribution.copyright}</p>
+      <p>{REQUIRED_ATTRIBUTION.copyright}</p>
       <p>
-        <a href={attribution.url}>{attribution.text}</a>
+        <a href={REQUIRED_ATTRIBUTION.url}>
+          {REQUIRED_ATTRIBUTION.text}
+        </a>
       </p>
       <p>
-        <a href={attribution.sourceCodeUrl}>Publication source code</a>
+        <a href={linkedSourceCodeUrl}>Publication source code</a>
       </p>
     </footer>
   );

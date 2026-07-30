@@ -216,8 +216,29 @@ test("shape validation rejects values outside the JSON data model", async () => 
       ({ code, path, params }) =>
         code === "schema.non_json_value" &&
         path === "/metadata/self" &&
-        params.reason === "cyclicReference",
+      params.reason === "cyclicReference",
     ),
+  );
+
+  const sharedMetadata = { value: "shared" };
+  const aliasedWork = structuredClone(originalWork);
+  aliasedWork.metadata = {
+    first: sharedMetadata,
+    second: sharedMetadata,
+  };
+  const aliasedResult = validateWorkShape(aliasedWork);
+  assert.equal(
+    aliasedResult.valid,
+    true,
+    JSON.stringify(aliasedResult.diagnostics, null, 2),
+  );
+  assert.deepEqual(
+    aliasedResult.value.metadata.first,
+    aliasedResult.value.metadata.second,
+  );
+  assert.notEqual(
+    aliasedResult.value.metadata.first,
+    aliasedResult.value.metadata.second,
   );
 
   const revoked = Proxy.revocable({}, {});

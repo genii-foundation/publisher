@@ -14,9 +14,12 @@
     "NOTICE.md",
     "README.md",
     "SOURCE-NOTICE",
+    "THIRD_PARTY_NOTICES.md",
     "dist",
     "scripts",
     "src",
+    "third-party-data",
+    "third-party-licenses",
     "tsconfig.json",
     "*.schema.json"
   ],
@@ -31,6 +34,10 @@
       "types": "./dist/routes.d.ts",
       "import": "./dist/routes.js"
     },
+    "./attribution": {
+      "types": "./dist/attribution.d.ts",
+      "import": "./dist/attribution.js"
+    },
     "./reader": {
       "types": "./dist/reader.d.ts",
       "import": "./dist/reader.js"
@@ -43,9 +50,11 @@
   },
   "scripts": {
     "build": "node ./scripts/build.mjs",
+    "portable-unicode:check": "node ./scripts/generate-case-folding.mjs",
+    "portable-unicode:update": "node ./scripts/generate-case-folding.mjs --write",
     "check": "tsc -p tsconfig.json --noEmit",
     "prepack": "node ./scripts/build.mjs",
-    "prepublishOnly": "node ./scripts/check-release-tag.mjs"
+    "prepublishOnly": "node ../provenance/scripts/reject-directory-publish.mjs"
   },
   "repository": {
     "type": "git",
@@ -66,6 +75,7 @@
   "devDependencies": {
     "@types/node": "22.20.1",
     "@types/semver": "7.7.1",
+    "@unicode/unicode-15.1.0": "1.6.17",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
     "typescript": "7.0.2"

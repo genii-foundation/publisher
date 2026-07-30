@@ -11,6 +11,8 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
+import { normalizePortableRepositoryText } from "./portable-unicode.js";
+
 export type CanonicalRoutePathIssue =
   | "backslash"
   | "character"
@@ -207,7 +209,7 @@ export function inspectCanonicalRoutePath(
   } catch {
     return invalid("percent-encoding-utf8");
   }
-  if (decoded.normalize("NFC") !== decoded) {
+  if (normalizePortableRepositoryText(decoded) !== decoded) {
     return invalid("unicode-normalization");
   }
   for (const character of decoded) {
@@ -296,7 +298,7 @@ export function inspectCanonicalUrlFragment(
   } catch {
     return invalidFragment("percent-encoding-utf8");
   }
-  if (decoded.normalize("NFC") !== decoded) {
+  if (normalizePortableRepositoryText(decoded) !== decoded) {
     return invalidFragment("unicode-normalization");
   }
   if (decoded.includes(":~:")) {

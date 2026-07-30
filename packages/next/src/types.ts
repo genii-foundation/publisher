@@ -25,6 +25,10 @@ import type {
 import type { Metadata, NextConfig } from "next";
 import type { ReactElement, ReactNode } from "react";
 
+import type {
+  PublisherNextErrorIdentity,
+} from "./error-identity.js";
+
 export const PUBLISHER_NEXT_VERSION = "0.1.0-alpha.0";
 export const PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION = "1.0";
 export const PUBLISHER_NEXT_APPLICATION_SCHEMA_URL =
@@ -267,6 +271,7 @@ export interface PublicationNextApplication {
   readonly manifest: PublisherNextApplicationManifest;
   readonly artifact: PublisherNextApplicationArtifact;
   readonly theme: PublisherNextThemeInstance;
+  readonly errorIdentity: PublisherNextErrorIdentity;
   readonly slashPolicy:
     | "none"
     | "no-trailing"

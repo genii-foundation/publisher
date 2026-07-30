@@ -15,9 +15,14 @@ import { satisfies, valid, validRange } from "semver";
 
 import {
   CANONICAL_PUBLICATION_MANIFEST_PATH,
+  MAXIMUM_PROTOCOL_DIAGNOSTICS,
+  PUBLICATION_PROTOCOL_LIMITS,
   isPathWithinRoot,
+  isReservedHostIntegrationPath,
+  portableRepositoryPathIdentity,
   resolvePublicationLayout,
   resolveWorkSourcePaths,
+  validatePublicationResourceLimits,
 } from "./layout.js";
 import type {
   ResolvedPublicationLayout,
@@ -30,19 +35,15 @@ import type {
   ValidationResult,
   WorkManifest,
 } from "./types.js";
+import {
+  REQUIRED_ATTRIBUTION,
+} from "./attribution.js";
 import { immutableSnapshot } from "./immutability.js";
 import {
   inspectCanonicalRoutePath,
   isAbsoluteHttpUrl,
   type CanonicalRoutePathIssue,
 } from "./routes.js";
-
-export const REQUIRED_ATTRIBUTION = Object.freeze({
-  placement: "footer",
-  copyright: "Copyright 2026 GENII Foundation",
-  text: "Published with GENII Publisher",
-  url: "https://publisher.genii.foundation",
-});
 
 export const SUPPORTED_SCHEMA_VERSIONS = Object.freeze({
   publication: "1.0",
@@ -56,6 +57,11 @@ export interface SemanticValidationInput {
   readonly engineVersion: string;
   readonly workManifests: ReadonlyMap<string, WorkManifest>;
   readonly collectionManifests: ReadonlyMap<string, CollectionManifest>;
+}
+
+export interface PublicationPreflightInput {
+  readonly publication: PublicationManifest;
+  readonly engineVersion: string;
 }
 
 export interface ResolvedWorkSource extends ResolvedWorkSourcePaths {
@@ -98,6 +104,17 @@ interface RedirectRecord {
 interface RedirectResolution {
   readonly kind: "active" | "cycle" | "external" | "unresolved";
   readonly terminalRoute: string;
+}
+
+interface SourcePathOwner {
+  readonly role:
+    | "collection-manifest"
+    | "manuscript"
+    | "publication-manifest"
+    | "work-manifest";
+  readonly entityId?: string;
+  readonly documentPath: string;
+  readonly pointer: string;
 }
 
 const EXACT_SEMVER =
@@ -148,15 +165,112 @@ function stableSerialize(value: unknown): string {
 function sortDiagnostics(
   diagnostics: readonly Diagnostic[],
 ): readonly Diagnostic[] {
-  return [...diagnostics].sort(
-    (left, right) =>
-      compareText(left.documentPath ?? "", right.documentPath ?? "") ||
-      compareText(left.path, right.path) ||
-      compareText(left.code, right.code) ||
-      compareText(left.keyword, right.keyword) ||
-      compareText(left.message, right.message) ||
-      compareText(stableSerialize(left.params), stableSerialize(right.params)),
+  const maximumDetails = MAXIMUM_PROTOCOL_DIAGNOSTICS - 1;
+  const sorted = [...diagnostics].sort(compareDiagnostics);
+  const totalDiagnostics =
+    diagnosticCollectorTotals.get(diagnostics) ??
+    diagnostics.length;
+  const omittedDiagnostics = Math.max(
+    0,
+    totalDiagnostics - maximumDetails,
   );
+  const bounded = sorted.slice(0, maximumDetails);
+  if (omittedDiagnostics > 0) {
+    bounded.push(
+      diagnostic(
+        "validation.diagnostics_truncated",
+        "",
+        "Further protocol diagnostics were omitted after the fixed reporting limit.",
+        "diagnosticLimit",
+        {
+          maximumDiagnostics:
+            MAXIMUM_PROTOCOL_DIAGNOSTICS,
+          omittedDiagnostics,
+        },
+      ),
+    );
+  }
+  return bounded.sort(compareDiagnostics);
+}
+
+function compareDiagnostics(left: Diagnostic, right: Diagnostic): number {
+  return (
+    compareText(left.documentPath ?? "", right.documentPath ?? "") ||
+    compareText(left.path, right.path) ||
+    compareText(left.code, right.code) ||
+    compareText(left.schemaPath ?? "", right.schemaPath ?? "") ||
+    compareText(left.keyword, right.keyword) ||
+    compareText(left.message, right.message) ||
+    compareText(left.severity, right.severity) ||
+    compareText(stableSerialize(left.params), stableSerialize(right.params))
+  );
+}
+
+const diagnosticCollectorTotals =
+  new WeakMap<readonly Diagnostic[], number>();
+
+function createDiagnosticCollector(): Diagnostic[] {
+  const retained: Diagnostic[] = [];
+  diagnosticCollectorTotals.set(retained, 0);
+  Object.defineProperty(retained, "push", {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: (...items: Diagnostic[]): number => {
+      const maximumDetails = MAXIMUM_PROTOCOL_DIAGNOSTICS - 1;
+      let total =
+        diagnosticCollectorTotals.get(retained) ??
+        retained.length;
+
+      for (const item of items) {
+        const nestedOmitted =
+          item.keyword === "diagnosticLimit" &&
+          typeof item.params.omittedDiagnostics === "number" &&
+          Number.isSafeInteger(item.params.omittedDiagnostics) &&
+          item.params.omittedDiagnostics >= 0
+            ? item.params.omittedDiagnostics
+            : undefined;
+        if (nestedOmitted !== undefined) {
+          total += nestedOmitted;
+          continue;
+        }
+        total += 1;
+        let low = 0;
+        let high = retained.length;
+        while (low < high) {
+          const middle = Math.floor((low + high) / 2);
+          const current = retained[middle];
+          if (
+            current !== undefined &&
+            compareDiagnostics(current, item) < 0
+          ) {
+            low = middle + 1;
+          } else {
+            high = middle;
+          }
+        }
+
+        if (low >= maximumDetails) {
+          continue;
+        }
+        if (retained.length < maximumDetails) {
+          retained.length += 1;
+        }
+        for (
+          let index = retained.length - 1;
+          index > low;
+          index -= 1
+        ) {
+          retained[index] = retained[index - 1] as Diagnostic;
+        }
+        retained[low] = item;
+      }
+
+      diagnosticCollectorTotals.set(retained, total);
+      return retained.length;
+    },
+  });
+  return retained;
 }
 
 function validateUniqueIds(
@@ -352,7 +466,7 @@ function validateOriginRelativeRoute(
   diagnostics: Diagnostic[],
   requiredToken?: "{workId}" | "{collectionId}",
 ): boolean {
-  const initialDiagnosticCount = diagnostics.length;
+  let routeValid = true;
   if (typeof value !== "string") {
     diagnostics.push(
       diagnostic(
@@ -386,6 +500,7 @@ function validateOriginRelativeRoute(
           documentPath,
         ),
       );
+      routeValid = false;
     } else {
       concreteRoute = value;
     }
@@ -396,6 +511,7 @@ function validateOriginRelativeRoute(
     let tokenValid = true;
     if (requiredTokenCount === 0) {
       tokenValid = false;
+      routeValid = false;
       diagnostics.push(
         diagnostic(
           "route.template_token_required",
@@ -414,6 +530,7 @@ function validateOriginRelativeRoute(
       unmatchedBraces.includes("}")
     ) {
       tokenValid = false;
+      routeValid = false;
       diagnostics.push(
         diagnostic(
           "route.template_token_invalid",
@@ -436,6 +553,7 @@ function validateOriginRelativeRoute(
   if (concreteRoute !== undefined) {
     const inspection = inspectCanonicalRoutePath(concreteRoute);
     if (!inspection.valid) {
+      routeValid = false;
       const routeDiagnostic = canonicalRouteDiagnostic(
         inspection.issue,
         value,
@@ -446,7 +564,7 @@ function validateOriginRelativeRoute(
     }
   }
 
-  return diagnostics.length === initialDiagnosticCount;
+  return routeValid;
 }
 
 function canonicalRouteDiagnostic(
@@ -1002,6 +1120,181 @@ function validateSourceContainment(
   }
 }
 
+function registerSourcePathOwner(
+  owners: Map<string, SourcePathOwner>,
+  sourcePath: string,
+  owner: SourcePathOwner,
+  diagnostics: Diagnostic[],
+): void {
+  if (isReservedHostIntegrationPath(sourcePath)) {
+    diagnostics.push(
+      diagnostic(
+        "source.path_reserved",
+        owner.pointer,
+        `Host integration path "${sourcePath}" cannot be used as publication source.`,
+        "reservedHostIntegrationPath",
+        {
+          sourcePath,
+          role: owner.role,
+          ...(owner.entityId === undefined
+            ? {}
+            : { entityId: owner.entityId }),
+        },
+        owner.documentPath,
+      ),
+    );
+  }
+  const sourceIdentity =
+    portableRepositoryPathIdentity(sourcePath);
+  const first = owners.get(sourceIdentity);
+  if (first === undefined) {
+    owners.set(sourceIdentity, owner);
+    return;
+  }
+  diagnostics.push(
+    diagnostic(
+      "source.path_owner_collision",
+      owner.pointer,
+      `Source path "${sourcePath}" is assigned to more than one publication entity.`,
+      "uniqueSourcePathOwner",
+      {
+        sourcePath,
+        role: owner.role,
+        ...(owner.entityId === undefined
+          ? {}
+          : { entityId: owner.entityId }),
+        documentPath: owner.documentPath,
+        firstRole: first.role,
+        ...(first.entityId === undefined
+          ? {}
+          : { firstEntityId: first.entityId }),
+        firstDocumentPath: first.documentPath,
+        firstPointer: first.pointer,
+      },
+      owner.documentPath,
+    ),
+  );
+}
+
+function pathsOverlap(
+  left: string,
+  right: string,
+): boolean {
+  return (
+    isPathWithinRoot(left, right) ||
+    isPathWithinRoot(right, left)
+  );
+}
+
+interface AssetRootTrieNode {
+  readonly children: Map<string, AssetRootTrieNode>;
+  firstOwner?: ResolvedWorkSource;
+  owner?: ResolvedWorkSource;
+}
+
+function conflictingAssetRootOwner(
+  root: AssetRootTrieNode,
+  assetsPath: string,
+): ResolvedWorkSource | undefined {
+  let node = root;
+  for (
+    const segment of
+      portableRepositoryPathIdentity(assetsPath).split("/")
+  ) {
+    if (node.owner !== undefined) {
+      return node.owner;
+    }
+    const child = node.children.get(segment);
+    if (child === undefined) {
+      return undefined;
+    }
+    node = child;
+  }
+  return node.owner ?? node.firstOwner;
+}
+
+function registerAssetRootOwner(
+  root: AssetRootTrieNode,
+  assetsPath: string,
+  work: ResolvedWorkSource,
+): void {
+  let node = root;
+  node.firstOwner ??= work;
+  for (
+    const segment of
+      portableRepositoryPathIdentity(assetsPath).split("/")
+  ) {
+    let child = node.children.get(segment);
+    if (child === undefined) {
+      child = { children: new Map() };
+      node.children.set(segment, child);
+    }
+    child.firstOwner ??= work;
+    node = child;
+  }
+  node.owner ??= work;
+}
+
+function validateAssetRootOwnership(
+  sharedAssetsRoot: string,
+  works: readonly ResolvedWorkSource[],
+  diagnostics: Diagnostic[],
+): void {
+  const claimedWorkRoots: AssetRootTrieNode = {
+    children: new Map(),
+  };
+  for (const work of works) {
+    if (work.assetsPath === undefined) {
+      continue;
+    }
+    if (pathsOverlap(sharedAssetsRoot, work.assetsPath)) {
+      diagnostics.push(
+        diagnostic(
+          "asset.root_owner_overlap",
+          "/assets",
+          `Work asset root "${work.assetsPath}" overlaps shared asset root "${sharedAssetsRoot}".`,
+          "disjointAssetRoots",
+          {
+            sharedAssetsRoot,
+            workAssetsRoot: work.assetsPath,
+            workId: work.workId,
+          },
+          work.manifestPath,
+        ),
+      );
+      continue;
+    }
+    const first = conflictingAssetRootOwner(
+      claimedWorkRoots,
+      work.assetsPath,
+    );
+    if (first !== undefined) {
+      diagnostics.push(
+        diagnostic(
+          "asset.root_owner_overlap",
+          "/assets",
+          `Work asset root "${work.assetsPath}" overlaps the asset root owned by work "${first.workId}".`,
+          "disjointAssetRoots",
+          {
+            workAssetsRoot: work.assetsPath,
+            workId: work.workId,
+            firstWorkAssetsRoot: first.assetsPath,
+            firstWorkId: first.workId,
+            firstDocumentPath: first.manifestPath,
+          },
+          work.manifestPath,
+        ),
+      );
+      continue;
+    }
+    registerAssetRootOwner(
+      claimedWorkRoots,
+      work.assetsPath,
+      work,
+    );
+  }
+}
+
 function resolveLoadedSourceGraph(
   input: SemanticValidationInput,
   layout: ResolvedPublicationLayout,
@@ -1011,6 +1304,43 @@ function resolveLoadedSourceGraph(
   const sourceRoots = input.publication.boundaries.sourceRoots;
   const works: ResolvedWorkSource[] = [];
   const collections: ResolvedCollectionSource[] = [];
+  const sourcePathOwners = new Map<string, SourcePathOwner>();
+  registerSourcePathOwner(
+    sourcePathOwners,
+    layout.publicationManifestPath,
+    {
+      role: "publication-manifest",
+      documentPath: CANONICAL_PUBLICATION_MANIFEST_PATH,
+      pointer: "",
+    },
+    diagnostics,
+  );
+  for (const reference of layout.works.manifests) {
+    registerSourcePathOwner(
+      sourcePathOwners,
+      reference.manifestPath,
+      {
+        role: "work-manifest",
+        entityId: reference.id,
+        documentPath: CANONICAL_PUBLICATION_MANIFEST_PATH,
+        pointer: reference.referencePointer,
+      },
+      diagnostics,
+    );
+  }
+  for (const reference of layout.collections.manifests) {
+    registerSourcePathOwner(
+      sourcePathOwners,
+      reference.manifestPath,
+      {
+        role: "collection-manifest",
+        entityId: reference.id,
+        documentPath: CANONICAL_PUBLICATION_MANIFEST_PATH,
+        pointer: reference.referencePointer,
+      },
+      diagnostics,
+    );
+  }
 
   for (const reference of layout.works.manifests) {
     const work = input.workManifests.get(reference.manifestPath);
@@ -1053,6 +1383,18 @@ function resolveLoadedSourceGraph(
     const sourceResult = resolveWorkSourcePaths(reference.manifestPath, work);
     diagnostics.push(...sourceResult.diagnostics);
     if (sourceResult.valid) {
+      registerSourcePathOwner(
+        sourcePathOwners,
+        sourceResult.value.manuscriptPath,
+        {
+          role: "manuscript",
+          entityId: reference.id,
+          documentPath: reference.manifestPath,
+          pointer: "/manuscript",
+        },
+        diagnostics,
+      );
+
       validateSourceContainment(
         sourceResult.value.manuscriptPath,
         "/manuscript",
@@ -1117,6 +1459,28 @@ function resolveLoadedSourceGraph(
       );
     }
 
+    if (
+      collection.workIds.length >
+      PUBLICATION_PROTOCOL_LIMITS.maximumWorks
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "collection.resource_limit",
+          "/workIds",
+          `Collection workIds exceed the protocol limit of ${PUBLICATION_PROTOCOL_LIMITS.maximumWorks.toLocaleString("en-US")}.`,
+          "maxItems",
+          {
+            resource: "workIds",
+            actualItems: collection.workIds.length,
+            maximumItems:
+              PUBLICATION_PROTOCOL_LIMITS.maximumWorks,
+          },
+          reference.manifestPath,
+        ),
+      );
+      continue;
+    }
+
     const firstWorkIndex = new Map<string, number>();
     collection.workIds.forEach((workId, index) => {
       const firstIndex = firstWorkIndex.get(workId);
@@ -1158,7 +1522,158 @@ function resolveLoadedSourceGraph(
     });
   }
 
+  validateAssetRootOwnership(
+    layout.assetsRoot,
+    works,
+    diagnostics,
+  );
   return { works, collections };
+}
+
+/**
+ * Validates every publication-manifest invariant that does not require opening
+ * a child manifest. Loaders use this least-authority gate before traversing any
+ * work or collection path.
+ */
+export function validatePublicationPreflight(
+  input: PublicationPreflightInput,
+): ValidationResult<ResolvedPublicationLayout> {
+  const resourceDiagnostics =
+    validatePublicationResourceLimits(input.publication);
+  if (resourceDiagnostics.length > 0) {
+    return immutableSnapshot({
+      valid: false,
+      diagnostics: resourceDiagnostics,
+    });
+  }
+
+  const diagnostics = createDiagnosticCollector();
+  const layoutResult = resolvePublicationLayout(input.publication);
+  diagnostics.push(...layoutResult.diagnostics);
+  validateSchemaVersion(
+    input.publication.schemaVersion,
+    SUPPORTED_SCHEMA_VERSIONS.publication,
+    CANONICAL_PUBLICATION_MANIFEST_PATH,
+    diagnostics,
+  );
+  validateEngineCompatibility(
+    input.publication,
+    input.engineVersion,
+    diagnostics,
+  );
+  validateUniqueIds(
+    input.publication.works,
+    "/works",
+    "work.reference.duplicate_id",
+    "work",
+    diagnostics,
+  );
+  validateUniqueIds(
+    input.publication.collections ?? [],
+    "/collections",
+    "collection.reference.duplicate_id",
+    "collection",
+    diagnostics,
+  );
+  validateUniqueIds(
+    input.publication.extensions ?? [],
+    "/extensions",
+    "extension.duplicate_id",
+    "extension",
+    diagnostics,
+  );
+  validatePublicationUrls(input.publication, diagnostics);
+  validateAttribution(input.publication, diagnostics);
+
+  const activeRoutes = new Map<string, ActiveRoute>();
+  if (
+    validateOriginRelativeRoute(
+      input.publication.routes.home,
+      "/routes/home",
+      CANONICAL_PUBLICATION_MANIFEST_PATH,
+      diagnostics,
+    )
+  ) {
+    addActiveRoute(
+      {
+        route: input.publication.routes.home,
+        path: "/routes/home",
+        documentPath: CANONICAL_PUBLICATION_MANIFEST_PATH,
+        kind: "home",
+      },
+      activeRoutes,
+      diagnostics,
+    );
+  }
+  if (
+    input.publication.routes.updates !== undefined &&
+    validateOriginRelativeRoute(
+      input.publication.routes.updates,
+      "/routes/updates",
+      CANONICAL_PUBLICATION_MANIFEST_PATH,
+      diagnostics,
+    )
+  ) {
+    addActiveRoute(
+      {
+        route: input.publication.routes.updates,
+        path: "/routes/updates",
+        documentPath: CANONICAL_PUBLICATION_MANIFEST_PATH,
+        kind: "updates",
+      },
+      activeRoutes,
+      diagnostics,
+    );
+  }
+  validateOriginRelativeRoute(
+    input.publication.routes.work,
+    "/routes/work",
+    CANONICAL_PUBLICATION_MANIFEST_PATH,
+    diagnostics,
+    "{workId}",
+  );
+  const collectionCount =
+    input.publication.collections?.length ?? 0;
+  if (
+    collectionCount > 0 &&
+    input.publication.routes.collection === undefined
+  ) {
+    diagnostics.push(
+      diagnostic(
+        "route.collection.required",
+        "/routes/collection",
+        "A collection route is required when the publication has collections.",
+        "required",
+        { collectionCount },
+      ),
+    );
+  } else if (input.publication.routes.collection !== undefined) {
+    validateOriginRelativeRoute(
+      input.publication.routes.collection,
+      "/routes/collection",
+      CANONICAL_PUBLICATION_MANIFEST_PATH,
+      diagnostics,
+      "{collectionId}",
+    );
+  }
+  validateRedirects(
+    input.publication,
+    activeRoutes,
+    diagnostics,
+    true,
+  );
+
+  if (diagnostics.length > 0 || !layoutResult.valid) {
+    return immutableSnapshot({
+      valid: false,
+      diagnostics: sortDiagnostics(diagnostics),
+    });
+  }
+  return immutableSnapshot({
+    valid: true,
+    value: layoutResult.value,
+    diagnostics: [],
+  });
 }
 
 /**
@@ -1170,9 +1685,52 @@ function validatePublicationSemanticsInternal(
   input: SemanticValidationInput,
   deferRedirectTerminalResolution: boolean,
 ): ValidationResult<ResolvedPublicationSourceGraph> {
-  const diagnostics: Diagnostic[] = [];
+  const resourceDiagnostics =
+    validatePublicationResourceLimits(input.publication);
+  if (resourceDiagnostics.length > 0) {
+    return immutableSnapshot({
+      valid: false,
+      diagnostics: resourceDiagnostics,
+    });
+  }
+  const diagnostics = createDiagnosticCollector();
   const layoutResult = resolvePublicationLayout(input.publication);
   diagnostics.push(...layoutResult.diagnostics);
+  if (layoutResult.valid) {
+    let collectionWorkReferenceCount = 0;
+    for (const reference of layoutResult.value.collections.manifests) {
+      const manifest = input.collectionManifests.get(
+        reference.manifestPath,
+      );
+      if (manifest === undefined) {
+        continue;
+      }
+      collectionWorkReferenceCount += manifest.workIds.length;
+      if (
+        collectionWorkReferenceCount >
+        PUBLICATION_PROTOCOL_LIMITS.maximumCollectionWorkReferences
+      ) {
+        return immutableSnapshot({
+          valid: false,
+          diagnostics: [
+            diagnostic(
+              "publication.resource_limit",
+              "/collections",
+              `Collection work references exceed the protocol limit of ${PUBLICATION_PROTOCOL_LIMITS.maximumCollectionWorkReferences.toLocaleString("en-US")}.`,
+              "maxItems",
+              {
+                resource: "collectionWorkReferences",
+                actualItems: collectionWorkReferenceCount,
+                maximumItems:
+                  PUBLICATION_PROTOCOL_LIMITS
+                    .maximumCollectionWorkReferences,
+              },
+            ),
+          ],
+        });
+      }
+    }
+  }
 
   validateSchemaVersion(
     input.publication.schemaVersion,

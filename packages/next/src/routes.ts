@@ -11,6 +11,9 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
+import {
+  normalizePortableRepositoryText,
+} from "@genii-foundation/publisher-schema";
 import type {
   ContentRoute,
   Diagnostic,
@@ -145,7 +148,7 @@ function inspectSegments(
         typeof segment !== "string" ||
         segment.length === 0 ||
         segment.includes("/") ||
-        segment !== segment.normalize("NFC")
+        segment !== normalizePortableRepositoryText(segment)
       ) {
         return { valid: false, issue: "segment" };
       }

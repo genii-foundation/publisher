@@ -13,7 +13,7 @@
     }
   },
   "engine": {
-    "compatibility": ">=1.0.0 <2.0.0"
+    "compatibility": ">=0.1.0-alpha.0 <2.0.0"
   },
   "layout": {
     "mode": "canonical"

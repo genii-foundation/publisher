@@ -256,7 +256,10 @@ test("content release lifecycle enforces prerelease and stable npm tags", async 
   const manifest = JSON.parse(
     await readFile(join(contentRoot, "package.json"), "utf8"),
   );
-  assert.equal(manifest.scripts.prepublishOnly, "node ./scripts/check-release-tag.mjs");
+  assert.equal(
+    manifest.scripts.prepublishOnly,
+    "node ../../provenance/scripts/reject-directory-publish.mjs",
+  );
   assert.equal(expectedReleaseTag("1.0.0-alpha.1"), "next");
   assert.equal(expectedReleaseTag("1.0.0"), "latest");
   assert.throws(
@@ -331,7 +334,7 @@ test("packed content freezes its runtime and proves production and development c
   );
   assert.equal(
     contentManifest.scripts.prepack,
-    "npm run build && node ./scripts/bundle-runtime.mjs stage",
+    "node ./scripts/build.mjs && node ./scripts/bundle-runtime.mjs freeze && node ./scripts/bundle-runtime.mjs stage",
   );
 
   const bundledRoots = [...contentManifest.bundleDependencies].sort();

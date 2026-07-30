@@ -13,24 +13,25 @@ If you wish to allow use of your version of this file only under the terms of th
 
 "use client";
 
-import type {
-  ReaderPublicationIdentity,
-} from "@genii-foundation/publisher-schema";
+import {
+  GENII_PUBLISHER_SOURCE_CODE_URL,
+  REQUIRED_ATTRIBUTION,
+} from "@genii-foundation/publisher-schema/attribution";
 import type { ReactElement } from "react";
 
 import { PublisherAttribution } from "../components/attribution.js";
 import {
+  createPublisherNextErrorIdentity,
+} from "../error-identity.js";
+import type {
+  PublisherNextErrorIdentity,
+} from "../error-identity.js";
+import {
   publisherNextThemeStyle,
 } from "../theme/style.js";
-import type {
-  PublisherNextThemeInstance,
-} from "../types.js";
-
-export interface PublisherNextErrorIdentity {
-  readonly homePath: string;
-  readonly publication: ReaderPublicationIdentity;
-  readonly theme: PublisherNextThemeInstance;
-}
+import {
+  defaultPublisherNextTheme,
+} from "../theme/default.js";
 
 export interface PublisherNextErrorBoundaryProps {
   readonly error: Error & { readonly digest?: string };
@@ -49,6 +50,42 @@ export interface PublisherNextFrameworkErrorPageProps {
 interface PublisherErrorShellProps {
   readonly identity: PublisherNextErrorIdentity;
   readonly reset: () => void;
+}
+
+const fallbackTheme = defaultPublisherNextTheme.configure({});
+if (!fallbackTheme.valid) {
+  throw new TypeError(
+    "The built-in error-page theme is invalid.",
+  );
+}
+const fallbackIdentityResult =
+  createPublisherNextErrorIdentity({
+    homePath: "/",
+    publication: {
+      title: "Publication",
+      language: "en",
+      attribution: {
+        ...REQUIRED_ATTRIBUTION,
+        sourceCodeUrl: GENII_PUBLISHER_SOURCE_CODE_URL,
+      },
+    },
+    theme: fallbackTheme.value,
+  });
+if (!fallbackIdentityResult.valid) {
+  throw new TypeError(
+    "The built-in error-page identity is invalid.",
+  );
+}
+const FALLBACK_ERROR_IDENTITY =
+  fallbackIdentityResult.value;
+
+function resolveErrorIdentity(
+  value: unknown,
+): PublisherNextErrorIdentity {
+  const result = createPublisherNextErrorIdentity(value);
+  return result.valid
+    ? result.value
+    : FALLBACK_ERROR_IDENTITY;
 }
 
 function PublisherErrorShell({
@@ -84,7 +121,11 @@ function PublisherErrorShell({
           Try again
         </button>
       </main>
-      <PublisherAttribution publication={identity.publication} />
+      <PublisherAttribution
+        sourceCodeUrl={
+          identity.publication.attribution.sourceCodeUrl
+        }
+      />
     </div>
   );
 }
@@ -97,7 +138,12 @@ export function PublisherNextErrorPage(
   props: PublisherNextErrorPageProps,
 ): ReactElement {
   void props.error;
-  return <PublisherErrorShell {...props} />;
+  return (
+    <PublisherErrorShell
+      identity={resolveErrorIdentity(props.identity)}
+      reset={props.reset}
+    />
+  );
 }
 
 export function PublisherNextFrameworkErrorPage({
@@ -105,7 +151,7 @@ export function PublisherNextFrameworkErrorPage({
 }: PublisherNextFrameworkErrorPageProps): ReactElement {
   return (
     <PublisherErrorShell
-      identity={identity}
+      identity={resolveErrorIdentity(identity)}
       reset={reloadPage}
     />
   );
@@ -115,11 +161,15 @@ export function PublisherNextGlobalErrorPage(
   props: PublisherNextErrorPageProps,
 ): ReactElement {
   void props.error;
+  const identity = resolveErrorIdentity(props.identity);
   return (
-    <html lang={props.identity.publication.language}>
+    <html lang={identity.publication.language}>
       <body>
-        <title>{`Publication error | ${props.identity.publication.title}`}</title>
-        <PublisherErrorShell {...props} />
+        <title>{`Publication error | ${identity.publication.title}`}</title>
+        <PublisherErrorShell
+          identity={identity}
+          reset={props.reset}
+        />
       </body>
     </html>
   );

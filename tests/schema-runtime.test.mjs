@@ -20,10 +20,13 @@ import test from "node:test";
 
 import {
   inspectCanonicalRoutePath,
+  inspectCanonicalUrlFragment,
   isCanonicalRoutePath,
+  PUBLICATION_PROTOCOL_LIMITS,
   REQUIRED_ATTRIBUTION,
   resolvePublicationSourcesForContentCompilation,
   resolvePublicationLayout,
+  resolveWorkSourcePaths,
   validateCollectionShape,
   validatePublicationSemantics,
   validatePublicationShape,
@@ -189,6 +192,36 @@ test("canonical route inspection uses one ASCII serialized spelling", () => {
   }
 });
 
+test("canonical routes and fragments use pinned Unicode 15.1 normalization", () => {
+  const unicodeVersionDrift = "q\u{1ACF}\u0323";
+  const pinnedRoute = "/q%E1%AB%8F%CC%A3";
+  assert.equal(decodeURIComponent(pinnedRoute), `/${unicodeVersionDrift}`);
+  assert.deepEqual(inspectCanonicalRoutePath(pinnedRoute), {
+    valid: true,
+    value: pinnedRoute,
+  });
+  assert.deepEqual(
+    inspectCanonicalUrlFragment("q%E1%AB%8F%CC%A3"),
+    {
+      valid: true,
+      value: "q%E1%AB%8F%CC%A3",
+      decoded: unicodeVersionDrift,
+    },
+  );
+
+  const laterHostOrder = "q\u0323\u{1ACF}";
+  const laterHostRoute = "/q%CC%A3%E1%AB%8F";
+  assert.equal(
+    decodeURIComponent(laterHostRoute),
+    `/${laterHostOrder}`,
+  );
+  assert.deepEqual(inspectCanonicalRoutePath(laterHostRoute), {
+    valid: true,
+    value: laterHostRoute,
+  });
+  assert.notEqual(pinnedRoute, laterHostRoute);
+});
+
 test("schema package manifest declares runtime, schemas, and legal artifacts", async () => {
   const packageManifest = await readJson(
     new URL("schemas/package.json", repositoryRoot),
@@ -206,12 +239,21 @@ test("schema package manifest declares runtime, schemas, and legal artifacts", a
     "NOTICE.md",
     "README.md",
     "SOURCE-NOTICE",
+    "THIRD_PARTY_NOTICES.md",
     "dist",
     "scripts",
     "src",
+    "third-party-data",
+    "third-party-licenses",
     "tsconfig.json",
     "*.schema.json",
   ]);
+  assert.equal(
+    packageManifest.devDependencies[
+      "@unicode/unicode-15.1.0"
+    ],
+    "1.6.17",
+  );
   assert.equal(
     packageManifest.exports["./publication.schema.json"],
     "./publication.schema.json",
@@ -227,6 +269,10 @@ test("schema package manifest declares runtime, schemas, and legal artifacts", a
   assert.deepEqual(packageManifest.exports["./routes"], {
     types: "./dist/routes.d.ts",
     import: "./dist/routes.js",
+  });
+  assert.deepEqual(packageManifest.exports["./attribution"], {
+    types: "./dist/attribution.d.ts",
+    import: "./dist/attribution.js",
   });
 
   const legalArtifacts = [
@@ -406,6 +452,216 @@ test("semantic validation catches cross-file and collection drift", async () => 
       ({ code }) => code === "collection.unknown_work_id",
     ),
   );
+});
+
+test("semantic validation rejects source paths claimed by multiple entities", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const publication = structuredClone(fixture.publication);
+  const [firstManifestPath, firstWork] =
+    fixture.workManifests.entries().next().value;
+  const manuscriptPath =
+    "publication/works/rain-gauge/manuscript.md";
+  const secondManifestPath =
+    "publication/works/barometer/work.json";
+
+  publication.works.push({
+    id: "barometer",
+    manifest: secondManifestPath,
+  });
+  const workManifests = new Map(fixture.workManifests);
+  workManifests.set(secondManifestPath, {
+    ...firstWork,
+    id: "barometer",
+    title: "The Barometer Reading",
+    route: "/works/barometer",
+    manuscript: {
+      path: manuscriptPath,
+      relativeTo: "repository",
+    },
+  });
+
+  const expectedDiagnostic = {
+    severity: "error",
+    code: "source.path_owner_collision",
+    path: "/manuscript",
+    message:
+      `Source path "${manuscriptPath}" is assigned to more than one publication entity.`,
+    keyword: "uniqueSourcePathOwner",
+    params: {
+      sourcePath: manuscriptPath,
+      role: "manuscript",
+      entityId: "barometer",
+      documentPath: secondManifestPath,
+      firstRole: "manuscript",
+      firstEntityId: "rain-gauge",
+      firstDocumentPath: firstManifestPath,
+      firstPointer: "/manuscript",
+    },
+    documentPath: secondManifestPath,
+  };
+  const inputs = {
+    publication,
+    engineVersion: "1.0.0",
+    workManifests,
+    collectionManifests: fixture.collectionManifests,
+  };
+
+  for (const validate of [
+    validatePublicationSemantics,
+    resolvePublicationSourcesForContentCompilation,
+  ]) {
+    const first = validate(inputs);
+    const second = validate({
+      ...inputs,
+      workManifests: new Map([...workManifests].reverse()),
+    });
+    assert.equal(first.valid, false);
+    assert.equal(second.valid, false);
+    assert.deepEqual(
+      first.diagnostics.filter(
+        ({ code }) => code === "source.path_owner_collision",
+      ),
+      [expectedDiagnostic],
+    );
+    assert.deepEqual(second.diagnostics, first.diagnostics);
+  }
+
+  const manifestCollisionWorkManifests = new Map(
+    fixture.workManifests,
+  );
+  manifestCollisionWorkManifests.set(firstManifestPath, {
+    ...firstWork,
+    manuscript: {
+      path: firstManifestPath,
+      relativeTo: "repository",
+    },
+  });
+  const manifestCollision =
+    resolvePublicationSourcesForContentCompilation({
+      publication: fixture.publication,
+      engineVersion: "1.0.0",
+      workManifests: manifestCollisionWorkManifests,
+      collectionManifests: fixture.collectionManifests,
+    });
+  assert.equal(manifestCollision.valid, false);
+  assert.deepEqual(
+    manifestCollision.diagnostics.filter(
+      ({ code }) => code === "source.path_owner_collision",
+    ),
+    [
+      {
+        severity: "error",
+        code: "source.path_owner_collision",
+        path: "/manuscript",
+        message:
+          `Source path "${firstManifestPath}" is assigned to more than one publication entity.`,
+        keyword: "uniqueSourcePathOwner",
+        params: {
+          sourcePath: firstManifestPath,
+          role: "manuscript",
+          entityId: "rain-gauge",
+          documentPath: firstManifestPath,
+          firstRole: "work-manifest",
+          firstEntityId: "rain-gauge",
+          firstDocumentPath: "publication.json",
+          firstPointer: "/works/0",
+        },
+        documentPath: firstManifestPath,
+      },
+    ],
+  );
+});
+
+test("host integration configuration is reserved from every manifest-owned source role", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const reservedPath = "publisher.config.ts";
+  const layoutCases = [
+    {
+      label: "work manifest",
+      mutate(publication) {
+        publication.works[0].manifest = reservedPath;
+      },
+    },
+    {
+      label: "collection manifest",
+      mutate(publication) {
+        publication.collections[0].manifest = reservedPath;
+      },
+    },
+    {
+      label: "shared assets",
+      mutate(publication) {
+        publication.layout = {
+          mode: "declared",
+          overrides: { assets: reservedPath },
+        };
+      },
+    },
+    {
+      label: "continuity root",
+      mutate(publication) {
+        publication.layout = {
+          mode: "declared",
+          overrides: { continuity: reservedPath },
+        };
+      },
+    },
+    {
+      label: "audio catalog",
+      mutate(publication) {
+        publication.audio.catalog = reservedPath;
+      },
+    },
+    {
+      label: "source root",
+      mutate(publication) {
+        publication.boundaries.sourceRoots.push(reservedPath);
+      },
+    },
+    {
+      label: "output root",
+      mutate(publication) {
+        publication.boundaries.outputRoots.push(reservedPath);
+      },
+    },
+  ];
+  for (const testCase of layoutCases) {
+    const publication = structuredClone(fixture.publication);
+    testCase.mutate(publication);
+    const result = resolvePublicationLayout(publication);
+    assert.equal(result.valid, false, testCase.label);
+    assert.equal(
+      result.diagnostics.some(
+        ({ code, params }) =>
+          code === "source.path_reserved" &&
+          params.sourcePath === reservedPath,
+      ),
+      true,
+      `${testCase.label}: ${JSON.stringify(result.diagnostics)}`,
+    );
+  }
+
+  const [manifestPath, work] =
+    fixture.workManifests.entries().next().value;
+  for (const role of ["manuscript", "assets"]) {
+    const result = resolveWorkSourcePaths(manifestPath, {
+      ...work,
+      [role]: {
+        path: reservedPath,
+        relativeTo: "repository",
+      },
+    });
+    assert.equal(result.valid, false, role);
+    assert.equal(
+      result.diagnostics.some(
+        ({ code, params }) =>
+          code === "source.path_reserved" &&
+          params.sourcePath === reservedPath,
+      ),
+      true,
+      `${role}: ${JSON.stringify(result.diagnostics)}`,
+    );
+  }
 });
 
 test("semantic validation rejects route loops and boundary overlap", async () => {
@@ -901,6 +1157,36 @@ test("semantic diagnostics have deterministic public ordering", async () => {
   assert.deepEqual(locations, [...locations].sort());
 });
 
+test("semantic validation absorbs nested layout truncation into one exact sentinel", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const publication = structuredClone(fixture.publication);
+  publication.works = Array.from(
+    { length: 400 },
+    () => ({ id: "rain-gauge" }),
+  );
+
+  const result = validateFixtureSemantics(fixture, {
+    publication,
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics.length, 256);
+  assert.equal(
+    result.diagnostics.filter(
+      ({ code }) => code === "validation.diagnostics_truncated",
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    result.diagnostics.find(
+      ({ code }) => code === "validation.diagnostics_truncated",
+    )?.params,
+    {
+      maximumDiagnostics: 256,
+      omittedDiagnostics: 942,
+    },
+  );
+});
+
 test("path validation is safe without prior shape validation", () => {
   const cases = [
     [".", "path.current_directory"],
@@ -947,4 +1233,111 @@ test("canonical IDs cannot resolve to Windows reserved manifest paths", async ()
         code === "path.windows_reserved_name" && path === "/works/0/id",
     ),
   );
+});
+
+test("semantic validation rejects ambiguous shared and work asset roots", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const workManifests = new Map(fixture.workManifests);
+  const [workPath, work] = workManifests.entries().next().value;
+  workManifests.set(workPath, {
+    ...work,
+    assets: {
+      path: "publication/assets/rain-gauge",
+      relativeTo: "repository",
+    },
+  });
+
+  const result = validateFixtureSemantics(fixture, {
+    workManifests,
+  });
+  assert.equal(result.valid, false);
+  assert.equal(
+    result.diagnostics.some(
+      ({ code, documentPath, path }) =>
+        code === "asset.root_owner_overlap" &&
+        documentPath === workPath &&
+        path === "/assets",
+    ),
+    true,
+  );
+});
+
+test("semantic validation bounds collection work references for direct callers", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const collectionManifests = new Map(
+    fixture.collectionManifests,
+  );
+  const [collectionPath, collection] =
+    collectionManifests.entries().next().value;
+  collectionManifests.set(collectionPath, {
+    ...collection,
+    workIds: Array.from(
+      { length: 5_000 },
+      (_, index) => `work-${index}`,
+    ),
+  });
+
+  const result = validateFixtureSemantics(fixture, {
+    collectionManifests,
+  });
+  assert.equal(result.valid, false);
+  assert.equal(
+    result.diagnostics.some(
+      ({ code, documentPath, path }) =>
+        code === "collection.resource_limit" &&
+        documentPath === collectionPath &&
+        path === "/workIds",
+    ),
+    true,
+  );
+});
+
+test("semantic validation rejects aggregate collection membership before expanding relationships", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const publication = structuredClone(fixture.publication);
+  const fullWorkIds = Array.from(
+    { length: PUBLICATION_PROTOCOL_LIMITS.maximumWorks },
+    (_, index) => `work-${index}`,
+  );
+  const collectionSizes = [
+    ...Array.from({ length: 20 }, () => fullWorkIds.length),
+    21,
+  ];
+  const collectionManifests = new Map();
+  publication.collections = collectionSizes.map((size, index) => {
+    const id = `collection-${index}`;
+    const manifestPath =
+      `publication/collections/${id}/collection.json`;
+    collectionManifests.set(manifestPath, {
+      schemaVersion: "1.0",
+      id,
+      title: `Collection ${index}`,
+      workIds: fullWorkIds.slice(0, size),
+    });
+    return { id };
+  });
+
+  const result = validatePublicationSemantics({
+    publication,
+    engineVersion: "1.0.0",
+    workManifests: fixture.workManifests,
+    collectionManifests,
+  });
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.diagnostics, [
+    {
+      severity: "error",
+      code: "publication.resource_limit",
+      documentPath: "publication.json",
+      path: "/collections",
+      message:
+        "Collection work references exceed the protocol limit of 100,000.",
+      keyword: "maxItems",
+      params: {
+        resource: "collectionWorkReferences",
+        actualItems: 100_001,
+        maximumItems: 100_000,
+      },
+    },
+  ]);
 });
