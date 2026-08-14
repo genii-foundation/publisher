@@ -2,6 +2,14 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. The GENII Publisher application package is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-13, GENII Foundation
+
+- Added deterministic search artifact projection to every publication build.
+- Required renderer-declared search capability and destination before any build output is written.
+- Materialized and checked the search artifact atomically beside the Reader, narration, and synchronization artifacts.
+- Compiled author-declared Markdown section structure into durable Reader hierarchy, routes, continuity, and section-local block ranges.
+- Refused stale, orphaned, out-of-order, and route-less navigable section declarations with manuscript-aware diagnostics.
+
 ## 2026-07-28, GENII Foundation
 
 - Established the browser-safe application package and separate Node.js orchestration entry point.

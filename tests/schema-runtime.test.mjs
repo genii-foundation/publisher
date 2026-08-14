@@ -291,6 +291,42 @@ test("schema package manifest declares runtime, schemas, and legal artifacts", a
   }
 });
 
+test("work section declarations are closed durable protocol data", async () => {
+  const work = await readJson(
+    new URL(
+      "../fixtures/canonical-structured-essay/publication/works/tidal-ledger/work.json",
+      import.meta.url,
+    ),
+  );
+  const accepted = validateWorkShape(work);
+  assert.equal(
+    accepted.valid,
+    true,
+    JSON.stringify(accepted.diagnostics, null, 2),
+  );
+  assert.equal(accepted.value.sections.length, 3);
+
+  const withUnknownSelectorAuthority = structuredClone(work);
+  withUnknownSelectorAuthority.sections[1].start.route = "/derived";
+  const refusedUnknown = validateWorkShape(withUnknownSelectorAuthority);
+  assert.equal(refusedUnknown.valid, false);
+  assert.ok(
+    refusedUnknown.diagnostics.some(
+      ({ path }) => path === "/sections/1/start",
+    ),
+    JSON.stringify(refusedUnknown.diagnostics, null, 2),
+  );
+
+  const withEmptySections = structuredClone(work);
+  withEmptySections.sections = [];
+  const refusedEmpty = validateWorkShape(withEmptySections);
+  assert.equal(refusedEmpty.valid, false);
+  assert.ok(
+    refusedEmpty.diagnostics.some(({ path }) => path === "/sections"),
+    JSON.stringify(refusedEmpty.diagnostics, null, 2),
+  );
+});
+
 test("canonical fixture resolves and passes semantic validation", async () => {
   const fixture = await loadFixture("canonical-field-notes");
   const before = JSON.stringify(snapshotFixture(fixture));

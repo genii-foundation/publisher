@@ -1567,6 +1567,7 @@ export async function createPublicationNextApplication(
         homePath: resolver.homePath,
         markdownForBlock,
         page,
+        readerBuildId: reader.buildId,
         theme: themeResult.value.instance,
         updates: updatesView,
       });

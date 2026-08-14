@@ -43,6 +43,13 @@ import {
   projectPublicationReader,
   serializePublicationReaderEnvelope,
 } from "@genii-foundation/publisher-reader";
+import {
+  createReaderSearchIndex,
+  serializeReaderSearchIndex,
+} from "@genii-foundation/publisher-reader/search";
+import type {
+  ReaderSearchIndex,
+} from "@genii-foundation/publisher-reader/search";
 import type {
   AudioEnvelope,
   Diagnostic,
@@ -53,6 +60,7 @@ import type {
   ReaderAudience,
   SyncEnvelope,
   ValidationResult,
+  WorkSectionDeclaration,
 } from "@genii-foundation/publisher-schema";
 
 import {
@@ -88,10 +96,10 @@ import type {
 } from "./types.js";
 
 /**
- * The identity the engine gives a work's single markdown section.
+ * The identity the engine gives a work's undeclared single Markdown section.
  *
- * Internal. It participates in route ownership and link resolution but is never
- * part of a URL, so changing it cannot break a published address.
+ * Internal. Publications that declare section structure supply their own durable
+ * IDs instead.
  */
 export function rootSectionIdFor(workId: string): string {
   return `${workId}-root`;
@@ -112,6 +120,154 @@ function buildDiagnostic(
     params,
     documentPath,
   );
+}
+
+/**
+ * Applies durable work-manifest structure to one neutral Markdown block stream.
+ *
+ * Selectors locate boundaries only. IDs, hierarchy, routes, and continuity all
+ * come from the declaration, so changing a heading cannot silently mint a new
+ * public identity.
+ */
+function applyDeclaredMarkdownStructure(
+  work: WorkContentInput,
+  declarations: readonly WorkSectionDeclaration[],
+  manuscriptPath: string,
+): ValidationResult<WorkContentInput> {
+  const sourceBlocks = work.sections[0]?.blocks ?? [];
+  const diagnostics: Diagnostic[] = [];
+  const starts: number[] = [];
+
+  declarations.forEach((declaration, declarationIndex) => {
+    const selector = declaration.start;
+    if (selector.kind === "document") {
+      starts.push(0);
+      return;
+    }
+    const occurrence = selector.occurrence ?? 1;
+    let seen = 0;
+    const blockIndex = sourceBlocks.findIndex((block) => {
+      if (
+        block.kind !== selector.blockKind ||
+        block.text !== selector.text
+      ) {
+        return false;
+      }
+      seen += 1;
+      return seen === occurrence;
+    });
+    if (blockIndex === -1) {
+      diagnostics.push(
+        buildDiagnostic(
+          "build.section_start_missing",
+          `/sections/${declarationIndex}/start`,
+          `Section "${declaration.id}" cannot find its declared ${selector.blockKind} boundary in the manuscript.`,
+          {
+            blockKind: selector.blockKind,
+            occurrence,
+            sectionId: declaration.id,
+            text: selector.text,
+          },
+          manuscriptPath,
+        ),
+      );
+    }
+    starts.push(blockIndex);
+  });
+
+  if (starts[0] !== 0) {
+    diagnostics.push(
+      buildDiagnostic(
+        "build.section_start_orphaned_prefix",
+        "/sections/0/start",
+        "The first declared section must begin at the document or its first Markdown block so no manuscript content is orphaned.",
+        { firstBlockIndex: starts[0] ?? null },
+        manuscriptPath,
+      ),
+    );
+  }
+  starts.forEach((start, index) => {
+    if (index > 0 && start <= (starts[index - 1] ?? -1)) {
+      diagnostics.push(
+        buildDiagnostic(
+          "build.section_start_order_invalid",
+          `/sections/${index}/start`,
+          `Section "${declarations[index]?.id ?? index}" must start after the previous section in manuscript order.`,
+          {
+            previousBlockIndex: starts[index - 1],
+            sectionBlockIndex: start,
+          },
+          manuscriptPath,
+        ),
+      );
+    }
+  });
+  if (diagnostics.length > 0) {
+    return invalidResult(diagnostics);
+  }
+
+  const sections = declarations.map((declaration, index) => {
+    const start = starts[index] ?? 0;
+    const end = starts[index + 1] ?? sourceBlocks.length;
+    const navigable = declaration.navigable ?? true;
+    const route = declaration.route;
+    if (index > 0 && navigable && route === undefined) {
+      diagnostics.push(
+        buildDiagnostic(
+          "build.section_route_missing",
+          `/sections/${index}/route`,
+          `Navigable section "${declaration.id}" needs an explicit route.`,
+          { sectionId: declaration.id },
+          manuscriptPath,
+        ),
+      );
+    }
+    const routes = route === undefined
+      ? {}
+      : { canonical: { path: route } };
+    return {
+      id: declaration.id,
+      role: declaration.role ?? "section",
+      title: declaration.title,
+      ...(declaration.parentId === undefined
+        ? {}
+        : { parentId: declaration.parentId }),
+      routes,
+      activeRouteNames: route === undefined ? [] : ["canonical"],
+      readerLocation: route === undefined
+        ? navigable && index === 0
+          ? { kind: "work" as const }
+          : { kind: "none" as const }
+        : { kind: "route" as const, routeName: "canonical" },
+      continuity: declaration.continuity ?? {
+        id: declaration.id,
+        legacyIds: [],
+        progressGroups: [[declaration.id]],
+        historicalSectionIds: [],
+      },
+      navigable,
+      blocks: sourceBlocks.slice(start, end),
+      ...(declaration.metadata === undefined
+        ? {}
+        : { metadata: declaration.metadata }),
+    };
+  });
+  if (diagnostics.length > 0) {
+    return invalidResult(diagnostics);
+  }
+  return Object.freeze({
+    valid: true as const,
+    value: Object.freeze({
+      workId: work.workId,
+      adapter: Object.freeze({
+        id: "structured-markdown",
+        package: "@genii-foundation/publisher-content",
+        version: work.adapter.version,
+      }),
+      sections: Object.freeze(sections.map((section) => Object.freeze(section))),
+    }),
+    diagnostics: sortAndFreezeDiagnostics([]),
+  });
 }
 
 /**
@@ -215,7 +371,20 @@ export function derivePublicationWorkInputs(
       }
       continue;
     }
-    works.push(compiled.value.work);
+    if (work.manifest.sections === undefined) {
+      works.push(compiled.value.work);
+      continue;
+    }
+    const structured = applyDeclaredMarkdownStructure(
+      compiled.value.work,
+      work.manifest.sections,
+      work.manuscriptPath,
+    );
+    if (!structured.valid) {
+      diagnostics.push(...structured.diagnostics);
+      continue;
+    }
+    works.push(structured.value);
   }
 
   if (diagnostics.length > 0) {
@@ -265,6 +434,12 @@ export interface BuiltPublicationReader {
   readonly reader: PublicationReaderEnvelope;
   /** Canonical JSON text, exactly as it would be written. */
   readonly text: string;
+  /** Capability-sliced search data bound to this exact Reader build. */
+  readonly search: {
+    readonly index: ReaderSearchIndex;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
   /**
    * Cross-checked narration and its artifact, when the publication declares a
    * catalog.
@@ -337,6 +512,11 @@ export async function buildPublicationReader(
   if (!reader.valid) {
     return invalidResult(reader.diagnostics);
   }
+  const searchIndex = createReaderSearchIndex(reader.value);
+  const search = Object.freeze({
+    index: searchIndex,
+    text: serializeReaderSearchIndex(searchIndex),
+  });
 
   // Cross-checked against every section the publication compiled, not against
   // the audience projection. A catalog describes the publication, so narration
@@ -456,6 +636,7 @@ export async function buildPublicationReader(
       content: content.value,
       reader: reader.value,
       text,
+      search,
       ...(audio === undefined ? {} : { audio }),
       ...(sync === undefined ? {} : { sync }),
     }),

@@ -63,7 +63,15 @@ test("the default theme resolves a closed immutable token snapshot", () => {
   const configured = assertValid(
     resolved.implementation.configure(resolved.config),
   );
-  assert.equal(configured.tokens.color.canvas, "#11181A");
+  assert.deepEqual(configured.tokens.color, {
+    canvas: "#11191B",
+    surface: "#182326",
+    text: "#F1F4EF",
+    mutedText: "#B8C3C4",
+    accent: "#86D0E0",
+    focus: "#F0AE54",
+    border: "#3D5055",
+  });
   assert.equal(Object.isFrozen(configured), true);
   assert.equal(Object.isFrozen(configured.tokens), true);
   assert.equal(Object.isFrozen(configured.tokens.color), true);

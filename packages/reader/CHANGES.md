@@ -2,6 +2,16 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher reader is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-13, GENII Foundation
+
+- Added browser-safe preference and progress subpaths for the default Reader application.
+- Added publication-scoped, immutable preferences with bounded typography, appearance, motion, highlighting, and focus controls.
+- Added continuity-aware local progress with revision detection, deterministic monotonic merges, hostile-input sanitization, resource bounds, and word-weighted aggregate percentage.
+- Added exact passage ranges with unique content-hash relocation and explicit ambiguity for moved blocks.
+- Added publication-scoped bookmarks with bounded notes and context, quote reanchoring, deterministic search and serialization, absorbing tombstones, and local and remote byte budgets.
+- Added a Reader-build-bound search artifact with Unicode-aware matching and original-text snippet offsets.
+- Kept time, storage, DOM, network, environment, and randomness authority outside the framework-neutral state core.
+
 ## 2026-07-28, GENII Foundation
 
 - Established the framework-neutral reader projection and runtime package boundary.

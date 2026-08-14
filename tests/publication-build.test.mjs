@@ -192,6 +192,86 @@ test("the section identity is derived from the work and is not a route", async (
   }
 });
 
+test("declared Markdown structure preserves durable hierarchy, routes, and continuity", async () => {
+  const publicationRoot = join(fixtureRoot, "canonical-structured-essay");
+  const first = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+  });
+  const second = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+  });
+  assert.ok(first.valid, diagnosticsText(first));
+  assert.ok(second.valid, diagnosticsText(second));
+  assert.equal(first.value.text, second.value.text);
+
+  const work = first.value.content.works[0];
+  assert.ok(work);
+  assert.equal(work.source.adapter.id, "structured-markdown");
+  assert.deepEqual(
+    work.sections.map(({ id, parentId }) => ({ id, parentId })),
+    [
+      { id: "tidal-ledger-root", parentId: null },
+      {
+        id: "tidal-ledger-low-water",
+        parentId: "tidal-ledger-root",
+      },
+      {
+        id: "tidal-ledger-arithmetic",
+        parentId: "tidal-ledger-root",
+      },
+    ],
+  );
+  assert.equal(work.sections[0].blocks.some(({ text }) => text === "Low water"), false);
+  assert.equal(work.sections[1].blocks[0].text, "Low water");
+  assert.equal(work.sections[2].blocks[0].text, "Arithmetic");
+  assert.deepEqual(work.sections[0].childIds, [
+    "tidal-ledger-low-water",
+    "tidal-ledger-arithmetic",
+  ]);
+  assert.deepEqual(work.sections[1].continuity, {
+    id: "tidal-ledger-low-water",
+    legacyIds: ["tidal-ledger-ebb"],
+    progressGroups: [["tidal-ledger-low-water", "tidal-ledger-ebb"]],
+    historicalSectionIds: ["tidal-ledger-ebb"],
+  });
+  assert.deepEqual(
+    first.value.reader.routes.active
+      .filter(({ target }) => target.kind === "section")
+      .map(({ path }) => path),
+    ["/readings/low-water", "/readings/arithmetic"],
+  );
+});
+
+test("a stale declared section boundary refuses the build and names the manuscript", async (t) => {
+  const publicationRoot = scratchFixture(t, "canonical-structured-essay");
+  const manifestPath = join(
+    publicationRoot,
+    "publication",
+    "works",
+    "tidal-ledger",
+    "work.json",
+  );
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.sections[1].start.text = "A heading that is not present";
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  const result = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+  });
+  assert.equal(result.valid, false);
+  assert.ok(
+    result.diagnostics.some(
+      ({ code, documentPath }) =>
+        code === "build.section_start_missing" &&
+        documentPath?.endsWith("manuscript.md"),
+    ),
+    diagnosticsText(result),
+  );
+});
+
 // ----------------------------------------------------------- failures
 
 test("a work whose manuscript is missing is named, not asserted away", async (t) => {
@@ -597,13 +677,12 @@ test("the audit's engine side claims match the schema and the code", async () =>
     "per-word timing data has entered the reader envelope, reversing a recorded decision",
   );
 
-  // The section identifier bound the audit measures Coherence against.
+  // The generic section identifier bound remains an engine contract. Historical
+  // Coherence measurements belonged to the superseded audit and are deliberately
+  // not kept alive as current migration claims.
   assert.equal(schema.$defs.stableId.maxLength, 128);
-  for (const quoted of ["128 character", "142 characters", "682 distinct"]) {
-    assert.ok(
-      audit.includes(quoted),
-      `the audit no longer quotes ${quoted}, so its measurement cannot be traced`,
-    );
-  }
+  assert.ok(
+    audit.includes("c60aa2bca5aa3cc7abf0d9bd661538a247315f59"),
+    "the audit must name the exact Coherence ref its current measurements use",
+  );
 });
-

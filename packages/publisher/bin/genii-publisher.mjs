@@ -63,6 +63,7 @@ import {
 } from "../dist/node/protected-roots.js";
 import {
   AUDIO_DATA_ARTIFACT,
+  SEARCH_DATA_ARTIFACT,
   assertHostCanCarryDataArtifact,
   assertHostCanServe,
   readHostCapabilities,
@@ -843,10 +844,19 @@ async function runBuild(options) {
     return 1;
   }
 
-  // Every generated artifact beyond the reader artifact, in one list. Two of these
-  // exist now and the branch was already duplicated once; a third copy would be
-  // where they quietly diverge.
+  // Every generated artifact beyond the reader artifact, in one list.
   const extraArtifacts = [
+    {
+      id: SEARCH_DATA_ARTIFACT,
+      noun: "search index",
+      label: "Search",
+      declaredPath: template.searchDataPath,
+      text: built.value.search.text,
+      detail: [
+        `Sections     ${built.value.search.index.entries.length.toLocaleString("en-US")}`,
+        `Reader build ${built.value.search.index.readerBuildId}`,
+      ],
+    },
     built.value.audio === undefined
       ? null
       : {
@@ -1086,6 +1096,8 @@ async function runStatus(options) {
     upgradeAvailable: false,
     artifactTracking: null,
     stagedArtifact: null,
+    dataArtifacts: [],
+    stagedDataArtifacts: [],
     unservable: [],
     conflictedFiles: [],
     artifact: null,
@@ -1203,6 +1215,75 @@ async function runStatus(options) {
               "run build to clear a staged artifact left by an interrupted build, which will otherwise block apply and upgrade",
             );
           }
+
+          const extraArtifacts = [
+            {
+              id: SEARCH_DATA_ARTIFACT,
+              label: "Search",
+              declaredPath: template.searchDataPath,
+              text: built.value.search.text,
+            },
+            built.value.audio === undefined
+              ? null
+              : {
+                  id: AUDIO_DATA_ARTIFACT,
+                  label: "Narration",
+                  declaredPath: template.audioDataPath,
+                  text: built.value.audio.text,
+                },
+            built.value.sync === undefined
+              ? null
+              : {
+                  id: SYNC_DATA_ARTIFACT,
+                  label: "Sync",
+                  declaredPath: template.syncDataPath,
+                  text: built.value.sync.text,
+                },
+          ].filter(Boolean);
+          const capabilities = readHostCapabilities(rendererModule ?? {});
+          for (const artifact of extraArtifacts) {
+            const carriable = assertHostCanCarryDataArtifact({
+              artifact: artifact.id,
+              capabilities,
+              renderer: state.renderer,
+              declaredPath: artifact.declaredPath,
+            });
+            if (!carriable.valid) {
+              report.unservable.push(
+                ...carriable.diagnostics.map((item) => item.message),
+              );
+              report.actions.push(
+                `use a renderer that can carry the ${artifact.id} artifact`,
+              );
+              continue;
+            }
+            const extraDestination = resolveArtifactDestination({
+              hostRoot,
+              declaredArtifactPath: artifact.declaredPath,
+              rendererManagedPaths: template.files.map((file) => file.path),
+              protectedRoots: protectedRootsFor(hostRoot, options),
+            });
+            const extraChecked = checkHostArtifact({
+              destination: extraDestination,
+              text: artifact.text,
+            });
+            report.dataArtifacts.push({
+              id: artifact.id,
+              label: artifact.label,
+              ...extraChecked,
+              tracking: null,
+            });
+            if (extraChecked.outcome !== "current") {
+              report.actions.push(`build the ${artifact.id} artifact`);
+            }
+            const extraStaged = stagedArtifactPathFor(extraDestination);
+            if (existsSync(extraStaged)) {
+              report.stagedDataArtifacts.push(extraStaged);
+              report.actions.push(
+                `run build to clear the staged ${artifact.id} artifact left by an interrupted build`,
+              );
+            }
+          }
         }
       }
     }
@@ -1232,6 +1313,17 @@ async function runStatus(options) {
     if (tracking === "untrackedAndNotIgnored") {
       report.actions.push(
         `decide whether ${report.artifact.hostRelativePath} is committed or ignored, because upgrade and rollback need a clean tree`,
+      );
+    }
+  }
+  for (const artifact of report.dataArtifacts) {
+    if (artifact.outcome === "missing") {
+      continue;
+    }
+    artifact.tracking = artifactTracking(hostRoot, artifact.hostRelativePath);
+    if (artifact.tracking === "untrackedAndNotIgnored") {
+      report.actions.push(
+        `decide whether ${artifact.hostRelativePath} is committed or ignored, because upgrade and rollback need a clean tree`,
       );
     }
   }
@@ -1325,10 +1417,30 @@ function describeStatus(report) {
       }`,
     );
   }
+  for (const artifact of report.dataArtifacts) {
+    const tracking =
+      artifact.tracking === null ||
+      artifact.tracking === "tracked" ||
+      artifact.tracking === "noRepository"
+        ? ""
+        : artifact.tracking === "ignored"
+          ? "  (ignored by Git)"
+          : "  (neither committed nor ignored)";
+    lines.push(
+      `${artifact.label.padEnd(12)} ${artifact.hostRelativePath} is ${artifact.outcome}${tracking}`,
+    );
+  }
   if (report.stagedArtifact !== null) {
     lines.push("");
     lines.push("Left by an interrupted build");
     lines.push(`  ${report.stagedArtifact}`);
+  }
+  if (report.stagedDataArtifacts.length > 0) {
+    lines.push("");
+    lines.push("Staged data artifacts left by an interrupted build");
+    for (const path of report.stagedDataArtifacts) {
+      lines.push(`  ${path}`);
+    }
   }
   if (report.unservable.length > 0) {
     lines.push("");

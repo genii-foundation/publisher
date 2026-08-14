@@ -199,7 +199,7 @@ test("the real renderer takes a publication from nothing to a current artifact",
     readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
   );
   assert.equal(state.renderer, realRenderer);
-  assert.equal(state.hostContractVersion, "0.1.0");
+  assert.equal(state.hostContractVersion, "0.2.0");
 
   // Status now wants an artifact.
   const middle = run(hostRoot, ["status"]);

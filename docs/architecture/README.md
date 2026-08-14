@@ -16,5 +16,7 @@ These records define the accepted foundation of GENII Publisher.
 12. [ADR 0012: Author lifecycle contracts and mutation policy](./0012-author-lifecycle-contracts.md)
 13. [ADR 0013: Reader artifact materialization](./0013-reader-artifact-materialization.md)
 14. [ADR 0014: Narration and synchronization boundary](./0014-narration-boundary.md)
+15. [ADR 0015: Opinionated reader application and parity boundary](./0015-opinionated-reader-application.md)
+16. [ADR 0016: Declared Markdown section structure](./0016-declared-markdown-section-structure.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

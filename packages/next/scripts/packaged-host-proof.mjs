@@ -48,6 +48,10 @@ import {
 import {
   deflateSync,
 } from "node:zlib";
+import {
+  createReaderSearchIndex,
+  serializeReaderSearchIndex,
+} from "../../reader/dist/search.js";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const repositoryRoot = fileURLToPath(
@@ -612,6 +616,149 @@ async function assertHydratedErrorAttribution({
   }
 }
 
+async function assertHydratedReaderTools({
+  browser,
+  url,
+}) {
+  const page = await openDevToolsPage(browser);
+  try {
+    await page.send("Emulation.setDeviceMetricsOverride", {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+    const navigation = await page.send("Page.navigate", { url });
+    assert.equal(
+      navigation.errorText,
+      undefined,
+      `Reader tools navigation failed: ${navigation.errorText}`,
+    );
+    let ready;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const rail = document.querySelector(".publisher-reader-rail");',
+          "  const rect = rail?.getBoundingClientRect();",
+          "  return {",
+          '    complete: document.readyState === "complete",',
+          "    controls: rail?.querySelectorAll(\"button\").length ?? 0,",
+          "    inViewport: rect !== undefined && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,",
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      ready = evaluated.result?.value;
+      if (
+        ready?.complete === true &&
+        ready.controls === 4 &&
+        ready.inViewport === true
+      ) {
+        break;
+      }
+      await wait(100);
+    }
+    assert.deepEqual(
+      ready,
+      { complete: true, controls: 4, inViewport: true },
+      "The hydrated Reader rail was not reachable inside the mobile viewport.",
+    );
+
+    const opened = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const buttons = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"));',
+        '  const search = buttons.find((button) => button.textContent?.includes("Search"));',
+        "  search?.click();",
+        "  return search !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(opened.result?.value, true);
+
+    let searchState;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const panel = document.querySelector(".publisher-reader-panel");',
+          '  const input = panel?.querySelector("input[type=search]");',
+          "  const rect = panel?.getBoundingClientRect();",
+          "  return {",
+          "    failed: panel?.querySelector('[role=alert]') !== null,",
+          "    hasInput: input !== null && input !== undefined,",
+          "    inViewport: rect !== undefined && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,",
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      searchState = evaluated.result?.value;
+      if (searchState?.hasInput === true && searchState.failed === false) {
+        break;
+      }
+      await wait(100);
+    }
+    assert.deepEqual(
+      searchState,
+      { failed: false, hasInput: true, inViewport: true },
+      "The hydrated search panel was not usable inside the mobile viewport.",
+    );
+
+    const focused = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const input = document.querySelector(".publisher-reader-search input");',
+        "  if (!(input instanceof HTMLInputElement)) return false;",
+        "  input.focus();",
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(focused.result?.value, true);
+    for (const character of "opening") {
+      await page.send("Input.dispatchKeyEvent", {
+        type: "char",
+        text: character,
+        unmodifiedText: character,
+      });
+    }
+    let resultCount = 0;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "({",
+          '  count: document.querySelectorAll(".publisher-reader-search-results a").length,',
+          '  failed: document.querySelector(".publisher-reader-search [role=alert]") !== null,',
+          '  query: document.querySelector(".publisher-reader-search input")?.value ?? "",',
+          "})",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      const state = evaluated.result?.value;
+      assert.equal(
+        state?.failed,
+        false,
+        "The hydrated Reader search rejected its generated artifact.",
+      );
+      assert.equal(state?.query, "opening");
+      resultCount = state?.count ?? 0;
+      if (resultCount > 0) break;
+      await wait(100);
+    }
+    assert.ok(
+      resultCount > 0,
+      "The hydrated Reader search returned no result for a known section title.",
+    );
+  } finally {
+    page.close();
+  }
+}
+
 async function startHost(
   hostRoot,
   environment,
@@ -1109,8 +1256,8 @@ export async function runPackagedHostProof(
     // boundary is exercised; an author host must never carry that.
     // Replaced rather than added, so it must already exist in the contract.
     const proofOverriddenHostPaths = ["app/layout.tsx"];
-    // Added beyond the contract. The reader artifact is generated publication
-    // data rather than a template file, so it belongs here too.
+    // Added beyond the contract. Reader and search artifacts are generated
+    // publication data rather than template files, so they belong here too.
     const proofAddedHostPaths = [
       "declaration-probe.ts",
       "export-probe.mjs",
@@ -1120,6 +1267,7 @@ export async function runPackagedHostProof(
       `app/${basename(boundaryProofRoot)}/page.tsx`,
       "public/proof.png",
       hostTemplate.readerDataPath,
+      hostTemplate.searchDataPath,
     ];
     for (const path of proofOverriddenHostPaths) {
       assert.ok(
@@ -1134,6 +1282,11 @@ export async function runPackagedHostProof(
       writeJson(
         join(hostRoot, hostTemplate.readerDataPath),
         reader,
+      ),
+      writeFile(
+        join(hostRoot, hostTemplate.searchDataPath),
+        serializeReaderSearchIndex(createReaderSearchIndex(reader)),
+        "utf8",
       ),
       writeFile(
         join(appRoot, "layout.tsx"),
@@ -1525,6 +1678,7 @@ export async function runPackagedHostProof(
     let frameworkErrorStatuses;
     let runtimeErrorStatus;
     let imageContentType;
+    let readerToolsHydrationVerified = false;
     try {
       host = await startHost(hostRoot, proofEnvironment);
     } catch (error) {
@@ -1586,6 +1740,18 @@ export async function runPackagedHostProof(
         /<script>alert\(2\)<\/script>/u,
       );
       assert.doesNotMatch(html, /href="javascript:/iu);
+
+      if (browser !== undefined) {
+        const sectionPath = reader.routes.active.find(
+          ({ target }) => target.kind === "section",
+        )?.path;
+        assert.equal(typeof sectionPath, "string");
+        await assertHydratedReaderTools({
+          browser,
+          url: `${host.origin}${sectionPath}`,
+        });
+        readerToolsHydrationVerified = true;
+      }
 
       const internal = await fetch(
         `${host.origin}/legacy/(cafe)+story?edition=morning`,
@@ -1804,6 +1970,7 @@ export async function runPackagedHostProof(
       auditVulnerabilities:
         audit.metadata.vulnerabilities.total,
       browserHydrationVerified: browser !== undefined,
+      readerToolsHydrationVerified,
       globalErrorStatus,
       frameworkErrorStatuses,
       htmlFiles: Object.freeze(

@@ -71,6 +71,18 @@ The raw schemas are also exported:
 @genii-foundation/publisher-schema/reader-envelope.schema.json
 ```
 
+### Declared manuscript structure
+
+A work may declare `sections` in preorder. Each declaration owns its durable ID,
+title, hierarchy, route, continuity, and navigability. Its `start` selector only
+locates a boundary in the neutral Markdown block stream. The selector never
+derives identity or public routing from a heading.
+
+The first declaration must start at the document or first block. Later
+navigable sections require explicit routes. A missing, repeated, or out-of-order
+boundary is a build error naming the manuscript and declaration pointer. This
+keeps ordinary heading edits from silently minting or retiring public addresses.
+
 ## Release safety
 
 The source and content schemas currently accept contract version `1.0`. The initial contract remains unpublished while its complete compiler and reader boundary is assembled. The first public package release freezes that contract. After publication, incompatible meaning changes require a new schema version and an explicit migration. The JavaScript package remains prerelease software, so exported convenience APIs may still evolve before package 1.0 without silently changing a published schema version.

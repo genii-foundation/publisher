@@ -16,6 +16,7 @@ import type {
   ReaderPublicationIdentity,
   ReaderSection,
   ReaderWork,
+  Sha256Digest,
 } from "@genii-foundation/publisher-schema";
 import {
   createElement,
@@ -23,6 +24,10 @@ import {
   type ReactNode,
 } from "react";
 
+import {
+  PublisherReaderRail,
+  type PublisherReaderOutlineEntry,
+} from "../client/reader-rail.js";
 import type {
   PublisherNextPage,
   PublisherNextThemeInstance,
@@ -98,6 +103,37 @@ function owningHeading(
     first.text === section.title
     ? first
     : null;
+}
+
+function sectionHref(
+  workRoute: string,
+  section: ReaderSection,
+): string {
+  if (section.readerAddress === null) {
+    return workRoute;
+  }
+  return `${section.readerAddress.path}${
+    section.readerAddress.anchor === undefined
+      ? ""
+      : `#${section.readerAddress.anchor}`
+  }`;
+}
+
+function readerOutline(page: PublisherNextPage): readonly PublisherReaderOutlineEntry[] {
+  const work = page.kind === "work" || page.kind === "section"
+    ? page.work
+    : null;
+  if (work === null) return Object.freeze([]);
+  return Object.freeze(
+    work.sections
+      .filter((section) => section.navigable)
+      .map((section) => Object.freeze({
+        id: section.id,
+        title: section.title,
+        href: sectionHref(work.route, section),
+        depth: section.depth,
+      })),
+  );
 }
 
 function SectionContent({
@@ -352,19 +388,11 @@ function SectionPage({
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: Extract<PublisherNextPage, { kind: "section" }>;
 }): ReactElement {
-  const sectionHref = (section: ReaderSection): string | null => {
-    if (section.readerAddress === null) {
-      return null;
-    }
-    return `${section.readerAddress.path}${
-      section.readerAddress.anchor === undefined
-        ? ""
-        : `#${section.readerAddress.anchor}`
-    }`;
-  };
   const previousHref =
-    page.previous === null ? null : sectionHref(page.previous);
-  const nextHref = page.next === null ? null : sectionHref(page.next);
+    page.previous === null ? null : sectionHref(page.work.route, page.previous);
+  const nextHref = page.next === null
+    ? null
+    : sectionHref(page.work.route, page.next);
   const headingBlock = owningHeading(page.section);
   const headingDomId =
     headingBlock?.readerAddress?.path === page.path
@@ -538,6 +566,7 @@ export interface PublisherPageViewProps {
   readonly homePath: string;
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: PublisherNextPage;
+  readonly readerBuildId: Sha256Digest;
   readonly theme: PublisherNextThemeInstance;
   readonly updates: PublisherNextUpdatesView | null;
 }
@@ -546,6 +575,11 @@ interface PublisherPageShellProps {
   readonly body: ReactNode;
   readonly homePath: string;
   readonly pageKind: PublisherNextPage["kind"] | "not-found";
+  readonly reader?: {
+    readonly buildId: Sha256Digest;
+    readonly currentSection?: ReaderSection;
+    readonly outline: readonly PublisherReaderOutlineEntry[];
+  };
   readonly publication: ReaderPublicationIdentity;
   readonly theme: PublisherNextThemeInstance;
 }
@@ -554,6 +588,7 @@ function PublisherPageShell({
   body,
   homePath,
   pageKind,
+  reader,
   publication,
   theme,
 }: PublisherPageShellProps): ReactElement {
@@ -574,6 +609,17 @@ function PublisherPageShell({
         homePath={homePath}
         title={publication.title}
       />
+      {reader === undefined ? null : (
+        <PublisherReaderRail
+          {...(reader.currentSection === undefined
+            ? {}
+            : { currentSection: reader.currentSection })}
+          outline={reader.outline}
+          publicationId={publication.id}
+          readerBuildId={reader.buildId}
+          searchPath="/publication-reader-search.json"
+        />
+      )}
       <main id="publisher:main">{body}</main>
       <PublisherAttribution
         sourceCodeUrl={publication.attribution.sourceCodeUrl}
@@ -586,6 +632,7 @@ export async function PublisherPageView({
   homePath,
   markdownForBlock,
   page,
+  readerBuildId,
   theme,
   updates,
 }: PublisherPageViewProps): Promise<ReactElement> {
@@ -600,6 +647,13 @@ export async function PublisherPageView({
       homePath={homePath}
       pageKind={page.kind}
       publication={page.publication}
+      reader={{
+        buildId: readerBuildId,
+        ...(page.kind === "section"
+          ? { currentSection: page.section }
+          : {}),
+        outline: readerOutline(page),
+      }}
       theme={theme}
     />
   );

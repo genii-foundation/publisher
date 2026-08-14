@@ -407,6 +407,18 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     types: "./dist/markdown.d.ts",
     import: "./dist/markdown.js",
   });
+  for (const subpath of [
+    "preferences",
+    "progress",
+    "passage-range",
+    "bookmarks",
+    "search",
+  ]) {
+    assert.deepEqual(readerManifest.exports[`./${subpath}`], {
+      types: `./dist/${subpath}.d.ts`,
+      import: `./dist/${subpath}.js`,
+    });
+  }
   assert.equal(
     readerManifest.dependencies["mdast-util-from-markdown"],
     "2.0.3",
@@ -844,6 +856,26 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         applyReaderLinksToMarkdown,
         type ReaderBlockMarkdownLink,
       } from "@genii-foundation/publisher-reader/markdown";
+      import {
+        createDefaultReaderPreferences,
+        type ReaderPreferences,
+      } from "@genii-foundation/publisher-reader/preferences";
+      import {
+        createEmptyReaderProgressState,
+        type ReaderProgressState,
+      } from "@genii-foundation/publisher-reader/progress";
+      import {
+        validateReaderPassageRange,
+        type ReaderPassageRange,
+      } from "@genii-foundation/publisher-reader/passage-range";
+      import {
+        createEmptyReaderBookmarksState,
+        type ReaderBookmarksState,
+      } from "@genii-foundation/publisher-reader/bookmarks";
+      import {
+        createReaderSearchTerms,
+        type ReaderSearchIndex,
+      } from "@genii-foundation/publisher-reader/search";
 
       declare const input: unknown;
       declare const envelope: PublicationReaderEnvelope;
@@ -868,6 +900,16 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       const linked: ValidationResult<string> =
         applyReaderLinksToMarkdown(block, links);
       declare const resolution: ReaderAddressResolution;
+      const preferences: ReaderPreferences =
+        createDefaultReaderPreferences();
+      const progress: ReaderProgressState =
+        createEmptyReaderProgressState("portable-reader");
+      declare const range: ReaderPassageRange;
+      const rangeValidation = validateReaderPassageRange(range);
+      const bookmarks: ReaderBookmarksState =
+        createEmptyReaderBookmarksState("portable-reader");
+      declare const searchIndex: ReaderSearchIndex;
+      const terms: readonly string[] = createReaderSearchTerms("portable");
       void [
         READER_PROJECTOR_VERSION,
         projected,
@@ -878,6 +920,12 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         address,
         linked,
         resolution,
+        preferences,
+        progress,
+        rangeValidation,
+        bookmarks,
+        searchIndex,
+        terms,
       ];
     `;
     await Promise.all([
@@ -931,17 +979,30 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       },
     );
 
-    const runtimeClosure = await collectModuleClosure(
-      join(installedReaderRoot, "dist", "runtime.js"),
-      installedReaderRoot,
-    );
+    const browserSubpaths = [
+      "runtime",
+      "preferences",
+      "progress",
+      "passage-range",
+      "bookmarks",
+      "search",
+    ];
+    const browserClosures = new Map();
+    for (const subpath of browserSubpaths) {
+      browserClosures.set(
+        subpath,
+        await collectModuleClosure(
+          join(installedReaderRoot, "dist", `${subpath}.js`),
+          installedReaderRoot,
+        ),
+      );
+    }
+    const runtimeClosure = browserClosures.get("runtime");
+    assert.ok(runtimeClosure);
     assert.deepEqual(runtimeClosure.externalSpecifiers, [
       "@genii-foundation/publisher-schema/reader",
       "@genii-foundation/publisher-schema/routes",
     ]);
-    const runtimeSource = runtimeClosure.files
-      .map(({ source }) => source)
-      .join("\n");
     for (const forbidden of [
       "@genii-foundation/publisher-content",
       "node:",
@@ -951,11 +1012,14 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       "process.env",
       "fetch(",
     ]) {
-      assert.equal(
-        runtimeSource.includes(forbidden),
-        false,
-        `Browser runtime closure contains forbidden dependency ${forbidden}.`,
-      );
+      for (const [subpath, closure] of browserClosures) {
+        const source = closure.files.map(({ source }) => source).join("\n");
+        assert.equal(
+          source.includes(forbidden),
+          false,
+          `Browser ${subpath} closure contains forbidden dependency ${forbidden}.`,
+        );
+      }
     }
 
     await rm(installedContentRoot, {
@@ -964,23 +1028,28 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     });
     assert.equal(await pathExists(installedContentRoot), false);
 
-    const runtimeEntry = join(
-      installedReaderRoot,
-      "dist",
-      "runtime.js",
+    const browserEntries = Object.fromEntries(
+      browserSubpaths.map((subpath) => [
+        subpath,
+        join(installedReaderRoot, "dist", `${subpath}.js`),
+      ]),
     );
     const browserBundle = await buildWithEsbuild({
       absWorkingDir: consumerRoot,
-      entryPoints: [runtimeEntry],
+      entryPoints: browserEntries,
       bundle: true,
       format: "esm",
       logLevel: "silent",
       metafile: true,
+      outdir: join(temporaryRoot, "browser-bundle"),
       platform: "browser",
       treeShaking: true,
       write: false,
     });
-    assert.equal(browserBundle.outputFiles.length, 1);
+    assert.equal(
+      browserBundle.outputFiles.length,
+      browserSubpaths.length,
+    );
     const bundledReferences = [
       ...Object.keys(browserBundle.metafile.inputs),
       ...Object.values(browserBundle.metafile.inputs).flatMap(
@@ -1004,7 +1073,9 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         `Browser bundle retained Node builtin ${reference}.`,
       );
     }
-    const bundledRuntime = browserBundle.outputFiles[0].text;
+    const bundledRuntime = browserBundle.outputFiles
+      .map(({ text }) => text)
+      .join("\n");
     assert.equal(
       bundledRuntime.includes(
         "@genii-foundation/publisher-content",
@@ -1021,6 +1092,21 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       import {
         createPublicationReaderRuntime,
       } from "@genii-foundation/publisher-reader/runtime";
+      import {
+        createDefaultReaderPreferences,
+      } from "@genii-foundation/publisher-reader/preferences";
+      import {
+        createEmptyReaderProgressState,
+      } from "@genii-foundation/publisher-reader/progress";
+      import {
+        validateReaderPassageRange,
+      } from "@genii-foundation/publisher-reader/passage-range";
+      import {
+        createEmptyReaderBookmarksState,
+      } from "@genii-foundation/publisher-reader/bookmarks";
+      import {
+        createReaderSearchTerms,
+      } from "@genii-foundation/publisher-reader/search";
 
       const digest = "sha256:" + "0".repeat(64);
       const envelope = {
@@ -1097,6 +1183,20 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         content: null,
       });
       assert.equal(Object.isFrozen(result.value.envelope), true);
+      assert.equal(createDefaultReaderPreferences().fontScale, 100);
+      assert.equal(
+        createEmptyReaderProgressState("portable-reader").publicationId,
+        "portable-reader",
+      );
+      assert.equal(validateReaderPassageRange(null).valid, false);
+      assert.equal(
+        createEmptyReaderBookmarksState("portable-reader").publicationId,
+        "portable-reader",
+      );
+      assert.deepEqual(createReaderSearchTerms("Portable Reader"), [
+        "portable",
+        "reader",
+      ]);
       console.log("browser-runtime-ok");
     `;
     const proofOutput = run(

@@ -315,6 +315,34 @@ export interface RepositoryRelativePath {
 
 export type SourcePath = string | RepositoryRelativePath;
 
+export type WorkSectionStart =
+  | { readonly kind: "document" }
+  | {
+      readonly kind: "block";
+      readonly blockKind: string;
+      readonly text: string;
+      readonly occurrence?: number;
+    };
+
+export interface WorkSectionContinuity {
+  readonly id: string;
+  readonly legacyIds: readonly string[];
+  readonly progressGroups: readonly (readonly string[])[];
+  readonly historicalSectionIds: readonly string[];
+}
+
+export interface WorkSectionDeclaration {
+  readonly id: string;
+  readonly title: string;
+  readonly role?: string;
+  readonly parentId?: string;
+  readonly route?: string;
+  readonly navigable?: boolean;
+  readonly start: WorkSectionStart;
+  readonly continuity?: WorkSectionContinuity;
+  readonly metadata?: Readonly<Record<string, JSONValue>>;
+}
+
 export interface WorkManifest {
   readonly $schema?:
     "https://publisher.genii.foundation/schemas/work.schema.json";
@@ -330,6 +358,7 @@ export interface WorkManifest {
   readonly route?: string;
   readonly manuscript: SourcePath;
   readonly assets?: SourcePath;
+  readonly sections?: readonly WorkSectionDeclaration[];
   readonly metadata?: Readonly<Record<string, JSONValue>>;
 }
 

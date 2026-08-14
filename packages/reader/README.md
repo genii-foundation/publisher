@@ -1,6 +1,6 @@
 # `@genii-foundation/publisher-reader`
 
-This package projects a validated GENII Publisher content envelope into deterministic reader data and constructs framework-neutral lookup behavior over that projection.
+This package projects a validated GENII Publisher content envelope into deterministic reader data, constructs framework-neutral lookup behavior over that projection, and supplies local-first state primitives for a complete default reader.
 
 The package is prerelease software. Its API may change before 1.0 through explicit versioned migrations.
 
@@ -8,7 +8,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 
 The serialized reader envelope contains renderable publication structure, Markdown blocks, public addresses, link locations, assets, routes, statistics, and the complete fixed Publisher attribution. It omits repository paths, source provenance, extension declarations, capability grants, configuration, payloads, provider state, credentials, progress, bookmarks, preferences, analytics, audio state, and sync state.
 
-Projection and full validation are build-time Node.js operations. Browser code should import `@genii-foundation/publisher-reader/runtime`, which constructs immutable in-memory indexes without filesystem, network, environment, process, clock, or randomness access.
+Projection and full validation are build-time Node.js operations. Browser code should import the `runtime`, `preferences`, `progress`, `passage-range`, `bookmarks`, or `search` subpath. These subpaths contain no filesystem, network, environment, process, DOM, storage, clock, or randomness access.
 
 The runtime never chooses a primary collection, rewrites routes, trims trailing slashes, or infers a canonical reader address from object order. Callers supply collection context explicitly when a work belongs to more than one collection.
 
@@ -76,6 +76,28 @@ The reader build ID covers every projected semantic field and the complete sourc
 Validation first detaches an immutable snapshot from the caller. Serialization, byte hashing, and returned artifacts all use that same validated snapshot, so accessors or stateful objects cannot change the emitted artifact after validation.
 
 Runtime method arguments become one detached record before any field is interpreted. Accessors, hidden properties, inherited fields, symbols, and inconsistent proxy traps fail closed instead of becoming omitted optional values or cross-state requests.
+
+## Local reader state
+
+The `preferences` subpath defines the default application controls without choosing a UI or storage provider. Preferences are scoped by a deterministic publication key. Font size uses a bounded 5 percent grid from 85 through 125. Publication themes declare stable font family IDs, with generic `serif` as the default. Color scheme, motion, highlighting, and focus controls are validated, immutable, and serialized in one canonical field order. Malformed or newer stored schemas resolve to defaults.
+
+The `progress` subpath owns local-first reading state. The default behavior remains entirely on the reader's device. A host may persist the returned string in local storage. An optional sync adapter must validate and, when its provider has a smaller payload budget, explicitly project the state it can carry. This package never opens storage or a network connection.
+
+Progress entries use every reviewed continuity progress group from each `ReaderSection`. Aliases within one group fold to a stable owner. A section assembled from several historical groups uses the least complete group's percentage, so a merge cannot manufacture completion from one ancestor. A current interaction covers the complete reviewed lineage. A read records bounded evidence for exact section content hashes, so reading a current revision remains absorbing when an older device later reports a read of the previous revision. Changed content reports `updated` until every reviewed group carries current-revision evidence. Percent, scroll depth, reading time, audio position, latest activity, and counts use absorbing maxima. First activity uses the earliest valid timestamp. Manual read state wins an otherwise equal automatic read tie. Other equal-time choices use lexical order, which makes merging commutative and deterministic.
+
+All mutation, parsing, sanitization, and merge calls that can interpret time require an explicit `now` value in epoch milliseconds. The module never reads the clock. Parsing clamps future timestamps to that value. A local event older than the state's latest accepted update is refused instead of rewinding newer evidence. Parsing also rejects a publication mismatch or newer schema, bounds input bytes and entry counts, and stores entries in a frozen null-prototype record. Aggregate percentage is weighted by each supplied section's current `wordCount`.
+
+The `passage-range` subpath identifies a selection by work, reviewed section continuity identity, block identity, block content hash, and UTF-16 offsets. Resolution accepts a current ordered block list. It preserves a range when its content is exact, relocates a missing block ID only when its content hash has one candidate, and reports duplicate hashes as ambiguous. An existing block ID with a different content hash is revised content and never counts as an exact match.
+
+The `bookmarks` subpath stores caller-identified selections, optional notes, and absorbing deletion tombstones in a publication-scoped versioned document. It bounds every string, input size, output size, live count, and retained tombstone count. Merge is commutative, idempotent, deterministic under equal timestamps, and incapable of reviving an ID once either side has deleted it. A failed range resolution may reanchor by an exact quote plus its bounded context across the section's ordered block text. More than one matching location remains ambiguous.
+
+The bookmark core does not generate IDs, inspect a document, open storage, or contact a sync provider. Hosts supply IDs and time, turn selections into passage ranges, persist the canonical serialization, and decide whether to use the stricter remote byte budget.
+
+## Search artifact
+
+The `search` subpath projects a Reader envelope into a smaller artifact containing only navigable section identity, titles, destinations, plain text, word counts, and the exact Reader build identity. A search surface can load it without downloading Markdown, links, assets, collections, redirects, or unrelated capability state.
+
+Search folding is Unicode aware, case insensitive, punctuation insensitive, and diacritic insensitive. Query terms must all match a title or section body. Title matches rank first, with source order and continuity identity as deterministic ties. Snippet offsets map folded matches back to the original UTF-16 text, so collapsed punctuation and decomposed characters do not move the visible match to the wrong passage.
 
 ## Attribution
 

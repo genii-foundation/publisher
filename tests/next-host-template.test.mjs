@@ -18,8 +18,11 @@ import test from "node:test";
 
 import {
   PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+  PUBLISHER_NEXT_HOST_CAPABILITIES,
+  PUBLISHER_NEXT_HOST_MIGRATIONS,
   PUBLISHER_NEXT_HOST_RENDERER,
   PUBLISHER_NEXT_READER_DATA_PATH,
+  PUBLISHER_NEXT_SEARCH_DATA_PATH,
   PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY,
   createPublisherNextHostTemplate,
 } from "../packages/next/dist/host.js";
@@ -94,6 +97,14 @@ test("the host contract declares exactly the author host file set", () => {
     result.readerDataPath,
     PUBLISHER_NEXT_READER_DATA_PATH,
   );
+  assert.equal(result.searchDataPath, PUBLISHER_NEXT_SEARCH_DATA_PATH);
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("search"));
+  assert.deepEqual(PUBLISHER_NEXT_HOST_MIGRATIONS, [{
+    from: "0.1.0",
+    to: "0.2.0",
+    summary:
+      "Add the required lazy search artifact destination to the official host contract.",
+  }]);
 });
 
 test("the file list is sorted, unique, and frozen", () => {

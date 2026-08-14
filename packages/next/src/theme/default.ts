@@ -33,13 +33,13 @@ import {
 
 const LIGHT_TOKENS: PublisherNextThemeTokens = Object.freeze({
   color: Object.freeze({
-    canvas: "#F7F4ED",
-    surface: "#FFFFFF",
-    text: "#182326",
-    mutedText: "#4C5A5E",
-    accent: "#005A6E",
-    focus: "#8A3500",
-    border: "#C5CDCE",
+    canvas: "#F5F7F4",
+    surface: "#FCFDFB",
+    text: "#162225",
+    mutedText: "#526166",
+    accent: "#18586C",
+    focus: "#9A4E00",
+    border: "#C8D0CF",
   }),
   typography: Object.freeze({
     bodyFamily:
@@ -61,13 +61,13 @@ const LIGHT_TOKENS: PublisherNextThemeTokens = Object.freeze({
 
 const DARK_TOKENS: PublisherNextThemeTokens = Object.freeze({
   color: Object.freeze({
-    canvas: "#11181A",
-    surface: "#192225",
-    text: "#F1EEE4",
-    mutedText: "#BAC4C6",
-    accent: "#76D3EA",
-    focus: "#F5B942",
-    border: "#405055",
+    canvas: "#11191B",
+    surface: "#182326",
+    text: "#F1F4EF",
+    mutedText: "#B8C3C4",
+    accent: "#86D0E0",
+    focus: "#F0AE54",
+    border: "#3D5055",
   }),
   typography: LIGHT_TOKENS.typography,
   layout: LIGHT_TOKENS.layout,

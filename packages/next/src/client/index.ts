@@ -19,6 +19,9 @@ export {
   PublisherNextFrameworkErrorPage,
   PublisherNextGlobalErrorPage,
 } from "./error.js";
+export {
+  PublisherReaderRail,
+} from "./reader-rail.js";
 export type {
   CreatePublisherNextErrorIdentityInput,
   PublisherNextErrorIdentity,
@@ -28,3 +31,7 @@ export type {
   PublisherNextErrorPageProps,
   PublisherNextFrameworkErrorPageProps,
 } from "./error.js";
+export type {
+  PublisherReaderOutlineEntry,
+  PublisherReaderRailProps,
+} from "./reader-rail.js";

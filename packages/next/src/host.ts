@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.1.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.2.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -48,6 +48,10 @@ export const PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY = "[...segments]";
 /** Host-relative location of the compiled reader artifact. */
 export const PUBLISHER_NEXT_READER_DATA_PATH =
   "publication-reader.json";
+
+/** Host-relative location of the lazy client search artifact. */
+export const PUBLISHER_NEXT_SEARCH_DATA_PATH =
+  "public/publication-reader-search.json";
 
 /**
  * Host-relative location of the narration envelope.
@@ -117,7 +121,7 @@ export interface PublisherNextHostCapabilities {
 export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
   Object.freeze({
     routeKinds: Object.freeze(["home", "work", "collection", "section"]),
-    dataArtifacts: Object.freeze(["audio", "sync"]),
+    dataArtifacts: Object.freeze(["audio", "search", "sync"]),
   });
 
 export interface PublisherNextHostMigration {
@@ -134,18 +138,20 @@ export interface PublisherNextHostMigration {
 /**
  * Every host contract move this renderer knows how to make.
  *
- * Empty because 0.1.0 is the first contract, so no host can be on an earlier
- * one. An upgrade that does not move contract versions needs no edge, and any
- * other pair is refused for want of a route, which is the right answer until a
- * real contract change adds one.
- *
  * A renderer with nothing to migrate still exports this, empty, rather than
  * omitting it. Absent and empty would then be indistinguishable, and a renderer
  * that misnamed the export would silently upgrade with no route, skipping the
  * manual steps an edge exists to announce.
  */
 export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration[] =
-  Object.freeze([]);
+  Object.freeze([
+    Object.freeze({
+      from: "0.1.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Add the required lazy search artifact destination to the official host contract.",
+    }),
+  ]);
 
 export interface PublisherNextHostTemplateInput {
   /** Package name for the generated host manifest. */
@@ -171,6 +177,8 @@ export interface PublisherNextHostTemplate {
   readonly renderer: string;
   readonly rendererVersion: string;
   readonly readerDataPath: string;
+  /** Where the required capability-sliced search artifact belongs. */
+  readonly searchDataPath: string;
   /**
    * Where the narration envelope belongs, when this renderer can serve one.
    *
@@ -492,6 +500,7 @@ export function createPublisherNextHostTemplate(
     renderer: PUBLISHER_NEXT_HOST_RENDERER,
     rendererVersion: PUBLISHER_NEXT_VERSION,
     readerDataPath: PUBLISHER_NEXT_READER_DATA_PATH,
+    searchDataPath: PUBLISHER_NEXT_SEARCH_DATA_PATH,
     audioDataPath: PUBLISHER_NEXT_AUDIO_DATA_PATH,
     syncDataPath: PUBLISHER_NEXT_SYNC_DATA_PATH,
     files: Object.freeze(

@@ -2,6 +2,13 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher Next.js renderer is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-13, GENII Foundation
+
+- Advanced the host contract to 0.2.0 with a required public destination for the lazy, Reader-build-bound search artifact.
+- Declared search as an official renderer data capability and provided the sequential 0.1.0 to 0.2.0 migration edge.
+- Added the default responsive Reader rail with section navigation, lazy search, local progress, saved bookmark access, reading preferences, focus treatments, reduced motion, and mobile-safe panels while retaining server-rendered manuscript text.
+- Extended the packed host proof to materialize the required search artifact used by the default Reader interface.
+
 ## 2026-07-28, GENII Foundation
 
 - Established the official Next.js server-rendered publication adapter.

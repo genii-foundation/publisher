@@ -156,6 +156,12 @@ test("home catalogs expose only published works and collections", async () => {
   const html = await renderResolved(application, undefined);
   assert.match(html, /Café \+ Field Notes/);
   assert.match(html, /Field Notes/);
+  assert.match(html, /class="publisher-reader-rail"/u);
+  assert.match(html, /aria-label="Reader tools"/u);
+  assert.match(html, />Contents</u);
+  assert.match(html, />Search</u);
+  assert.match(html, />Bookmarks</u);
+  assert.match(html, />Settings</u);
   assert.doesNotMatch(html, /Quiet Draft/);
   assert.doesNotMatch(html, /Old Record/);
   assert.doesNotMatch(html, /Retired Notes/);
@@ -1147,7 +1153,7 @@ test("Markdown URLs reject malformed UTF-8 percent escapes", () => {
   );
 });
 
-test("static route functions remain server rendered without client state", async () => {
+test("static routes preserve server-rendered manuscript around client tools", async () => {
   const application = await createApplication();
   const generated = application.generateStaticParams();
   assert.deepEqual(generated, application.staticParams);
