@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher content is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-18, GENII Foundation
+
+- Compiled named Updates views and their pagination authority into deterministic content routes.
+
 ## 2026-07-28, GENII Foundation
 
 - Established the framework-neutral content package boundary.

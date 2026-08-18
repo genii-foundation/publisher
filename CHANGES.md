@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-18, GENII Foundation
+
+- Added the backward-compatible named and paginated Updates route contract as the first part of generated-host Updates integration.
+
 ## 2026-08-13, GENII Foundation
 
 - Added optional preorder section declarations to work manifests, with durable identities, hierarchy, routes, continuity, and exact Markdown block boundary selectors.

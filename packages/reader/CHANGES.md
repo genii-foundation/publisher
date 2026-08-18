@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher reader is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-18, GENII Foundation
+
+- Preserved stable Updates view identities and pagination authority through Reader projection and runtime validation.
+
 ## 2026-08-13, GENII Foundation
 
 - Added browser-safe preference and progress subpaths for the default Reader application.

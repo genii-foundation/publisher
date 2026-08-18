@@ -261,7 +261,22 @@ export interface PublicationRoutes {
   readonly home: string;
   readonly work: string;
   readonly collection?: string;
-  readonly updates?: string;
+  /**
+   * A string preserves the compact single-view contract. Publications that
+   * need named or paginated views use explicit declarations instead.
+   */
+  readonly updates?: string | readonly PublicationUpdatesRoute[];
+}
+
+export interface PublicationUpdatesPagination {
+  readonly path: string;
+  readonly pageSize: number;
+}
+
+export interface PublicationUpdatesRoute {
+  readonly id: string;
+  readonly path: string;
+  readonly pagination?: PublicationUpdatesPagination;
 }
 
 export type RedirectStatus = 301 | 302 | 307 | 308;

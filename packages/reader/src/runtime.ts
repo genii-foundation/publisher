@@ -1069,14 +1069,33 @@ function indexRoutes(
   const updateRoutes = envelope.routes.active.filter(
     ({ target }) => target.kind === "updates",
   );
-  if (updateRoutes.length > 1) {
+  const updateViewIds = new Set<string>();
+  for (let index = 0; index < updateRoutes.length; index += 1) {
+    const route = updateRoutes[index];
+    if (route === undefined || route.target.kind !== "updates") {
+      continue;
+    }
+    if (updateViewIds.has(route.target.viewId)) {
+      diagnostics.push(
+        diagnostic(
+          "reader.runtime.updates_view_id_duplicate",
+          `/routes/active/${index}/target/viewId`,
+          "Updates view ids must be unique.",
+          "uniqueItems",
+          { viewId: route.target.viewId },
+        ),
+      );
+    }
+    updateViewIds.add(route.target.viewId);
+  }
+  if (updateRoutes.length > 32) {
     diagnostics.push(
       diagnostic(
         "reader.runtime.updates_route_count",
         "/routes/active",
-        "A reader envelope may contain at most one Updates route.",
+        "A reader envelope may contain at most 32 Updates routes.",
         "routeCardinality",
-        { actual: updateRoutes.length, maximum: 1 },
+        { actual: updateRoutes.length, maximum: 32 },
       ),
     );
   }
@@ -1085,9 +1104,7 @@ function indexRoutes(
   if (homeRoutes[0] !== undefined) {
     expected.push(homeRoutes[0]);
   }
-  if (updateRoutes[0] !== undefined) {
-    expected.push(updateRoutes[0]);
-  }
+  expected.push(...updateRoutes);
   for (const work of envelope.works) {
     expected.push({
       path: work.route,

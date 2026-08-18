@@ -1181,6 +1181,63 @@ test("semantic validation preserves configured trailing-slash routes", async () 
   );
 });
 
+test("Updates routes support stable named views and bounded pagination templates", async () => {
+  const fixture = await loadFixture("canonical-field-notes");
+  const publication = structuredClone(fixture.publication);
+  publication.routes.updates = [
+    {
+      id: "all",
+      path: "/updates",
+      pagination: { path: "/updates/{page}", pageSize: 5 },
+    },
+    {
+      id: "literary",
+      path: "/updates/literary",
+      pagination: {
+        path: "/updates/literary/{page}",
+        pageSize: 5,
+      },
+    },
+  ];
+
+  const shape = validatePublicationShape(publication);
+  assert.equal(shape.valid, true, JSON.stringify(shape.diagnostics, null, 2));
+  const semantic = validateFixtureSemantics(fixture, { publication });
+  assert.equal(
+    semantic.valid,
+    true,
+    JSON.stringify(semantic.diagnostics, null, 2),
+  );
+
+  const duplicate = structuredClone(publication);
+  duplicate.routes.updates[1].id = "all";
+  duplicate.routes.updates[1].pagination.path = "/updates/{page}";
+  const invalid = validateFixtureSemantics(fixture, {
+    publication: duplicate,
+  });
+  assert.equal(invalid.valid, false);
+  assert.ok(
+    invalid.diagnostics.some(
+      ({ code }) => code === "route.updates_view_id_duplicate",
+    ),
+  );
+  assert.ok(
+    invalid.diagnostics.some(
+      ({ code }) => code === "route.updates_pagination_duplicate",
+    ),
+  );
+
+  for (const pagination of [
+    { path: "/updates/page", pageSize: 5 },
+    { path: "/updates/{page}", pageSize: 0 },
+    { path: "/updates/{page}", pageSize: 101 },
+  ]) {
+    const candidate = structuredClone(publication);
+    candidate.routes.updates[0].pagination = pagination;
+    assert.equal(validatePublicationShape(candidate).valid, false);
+  }
+});
+
 test("semantic diagnostics have deterministic public ordering", async () => {
   const fixture = await loadFixture("canonical-field-notes");
   const publication = structuredClone(fixture.publication);

@@ -441,18 +441,13 @@ test("both fixture publications project into deterministic public reader artifac
       publicationId: "rain-gauge-journal",
       workIds: ["rain-gauge"],
       collectionIds: ["weather-observations"],
-      // The build identity moved when this fixture stopped declaring an audio
-      // adapter it never used, because identity covers the source manifest.
-      //
-      // byteLength deliberately did not move, and that is worth keeping in view:
-      // removing narration configuration changed the build identity and not one
-      // byte of the serialized reader envelope. Narration never enters the reader
-      // artifact, and this is that claim measured rather than asserted.
+      // Route targets now carry the stable Updates view identity. That changes
+      // the Reader bytes and every identity derived from them, deliberately.
       buildId:
-        "sha256:0664cc455e6f1f3526d1a495f0b1ab565dca8c1e575ca99f42a99f8e3a63cc80",
-      byteLength: 5991,
+        "sha256:67206ed8deb83193076a6d113558a6c291fc015aa956342f890837223efba09c",
+      byteLength: 6010,
       artifactHash:
-        "sha256:91d733b9f7023059a811cddb9831a7f7a532eeb7593ffdd22b99d23191079e3a",
+        "sha256:bab751a20b34b5c1d909f3b0b5b560c647f14c3ffaa87bf2a2ac56e685f0d5bc",
     },
     {
       directory: "declared-night-dispatch",
@@ -460,10 +455,10 @@ test("both fixture publications project into deterministic public reader artifac
       workIds: ["signal-lantern", "platform-bell"],
       collectionIds: ["after-dark"],
       buildId:
-        "sha256:f074086d1034b3d1a0bcf113fb00e9bbd7b383b314e2e801a2195db89d990e39",
-      byteLength: 8727,
+        "sha256:9dec0414fcd327d0bee8cdc6a55fe651f174d8cf5c33e293ad0be31f9b1e6a6b",
+      byteLength: 8746,
       artifactHash:
-        "sha256:0d5b335db97cf33df1f0115b1d7f0751bcf8e61fc619cfe11ca09493caa188cc",
+        "sha256:96c770607d7f0c47dc23647e9ea1a53fa540d5f860279bf9ec11990669b98099",
     },
   ];
 

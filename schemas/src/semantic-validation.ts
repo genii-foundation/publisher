@@ -464,7 +464,7 @@ function validateOriginRelativeRoute(
   path: string,
   documentPath: string,
   diagnostics: Diagnostic[],
-  requiredToken?: "{workId}" | "{collectionId}",
+  requiredToken?: "{workId}" | "{collectionId}" | "{page}",
 ): boolean {
   let routeValid = true;
   if (typeof value !== "string") {
@@ -709,6 +709,97 @@ function addActiveRoute(
   );
 }
 
+function validateUpdatesRoutes(
+  publication: PublicationManifest,
+  activeRoutes: Map<string, ActiveRoute>,
+  diagnostics: Diagnostic[],
+): void {
+  const declared = publication.routes.updates;
+  if (declared === undefined) {
+    return;
+  }
+  const routes =
+    typeof declared === "string"
+      ? [{ id: "updates", path: declared }]
+      : declared;
+  const ids = new Map<string, number>();
+  const paginationPaths = new Map<string, number>();
+  routes.forEach((route, index) => {
+    const basePath =
+      typeof declared === "string"
+        ? "/routes/updates"
+        : `/routes/updates/${index}`;
+    const firstIdIndex = ids.get(route.id);
+    if (firstIdIndex !== undefined) {
+      diagnostics.push(
+        diagnostic(
+          "route.updates_view_id_duplicate",
+          `${basePath}/id`,
+          `Updates view id "${route.id}" is already declared.`,
+          "uniqueItems",
+          { id: route.id, firstIndex: firstIdIndex, index },
+        ),
+      );
+    } else {
+      ids.set(route.id, index);
+    }
+
+    if (
+      validateOriginRelativeRoute(
+        route.path,
+        typeof declared === "string" ? basePath : `${basePath}/path`,
+        CANONICAL_PUBLICATION_MANIFEST_PATH,
+        diagnostics,
+      )
+    ) {
+      addActiveRoute(
+        {
+          route: route.path,
+          path:
+            typeof declared === "string" ? basePath : `${basePath}/path`,
+          documentPath: CANONICAL_PUBLICATION_MANIFEST_PATH,
+          kind: "updates",
+          id: route.id,
+        },
+        activeRoutes,
+        diagnostics,
+      );
+    }
+
+    if (route.pagination === undefined) {
+      return;
+    }
+    const paginationPath = `${basePath}/pagination/path`;
+    validateOriginRelativeRoute(
+      route.pagination.path,
+      paginationPath,
+      CANONICAL_PUBLICATION_MANIFEST_PATH,
+      diagnostics,
+      "{page}",
+    );
+    const firstPaginationIndex = paginationPaths.get(
+      route.pagination.path,
+    );
+    if (firstPaginationIndex !== undefined) {
+      diagnostics.push(
+        diagnostic(
+          "route.updates_pagination_duplicate",
+          paginationPath,
+          "Updates pagination templates must be unique.",
+          "uniqueItems",
+          {
+            path: route.pagination.path,
+            firstIndex: firstPaginationIndex,
+            index,
+          },
+        ),
+      );
+    } else {
+      paginationPaths.set(route.pagination.path, index);
+    }
+  });
+}
+
 function validateRoutes(
   input: SemanticValidationInput,
   layout: ResolvedPublicationLayout | undefined,
@@ -735,26 +826,7 @@ function validateRoutes(
     );
   }
 
-  if (publication.routes.updates !== undefined) {
-    const updatesValid = validateOriginRelativeRoute(
-      publication.routes.updates,
-      "/routes/updates",
-      CANONICAL_PUBLICATION_MANIFEST_PATH,
-      diagnostics,
-    );
-    if (updatesValid) {
-      addActiveRoute(
-        {
-          route: publication.routes.updates,
-          path: "/routes/updates",
-          documentPath: CANONICAL_PUBLICATION_MANIFEST_PATH,
-          kind: "updates",
-        },
-        activeRoutes,
-        diagnostics,
-      );
-    }
-  }
+  validateUpdatesRoutes(publication, activeRoutes, diagnostics);
 
   const workTemplateValid = validateOriginRelativeRoute(
     publication.routes.work,
@@ -1605,26 +1677,7 @@ export function validatePublicationPreflight(
       diagnostics,
     );
   }
-  if (
-    input.publication.routes.updates !== undefined &&
-    validateOriginRelativeRoute(
-      input.publication.routes.updates,
-      "/routes/updates",
-      CANONICAL_PUBLICATION_MANIFEST_PATH,
-      diagnostics,
-    )
-  ) {
-    addActiveRoute(
-      {
-        route: input.publication.routes.updates,
-        path: "/routes/updates",
-        documentPath: CANONICAL_PUBLICATION_MANIFEST_PATH,
-        kind: "updates",
-      },
-      activeRoutes,
-      diagnostics,
-    );
-  }
+  validateUpdatesRoutes(input.publication, activeRoutes, diagnostics);
   validateOriginRelativeRoute(
     input.publication.routes.work,
     "/routes/work",

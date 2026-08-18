@@ -473,6 +473,63 @@ test("declared content compiles without canonical path assumptions", async () =>
   assertValid(validateContentEnvelopeShape(envelope));
 });
 
+test("named Updates views compile as stable Reader route authority", async () => {
+  const input = await loadCompilationInput("declared-night-dispatch");
+  const configured = replacePublication(input, (publication) => {
+    publication.routes.updates = [
+      {
+        id: "all",
+        path: "/dispatch-log",
+        pagination: {
+          path: "/dispatch-log/{page}",
+          pageSize: 5,
+        },
+      },
+      {
+        id: "literary",
+        path: "/dispatch-log/literary",
+        pagination: {
+          path: "/dispatch-log/literary/{page}",
+          pageSize: 5,
+        },
+      },
+    ];
+    return publication;
+  });
+  const envelope = compile(configured);
+  assert.deepEqual(
+    envelope.routes.active
+      .filter(({ target }) => target.kind === "updates")
+      .map(({ path, target }) => ({ path, target })),
+    [
+      {
+        path: "/dispatch-log",
+        target: {
+          kind: "updates",
+          viewId: "all",
+          pagination: {
+            path: "/dispatch-log/{page}",
+            pageSize: 5,
+          },
+        },
+      },
+      {
+        path: "/dispatch-log/literary",
+        target: {
+          kind: "updates",
+          viewId: "literary",
+          pagination: {
+            path: "/dispatch-log/literary/{page}",
+            pageSize: 5,
+          },
+        },
+      },
+    ],
+  );
+  assertValid(validateContentEnvelopeShape(envelope));
+  assertValid(validatePublicationContentEnvelope(envelope));
+});
+
 test("source and work input ordering do not affect deterministic output", async () => {
   const input = await loadCompilationInput("declared-night-dispatch");
   const baseline = compile(input);

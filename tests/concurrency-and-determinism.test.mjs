@@ -71,15 +71,12 @@ const servable = join(repositoryRoot, "fixtures", "canonical-tide-tables");
 const expectedDigests = Object.freeze({
   "canonical-tide-tables":
     "02989c86def31920e6d4ea753e0bd138",
-  // Moved from 6a7dcd825ae631ce7f86d69360e374ee when this fixture stopped
-  // declaring an audio adapter it never used. It had named an adapter and no
-  // catalog, which produced no narration and reported nothing, and is now refused.
-  // Narration lives in canonical-narrated-tides so each fixture has one job.
-  // Remeasured on 22.12.0, 24.18.0, and 26.4.0.
+  // Updates targets now carry their stable view identity, so these two Reader
+  // artifacts moved together. Remeasured on 22.12.0, 24.18.0, and 26.4.0.
   "canonical-field-notes":
-    "d704c962f6e707d8a1a3728bca898846",
+    "dcc268d4ceb100671132a77e6daacdd0",
   "declared-night-dispatch":
-    "3f2f621289fbb26231edf4d78562ff5d",
+    "aa20f88a42b68f8eb1d3b0646763967c",
   "canonical-narrated-tides":
     "4a26cdd81b0374c8c2ef4140d086a7b0",
 });
