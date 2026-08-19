@@ -16,9 +16,12 @@ If you wish to allow use of your version of this file only under the terms of th
 import {
   READER_BOOKMARKS_SCHEMA_VERSION,
   createEmptyReaderBookmarksState,
+  createReaderBookmarksExportFileName,
   createReaderBookmarksStorageKey,
+  createReaderBookmarksTextExport,
   listLiveReaderBookmarks,
   parseReaderBookmarksState,
+  queryReaderBookmarks,
   serializeReaderBookmarksState,
   type ReaderBookmarksState,
 } from "@genii-foundation/publisher-reader/bookmarks";
@@ -105,6 +108,7 @@ export interface PublisherReaderOutlineEntry {
 
 export interface PublisherReaderRailProps {
   readonly publicationId: string;
+  readonly publicationTitle: string;
   readonly readerBuildId: Sha256Digest;
   readonly searchPath: string;
   readonly outline: readonly PublisherReaderOutlineEntry[];
@@ -259,6 +263,7 @@ function createClientEventId(now: number): string {
 
 export function PublisherReaderRail({
   publicationId,
+  publicationTitle,
   readerBuildId,
   searchPath,
   outline,
@@ -323,6 +328,7 @@ export function PublisherReaderRail({
   const [preferences, setPreferences] = useState<ReaderPreferences>(() =>
     createDefaultReaderPreferences(DEFAULT_FONT_POLICY));
   const [query, setQuery] = useState("");
+  const [bookmarkQuery, setBookmarkQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState<ReaderSearchIndex | null>(null);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [syncState, setSyncState] = useState<ReaderSyncState>("idle");
@@ -353,10 +359,16 @@ export function PublisherReaderRail({
   const canSyncProgress = sync?.capabilities.includes("progress") === true;
   const canSyncBookmarks = sync?.capabilities.includes("bookmarks") === true;
   const canSyncEngagement = sync?.capabilities.includes("engagement") === true;
-  const bookmarks = useMemo(
+  const allBookmarks = useMemo(
     () => listLiveReaderBookmarks(bookmarkState),
     [bookmarkState],
   );
+  const bookmarks = useMemo(() => {
+    const text = bookmarkQuery.trim();
+    return text.length === 0
+      ? allBookmarks
+      : queryReaderBookmarks(bookmarkState, { text });
+  }, [allBookmarks, bookmarkQuery, bookmarkState]);
 
   progressRef.current = progress;
   bookmarksRef.current = bookmarkState;
@@ -864,6 +876,27 @@ export function PublisherReaderRail({
     });
   };
 
+  const downloadBookmarks = (): void => {
+    if (allBookmarks.length === 0) return;
+    const now = Date.now();
+    const exported = createReaderBookmarksTextExport(
+      bookmarkState,
+      { publicationId, now },
+      { publicationTitle, origin: window.location.origin },
+    );
+    const url = URL.createObjectURL(new Blob([exported], {
+      type: "text/plain;charset=utf-8",
+    }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = createReaderBookmarksExportFileName(publicationId);
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
   const toggle = (panel: ReaderPanel): void => {
     setOpenPanel((current) => current === panel ? null : panel);
   };
@@ -1078,17 +1111,26 @@ export function PublisherReaderRail({
           ) : null}
 
           {openPanel === "bookmarks" ? (
-            bookmarks.length === 0 ? (
+            allBookmarks.length === 0 ? (
               <p>No saved passages yet. Passage selection controls arrive in the next Reader slice.</p>
             ) : (
-              <ol className="publisher-reader-bookmarks">
-                {bookmarks.map((bookmark) => (
-                  <li key={bookmark.id}>
-                    <a href={bookmark.href}><q>{bookmark.quote}</q></a>
-                    {bookmark.note === undefined ? null : <p>{bookmark.note}</p>}
-                  </li>
-                ))}
-              </ol>
+              <div className="publisher-reader-bookmark-panel">
+                <div className="publisher-reader-bookmark-tools">
+                  <label htmlFor={`${panelId}-bookmark-query`}>Search saved passages</label>
+                  <input id={`${panelId}-bookmark-query`} maxLength={280} onChange={(event) => setBookmarkQuery(event.currentTarget.value)} type="search" value={bookmarkQuery} />
+                  <button className="publisher-reader-secondary-action" onClick={downloadBookmarks} type="button">Export saved passages</button>
+                </div>
+                {bookmarks.length === 0 ? <p>No saved passages match this search.</p> : (
+                  <ol className="publisher-reader-bookmarks">
+                    {bookmarks.map((bookmark) => (
+                      <li key={bookmark.id}>
+                        <a href={bookmark.href}><q>{bookmark.quote}</q></a>
+                        {bookmark.note === undefined ? null : <p>{bookmark.note}</p>}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
             )
           ) : null}
 

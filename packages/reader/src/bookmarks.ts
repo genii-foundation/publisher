@@ -91,6 +91,13 @@ export interface ReaderBookmarkCounts {
   readonly total: number;
 }
 
+export interface ReaderBookmarksTextExportOptions {
+  readonly publicationTitle: string;
+  readonly origin?: string;
+}
+
+export const READER_BOOKMARKS_TEXT_EXPORT_VERSION = 1 as const;
+
 export type ReaderBookmarkResolution =
   | {
       readonly status: "exact" | "renamed" | "reanchored";
@@ -984,6 +991,96 @@ export function queryReaderBookmarks(
       ].some((field) => field.toLowerCase().includes(needle));
     }),
   );
+}
+
+function exportOrigin(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (!isBoundedScalarString(value, 1, 2_048)) {
+    throw new TypeError("The bookmark export origin is invalid.");
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new TypeError("The bookmark export origin is invalid.");
+  }
+  if (
+    (parsed.protocol !== "https:" && parsed.protocol !== "http:") ||
+    parsed.username.length > 0 ||
+    parsed.password.length > 0 ||
+    parsed.pathname !== "/" ||
+    parsed.search.length > 0 ||
+    parsed.hash.length > 0
+  ) {
+    throw new TypeError("The bookmark export origin is invalid.");
+  }
+  return parsed.origin;
+}
+
+function appendIndented(lines: string[], value: string): void {
+  for (const line of value.split(/\r\n|\r|\n/u)) {
+    lines.push(`  ${line}`);
+  }
+}
+
+export function createReaderBookmarksExportFileName(
+  publicationId: string,
+): string {
+  requirePublicationId(publicationId);
+  return `${publicationId}-saved-passages.txt`;
+}
+
+export function createReaderBookmarksTextExport(
+  state: ReaderBookmarksState,
+  context: ReaderBookmarksContext,
+  options: ReaderBookmarksTextExportOptions,
+): string {
+  validateContext(context);
+  const record = readAllowedRecord(options, ["publicationTitle"], ["origin"]);
+  if (
+    record === undefined ||
+    !isBoundedScalarString(record.publicationTitle, 1, 256)
+  ) {
+    throw new TypeError("The bookmark export publication title is invalid.");
+  }
+  const origin = exportOrigin(record.origin);
+  const bookmarks = listLiveReaderBookmarks(
+    sanitizeReaderBookmarksState(state, context),
+  );
+  const number = new Intl.NumberFormat("en-US");
+  const lines = [
+    "GENII Publisher saved passages",
+    `Export format version: ${READER_BOOKMARKS_TEXT_EXPORT_VERSION}`,
+    `Generated: ${new Date(context.now).toISOString()}`,
+    `Bookmarks: ${number.format(bookmarks.length)}`,
+    "",
+    "Publication:",
+  ];
+  appendIndented(lines, record.publicationTitle);
+  lines.push("");
+  if (bookmarks.length === 0) {
+    lines.push("No saved passages.", "");
+    return `${lines.join("\n")}\n`;
+  }
+  bookmarks.forEach((bookmark, index) => {
+    lines.push(
+      `Saved passage ${number.format(index + 1)}`,
+      `Saved: ${new Date(bookmark.createdAt).toISOString()}`,
+      "Destination:",
+    );
+    const destination = origin === undefined
+      ? bookmark.href
+      : new URL(bookmark.href, `${origin}/`).toString();
+    appendIndented(lines, destination);
+    lines.push("Selected text:");
+    appendIndented(lines, bookmark.quote);
+    if (bookmark.note !== undefined) {
+      lines.push("Note:");
+      appendIndented(lines, bookmark.note);
+    }
+    lines.push("");
+  });
+  return `${lines.join("\n")}\n`;
 }
 
 function chooseLiveBookmark(

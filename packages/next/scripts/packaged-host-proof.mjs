@@ -663,6 +663,7 @@ function createCrossTabBookmarkProof(reader, sectionPath) {
           quote,
           prefix: "",
           suffix: "",
+          note: "Cross-tab bookmark note.",
           range: {
             start: point(0),
             end: point(quote.length),
@@ -1096,6 +1097,69 @@ async function assertHydratedReaderTools({
         bookmarkProof.quote,
         "The first Reader tab did not render bookmark state written by its peer tab.",
       );
+      const setBookmarkQuery = async (value) => page.send("Runtime.evaluate", {
+        expression: [
+          "((value) => {",
+          '  const input = document.querySelector(".publisher-reader-bookmark-tools input[type=search]");',
+          "  if (!(input instanceof HTMLInputElement)) return false;",
+          '  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;',
+          "  setter?.call(input, value);",
+          '  input.dispatchEvent(new Event("input", { bubbles: true }));',
+          "  return true;",
+          `})(${JSON.stringify(value)})`,
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(
+        (await setBookmarkQuery(bookmarkProof.quote.slice(0, 5))).result?.value,
+        true,
+      );
+      let filteredQuote = "";
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression:
+            'document.querySelector(".publisher-reader-bookmarks q")?.textContent ?? ""',
+          returnByValue: true,
+        });
+        filteredQuote = evaluated.result?.value ?? "";
+        if (filteredQuote === bookmarkProof.quote) break;
+        await wait(50);
+      }
+      assert.equal(filteredQuote, bookmarkProof.quote);
+      assert.equal((await setBookmarkQuery("no such saved passage")).result?.value, true);
+      let emptySearch = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression:
+            'document.querySelector(".publisher-reader-bookmark-panel")?.textContent?.includes("No saved passages match this search.") === true',
+          returnByValue: true,
+        });
+        emptySearch = evaluated.result?.value === true;
+        if (emptySearch) break;
+        await wait(50);
+      }
+      assert.equal(emptySearch, true, "The default bookmark query did not render its empty state.");
+      assert.equal((await setBookmarkQuery("")).result?.value, true);
+      const exported = await page.send("Runtime.evaluate", {
+        expression: [
+          "(async () => {",
+          "  let captured;",
+          "  const original = URL.createObjectURL.bind(URL);",
+          "  URL.createObjectURL = (blob) => { captured = blob; return original(blob); };",
+          '  const button = Array.from(document.querySelectorAll(".publisher-reader-bookmark-tools button"))',
+          '    .find((candidate) => candidate.textContent?.includes("Export saved passages"));',
+          "  button?.click();",
+          '  return captured instanceof Blob ? await captured.text() : "";',
+          "})()",
+        ].join("\n"),
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const exportedText = exported.result?.value ?? "";
+      assert.match(exportedText, /GENII Publisher saved passages/u);
+      assert.ok(exportedText.includes(bookmarkProof.quote));
+      assert.match(exportedText, /Cross-tab bookmark note\./u);
+      assert.ok(exportedText.includes(bookmarkProof.state.bookmarks["cross-tab-proof"].href));
     } finally {
       peerPage.close();
     }

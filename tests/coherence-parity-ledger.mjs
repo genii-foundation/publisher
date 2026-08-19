@@ -240,8 +240,14 @@ export const READER_PARITY = Object.freeze([
     id: "reader.bookmarks.export",
     capability: "Readable bookmark export that preserves selected text, notes, and destinations",
     home: "engine",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "A versioned plain-text export indents all reader-controlled lines, omits tombstones, preserves complete live quotes, notes, saved times, and destinations, and requires no account or provider.",
+    evidence: {
+      decision: "docs/architecture/0028-readable-bookmark-export.md",
+      engine: "packages/reader/src/bookmarks.ts",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
     sourcePaths: ["src/lib/reader-export.ts", "src/lib/reader-bookmarks.ts"],
   },
   {

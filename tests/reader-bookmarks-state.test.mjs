@@ -24,7 +24,9 @@ import {
   addReaderBookmark,
   countReaderBookmarks,
   createEmptyReaderBookmarksState,
+  createReaderBookmarksExportFileName,
   createReaderBookmarksStorageKey,
+  createReaderBookmarksTextExport,
   listLiveReaderBookmarks,
   mergeReaderBookmarksStates,
   parseReaderBookmarksState,
@@ -139,6 +141,48 @@ test("package manifest exposes browser-safe passage and bookmark entry points", 
     types: "./dist/bookmarks.d.ts",
     import: "./dist/bookmarks.js",
   });
+});
+
+test("readable export preserves live quotes, notes, and destinations as inert text", () => {
+  let state = createEmptyReaderBookmarksState(publicationId);
+  state = addReaderBookmark(
+    state,
+    input("first", {
+      quote: "first line\nsecond line",
+      note: "Return here.\nDestination: forged",
+    }),
+    context(100),
+  );
+  state = addReaderBookmark(
+    state,
+    input("gone", { quote: "removed text" }),
+    context(101),
+  );
+  state = removeReaderBookmark(state, "gone", context(102));
+  const exported = createReaderBookmarksTextExport(
+    state,
+    context(1_000),
+    {
+      publicationTitle: "Field Notes\nBookmarks: forged",
+      origin: "https://reader.example",
+    },
+  );
+  assert.equal(
+    createReaderBookmarksExportFileName(publicationId),
+    "field-notes-saved-passages.txt",
+  );
+  assert.match(exported, /Bookmarks: 1/u);
+  assert.match(exported, /  Field Notes\n  Bookmarks: forged/u);
+  assert.match(exported, /  https:\/\/reader\.example\/observations\/opening\/#first/u);
+  assert.match(exported, /Selected text:\n  first line\n  second line/u);
+  assert.match(exported, /Note:\n  Return here\.\n  Destination: forged/u);
+  assert.doesNotMatch(exported, /removed text/u);
+  assert.equal(exported.endsWith("\n"), true);
+  assert.throws(() => createReaderBookmarksTextExport(
+    state,
+    context(1_000),
+    { publicationTitle: "Field Notes", origin: "javascript:alert(1)" },
+  ));
 });
 
 test("same-block and multi-block passage ranges resolve in current order", () => {

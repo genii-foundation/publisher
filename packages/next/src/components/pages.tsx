@@ -632,6 +632,7 @@ function PublisherPageShell({
             : { currentSection: reader.currentSection })}
           outline={reader.outline}
           publicationId={publication.id}
+          publicationTitle={publication.title}
           readerBuildId={reader.buildId}
           searchPath="/publication-reader-search.json"
           sync={reader.sync}

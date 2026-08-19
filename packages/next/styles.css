@@ -260,6 +260,8 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 }
 
 .publisher-reader-search,
+.publisher-reader-bookmark-panel,
+.publisher-reader-bookmark-tools,
 .publisher-reader-progress-panel,
 .publisher-reader-settings,
 .publisher-reader-sync {
@@ -305,7 +307,17 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   font-weight: 700;
 }
 
+.publisher-reader-panel .publisher-reader-secondary-action {
+  justify-self: start;
+  padding: 0.6rem 0;
+  color: var(--publisher-color-accent);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
 .publisher-reader-search label,
+.publisher-reader-bookmark-tools label,
 .publisher-reader-settings label,
 .publisher-reader-sync label {
   display: grid;
@@ -316,6 +328,7 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 }
 
 .publisher-reader-search input,
+.publisher-reader-bookmark-tools input,
 .publisher-reader-settings select,
 .publisher-reader-sync input {
   width: 100%;

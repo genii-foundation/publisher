@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 14 upgraded | 14 | Publisher implements a stronger checked contract. |
+| 15 upgraded | 15 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 28 planned | 28 | Accepted Publisher scope is not implemented yet. |
+| 27 planned | 27 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -91,9 +91,11 @@ mutating or obscuring prose, and bookmark presence reaches progress, section, an
 search surfaces.
 
 Publisher now implements the generic range, bookmark, reanchoring, merge,
-tombstone, query, and bounded remote-projection primitives. Readable export,
-virtualized presentation, margin markers, confirmation controls, and secondary
-Reader surfaces remain planned in the official renderer.
+tombstone, query, readable plain-text export, and bounded remote-projection
+primitives. The default Reader now searches selected text, notes, and context,
+renders an honest empty result, and downloads the complete live collection
+without network access. Virtualized presentation, margin markers, confirmation
+controls, selection capture, and secondary Reader surfaces remain planned.
 
 ### Preferences and focus
 
@@ -251,7 +253,7 @@ The following are accepted scope, not release blockers waiting for another
 product decision:
 
 1. Add publication heatmaps, recent sections, and next-section recommendations.
-2. Add bookmark export and the default bookmark query interface.
+2. Add virtualized bookmark presentation, selection capture, margin markers, and confirmed deletion controls.
 3. Project capability-sliced client artifacts and a default search interface.
 4. Add default settings, focus, progress, bookmark, and toolbar components.
 5. Add the default narration player and timing interaction.
