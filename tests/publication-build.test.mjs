@@ -46,10 +46,12 @@ import {
   projectPublicationReader,
 } from "../packages/reader/dist/index.js";
 import {
-  buildPublicationReader,
   derivePublicationWorkInputs,
   rootSectionIdFor,
 } from "../packages/publisher/dist/node.js";
+import {
+  buildFixturePublicationReader as buildPublicationReader,
+} from "./extension-fixture.mjs";
 import {
   loadPublicationCompilationSources,
 } from "../packages/publisher/dist/node/loader.js";

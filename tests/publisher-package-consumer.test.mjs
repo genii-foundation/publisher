@@ -233,6 +233,7 @@ async function expectedPublisherPackagePaths() {
     "README.md",
     "SOURCE-NOTICE",
     "THIRD_PARTY_NOTICES.md",
+    "third-party-licenses/semver-LICENSE-ISC.txt",
     // The author lifecycle executable ships with the package, because an author
     // runs it out of their own installation.
     ...binaryFiles.map(
@@ -335,6 +336,7 @@ test("packed Publisher application installs offline and loads an unrelated publi
     node: "./dist/node.js",
   });
   assert.equal(publisherManifest.devDependencies.esbuild, "0.27.0");
+  assert.equal(publisherManifest.devDependencies["@types/semver"], "7.7.1");
   // Pinned deliberately. The application package's dependency surface is what a
   // consumer installs, so growing it is an edit somebody makes on purpose rather
   // than a thing that happens to them.
@@ -342,6 +344,7 @@ test("packed Publisher application installs offline and loads an unrelated publi
     "@genii-foundation/publisher-content": "0.1.0-alpha.0",
     "@genii-foundation/publisher-reader": "0.1.0-alpha.0",
     "@genii-foundation/publisher-schema": "0.1.0-alpha.0",
+    semver: "7.8.5",
   });
 
   const temporaryRoot = await mkdtemp(

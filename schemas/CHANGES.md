@@ -4,6 +4,9 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Reserved author-owned `publisher.extensions.mjs` from every publication source role.
+- Added explicit author extension registration, exact installed extension identity, build-time `content.project` invocation, and Reader-build-bound extension artifacts.
+- Added official Next server extension slots with narrow page context, grant enforcement, deterministic application identity, and an independently packed extension proof.
 - Added explicit author-owned theme selection and a separately packaged canonical-host proof across ordinary and framework error surfaces.
 - Added a Reader-build-bound public identity artifact so client error chunks retain exact publication attribution and theme without manuscript data.
 - Added a build-bound browser narration projection and a lazy persistent default player with voice memory, rate, seek, queue, duration, and real packed-host playback proof.

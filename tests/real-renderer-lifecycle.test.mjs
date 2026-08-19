@@ -145,6 +145,44 @@ function realHost(t, { publication = servableFixture } = {}) {
     "utf8",
   );
   cpSync(publication, hostRoot, { recursive: true });
+  const manifest = JSON.parse(
+    readFileSync(join(hostRoot, "publication.json"), "utf8"),
+  );
+  if ((manifest.extensions ?? []).length > 0) {
+    writeFileSync(
+      join(hostRoot, "publisher.extensions.mjs"),
+      `${(manifest.extensions ?? []).map((extension) => `
+const ${extension.id.replaceAll("-", "_")} = Object.freeze({
+  id: ${JSON.stringify(extension.id)},
+  package: ${JSON.stringify(extension.package)},
+  version: "1.0.0",
+  engineCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+  capabilities: Object.freeze(${JSON.stringify(extension.capabilities)}),
+  implementation: Object.freeze({
+    kind: "genii.publisher.extension",
+    apiVersion: "1.0",
+    project({ content, config }) {
+      return Object.freeze({
+        valid: true,
+        value: Object.freeze({
+          serverData: Object.freeze({
+            extensionId: ${JSON.stringify(extension.id)},
+            publicationId: content.publicationId,
+            config,
+          }),
+        }),
+        diagnostics: Object.freeze([]),
+      });
+    },
+  }),
+});`).join("\n")}\n\nexport default Object.freeze([${
+        (manifest.extensions ?? [])
+          .map((extension) => extension.id.replaceAll("-", "_"))
+          .join(", ")
+      }]);\n`,
+      "utf8",
+    );
+  }
   mkdirSync(join(hostRoot, "node_modules", "@genii-foundation"), {
     recursive: true,
   });
@@ -225,7 +263,7 @@ test("the real renderer takes a publication from nothing to a current artifact",
     readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
   );
   assert.equal(state.renderer, realRenderer);
-  assert.equal(state.hostContractVersion, "0.10.0");
+  assert.equal(state.hostContractVersion, "0.11.0");
   const hostManifest = JSON.parse(
     readFileSync(join(hostRoot, "package.json"), "utf8"),
   );
@@ -348,6 +386,7 @@ test("the real renderer serves a publication with materialized Updates", (t) => 
   assert.equal(built.status, 0, built.stderr);
   assert.ok(existsSync(join(hostRoot, "publication-reader.json")));
   assert.ok(existsSync(join(hostRoot, "publication-public-identity.json")));
+  assert.ok(existsSync(join(hostRoot, "publication-extensions.json")));
   assert.ok(existsSync(join(hostRoot, "publication-updates.json")));
 });
 

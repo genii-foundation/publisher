@@ -21,6 +21,7 @@ import {
   PUBLISHER_NEXT_HOST_CAPABILITIES,
   PUBLISHER_NEXT_HOST_MIGRATIONS,
   PUBLISHER_NEXT_HOST_RENDERER,
+  PUBLISHER_NEXT_EXTENSION_DATA_PATH,
   PUBLISHER_NEXT_OFFLINE_CATALOG_HREF,
   PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH,
   PUBLISHER_NEXT_READER_DATA_PATH,
@@ -94,8 +95,10 @@ test("the host contract declares exactly the author host file set", () => {
       "publisher-application.js",
       "publisher-config.d.ts",
       "publisher-default-config.js",
+      "publisher-default-extensions.js",
       "publisher-default-theme.js",
       "publisher-error-identity.ts",
+      "publisher-extensions.d.ts",
       "publisher-sync-routes.js",
       "publisher-theme.d.ts",
       "tsconfig.json",
@@ -117,11 +120,13 @@ test("the host contract declares exactly the author host file set", () => {
     result.publicIdentityDataPath,
     PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH,
   );
+  assert.equal(result.extensionDataPath, PUBLISHER_NEXT_EXTENSION_DATA_PATH);
   assert.equal(result.offlineCatalogHref, PUBLISHER_NEXT_OFFLINE_CATALOG_HREF);
   assert.equal(PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH, "public/offline-sw.js");
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("offline"));
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("search"));
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("progress"));
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("extensions"));
   assert.deepEqual(PUBLISHER_NEXT_HOST_MIGRATIONS, [
     {
       from: "0.1.0",
@@ -183,6 +188,15 @@ test("the host contract declares exactly the author host file set", () => {
         "Add publisher.theme.mjs only when selecting a separately installed custom theme package.",
       ],
     },
+    {
+      from: "0.10.0",
+      to: "0.11.0",
+      summary:
+        "Connect explicit author extension registration and build-bound server slot data to the official host.",
+      manualSteps: [
+        "Add publisher.extensions.mjs when the publication manifest declares extensions, importing each separately installed extension package explicitly.",
+      ],
+    },
   ]);
 });
 
@@ -228,6 +242,9 @@ test("synchronization routes delegate through the checked server-only bridge", (
   assert.match(nextConfig, /publisher-default-config\.js/u);
   assert.match(nextConfig, /publisher\.theme\.mjs/u);
   assert.match(nextConfig, /publisher-default-theme\.js/u);
+  assert.match(nextConfig, /publisher\.extensions\.mjs/u);
+  assert.match(nextConfig, /publisher-default-extensions\.js/u);
+  assert.match(nextConfig, /genii-publisher:extensions/u);
   assert.match(nextConfig, /genii-publisher:theme/u);
   assert.match(nextConfig, /publication-public-identity\.json/u);
   assert.match(nextConfig, /does not match the exact Reader build/u);
@@ -326,7 +343,9 @@ test("declared inputs reach the files that need them", () => {
 
   const application = contentsOf(template(), "publisher-application.js");
   assert.match(application, /genii-publisher:theme/u);
-  assert.match(application, /theme, updatesData/u);
+  assert.match(application, /genii-publisher:extensions/u);
+  assert.match(application, /publication-extensions\.json/u);
+  assert.match(application, /extensionData, extensions/u);
 
   const identity = contentsOf(template(), "publisher-error-identity.ts");
   assert.match(identity, /publication-public-identity\.json/u);

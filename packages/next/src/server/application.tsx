@@ -34,6 +34,7 @@ import {
 import type {
   ContentRoute,
   Diagnostic,
+  ExtensionCapability,
   JSONValue,
   PublicationReaderEnvelope,
   ReaderBlock,
@@ -102,6 +103,8 @@ import {
   PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH,
   PUBLISHER_NEXT_APPLICATION_SCHEMA_URL,
   PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
+  PUBLISHER_NEXT_EXTENSION_API_VERSION,
+  PUBLISHER_NEXT_EXTENSION_SLOTS,
   PUBLISHER_NEXT_THEME_API_VERSION,
   PUBLISHER_NEXT_UPDATES_API_VERSION,
   PUBLISHER_NEXT_VERSION,
@@ -111,6 +114,9 @@ import type {
   PublicationNextApplication,
   PublisherNextApplicationArtifact,
   PublisherNextApplicationManifest,
+  PublisherNextExtensionPageContext,
+  PublisherNextExtensionRenderer,
+  PublisherNextExtensionSlot,
   PublisherNextJsonObject,
   PublisherNextPage,
   PublisherNextRouteResolution,
@@ -160,6 +166,22 @@ interface ConfiguredUpdatesState {
 interface ResolvedUpdatesState extends ConfiguredUpdatesState {
   readonly views: ReadonlyMap<string, PublisherNextUpdatesView>;
   readonly viewHash: ReturnType<typeof hashCanonicalJson>;
+}
+
+interface ResolvedExtensionEntry {
+  readonly id: string;
+  readonly package: string;
+  readonly version: string;
+  readonly capabilities: readonly ExtensionCapability[];
+  readonly projectionHash: Sha256Digest;
+  readonly renderer: PublisherNextExtensionRenderer | null;
+  readonly serverData?: JSONValue;
+}
+
+interface ResolvedExtensionsState {
+  readonly schemaVersion: "1.0";
+  readonly buildId: Sha256Digest;
+  readonly entries: readonly ResolvedExtensionEntry[];
 }
 
 function diagnostic(
@@ -500,6 +522,351 @@ function snapshotJsonObject(
       "json",
     );
   }
+}
+
+const EXTENSION_ID = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u;
+const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/u;
+const SUPPORTED_EXTENSION_CAPABILITIES = Object.freeze([
+  "content.project",
+  "renderer.slot",
+] as const);
+
+function snapshotExtensionData(
+  value: unknown,
+): ValidationResult<Readonly<Record<string, JSONValue>>> {
+  try {
+    const parsed = JSON.parse(
+      canonicalizeJson(value as JSONValue),
+    ) as JSONValue;
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      throw new TypeError("not an object");
+    }
+    return success(
+      freezeJson(parsed) as Readonly<Record<string, JSONValue>>,
+    );
+  } catch {
+    return failure(
+      "next.extension.data_invalid",
+      "/extensionData",
+      "Extension data must be one finite canonical JSON object.",
+      "json",
+    );
+  }
+}
+
+function resolveExtensions(
+  extensionDataInput: unknown,
+  registrationsInput: unknown,
+  reader: PublicationReaderEnvelope,
+): ValidationResult<ResolvedExtensionsState | null> {
+  if (extensionDataInput === undefined) {
+    if (registrationsInput === undefined) {
+      return success(null);
+    }
+    const registrations = inspectArray(registrationsInput, 1_000);
+    return registrations !== null && registrations.length === 0
+      ? success(null)
+      : failure(
+          "next.extension.data_required",
+          "/extensionData",
+          "Explicit extension registrations require the matching build-bound extension artifact.",
+          "required",
+        );
+  }
+  const snapshot = snapshotExtensionData(extensionDataInput);
+  if (!snapshot.valid) {
+    return snapshot;
+  }
+  const data = snapshot.value;
+  const inspected = inspectRecord(
+    data,
+    [
+      "schemaVersion",
+      "publicationId",
+      "engineVersion",
+      "readerBuildId",
+      "extensions",
+      "buildId",
+    ],
+  );
+  if (inspected === null) {
+    return failure(
+      "next.extension.data_shape_invalid",
+      "/extensionData",
+      "The extension artifact must use its closed build-bound shape.",
+      "properties",
+    );
+  }
+  const schemaVersion = valueOf(inspected, "schemaVersion");
+  const publicationId = valueOf(inspected, "publicationId");
+  const engineVersion = valueOf(inspected, "engineVersion");
+  const readerBuildId = valueOf(inspected, "readerBuildId");
+  const buildId = valueOf(inspected, "buildId");
+  if (
+    schemaVersion !== "1.0" ||
+    publicationId !== reader.publicationId ||
+    engineVersion !== reader.engineVersion ||
+    readerBuildId !== reader.buildId ||
+    typeof buildId !== "string" ||
+    !SHA256_DIGEST.test(buildId)
+  ) {
+    return failure(
+      "next.extension.data_identity_mismatch",
+      "/extensionData",
+      "The extension artifact does not belong to this exact Reader build.",
+      "identity",
+    );
+  }
+  const basis = Object.freeze({
+    schemaVersion,
+    publicationId,
+    engineVersion,
+    readerBuildId,
+    extensions: valueOf(inspected, "extensions") as JSONValue,
+  });
+  if (hashCanonicalJson(basis as JSONValue) !== buildId) {
+    return failure(
+      "next.extension.data_hash_mismatch",
+      "/extensionData/buildId",
+      "The extension artifact build identity does not match its canonical data.",
+      "hash",
+    );
+  }
+  const dataEntries = inspectArray(
+    valueOf(inspected, "extensions"),
+    1_000,
+  );
+  const registrations = inspectArray(registrationsInput, 1_000);
+  if (
+    dataEntries === null ||
+    registrations === null ||
+    dataEntries.length === 0 ||
+    registrations.length !== dataEntries.length
+  ) {
+    return failure(
+      "next.extension.registration_set_invalid",
+      "/extensions",
+      "The author registry must match every build-bound extension in declaration order.",
+      "extensionRegistration",
+    );
+  }
+  const entries: ResolvedExtensionEntry[] = [];
+  for (let index = 0; index < dataEntries.length; index += 1) {
+    const path = `/extensionData/extensions/${index}`;
+    const entryValue = dataEntries[index];
+    const entry = inspectRecord(
+      entryValue,
+      ["id", "package", "version", "capabilities", "config"],
+      ["serverData", "clientData"],
+    );
+    const registration = inspectRecord(
+      registrations[index],
+      [
+        "id",
+        "package",
+        "version",
+        "engineCompatibility",
+        "capabilities",
+        "implementation",
+      ],
+      ["renderer"],
+    );
+    if (entry === null || registration === null) {
+      return failure(
+        "next.extension.registration_invalid",
+        path,
+        "Extension data and registration must use their closed shapes.",
+        "properties",
+      );
+    }
+    const id = valueOf(entry, "id");
+    const packageName = valueOf(entry, "package");
+    const version = valueOf(entry, "version");
+    const entryCapabilities = inspectArray(
+      valueOf(entry, "capabilities"),
+      5,
+    );
+    const supportedCapabilities = inspectArray(
+      valueOf(registration, "capabilities"),
+      5,
+    );
+    const engineCompatibility = valueOf(
+      registration,
+      "engineCompatibility",
+    );
+    if (
+      typeof id !== "string" ||
+      !EXTENSION_ID.test(id) ||
+      typeof packageName !== "string" ||
+      !PACKAGE_NAME.test(packageName) ||
+      typeof version !== "string" ||
+      valid(version) !== version ||
+      valueOf(registration, "id") !== id ||
+      valueOf(registration, "package") !== packageName ||
+      valueOf(registration, "version") !== version ||
+      typeof engineCompatibility !== "string" ||
+      validRange(engineCompatibility) === null ||
+      !satisfies(reader.engineVersion, engineCompatibility, {
+        includePrerelease: true,
+      }) ||
+      entryCapabilities === null ||
+      supportedCapabilities === null ||
+      entryCapabilities.length === 0 ||
+      entryCapabilities.some(
+        (capability, capabilityIndex) =>
+          typeof capability !== "string" ||
+          entryCapabilities.indexOf(capability) !== capabilityIndex ||
+          !SUPPORTED_EXTENSION_CAPABILITIES.includes(
+            capability as typeof SUPPORTED_EXTENSION_CAPABILITIES[number],
+          ) ||
+          !supportedCapabilities.includes(capability),
+      )
+    ) {
+      return failure(
+        "next.extension.identity_invalid",
+        path,
+        "Extension identity, compatibility, and granted capabilities must match the explicit registry.",
+        "extensionIdentity",
+      );
+    }
+    if (valueOf(entry, "clientData") !== undefined) {
+      return failure(
+        "next.extension.client_unsupported",
+        `${path}/clientData`,
+        "The official renderer does not invoke renderer.client extensions yet.",
+        "extensionCapability",
+      );
+    }
+    const granted = Object.freeze(
+      [...entryCapabilities] as ExtensionCapability[],
+    );
+    const rendererValue = valueOf(registration, "renderer");
+    let renderer: PublisherNextExtensionRenderer | null = null;
+    if (granted.includes("renderer.slot")) {
+      const inspectedRenderer = inspectRecord(
+        rendererValue,
+        ["kind", "apiVersion", "rendererCompatibility", "renderSlot"],
+      );
+      const rendererCompatibility = inspectedRenderer === null
+        ? undefined
+        : valueOf(inspectedRenderer, "rendererCompatibility");
+      if (
+        inspectedRenderer === null ||
+        valueOf(inspectedRenderer, "kind") !==
+          "genii.publisher.next-extension" ||
+        valueOf(inspectedRenderer, "apiVersion") !==
+          PUBLISHER_NEXT_EXTENSION_API_VERSION ||
+        typeof rendererCompatibility !== "string" ||
+        validRange(rendererCompatibility) === null ||
+        !satisfies(PUBLISHER_NEXT_VERSION, rendererCompatibility, {
+          includePrerelease: true,
+        }) ||
+        typeof valueOf(inspectedRenderer, "renderSlot") !== "function"
+      ) {
+        return failure(
+          "next.extension.renderer_invalid",
+          `/extensions/${index}/renderer`,
+          "A renderer.slot grant requires one compatible official Next renderer adapter.",
+          "extensionRenderer",
+        );
+      }
+      renderer = Object.freeze({
+        kind: "genii.publisher.next-extension" as const,
+        apiVersion: PUBLISHER_NEXT_EXTENSION_API_VERSION,
+        rendererCompatibility,
+        renderSlot: valueOf(
+          inspectedRenderer,
+          "renderSlot",
+        ) as PublisherNextExtensionRenderer["renderSlot"],
+      });
+    }
+    entries.push(Object.freeze({
+      id,
+      package: packageName,
+      version,
+      capabilities: granted,
+      projectionHash: hashCanonicalJson(entryValue as JSONValue),
+      renderer,
+      ...(valueOf(entry, "serverData") === undefined
+        ? {}
+        : { serverData: valueOf(entry, "serverData") as JSONValue }),
+    }));
+  }
+  return success(Object.freeze({
+    schemaVersion: "1.0" as const,
+    buildId: buildId as Sha256Digest,
+    entries: Object.freeze(entries),
+  }));
+}
+
+function extensionPageContext(
+  page: PublisherNextPage,
+): PublisherNextExtensionPageContext {
+  const work = page.kind === "work" || page.kind === "section"
+    ? Object.freeze({ id: page.work.id, title: page.work.title })
+    : undefined;
+  const section = page.kind === "section"
+    ? Object.freeze({ id: page.section.id, title: page.section.title })
+    : undefined;
+  return Object.freeze({
+    kind: page.kind,
+    path: page.path,
+    publication: Object.freeze({
+      id: page.publication.id,
+      title: page.publication.title,
+      language: page.publication.language,
+    }),
+    ...(work === undefined ? {} : { work }),
+    ...(section === undefined ? {} : { section }),
+  });
+}
+
+async function renderExtensionSlot(
+  extensions: ResolvedExtensionsState | null,
+  slot: PublisherNextExtensionSlot,
+  page: PublisherNextPage,
+): Promise<ReactElement[]> {
+  if (!PUBLISHER_NEXT_EXTENSION_SLOTS.includes(slot)) {
+    throw new TypeError("Unknown Publisher extension slot.");
+  }
+  const context = extensionPageContext(page);
+  const rendered: ReactElement[] = [];
+  for (const extension of extensions?.entries ?? []) {
+    if (
+      !extension.capabilities.includes("renderer.slot") ||
+      extension.renderer === null
+    ) {
+      continue;
+    }
+    let body;
+    try {
+      body = await extension.renderer.renderSlot(Object.freeze({
+        slot,
+        page: context,
+        ...(extension.serverData === undefined
+          ? {}
+          : { serverData: extension.serverData }),
+      }));
+    } catch {
+      throw new TypeError(
+        `Extension ${JSON.stringify(extension.id)} threw while rendering ${slot}.`,
+      );
+    }
+    rendered.push(
+      <aside
+        data-publisher-extension={extension.id}
+        data-publisher-slot={slot}
+        key={`${slot}:${extension.id}`}
+      >
+        {body}
+      </aside>,
+    );
+  }
+  return rendered;
 }
 
 function updateText(
@@ -1457,6 +1824,7 @@ function createApplicationArtifact(
   reader: PublicationReaderEnvelope,
   theme: ResolvedThemeState,
   updates: ResolvedUpdatesState | null,
+  extensions: ResolvedExtensionsState | null,
   sync: SyncEnvelope | null,
   continuity: PublisherNextContinuityHandler,
 ): PublisherNextApplicationArtifact {
@@ -1501,6 +1869,24 @@ function createApplicationArtifact(
         localFallback: sync.localFallback,
         capabilities: Object.freeze([...sync.capabilities]),
       });
+  const extensionIdentity = extensions === null
+    ? null
+    : Object.freeze({
+        schemaVersion: extensions.schemaVersion,
+        buildId: extensions.buildId,
+        entries: Object.freeze(
+          extensions.entries.map((extension) => Object.freeze({
+            id: extension.id,
+            package: extension.package,
+            version: extension.version,
+            capabilities: Object.freeze([...extension.capabilities]),
+            projectionHash: extension.projectionHash,
+            rendererApiVersion: extension.renderer?.apiVersion ?? null,
+            rendererCompatibility:
+              extension.renderer?.rendererCompatibility ?? null,
+          })),
+        ),
+      });
   const basis = Object.freeze({
     schemaVersion: PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
     publicationId: reader.publicationId,
@@ -1510,6 +1896,7 @@ function createApplicationArtifact(
     source,
     theme: themeIdentity,
     updates: updatesIdentity,
+    extensions: extensionIdentity,
     sync: syncIdentity,
     continuity: continuityIdentity,
   });
@@ -1540,7 +1927,15 @@ export async function createPublicationNextApplication(
     const inspectedOptions = inspectRecord(
       options,
       ["reader"],
-      ["audioData", "syncData", "theme", "updates", "updatesData"],
+      [
+        "audioData",
+        "extensionData",
+        "extensions",
+        "syncData",
+        "theme",
+        "updates",
+        "updatesData",
+      ],
     );
     if (inspectedOptions === null) {
       return failure(
@@ -1557,6 +1952,15 @@ export async function createPublicationNextApplication(
       return readerResult;
     }
     const reader = readerResult.value;
+    const extensionsResult = resolveExtensions(
+      valueOf(inspectedOptions, "extensionData"),
+      valueOf(inspectedOptions, "extensions"),
+      reader,
+    );
+    if (!extensionsResult.valid) {
+      return extensionsResult;
+    }
+    const extensions = extensionsResult.value;
     const suppliedAudioData = valueOf(inspectedOptions, "audioData");
     let narration: ReaderNarrationEnvelope | null = null;
     let narrationCatalogHash: Sha256Digest | null = null;
@@ -1750,6 +2154,7 @@ export async function createPublicationNextApplication(
       reader,
       themeResult.value,
       updatesState,
+      extensions,
       sync,
       continuity,
     );
@@ -1811,7 +2216,19 @@ export async function createPublicationNextApplication(
               });
             })()
           : null;
+      const beforeMain = await renderExtensionSlot(
+        extensions,
+        "page.before-main",
+        page,
+      );
+      const afterMain = await renderExtensionSlot(
+        extensions,
+        "page.after-main",
+        page,
+      );
       return PublisherPageView({
+        afterMain,
+        beforeMain,
         homePath: resolver.homePath,
         markdownForBlock,
         page,

@@ -625,6 +625,8 @@ async function PageBody({
 }
 
 export interface PublisherPageViewProps {
+  readonly afterMain?: ReactNode;
+  readonly beforeMain?: ReactNode;
   readonly homePath: string;
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: PublisherNextPage;
@@ -635,6 +637,8 @@ export interface PublisherPageViewProps {
 }
 
 interface PublisherPageShellProps {
+  readonly afterMain?: ReactNode;
+  readonly beforeMain?: ReactNode;
   readonly body: ReactNode;
   readonly homePath: string;
   readonly pageKind: PublisherNextPage["kind"] | "not-found";
@@ -651,6 +655,8 @@ interface PublisherPageShellProps {
 }
 
 function PublisherPageShell({
+  afterMain,
+  beforeMain,
   body,
   homePath,
   pageKind,
@@ -694,7 +700,11 @@ function PublisherPageShell({
           sync={reader.sync}
         />
       )}
-      <main id="publisher:main">{body}</main>
+      <main id="publisher:main">
+        {beforeMain}
+        {body}
+        {afterMain}
+      </main>
       <PublisherAttribution
         sourceCodeUrl={publication.attribution.sourceCodeUrl}
       />
@@ -703,6 +713,8 @@ function PublisherPageShell({
 }
 
 export async function PublisherPageView({
+  afterMain,
+  beforeMain,
   homePath,
   markdownForBlock,
   page,
@@ -718,6 +730,8 @@ export async function PublisherPageView({
   });
   return (
     <PublisherPageShell
+      afterMain={afterMain}
+      beforeMain={beforeMain}
       body={body}
       homePath={homePath}
       pageKind={page.kind}

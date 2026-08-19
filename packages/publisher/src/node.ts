@@ -56,6 +56,7 @@ export {
 } from "./node/compile.js";
 export {
   AUDIO_DATA_ARTIFACT,
+  EXTENSION_DATA_ARTIFACT,
   PROGRESS_DATA_ARTIFACT,
   PUBLIC_IDENTITY_DATA_ARTIFACT,
   SEARCH_DATA_ARTIFACT,
@@ -65,6 +66,21 @@ export {
   findUnsupportedHostFeatures,
   readHostCapabilities,
 } from "./node/host-capabilities.js";
+export {
+  PUBLISHER_EXTENSION_API_VERSION,
+  PUBLISHER_EXTENSION_DATA_SCHEMA_VERSION,
+  projectPublisherExtensions,
+  resolvePublisherExtensions,
+} from "./node/extensions.js";
+export type {
+  PublisherExtensionDataEntry,
+  PublisherExtensionDataEnvelope,
+  PublisherExtensionImplementation,
+  PublisherExtensionProjectInput,
+  PublisherExtensionProjection,
+  PublisherExtensionRegistration,
+  ResolvedPublisherExtensions,
+} from "./node/extensions.js";
 export type {
   HostCapabilities,
   UnsupportedHostFeature,

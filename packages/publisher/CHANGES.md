@@ -4,6 +4,9 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Added explicit author extension registration with exact semantic identity and compatible capability support.
+- Invoked granted content projectors over frozen validated inputs and emitted canonical Reader-build-bound extension artifacts.
+- Reserved author extension code from source loading and lifecycle mutation, then materialized and checked extension artifacts through build and status.
 - Added a versioned public identity projection bound to each exact Reader build and materialized it as a required renderer data artifact.
 - Preserved exact installed host package metadata while generating the renderer contract.
 - Added versioned, inspectable local preview candidate identity for exact worktree, branch, commit, state, and source bytes.

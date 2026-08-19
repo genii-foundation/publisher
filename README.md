@@ -17,7 +17,7 @@ scripts, what they require, and which gate currently stops them.
 - The engine lives in this repository. A publication lives in a separate, thin host repository.
 - The default layout is canonical and deliberately opinionated.
 - A declared-layout mode is a fully supported escape hatch for established repositories.
-- Publications can inject validated themes now. They can declare extension packages and explicit capability grants, while extension invocation remains 1.0 work.
+- Publications can inject validated themes and explicitly registered extensions. Build-time content projection and official Next server slots are implemented. Client code, extension routes, and extension handlers remain 1.0 work.
 - Works and collections are first-class protocol concepts.
 - The initial renderer uses Next.js. The content protocol remains framework neutral.
 - Audio and Supabase synchronization belong to the 1.0 scope as optional capabilities.
@@ -46,7 +46,7 @@ Migration and extraction decisions are recorded in the machine-validated [proven
 | `@genii-foundation/publisher-sync-supabase` | Optional Supabase synchronization adapter |
 | `@genii-foundation/publisher-updates` | Author-repository history and Updates generation |
 
-The implemented package boundaries are proven against two invented neutral fixtures. The packed canonical host installs and executes an independent theme package across ordinary pages and framework error surfaces without carrying manuscript data into client error chunks. Extension invocation remains a 1.0 gate before code moves from an existing publication.
+The implemented package boundaries are proven against two invented neutral fixtures. The packed canonical host installs independent theme and extension packages, performs a frozen offline reinstall, renders extension server slots on ordinary pages, preserves the theme across framework error surfaces, and keeps manuscript plus extension server data out of client chunks. Client extension code, routes, and handlers remain 1.0 gates before code moves from an existing publication.
 
 ## Attribution and source
 

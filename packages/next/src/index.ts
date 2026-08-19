@@ -24,12 +24,18 @@ export {
   PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH,
   PUBLISHER_NEXT_APPLICATION_SCHEMA_URL,
   PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
+  PUBLISHER_NEXT_EXTENSION_API_VERSION,
+  PUBLISHER_NEXT_EXTENSION_SLOTS,
   PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES,
   PUBLISHER_NEXT_THEME_API_VERSION,
   PUBLISHER_NEXT_UPDATES_API_VERSION,
   PUBLISHER_NEXT_VERSION,
 } from "./types.js";
 export type {
+  PublisherNextExtensionPageContext,
+  PublisherNextExtensionRenderer,
+  PublisherNextExtensionRenderInput,
+  PublisherNextExtensionSlot,
   PublisherNextJsonObject,
   PublisherNextTheme,
   PublisherNextThemeInstance,

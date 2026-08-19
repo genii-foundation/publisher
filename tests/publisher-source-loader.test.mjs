@@ -815,6 +815,7 @@ test("does not discover, import, or traverse undeclared hostile repository entri
 test("never inspects host integration code when a manifest declares it as source", async (t) => {
   for (const reservedPath of [
     "publisher.config.ts",
+    "publisher.extensions.mjs",
     "publisher.theme.mjs",
   ]) {
     for (const role of ["work-manifest", "manuscript"]) {

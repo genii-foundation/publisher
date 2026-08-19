@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.10.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.11.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -60,6 +60,10 @@ export const PUBLISHER_NEXT_PROGRESS_DATA_PATH =
 /** Client-safe publication identity for framework error surfaces. */
 export const PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH =
   "publication-public-identity.json";
+
+/** Server-only extension projection bound to the exact Reader build. */
+export const PUBLISHER_NEXT_EXTENSION_DATA_PATH =
+  "publication-extensions.json";
 
 /** Public route serving the build-bound offline work package catalog. */
 export const PUBLISHER_NEXT_OFFLINE_CATALOG_HREF =
@@ -149,6 +153,7 @@ export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
     ]),
     dataArtifacts: Object.freeze([
       "audio",
+      "extensions",
       "offline",
       "progress",
       "public-identity",
@@ -232,11 +237,20 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.9.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.10.0",
       summary:
         "Connect an explicit author theme module and client-safe public identity artifact to every official host surface.",
       manualSteps: Object.freeze([
         "Add publisher.theme.mjs only when selecting a separately installed custom theme package.",
+      ]),
+    }),
+    Object.freeze({
+      from: "0.10.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Connect explicit author extension registration and build-bound server slot data to the official host.",
+      manualSteps: Object.freeze([
+        "Add publisher.extensions.mjs when the publication manifest declares extensions, importing each separately installed extension package explicitly.",
       ]),
     }),
   ]);
@@ -277,6 +291,8 @@ export interface PublisherNextHostTemplate {
   readonly progressDataPath: string;
   /** Where the required client-safe public identity artifact belongs. */
   readonly publicIdentityDataPath: string;
+  /** Where build-bound server extension projections belong. */
+  readonly extensionDataPath: string;
   /** Public href from which the renderer serves its offline package catalog. */
   readonly offlineCatalogHref: string;
   /**
@@ -487,10 +503,13 @@ export function createPublisherNextHostTemplate(
         'const publisherConfigPath = existsSync(authorConfigPath) ? "./publisher.config.ts" : "./publisher-default-config.js";',
         'const authorThemePath = join(process.cwd(), "publisher.theme.mjs");',
         'const publisherThemePath = existsSync(authorThemePath) ? "./publisher.theme.mjs" : "./publisher-default-theme.js";',
+        'const authorExtensionsPath = join(process.cwd(), "publisher.extensions.mjs");',
+        'const publisherExtensionsPath = existsSync(authorExtensionsPath) ? "./publisher.extensions.mjs" : "./publisher-default-extensions.js";',
         "export default createPublisherNextConfig(routePlan.value, {",
         "  turbopack: {",
         "    resolveAlias: {",
         '      "genii-publisher:config": publisherConfigPath,',
+        '      "genii-publisher:extensions": publisherExtensionsPath,',
         '      "genii-publisher:theme": publisherThemePath,',
         "    },",
         "  },",
@@ -556,6 +575,7 @@ export function createPublisherNextHostTemplate(
         'import { existsSync, readFileSync } from "node:fs";',
         'import { join } from "node:path";',
         `import reader from "./${PUBLISHER_NEXT_READER_DATA_PATH}" with { type: "json" };`,
+        'import extensions from "genii-publisher:extensions";',
         'import theme from "genii-publisher:theme";',
         'import { createPublicationNextApplication } from "@genii-foundation/publisher-next/server";',
         "",
@@ -565,12 +585,29 @@ export function createPublisherNextHostTemplate(
         'const syncData = existsSync(syncPath) ? JSON.parse(readFileSync(syncPath, "utf8")) : undefined;',
         `const audioPath = join(process.cwd(), "${PUBLISHER_NEXT_AUDIO_DATA_PATH}");`,
         'const audioData = existsSync(audioPath) ? JSON.parse(readFileSync(audioPath, "utf8")) : undefined;',
-        "const created = await createPublicationNextApplication({ reader, audioData, syncData, theme, updatesData });",
+        `const extensionPath = join(process.cwd(), "${PUBLISHER_NEXT_EXTENSION_DATA_PATH}");`,
+        'const extensionData = existsSync(extensionPath) ? JSON.parse(readFileSync(extensionPath, "utf8")) : undefined;',
+        "const created = await createPublicationNextApplication({ reader, audioData, extensionData, extensions, syncData, theme, updatesData });",
         "if (!created.valid) {",
         "  throw new Error(JSON.stringify(created.diagnostics));",
         "}",
         '/** @type {import("@genii-foundation/publisher-next/server").PublicationNextApplication} */',
         "export const application = created.value;",
+      ),
+    },
+    {
+      path: "publisher-extensions.d.ts",
+      contents: lines(
+        'declare module "genii-publisher:extensions" {',
+        "  const extensions: readonly unknown[];",
+        "  export default extensions;",
+        "}",
+      ),
+    },
+    {
+      path: "publisher-default-extensions.js",
+      contents: lines(
+        "export default Object.freeze([]);",
       ),
     },
     {
@@ -976,6 +1013,7 @@ export function createPublisherNextHostTemplate(
     searchDataPath: PUBLISHER_NEXT_SEARCH_DATA_PATH,
     progressDataPath: PUBLISHER_NEXT_PROGRESS_DATA_PATH,
     publicIdentityDataPath: PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH,
+    extensionDataPath: PUBLISHER_NEXT_EXTENSION_DATA_PATH,
     offlineCatalogHref: PUBLISHER_NEXT_OFFLINE_CATALOG_HREF,
     audioDataPath: PUBLISHER_NEXT_AUDIO_DATA_PATH,
     syncDataPath: PUBLISHER_NEXT_SYNC_DATA_PATH,

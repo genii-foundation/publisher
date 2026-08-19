@@ -37,7 +37,6 @@ import {
   compileMarkdownWork,
 } from "@genii-foundation/publisher-content";
 import type {
-  ResolvedExtensionInput,
   WorkContentInput,
 } from "@genii-foundation/publisher-content";
 import {
@@ -61,10 +60,8 @@ import type {
 import type {
   AudioEnvelope,
   Diagnostic,
-  ExtensionReference,
   JSONValue,
   PublicationContentEnvelope,
-  PublicationManifest,
   PublicationReaderEnvelope,
   ReaderAudience,
   SyncEnvelope,
@@ -73,9 +70,6 @@ import type {
   WorkSectionDeclaration,
 } from "@genii-foundation/publisher-schema";
 
-import {
-  PUBLISHER_VERSION,
-} from "../index.js";
 import {
   buildAudioEnvelope,
   resolvePublicationAudio,
@@ -100,6 +94,13 @@ import type {
 import {
   compileLoadedPublicationContent,
 } from "./compile.js";
+import {
+  projectPublisherExtensions,
+  resolvePublisherExtensions,
+} from "./extensions.js";
+import type {
+  PublisherExtensionDataEnvelope,
+} from "./extensions.js";
 import {
   invalidResult,
   loaderDiagnostic,
@@ -414,35 +415,13 @@ export function derivePublicationWorkInputs(
   });
 }
 
-/**
- * Extension identities, stamped with the engine version that resolved them.
- *
- * A manifest declares which extension it wants, not which build resolved it, so
- * the version is the engine's own. Reading a version out of the manifest would
- * let a publication claim an extension build that never ran.
- */
-function resolveExtensions(
-  publication: PublicationManifest,
-): readonly ResolvedExtensionInput[] {
-  const declared: readonly ExtensionReference[] =
-    publication.extensions ?? [];
-  return Object.freeze(
-    declared.map((extension) =>
-      Object.freeze({
-        id: extension.id,
-        package: extension.package,
-        version: PUBLISHER_VERSION,
-        capabilities: Object.freeze([...extension.capabilities]),
-      }),
-    ),
-  );
-}
-
 export interface BuildPublicationReaderInput {
   /** Absolute path to the publication root holding the manifest. */
   readonly publicationRoot: string;
   /** Which audience the projection is for. */
   readonly audience: ReaderAudience;
+  /** Explicit author registrations imported by the host, never manifest strings. */
+  readonly extensions?: unknown;
   readonly wordsPerMinute?: number;
 }
 
@@ -481,6 +460,11 @@ export interface BuiltPublicationReader {
       readonly publication: PublicationReaderEnvelope["publication"];
     };
     /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
+  /** Build-bound extension projection, present only for declared extensions. */
+  readonly extensions?: {
+    readonly envelope: PublisherExtensionDataEnvelope;
     readonly text: string;
   };
   /**
@@ -542,10 +526,18 @@ export async function buildPublicationReader(
     return invalidResult(works.diagnostics);
   }
 
+  const resolvedExtensions = resolvePublisherExtensions(
+    loaded.value.publication,
+    input.extensions ?? Object.freeze([]),
+  );
+  if (!resolvedExtensions.valid) {
+    return invalidResult(resolvedExtensions.diagnostics);
+  }
+
   const content = compileLoadedPublicationContent({
     loaded: loaded.value,
     works: works.value,
-    extensions: resolveExtensions(loaded.value.publication),
+    extensions: resolvedExtensions.value.compilerInputs,
     ...(input.wordsPerMinute === undefined
       ? {}
       : { wordsPerMinute: input.wordsPerMinute }),
@@ -559,6 +551,16 @@ export async function buildPublicationReader(
   });
   if (!reader.valid) {
     return invalidResult(reader.diagnostics);
+  }
+  const extensionProjection = content.value.extensions.length === 0
+    ? undefined
+    : await projectPublisherExtensions({
+        content: content.value,
+        reader: reader.value,
+        registrations: resolvedExtensions.value.registrations,
+      });
+  if (extensionProjection !== undefined && !extensionProjection.valid) {
+    return invalidResult(extensionProjection.diagnostics);
   }
   const searchIndex = createReaderSearchIndex(reader.value);
   const search = Object.freeze({
@@ -789,6 +791,9 @@ export async function buildPublicationReader(
       search,
       progress,
       publicIdentity,
+      ...(extensionProjection === undefined
+        ? {}
+        : { extensions: extensionProjection.value }),
       ...(audio === undefined ? {} : { audio }),
       ...(sync === undefined ? {} : { sync }),
       ...(updates === undefined ? {} : { updates }),

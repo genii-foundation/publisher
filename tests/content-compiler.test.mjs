@@ -1842,6 +1842,7 @@ test("envelope validation rejects aggregate collection membership before relatio
 test("compiler rejects reserved host integration code in asset and extension source roles", async () => {
   for (const reservedPath of [
     "publisher.config.ts",
+    "publisher.extensions.mjs",
     "publisher.theme.mjs",
   ]) {
     for (const role of ["asset", "extension"]) {

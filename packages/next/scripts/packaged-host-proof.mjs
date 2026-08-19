@@ -62,6 +62,9 @@ import {
 import {
   createReaderNarrationSectionTextProfile,
 } from "../../reader/dist/narration.js";
+import {
+  hashCanonicalJson,
+} from "../../content/dist/index.js";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const repositoryRoot = fileURLToPath(
@@ -3349,6 +3352,10 @@ export async function runPackagedHostProof(
   );
   assert.notEqual(homeRoute, undefined);
   const portableThemeAccent = "#6B3F84";
+  const packedExtensionRenderSentinel =
+    "PACKED_EXTENSION_SLOT_RENDERED";
+  const packedExtensionServerSentinel =
+    "PACKED_EXTENSION_SERVER_DATA_ONLY";
 
   const temporaryRoot = await mkdtemp(
     join(tmpdir(), "genii-publisher-next-host-"),
@@ -3358,6 +3365,10 @@ export async function runPackagedHostProof(
     const packRoot = join(temporaryRoot, "pack");
     const hostRoot = join(temporaryRoot, "host");
     const themeRoot = join(temporaryRoot, "portable-theme");
+    const extensionRoot = join(
+      temporaryRoot,
+      "portable-extension",
+    );
     const appRoot = join(hostRoot, "app");
     const pagesRoot = join(hostRoot, "pages");
     const routeRoot = join(appRoot, "[...segments]");
@@ -3377,6 +3388,7 @@ export async function runPackagedHostProof(
     await Promise.all([
       mkdir(packRoot),
       mkdir(themeRoot),
+      mkdir(extensionRoot),
       mkdir(routeRoot, { recursive: true }),
       mkdir(boundaryProofRoot, { recursive: true }),
       mkdir(runtimeErrorRoot, { recursive: true }),
@@ -3441,6 +3453,51 @@ export async function runPackagedHostProof(
         ].join("\n"),
         "utf8",
       ),
+      writeJson(join(extensionRoot, "package.json"), {
+        name: "@example/packed-publication-extension",
+        version: "1.0.0",
+        type: "module",
+        exports: "./index.js",
+      }),
+      writeFile(
+        join(extensionRoot, "index.js"),
+        [
+          "export default Object.freeze({",
+          '  id: "packed-publication-extension",',
+          '  package: "@example/packed-publication-extension",',
+          '  version: "1.0.0",',
+          '  engineCompatibility: ">=0.1.0-alpha.0 <2.0.0",',
+          '  capabilities: Object.freeze(["content.project", "renderer.slot"]),',
+          "  implementation: Object.freeze({",
+          '    kind: "genii.publisher.extension",',
+          '    apiVersion: "1.0",',
+          "    project({ content, config }) {",
+          "      return Object.freeze({",
+          "        valid: true,",
+          "        diagnostics: Object.freeze([]),",
+          "        value: Object.freeze({",
+          "          serverData: Object.freeze({",
+          `            marker: "${packedExtensionServerSentinel}",`,
+          "            publicationId: content.publicationId,",
+          "            config,",
+          "          }),",
+          "        }),",
+          "      });",
+          "    },",
+          "  }),",
+          "  renderer: Object.freeze({",
+          '    kind: "genii.publisher.next-extension",',
+          '    apiVersion: "1.0",',
+          '    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",',
+          "    renderSlot({ slot, serverData }) {",
+          `      return \`${packedExtensionRenderSentinel}:\${slot}:\${serverData.marker}\`;`,
+          "    },",
+          "  }),",
+          "});",
+          "",
+        ].join("\n"),
+        "utf8",
+      ),
     ]);
 
     const schemaTarball = packPackage(
@@ -3457,6 +3514,7 @@ export async function runPackagedHostProof(
     );
     const nextTarball = packPackage(packageRoot, packRoot);
     const themeTarball = packPackage(themeRoot, packRoot);
+    const extensionTarball = packPackage(extensionRoot, packRoot);
     const localDependency = (tarball) =>
       `file:${packagePath(relative(hostRoot, tarball))}`;
 
@@ -3473,6 +3531,8 @@ export async function runPackagedHostProof(
         [readerManifest.name]: localDependency(readerTarball),
         [nextManifest.name]: localDependency(nextTarball),
         "@example/packed-publication-theme": localDependency(themeTarball),
+        "@example/packed-publication-extension":
+          localDependency(extensionTarball),
         next: nextManifest.peerDependencies.next,
         react: nextManifest.peerDependencies.react,
         "react-dom":
@@ -3522,6 +3582,7 @@ export async function runPackagedHostProof(
       "export-probe.mjs",
       "server-import-probe.mjs",
       "publisher.config.ts",
+      "publisher.extensions.mjs",
       "publisher.theme.mjs",
       `app/${basename(runtimeErrorRoot)}/page.tsx`,
       `app/${basename(globalErrorRoot)}/page.tsx`,
@@ -3531,6 +3592,7 @@ export async function runPackagedHostProof(
       "public/proof.wav",
       hostTemplate.readerDataPath,
       hostTemplate.audioDataPath,
+      hostTemplate.extensionDataPath,
       hostTemplate.progressDataPath,
       hostTemplate.publicIdentityDataPath,
       hostTemplate.searchDataPath,
@@ -3629,6 +3691,32 @@ export async function runPackagedHostProof(
         sectionCount: narratedSections.length,
       },
     };
+    const extensionEntry = Object.freeze({
+      id: "packed-publication-extension",
+      package: "@example/packed-publication-extension",
+      version: "1.0.0",
+      capabilities: Object.freeze([
+        "content.project",
+        "renderer.slot",
+      ]),
+      config: Object.freeze({}),
+      serverData: Object.freeze({
+        marker: packedExtensionServerSentinel,
+        publicationId: reader.publicationId,
+        config: Object.freeze({}),
+      }),
+    });
+    const extensionBasis = Object.freeze({
+      schemaVersion: "1.0",
+      publicationId: reader.publicationId,
+      engineVersion: reader.engineVersion,
+      readerBuildId: reader.buildId,
+      extensions: Object.freeze([extensionEntry]),
+    });
+    const extensionEnvelope = Object.freeze({
+      ...extensionBasis,
+      buildId: hashCanonicalJson(extensionBasis),
+    });
 
     await Promise.all([
       writeJson(
@@ -3645,6 +3733,10 @@ export async function runPackagedHostProof(
           homePath: homeRoute.path,
           publication: reader.publication,
         },
+      ),
+      writeJson(
+        join(hostRoot, hostTemplate.extensionDataPath),
+        extensionEnvelope,
       ),
       writeFile(
         join(hostRoot, hostTemplate.progressDataPath),
@@ -3719,6 +3811,16 @@ export async function runPackagedHostProof(
           "    },",
           "  },",
           "});",
+          "",
+        ].join("\n"),
+        "utf8",
+      ),
+      writeFile(
+        join(hostRoot, "publisher.extensions.mjs"),
+        [
+          'import extension from "@example/packed-publication-extension";',
+          "",
+          "export default Object.freeze([extension]);",
           "",
         ].join("\n"),
         "utf8",
@@ -3946,11 +4048,13 @@ export async function runPackagedHostProof(
         "const postcssRequire = createRequire(nextRequire.resolve(\"postcss/package.json\"));",
         "const nanoidManifest = JSON.parse(await readFile(postcssRequire.resolve(\"nanoid/package.json\"), \"utf8\"));",
         'const sharp = nextRequire("sharp");',
+        'const extension = await import("@example/packed-publication-extension");',
         'assert.equal(postcssManifest.version, "8.5.24");',
         'assert.equal(nanoidManifest.version, "3.3.18");',
         'assert.equal(sharp.versions.sharp, "0.35.3");',
         'assert.equal(typeof sharp.versions.vips, "string");',
-        "process.stdout.write(JSON.stringify({ nanoidVersion: nanoidManifest.version, postcssVersion: postcssManifest.version, sharpVersion: sharp.versions.sharp, vipsVersion: sharp.versions.vips }));",
+        'assert.equal(extension.default.version, "1.0.0");',
+        "process.stdout.write(JSON.stringify({ extensionVersion: extension.default.version, nanoidVersion: nanoidManifest.version, postcssVersion: postcssManifest.version, sharpVersion: sharp.versions.sharp, vipsVersion: sharp.versions.vips }));",
         "",
       ].join("\n"),
       "utf8",
@@ -4130,6 +4234,7 @@ export async function runPackagedHostProof(
       "unlisted-notes",
       "First *safe* line",
       "unsafe link",
+      packedExtensionServerSentinel,
     ]) {
       assert.equal(
         clientChunks.includes(manuscriptSentinel),
@@ -4202,6 +4307,8 @@ export async function runPackagedHostProof(
         "Published with GENII Publisher",
         "https://publisher.genii.foundation",
         "https://github.com/genii-foundation/publisher",
+        packedExtensionRenderSentinel,
+        packedExtensionServerSentinel,
       ]) {
         assert.ok(
           semanticHtml.includes(expected),
@@ -4621,6 +4728,8 @@ export async function runPackagedHostProof(
       renderedRoutes: Object.freeze(renderedRoutes),
       runtimeErrorStatus,
       sharpVersion: dependencies.sharpVersion,
+      extensionPackage:
+        `@example/packed-publication-extension@${dependencies.extensionVersion}`,
       themePackage: "@example/packed-publication-theme@1.0.0",
       vipsVersion: dependencies.vipsVersion,
     });

@@ -47,9 +47,11 @@ import { fileURLToPath } from "node:url";
 
 import {
   buildAudioEnvelope,
-  buildPublicationReader,
   resolvePublicationAudio,
 } from "../packages/publisher/dist/node.js";
+import {
+  buildFixturePublicationReader as buildPublicationReader,
+} from "./extension-fixture.mjs";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const narratedFixture = join(repositoryRoot, "fixtures", "canonical-narrated-tides");

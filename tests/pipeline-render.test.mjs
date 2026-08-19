@@ -45,10 +45,13 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import {
   assertHostCanServe,
-  buildPublicationReader,
   findUnsupportedHostFeatures,
   readHostCapabilities,
 } from "../packages/publisher/dist/node.js";
+import {
+  buildFixturePublicationReader as buildPublicationReader,
+  extensionRegistrationsForBuild,
+} from "./extension-fixture.mjs";
 import {
   PUBLISHER_NEXT_HOST_CAPABILITIES,
 } from "../packages/next/dist/host.js";
@@ -100,6 +103,12 @@ async function buildOutput(publicationRoot) {
 async function createAsGeneratedHostDoes(built) {
   return await createPublicationNextApplication({
     reader: built.reader,
+    ...(built.extensions === undefined
+      ? {}
+      : {
+          extensionData: built.extensions.envelope,
+          extensions: extensionRegistrationsForBuild(built),
+        }),
     ...(built.updates === undefined
       ? {}
       : { updatesData: built.updates.envelope }),
@@ -394,7 +403,7 @@ test("the engine's own renderer resolves, with its import-only exports", (t) => 
     `the renderer must resolve:\n${planned.stderr}`,
   );
   assert.match(planned.stdout, /Renderer\s+@genii-foundation\/publisher-next/u);
-  assert.match(planned.stdout, /Contract\s+0\.10\.0/u);
+  assert.match(planned.stdout, /Contract\s+0\.11\.0/u);
 });
 
 test("a genuinely missing renderer says where it looked", (t) => {

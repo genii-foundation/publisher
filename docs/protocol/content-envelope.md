@@ -117,7 +117,7 @@ The publication manifest declares extensions in resolution order. Each declarati
 
 Typed content payloads let those resolved extensions contribute canonical JSON data without mutating the compiler. Payloads are sorted by ID. Every listed `sourcePath` must identify an injected `extension` source owned by the payload's extension, and one source path cannot belong to two extensions. The envelope derives each extension's ordered `payloadIds` and verifies every payload hash. Exact ordered capability grants, payload data, and producer identity participate in `hashes.content`. Extension source provenance participates in `hashes.sourceSet`. Both hashes feed `buildId`.
 
-A `content.project` grant permits a downstream extension projector to emit a separate artifact. It consumes the validated envelope, carries its identity, and cannot mutate it. It does not scan Markdown or reopen asset directories to invent a second account of the same publication. The current content package records the grant but does not load or invoke the projector.
+A `content.project` grant permits Publisher orchestration to invoke an explicitly registered downstream projector and emit a separate artifact. It consumes the validated envelope, carries its identity, and cannot mutate it. It does not scan Markdown or reopen asset directories to invent a second account of the same publication. The framework-neutral content package records the grant and exact resolution. The Node orchestration boundary owns invocation after content and Reader validation.
 
 ## Artifact boundary
 

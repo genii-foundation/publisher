@@ -83,6 +83,9 @@ const hardDeniedPrefixes = Object.freeze([".env."]);
 /** Reserved across every source role and never read, imported, or evaluated. */
 export const RESERVED_HOST_CONFIG_PATH = "publisher.config.ts";
 
+/** Author-owned executable extension registration, never managed by the engine. */
+export const RESERVED_HOST_EXTENSIONS_PATH = "publisher.extensions.mjs";
+
 /** Author-owned executable theme selection, never managed by the engine. */
 export const RESERVED_HOST_THEME_PATH = "publisher.theme.mjs";
 
@@ -196,6 +199,7 @@ export function createHostMutationAuthority(
     }
     if (
       path === RESERVED_HOST_CONFIG_PATH ||
+      path === RESERVED_HOST_EXTENSIONS_PATH ||
       path === RESERVED_HOST_THEME_PATH
     ) {
       return Object.freeze({

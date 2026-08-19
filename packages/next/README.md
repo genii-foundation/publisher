@@ -16,7 +16,7 @@ The renderer owns:
 - canonical trailing-slash redirects
 - deterministic application-manifest identity
 
-A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state, lazy default narration playback, and optional provider-neutral synchronization. It does not execute extensions or claim static-export support.
+A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state, lazy default narration playback, optional provider-neutral synchronization, and two engine-owned server extension slots. It does not execute client extensions, extension routes, extension handlers, or claim static-export support.
 
 Progress and complete bookmark documents share one publication-scoped reactive
 store. Its atomic updater always sees the latest in-memory snapshot. Same-tab
@@ -545,6 +545,41 @@ closed `genii-publisher:theme` host alias, and both the server application and
 client-safe error identity use the same adapter. A custom theme package must be
 browser safe because its configuration function also runs in client error
 chunks.
+
+## Extensions
+
+The official renderer implements the `renderer.slot` grant through two fixed
+server slots, `page.before-main` and `page.after-main`. Both sit inside the
+engine-owned `main` element and before the required attribution footer. The
+not-found and framework error surfaces do not invoke extensions.
+
+Install an extension package explicitly and register it in author-owned host
+code:
+
+```js
+// publisher.extensions.mjs
+import extension from "@example/publication-extension";
+
+export default Object.freeze([extension]);
+```
+
+The manifest package string is provenance, never import authority. The generated
+host loads `publication-extensions.json`, imports the author registry through
+`genii-publisher:extensions`, and passes both to
+`createPublicationNextApplication`. The renderer verifies exact publication,
+Reader build, registry order, package, version, grants, artifact hash, adapter
+API, and compatibility before rendering.
+
+A slot adapter receives only its slot name, page kind and path, public
+publication identity, optional work and section identity, and its own
+build-projected `serverData`. It never receives manuscript blocks, the Reader
+envelope, source evidence, another extension's data, provider configuration, or
+shell authority. The renderer wraps output in an engine-owned `aside` naming the
+extension and slot.
+
+`renderer.client`, `host.route`, and `host.handler` are not implemented. Browser
+extension data is rejected. Capability grants decide which documented interface
+Publisher invokes, but they do not sandbox explicitly imported JavaScript.
 
 ## Updates
 

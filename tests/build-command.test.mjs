@@ -73,6 +73,7 @@ for (const fixture of ["canonical-field-notes", "declared-night-dispatch"]) {
     assert.equal(built.status, 0, built.stderr);
     assert.match(built.stdout, /Artifact\s+alpha-reader\.json/u);
     assert.match(built.stdout, /Identity\s+alpha-public-identity\.json/u);
+    assert.match(built.stdout, /Extensions\s+alpha-extensions\.json/u);
     assert.match(built.stdout, /Search\s+public\/alpha-search\.json/u);
     assert.match(built.stdout, /Digest\s+sha256:[a-f0-9]{64}/u);
     assert.match(built.stdout, /^Written\.$/mu);
@@ -97,6 +98,11 @@ for (const fixture of ["canonical-field-notes", "declared-night-dispatch"]) {
       "schemaVersion",
     ]);
     assert.equal(Object.hasOwn(publicIdentity, "works"), false);
+    const extensions = JSON.parse(
+      readFileSync(join(hostRoot, "alpha-extensions.json"), "utf8"),
+    );
+    assert.equal(extensions.readerBuildId, parsed.buildId);
+    assert.equal(extensions.extensions.length, 1);
     const search = JSON.parse(
       readFileSync(join(hostRoot, "public", "alpha-search.json"), "utf8"),
     );
@@ -129,7 +135,7 @@ test("a renderer with no public identity surface keeps the projection optional",
     omitPublicIdentityDataPath: true,
     capabilities: {
       routeKinds: ["collection", "home", "section", "updates", "work"],
-      dataArtifacts: ["audio", "progress", "search", "sync", "updates"],
+      dataArtifacts: ["audio", "extensions", "progress", "search", "sync", "updates"],
     },
   });
   const built = run(hostRoot, [

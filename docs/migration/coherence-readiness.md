@@ -405,6 +405,13 @@ these concerns. It does not own the values that make Coherence itself.
 9. Prove the Coherence Updates adapter and migration compatibility.
 10. Prove the same contracts with an unrelated second publication.
 
+The foundation portability evidence now includes two neutral publication shapes,
+an independently packed theme, and an independently packed extension. The clean
+host performs a frozen offline reinstall, renders both extension slots, and
+proves that extension server data is absent from browser chunks. This closes the
+generic override proof. It does not replace the separate exact Coherence
+candidate and preview acceptance gates below.
+
 ## Coherence acceptance gates
 
 The migration is not accepted until all of these hold:

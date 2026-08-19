@@ -44,6 +44,10 @@ export type {
   PublisherNextUpdatesInstance,
   PublisherNextUpdatesPage,
   PublisherNextUpdatesView,
+  PublisherNextExtensionPageContext,
+  PublisherNextExtensionRenderer,
+  PublisherNextExtensionRenderInput,
+  PublisherNextExtensionSlot,
   ResolvedPublisherNextUpdates,
 } from "../types.js";
 export type {

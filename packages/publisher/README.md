@@ -10,7 +10,27 @@ The package root is safe to import in browsers. It exposes the exact Publisher v
 
 `@genii-foundation/publisher/node` owns trusted build-time access to author repositories. Its public source snapshot loader accepts one explicit absolute publication root and returns validated in-memory source. The returned TypeScript type is opaque and can only be obtained from the loader API. `compileLoadedPublicationContent` accepts only the exact snapshot object issued by that public loader, injects the installed `PUBLISHER_VERSION`, and combines it with explicit adapter output. A copied, hand-built, or injected-filesystem seam snapshot is not accepted. Browser code must never import the Node entry point.
 
-Declared layout overrides are protocol data in `publication.json`. A host may use `publisher.config.ts` to assemble application integration, themes, extensions, and adapters, but the source snapshot loader does not execute or inspect that file.
+Declared layout overrides are protocol data in `publication.json`. A host may use `publisher.config.ts` for provider integration, `publisher.theme.mjs` for explicit theme selection, and `publisher.extensions.mjs` for explicit extension registration. The source snapshot loader does not execute or inspect any of these reserved files.
+
+## Extension registration
+
+Manifest package names record provenance. They are never import instructions.
+Install each extension package explicitly, then register it in author-owned host
+code:
+
+```js
+// publisher.extensions.mjs
+import stationIndex from "@example/station-index-extension";
+
+export default Object.freeze([stationIndex]);
+```
+
+The registration supplies its exact package version, engine compatibility,
+supported capabilities, and implementation. Every manifest declaration must
+match one registration in declaration order. Publisher invokes
+`content.project` only when granted and materializes its canonical result in a
+Reader-build-bound extension artifact. `publisher.extensions.mjs` is never
+created, rewritten, or treated as publication source by lifecycle commands.
 
 ## Source snapshot boundary
 

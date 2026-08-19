@@ -45,6 +45,11 @@ export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH =
   "renderers/next/application.json";
 export const PUBLISHER_NEXT_THEME_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_UPDATES_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_EXTENSION_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_EXTENSION_SLOTS = Object.freeze([
+  "page.before-main",
+  "page.after-main",
+] as const);
 export const PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES =
   Object.freeze({
     "next@16.2.12": Object.freeze({
@@ -57,6 +62,42 @@ export const PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES =
 export type PublisherNextJsonObject = Readonly<
   Record<string, JSONValue>
 >;
+
+export type PublisherNextExtensionSlot =
+  typeof PUBLISHER_NEXT_EXTENSION_SLOTS[number];
+
+export interface PublisherNextExtensionPageContext {
+  readonly kind: PublisherNextPage["kind"];
+  readonly path: string;
+  readonly publication: {
+    readonly id: string;
+    readonly title: string;
+    readonly language: string;
+  };
+  readonly work?: {
+    readonly id: string;
+    readonly title: string;
+  };
+  readonly section?: {
+    readonly id: string;
+    readonly title: string;
+  };
+}
+
+export interface PublisherNextExtensionRenderInput {
+  readonly slot: PublisherNextExtensionSlot;
+  readonly page: PublisherNextExtensionPageContext;
+  readonly serverData?: JSONValue;
+}
+
+export interface PublisherNextExtensionRenderer {
+  readonly kind: "genii.publisher.next-extension";
+  readonly apiVersion: typeof PUBLISHER_NEXT_EXTENSION_API_VERSION;
+  readonly rendererCompatibility: string;
+  readonly renderSlot: (
+    input: PublisherNextExtensionRenderInput,
+  ) => ReactNode | Promise<ReactNode>;
+}
 
 export interface PublisherNextThemeTokens {
   readonly color: {
@@ -234,6 +275,20 @@ export interface PublisherNextApplicationManifest {
     readonly configHash: Sha256Digest;
     readonly viewHash: Sha256Digest;
   } | null;
+  readonly extensions: {
+    readonly schemaVersion: "1.0";
+    readonly buildId: Sha256Digest;
+    readonly entries: readonly {
+      readonly id: string;
+      readonly package: string;
+      readonly version: string;
+      readonly capabilities: readonly string[];
+      readonly projectionHash: Sha256Digest;
+      readonly rendererApiVersion:
+        typeof PUBLISHER_NEXT_EXTENSION_API_VERSION | null;
+      readonly rendererCompatibility: string | null;
+    }[];
+  } | null;
   readonly sync: {
     readonly schemaVersion: SyncEnvelope["schemaVersion"];
     readonly buildId: Sha256Digest;
@@ -329,6 +384,8 @@ export interface PublicationNextApplication {
 export interface CreatePublicationNextApplicationOptions {
   readonly reader: unknown;
   readonly audioData?: unknown;
+  readonly extensionData?: unknown;
+  readonly extensions?: unknown;
   readonly syncData?: unknown;
   readonly theme?: ResolvedPublisherNextTheme;
   readonly updates?: ResolvedPublisherNextUpdates;

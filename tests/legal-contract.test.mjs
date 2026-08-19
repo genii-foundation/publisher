@@ -240,6 +240,24 @@ test("public documentation identifies the canonical source repository", () => {
   }
 });
 
+test("Publisher package includes notices for its runtime SemVer dependency", async () => {
+  assert.ok(
+    publisherPackage.manifest.files.includes("THIRD_PARTY_NOTICES.md"),
+  );
+  assert.ok(
+    publisherPackage.manifest.files.includes("third-party-licenses"),
+  );
+  assert.equal(publisherPackage.manifest.dependencies.semver, "7.8.5");
+  const [notices, license] = await Promise.all([
+    read("packages/publisher/THIRD_PARTY_NOTICES.md"),
+    read("packages/publisher/third-party-licenses/semver-LICENSE-ISC.txt"),
+  ]);
+  assert.match(notices, /`semver` \| 7\.8\.5 \| dependency \| ISC/u);
+  assert.match(notices, /not GENII Publisher\s+Original Code/u);
+  assert.match(license, /^The ISC License$/m);
+  assert.match(license, /Isaac Z\. Schlueter and Contributors/u);
+});
+
 test("schema package preserves the portable Unicode data licenses", async () => {
   assert.ok(
     schemaPackage.manifest.files.includes("THIRD_PARTY_NOTICES.md"),

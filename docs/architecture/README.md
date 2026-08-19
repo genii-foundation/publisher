@@ -51,5 +51,6 @@ These records define the accepted foundation of GENII Publisher.
 47. [ADR 0047: Accessible manuscript extensions](./0047-accessible-manuscript-extensions.md)
 48. [ADR 0048: Exact local preview candidate identity](./0048-exact-local-preview-candidate-identity.md)
 49. [ADR 0049: Explicit host theme and public identity artifact](./0049-explicit-theme-and-public-identity.md)
+50. [ADR 0050: Explicit extension registration and server slots](./0050-explicit-extension-registration-and-server-slots.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

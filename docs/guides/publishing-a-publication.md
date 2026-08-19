@@ -32,6 +32,21 @@ explicit adapter for ordinary pages and framework error surfaces. Package names
 in `publication.json` remain provenance data and are never treated as import
 instructions.
 
+Install every declared extension package into the host and register it through
+author-owned code:
+
+```js
+// publisher.extensions.mjs
+import stationIndex from "@example/station-index-extension";
+
+export default Object.freeze([stationIndex]);
+```
+
+The registration order must match `publication.json`. A manifest package string
+never imports code. `content.project` emits a separate build-bound artifact, and
+the official Next renderer invokes only explicitly granted server slots. The
+engine never creates or rewrites `publisher.extensions.mjs`.
+
 Node 22.12.0 or newer, and npm 10.9.0.
 
 ## Your publication

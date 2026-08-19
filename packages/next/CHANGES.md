@@ -4,6 +4,9 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Advanced the host contract to 0.11.0 with explicit author extension registration and a required build-bound extension artifact.
+- Added two engine-owned server extension slots with exact grants, narrow immutable page context, deterministic identity, and safe failure handling.
+- Proved a separately packed extension through clean installation, frozen offline reinstallation, server rendering, and browser chunk exclusion of server-only data.
 - Advanced the host contract to 0.10.0 with explicit author theme selection, one shared server and error-surface adapter, and a required public identity artifact.
 - Proved an independently packed theme package through clean installation, frozen offline reinstallation, ordinary pages, static error pages, and manuscript-free client chunks.
 - Added server-owned linkable headings with hydrated adjacent copy actions and polite status reporting.

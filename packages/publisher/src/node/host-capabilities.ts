@@ -60,6 +60,8 @@ export const SEARCH_DATA_ARTIFACT = "search";
 export const PROGRESS_DATA_ARTIFACT = "progress";
 /** The client-safe publication identity used by framework error surfaces. */
 export const PUBLIC_IDENTITY_DATA_ARTIFACT = "public-identity";
+/** Build-bound projections produced by explicitly registered extensions. */
+export const EXTENSION_DATA_ARTIFACT = "extensions";
 /** The data artifact identifier Updates is published under. */
 export const UPDATES_DATA_ARTIFACT = "updates";
 

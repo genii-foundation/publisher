@@ -63,6 +63,7 @@ import {
 } from "../dist/node/protected-roots.js";
 import {
   AUDIO_DATA_ARTIFACT,
+  EXTENSION_DATA_ARTIFACT,
   PROGRESS_DATA_ARTIFACT,
   PUBLIC_IDENTITY_DATA_ARTIFACT,
   SEARCH_DATA_ARTIFACT,
@@ -90,6 +91,23 @@ import {
 const defaultRenderer = "@genii-foundation/publisher-next";
 const journalDirectoryName = join(".publisher", "transaction");
 const maximumPreviewIdentityFileBytes = 64 * 1024 * 1024;
+
+async function loadAuthorExtensionRegistrations(hostRoot) {
+  const registryPath = join(hostRoot, "publisher.extensions.mjs");
+  if (!existsSync(registryPath)) {
+    return Object.freeze([]);
+  }
+  try {
+    const loaded = await import(pathToFileURL(registryPath).href);
+    return loaded.default;
+  } catch (error) {
+    throw new CommandError(
+      `${registryPath} could not be imported.\n${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
 
 const usage = `genii-publisher <command>
 
@@ -819,10 +837,12 @@ async function runBuild(options) {
   });
   const { create, module } = await loadHostTemplate(hostRoot, renderer);
   const template = create(hostTemplateInput(hostRoot));
+  const extensions = await loadAuthorExtensionRegistrations(hostRoot);
 
   const built = await buildPublicationReader({
     publicationRoot,
     audience: assertAudience(options.audience),
+    extensions,
   });
   if (!built.valid) {
     if (options.json) {
@@ -879,6 +899,19 @@ async function runBuild(options) {
           ],
         }
       : null,
+    built.value.extensions === undefined
+      ? null
+      : {
+          id: EXTENSION_DATA_ARTIFACT,
+          noun: "extension projections",
+          label: "Extensions",
+          declaredPath: template.extensionDataPath,
+          text: built.value.extensions.text,
+          detail: [
+            `Registered   ${built.value.extensions.envelope.extensions.length.toLocaleString("en-US")}`,
+            `Reader build ${built.value.extensions.envelope.readerBuildId}`,
+          ],
+        },
     {
       id: SEARCH_DATA_ARTIFACT,
       noun: "search index",
@@ -1220,9 +1253,11 @@ async function runStatus(options) {
       // Artifact currency, when there is a publication to compare against.
       const publicationRoot = resolveHostRoot(options.publication ?? hostRoot);
       if (existsSync(join(publicationRoot, "publication.json"))) {
+        const extensions = await loadAuthorExtensionRegistrations(hostRoot);
         const built = await buildPublicationReader({
           publicationRoot,
           audience: assertAudience(options.audience),
+          extensions,
         });
         if (!built.valid) {
           report.artifact = { outcome: "publicationInvalid" };
@@ -1286,6 +1321,14 @@ async function runStatus(options) {
                   text: built.value.publicIdentity.text,
                 }
               : null,
+            built.value.extensions === undefined
+              ? null
+              : {
+                  id: EXTENSION_DATA_ARTIFACT,
+                  label: "Extensions",
+                  declaredPath: template.extensionDataPath,
+                  text: built.value.extensions.text,
+                },
             {
               id: SEARCH_DATA_ARTIFACT,
               label: "Search",
