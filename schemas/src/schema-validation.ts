@@ -19,6 +19,7 @@ import {
 } from "./envelope-resource-limits.js";
 import {
   audioCatalogValidator,
+  audioCheckpointValidator,
   audioEnvelopeValidator,
   collectionValidator,
   contentEnvelopeValidator,
@@ -35,6 +36,7 @@ import type {
 } from "./generated-validators.js";
 import type {
   AudioClipCatalog,
+  AudioCheckpoint,
   AudioEnvelope,
   CollectionManifest,
   Diagnostic,
@@ -693,6 +695,13 @@ export function validateAudioCatalogShape(
   input: unknown,
 ): ValidationResult<AudioClipCatalog> {
   return validateShape(audioCatalogValidator, input);
+}
+
+/** Validates immutable author lifecycle evidence for one narration checkpoint. */
+export function validateAudioCheckpointShape(
+  input: unknown,
+): ValidationResult<AudioCheckpoint> {
+  return validateShape(audioCheckpointValidator, input);
 }
 
 /**

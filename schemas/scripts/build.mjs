@@ -75,6 +75,10 @@ const validatorDefinitions = Object.freeze([
     fileName: "audio-catalog.schema.json",
   },
   {
+    exportName: "audioCheckpointValidator",
+    fileName: "audio-checkpoint.schema.json",
+  },
+  {
     exportName: "audioEnvelopeValidator",
     fileName: "audio-envelope.schema.json",
   },

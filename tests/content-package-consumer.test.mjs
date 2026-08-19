@@ -705,6 +705,7 @@ test("packed content freezes its runtime and proves production and development c
         compilePublicationContent,
         createPublicationContentArtifact,
         serializePublicationContentEnvelope,
+        validateAudioCheckpoint,
         validatePublicationContentEnvelope,
       } from "@genii-foundation/publisher-content";
       import {
@@ -718,6 +719,8 @@ test("packed content freezes its runtime and proves production and development c
         assert.equal(result.valid, true, JSON.stringify(result.diagnostics));
         return result.value;
       }
+
+      assert.equal(typeof validateAudioCheckpoint, "function");
 
       const publication = value(validatePublicationShape({
         "$schema": "https://publisher.genii.foundation/schemas/publication.schema.json",
@@ -978,7 +981,9 @@ test("packed content freezes its runtime and proves production and development c
         compilePublicationContent,
         createPublicationContentArtifact,
         serializePublicationContentEnvelope,
+        validateAudioCheckpoint,
         validatePublicationContentEnvelope,
+        type AudioCheckpoint,
         type CompilePublicationContentInput,
         type ResolvedExtensionInput,
         type SectionReaderLocationInput,
@@ -991,6 +996,7 @@ test("packed content freezes its runtime and proves production and development c
 
       declare const input: CompilePublicationContentInput;
       declare const envelope: PublicationContentEnvelope;
+      declare const checkpoint: AudioCheckpoint;
       const readerLocation: SectionReaderLocationInput = { kind: "work" };
       const capability: ExtensionCapability = "content.project";
       const extension: ResolvedExtensionInput = {
@@ -1003,11 +1009,14 @@ test("packed content freezes its runtime and proves production and development c
         compilePublicationContent(input);
       const validated: ValidationResult<PublicationContentEnvelope> =
         validatePublicationContentEnvelope(envelope);
+      const validatedCheckpoint: ValidationResult<AudioCheckpoint> =
+        validateAudioCheckpoint(checkpoint);
       const serialized: string = serializePublicationContentEnvelope(envelope);
       const artifact = createPublicationContentArtifact(envelope);
       void [
         compiled,
         validated,
+        validatedCheckpoint,
         serialized,
         artifact,
         readerLocation,

@@ -22,6 +22,9 @@ export {
   canonicalizeJson,
 } from "./canonical-json.js";
 export {
+  validateAudioCheckpoint,
+} from "./audio-checkpoint.js";
+export {
   hashCanonicalJson,
   sha256,
 } from "./hashing.js";
@@ -56,6 +59,7 @@ export type {
   WorkContentInput,
 } from "./types.js";
 export type {
+  AudioCheckpoint,
   PublicationContentEnvelope,
   Sha256Digest,
 } from "@genii-foundation/publisher-schema";

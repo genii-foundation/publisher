@@ -187,6 +187,64 @@ export interface AudioClipCatalog {
   readonly voices: readonly AudioCatalogVoice[];
 }
 
+export interface AudioCheckpointPublishedObject {
+  readonly objectKey: string;
+  readonly byteSize: number;
+  readonly sha256: string;
+}
+
+export interface AudioCheckpointUnit {
+  readonly sectionId: string;
+  readonly audioVersionId: string;
+  readonly spokenTextSha256: string;
+  readonly durationSeconds: number;
+  readonly exactWordCount: number;
+  readonly interpolatedWordCount: number;
+  readonly timingSource: string;
+  readonly audioFormat: "mp3" | "opus" | "wav";
+  readonly audio: AudioCheckpointPublishedObject;
+  readonly timings: AudioCheckpointPublishedObject;
+}
+
+export interface AudioCheckpoint {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/audio-checkpoint.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly checkpointId: string;
+  readonly source: {
+    readonly readerBuildId: string;
+    readonly sourceRevision: string;
+    readonly catalogSha256: string;
+    readonly settingsSha256: string;
+  };
+  readonly pipeline: {
+    readonly adapter: {
+      readonly package: string;
+      readonly version: string;
+    };
+    readonly runId: string;
+    readonly provider: string;
+    readonly model: string;
+  };
+  readonly voice: {
+    readonly id: string;
+    readonly label: string;
+    readonly referenceId?: string;
+  };
+  readonly recordedAt: string;
+  readonly remoteVerifiedAt: string;
+  readonly statistics: {
+    readonly unitCount: number;
+    readonly objectCount: number;
+    readonly durationSeconds: number;
+    readonly audioBytes: number;
+    readonly timingsBytes: number;
+  };
+  readonly unitsSha256: string;
+  readonly units: readonly AudioCheckpointUnit[];
+}
+
 export interface AudioEnvelopeVoice extends AudioCatalogVoice {
   /** Sections this voice narrates. */
   readonly narratedSectionCount: number;

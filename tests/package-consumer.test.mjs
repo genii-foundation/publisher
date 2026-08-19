@@ -321,6 +321,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "SOURCE-NOTICE",
       "THIRD_PARTY_NOTICES.md",
       "audio-catalog.schema.json",
+      "audio-checkpoint.schema.json",
       "audio-envelope.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",
@@ -530,6 +531,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         isCanonicalRoutePath,
         normalizePortableRepositoryText,
         portableRepositoryPathIdentity,
+        validateAudioCheckpointShape,
         validateContentEnvelopeShape,
         validatePublicationShape,
         validateRepositoryRelativePath,
@@ -546,6 +548,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         validateReaderEnvelopeShape,
       } from "@genii-foundation/publisher-schema/reader";
       import contentEnvelopeSchema from "@genii-foundation/publisher-schema/content-envelope.schema.json" with { type: "json" };
+      import audioCheckpointSchema from "@genii-foundation/publisher-schema/audio-checkpoint.schema.json" with { type: "json" };
       import readerEnvelopeSchema from "@genii-foundation/publisher-schema/reader-envelope.schema.json" with { type: "json" };
       import workSchema from "@genii-foundation/publisher-schema/work.schema.json" with { type: "json" };
 
@@ -554,6 +557,11 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         "https://publisher.genii.foundation/schemas/work.schema.json",
       );
       assert.equal(typeof validatePublicationShape, "function");
+      assert.equal(typeof validateAudioCheckpointShape, "function");
+      assert.equal(
+        audioCheckpointSchema.$id,
+        "https://publisher.genii.foundation/schemas/audio-checkpoint.schema.json",
+      );
       assert.equal(typeof validateContentEnvelopeShape, "function");
       assert.deepEqual(EXTENSION_CAPABILITIES, [
         "content.project",
@@ -737,6 +745,7 @@ if (
 
     for (const schemaFileName of [
       "audio-catalog.schema.json",
+      "audio-checkpoint.schema.json",
       "audio-envelope.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",

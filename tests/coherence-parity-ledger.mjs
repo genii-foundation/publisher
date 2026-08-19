@@ -596,9 +596,14 @@ export const AUDIO_PARITY = Object.freeze([
     id: "audio.checkpoint.evidence",
     capability: "Immutable narration checkpoints with exact object, timing, model, source, and hash evidence",
     home: "engine",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "The catalog schema does not yet describe the reviewed immutable evidence needed to promote or guard changed narration.",
+    status: "upgraded",
+    why: "The closed checkpoint schema and semantic validator bind the exact Reader build, source revision, catalog, settings, adapter, run, provider, model, narrator, spoken text, remote audio and timing objects, canonical aggregate statistics, and ordered unit fingerprint without contacting storage.",
+    evidence: {
+      decision: "docs/architecture/0041-immutable-audio-checkpoints.md",
+      schema: "audio-checkpoint.schema.json",
+      validation: "packages/content/src/audio-checkpoint.ts",
+      tests: "tests/audio-checkpoint.test.mjs",
+    },
   },
   {
     id: "audio.promotion.selected_unit",

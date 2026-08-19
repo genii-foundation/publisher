@@ -266,6 +266,10 @@ test("schema package manifest declares runtime, schemas, and legal artifacts", a
     packageManifest.exports["./collection.schema.json"],
     "./collection.schema.json",
   );
+  assert.equal(
+    packageManifest.exports["./audio-checkpoint.schema.json"],
+    "./audio-checkpoint.schema.json",
+  );
   assert.deepEqual(packageManifest.exports["./routes"], {
     types: "./dist/routes.d.ts",
     import: "./dist/routes.js",
