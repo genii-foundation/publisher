@@ -91,6 +91,10 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
+import {
+  createPublisherReaderStore,
+  usePublisherReaderStore,
+} from "./reader-store.js";
 
 export interface PublisherReaderOutlineEntry {
   readonly id: string;
@@ -245,13 +249,60 @@ export function PublisherReaderRail({
   const panelId = useId();
   const syncEmailRef = useRef<HTMLInputElement>(null);
   const consentContinueRef = useRef<HTMLButtonElement>(null);
+  const preferencesKey = useMemo(
+    () => createReaderPreferencesStorageKey(publicationId),
+    [publicationId],
+  );
+  const progressKey = useMemo(
+    () => createReaderProgressStorageKey(publicationId),
+    [publicationId],
+  );
+  const bookmarksKey = useMemo(
+    () => createReaderBookmarksStorageKey(publicationId),
+    [publicationId],
+  );
+  const consentKey = useMemo(
+    () => createReaderSyncConsentStorageKey(publicationId),
+    [publicationId],
+  );
+  const engagementKey = useMemo(
+    () => createReaderEngagementStorageKey(publicationId),
+    [publicationId],
+  );
+  const progressStore = useMemo(() => createPublisherReaderStore({
+    storageKey: progressKey,
+    parse: (serialized: string | null) => parseReaderProgressState(serialized, {
+      publicationId,
+      now: Date.now(),
+      ...(currentSection === undefined ? {} : { sections: [currentSection] }),
+    }),
+    serialize: (value: ReaderProgressState) => serializeReaderProgressState(
+      value,
+      {
+        publicationId,
+        now: Date.now(),
+        ...(currentSection === undefined ? {} : { sections: [currentSection] }),
+      },
+    ),
+    empty: () => createEmptyReaderProgressState(publicationId),
+  }), [currentSection, progressKey, publicationId]);
+  const bookmarksStore = useMemo(() => createPublisherReaderStore({
+    storageKey: bookmarksKey,
+    parse: (serialized: string | null) => parseReaderBookmarksState(
+      serialized,
+      { publicationId, now: Date.now() },
+    ),
+    serialize: (value: ReaderBookmarksState) => serializeReaderBookmarksState(
+      value,
+      { publicationId, now: Date.now() },
+    ),
+    empty: () => createEmptyReaderBookmarksState(publicationId),
+  }), [bookmarksKey, publicationId]);
+  const progress = usePublisherReaderStore(progressStore);
+  const bookmarkState = usePublisherReaderStore(bookmarksStore);
   const [openPanel, setOpenPanel] = useState<ReaderPanel | null>(null);
   const [preferences, setPreferences] = useState<ReaderPreferences>(() =>
     createDefaultReaderPreferences(DEFAULT_FONT_POLICY));
-  const [progress, setProgress] = useState<ReaderProgressState>(() =>
-    createEmptyReaderProgressState(publicationId));
-  const [bookmarkState, setBookmarkState] = useState<ReaderBookmarksState>(() =>
-    createEmptyReaderBookmarksState(publicationId));
   const [query, setQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState<ReaderSearchIndex | null>(null);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
@@ -279,27 +330,6 @@ export function PublisherReaderRail({
   const signedInRef = useRef(false);
   const noteSyncChangeRef = useRef<(now: number) => void>(() => undefined);
   const recordedSectionRef = useRef<string | null>(null);
-
-  const preferencesKey = useMemo(
-    () => createReaderPreferencesStorageKey(publicationId),
-    [publicationId],
-  );
-  const progressKey = useMemo(
-    () => createReaderProgressStorageKey(publicationId),
-    [publicationId],
-  );
-  const bookmarksKey = useMemo(
-    () => createReaderBookmarksStorageKey(publicationId),
-    [publicationId],
-  );
-  const consentKey = useMemo(
-    () => createReaderSyncConsentStorageKey(publicationId),
-    [publicationId],
-  );
-  const engagementKey = useMemo(
-    () => createReaderEngagementStorageKey(publicationId),
-    [publicationId],
-  );
   const canSyncProgress = sync?.capabilities.includes("progress") === true;
   const canSyncBookmarks = sync?.capabilities.includes("bookmarks") === true;
   const canSyncEngagement = sync?.capabilities.includes("engagement") === true;
@@ -314,6 +344,21 @@ export function PublisherReaderRail({
     if (!signedInRef.current || !consentRef.current.granted) return;
     coordinatorRef.current = noteReaderSyncChange(coordinatorRef.current, now);
   };
+
+  useEffect(() => {
+    const unsubscribeProgress = progressStore.subscribeChanges((source) => {
+      progressRef.current = progressStore.getSnapshot();
+      if (source !== "remote") noteSyncChangeRef.current(Date.now());
+    });
+    const unsubscribeBookmarks = bookmarksStore.subscribeChanges((source) => {
+      bookmarksRef.current = bookmarksStore.getSnapshot();
+      if (source !== "remote") noteSyncChangeRef.current(Date.now());
+    });
+    return () => {
+      unsubscribeProgress();
+      unsubscribeBookmarks();
+    };
+  }, [bookmarksStore, progressStore]);
 
   useEffect(() => {
     signedInRef.current = false;
@@ -334,19 +379,6 @@ export function PublisherReaderRail({
     setPreferences(loaded);
     applyPreferences(loaded);
     const now = Date.now();
-    const loadedProgress = parseReaderProgressState(safeLocalRead(progressKey), {
-      publicationId,
-      now,
-      ...(currentSection === undefined ? {} : { sections: [currentSection] }),
-    });
-    progressRef.current = loadedProgress;
-    setProgress(loadedProgress);
-    const loadedBookmarks = parseReaderBookmarksState(
-      safeLocalRead(bookmarksKey),
-      { publicationId, now },
-    );
-    bookmarksRef.current = loadedBookmarks;
-    setBookmarkState(loadedBookmarks);
     consentRef.current = parseReaderSyncConsent(
       safeLocalRead(consentKey),
       publicationId,
@@ -376,12 +408,10 @@ export function PublisherReaderRail({
     }
     engagementRef.current = engagement;
   }, [
-    bookmarksKey,
     consentKey,
     currentSection,
     engagementKey,
     preferencesKey,
-    progressKey,
     publicationId,
   ]);
 
@@ -406,11 +436,6 @@ export function PublisherReaderRail({
     if (sync === null) return;
     let active = true;
 
-    const progressContext = (now: number) => ({
-      publicationId,
-      now,
-      ...(currentSection === undefined ? {} : { sections: [currentSection] }),
-    });
     const applyRemoteState = (
       remote: ReaderSyncRemoteState,
       now: number,
@@ -423,18 +448,8 @@ export function PublisherReaderRail({
       );
       progressRef.current = reconciled.progress;
       bookmarksRef.current = reconciled.bookmarks;
-      safeLocalWrite(
-        progressKey,
-        serializeReaderProgressState(reconciled.progress, progressContext(now)),
-      );
-      safeLocalWrite(
-        bookmarksKey,
-        serializeReaderBookmarksState(reconciled.bookmarks, { publicationId, now }),
-      );
-      if (active) {
-        setProgress(reconciled.progress);
-        setBookmarkState(reconciled.bookmarks);
-      }
+      progressStore.write(reconciled.progress, "remote");
+      bookmarksStore.write(reconciled.bookmarks, "remote");
       return reconciled;
     };
     const finishAttempt = (
@@ -564,13 +579,12 @@ export function PublisherReaderRail({
       syncAbortRef.current?.abort();
     };
   }, [
-    bookmarksKey,
+    bookmarksStore,
     canSyncBookmarks,
     canSyncEngagement,
     canSyncProgress,
-    currentSection,
     engagementKey,
-    progressKey,
+    progressStore,
     publicationId,
     sync,
   ]);
@@ -589,7 +603,7 @@ export function PublisherReaderRail({
       const traversed = Math.max(0, Math.min(bounds.height, viewport - bounds.top));
       const percent = bounds.height <= 0 ? 0 : Math.round(100 * traversed / bounds.height);
       const now = Date.now();
-      setProgress((current) => {
+      progressStore.update((current) => {
         let next: ReaderProgressState;
         try {
           next = recordReaderSectionProgress(current, currentSection, {
@@ -613,8 +627,6 @@ export function PublisherReaderRail({
           return current;
         }
         progressRef.current = next;
-        safeLocalWrite(progressKey, serialized);
-        noteSyncChangeRef.current(now);
         return next;
       });
     };
@@ -629,7 +641,7 @@ export function PublisherReaderRail({
       window.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
     };
-  }, [currentSection, progressKey, publicationId]);
+  }, [currentSection, progressStore, publicationId]);
 
   useEffect(() => {
     if (openPanel !== "search" || searchState !== "idle") return;

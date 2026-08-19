@@ -616,7 +616,61 @@ async function assertHydratedErrorAttribution({
   }
 }
 
+function createCrossTabBookmarkProof(reader, sectionPath) {
+  const route = reader.routes.active.find(
+    ({ path, target }) =>
+      path === sectionPath && target.kind === "section",
+  );
+  assert.notEqual(route, undefined);
+  const work = reader.works.find(
+    (candidate) => candidate.id === route.target.workId,
+  );
+  assert.notEqual(work, undefined);
+  const section = work.sections.find(
+    (candidate) => candidate.id === route.target.sectionId,
+  );
+  assert.notEqual(section, undefined);
+  const block = section.blocks.find(
+    (candidate) => candidate.text.length > 0,
+  );
+  assert.notEqual(block, undefined);
+  const quote = block.text.slice(0, Math.min(16, block.text.length));
+  const point = (offset) => ({
+    workId: work.id,
+    sectionContinuityId: section.continuity.id,
+    blockId: block.id,
+    blockContentHash: block.contentHash,
+    offset,
+  });
+  const now = Date.now();
+  return Object.freeze({
+    quote,
+    state: {
+      schemaVersion: 1,
+      publicationId: reader.publicationId,
+      bookmarks: {
+        "cross-tab-proof": {
+          id: "cross-tab-proof",
+          createdAt: now,
+          updatedAt: now,
+          workId: work.id,
+          sectionContinuityId: section.continuity.id,
+          href: sectionPath,
+          quote,
+          prefix: "",
+          suffix: "",
+          range: {
+            start: point(0),
+            end: point(quote.length),
+          },
+        },
+      },
+    },
+  });
+}
+
 async function assertHydratedReaderTools({
+  bookmarkProof,
   browser,
   url,
 }) {
@@ -922,6 +976,76 @@ async function assertHydratedReaderTools({
       },
       "The default Reader did not complete and acknowledge its local-first synchronization transfer.",
     );
+    const peerPage = await openDevToolsPage(browser);
+    try {
+      await peerPage.send("Emulation.setDeviceMetricsOverride", {
+        width: 390,
+        height: 844,
+        deviceScaleFactor: 1,
+        mobile: true,
+      });
+      const peerNavigation = await peerPage.send("Page.navigate", { url });
+      assert.equal(
+        peerNavigation.errorText,
+        undefined,
+        `Peer Reader navigation failed: ${peerNavigation.errorText}`,
+      );
+      let peerReady = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const evaluated = await peerPage.send("Runtime.evaluate", {
+          expression: [
+            "({",
+            '  complete: document.readyState === "complete",',
+            '  controls: document.querySelectorAll(".publisher-reader-rail-actions button").length,',
+            "})",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        peerReady =
+          evaluated.result?.value?.complete === true &&
+          evaluated.result.value.controls === 5;
+        if (peerReady) break;
+        await wait(100);
+      }
+      assert.equal(peerReady, true, "The peer Reader tab did not hydrate.");
+      const peerWrite = await peerPage.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const key = Object.keys(localStorage).find((candidate) => candidate.includes("reader.bookmarks"));',
+          "  if (key === undefined) return false;",
+          `  localStorage.setItem(key, JSON.stringify(${JSON.stringify(bookmarkProof.state)}));`,
+          "  return true;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(peerWrite.result?.value, true);
+
+      let crossTabQuote = "";
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+            '    .find((candidate) => candidate.textContent?.includes("Bookmarks"));',
+            "  if (button?.getAttribute(\"aria-expanded\") !== \"true\") button?.click();",
+            '  return document.querySelector(".publisher-reader-bookmarks q")?.textContent ?? "";',
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        crossTabQuote = evaluated.result?.value ?? "";
+        if (crossTabQuote === bookmarkProof.quote) break;
+        await wait(100);
+      }
+      assert.equal(
+        crossTabQuote,
+        bookmarkProof.quote,
+        "The first Reader tab did not render bookmark state written by its peer tab.",
+      );
+    } finally {
+      peerPage.close();
+    }
   } finally {
     page.close();
   }
@@ -1983,6 +2107,7 @@ export async function runPackagedHostProof(
         )?.path;
         assert.equal(typeof sectionPath, "string");
         await assertHydratedReaderTools({
+          bookmarkProof: createCrossTabBookmarkProof(reader, sectionPath),
           browser,
           url: `${host.origin}${sectionPath}`,
         });

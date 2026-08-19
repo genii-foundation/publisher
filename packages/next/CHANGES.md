@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Added one publication-scoped reactive store for atomic progress and bookmark updates, same-tab notification, native cross-tab convergence, stable hydration, and in-memory fallback.
+- Extended the clean packed-host Chrome proof to render a bookmark written by a peer Reader tab.
 - Connected the framework-neutral local-first coordinator to the default Reader account flow with offline recovery, bounded retry, latest-local reconciliation, engagement acknowledgement, and schema-ahead refusal.
 - Extended the clean packed-host Chrome proof through consent, code sign-in, and an acknowledged progress, bookmarks, consent, and engagement transfer.
 - Advanced the host contract to 0.7.0 with provider-neutral publication-scoped Reader state transfer routes.

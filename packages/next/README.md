@@ -18,6 +18,13 @@ The renderer owns:
 
 A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state and optional provider-neutral synchronization. It does not execute extensions, play audio, or claim static-export support.
 
+Progress and complete bookmark documents share one publication-scoped reactive
+store. Its atomic updater always sees the latest in-memory snapshot. Same-tab
+writers notify each other directly, native storage events converge separate
+tabs, and canonically equal replacements cause no write or render churn. A
+stable empty server snapshot preserves hydration, while unavailable browser
+persistence leaves the current tab's in-memory reading state usable.
+
 ## Supported toolchain
 
 The reference author host pins the complete renderer toolchain. Do not use version ranges in a publication repository.

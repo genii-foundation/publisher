@@ -146,8 +146,13 @@ export const READER_PARITY = Object.freeze([
     id: "reader.state.reactive_store",
     capability: "Atomic local updates and cross-tab notification for private Reader state",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "One generic renderer store supplies stable server snapshots, atomic canonical updates, same-tab notification, native cross-tab convergence, injected test authority, and in-memory continuity when persistence is unavailable. Progress and full bookmark documents consume the same primitive.",
+    evidence: {
+      store: "packages/next/src/client/reader-store.ts",
+      consumer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
     sourcePaths: ["src/lib/reader-store.ts", "src/lib/reader-progress-store.ts"],
   },
   {
