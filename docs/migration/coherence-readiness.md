@@ -428,6 +428,15 @@ server and client projection data are absent from static browser chunks. This
 closes the generic override proof. It does not replace the separate exact
 Coherence candidate and preview acceptance gates below.
 
+The release rehearsal now binds that portability evidence to the exact five
+publishable package candidates. A clean canonical Field Notes repository installs
+those tarballs, repeats the install offline from its lockfile, runs the shipped
+author lifecycle, builds the official production host, and serves home, work, and
+Updates routes with separately packed theme and extension overrides. Source bytes
+and candidate digests are checked before and after. Provenance acceptance remains
+an independent human gate, so this proof cannot silently turn rehearsal into
+release authorization.
+
 ## Coherence acceptance gates
 
 The migration is not accepted until all of these hold:

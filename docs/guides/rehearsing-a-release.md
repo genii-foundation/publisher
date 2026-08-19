@@ -23,6 +23,30 @@ Neither script publishes. Publication is a separate workflow step that uploads t
 paths preparation produced, and direct package-directory publication is refused
 outright by each package's `prepublishOnly` hook.
 
+## Rehearsing the second publication
+
+Run the complete neutral-publication proof through the pinned package manager:
+
+```bash
+npm run release:rehearse
+```
+
+The rehearsal builds the same five exact package candidates used by release
+preparation. It installs those tarballs into a clean, unrelated canonical
+publication, writes a lockfile, performs a frozen offline reinstall, and invokes
+the installed `genii-publisher` executable. The executable plans and applies the
+official host contract, builds the Reader artifacts, and checks that they are
+current. The resulting host then performs a production Next.js build and serves
+its home, work, and Updates routes with a separately packed theme and extension.
+
+The proof also verifies that canonical publication sources remain byte-identical,
+that every installed package has the exact candidate version, and that the same
+candidate archive digests remain unchanged after the rehearsal.
+
+This command does not accept provenance records, create a release manifest,
+publish packages, or contact a deployment provider. It proves portability. It
+does not grant release authority.
+
 ## Running preparation
 
 Three things are required, and each one refuses clearly if missing.
