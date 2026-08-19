@@ -186,10 +186,11 @@ export const READER_PARITY = Object.freeze([
     capability: "Publication-scoped local bookmarks, passage capture, and notes",
     home: "engine",
     status: "added",
-    why: "The generic local document is publication scoped, immutable, bounded, canonical, and independent of storage or network authority. The official renderer refuses DOM text that differs from canonical Reader blocks before translating a same-section selection into portable offsets.",
+    why: "The generic local document is publication scoped, immutable, bounded, canonical, and independent of storage or network authority. The official renderer refuses DOM text that differs from canonical Reader blocks before translating a same-section selection into portable offsets, then captures an optional private note without losing the validated range.",
     evidence: {
       engine: "packages/reader/src/bookmarks.ts",
       selection: "packages/next/src/client/reader-selection.ts",
+      decision: "docs/architecture/0033-optional-bookmark-capture-note.md",
       browserProof: "packages/next/scripts/packaged-host-proof.mjs",
     },
     sourcePaths: ["src/lib/reader-bookmarks.ts"],

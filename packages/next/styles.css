@@ -70,7 +70,8 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 
 .publisher-root button:focus-visible,
 .publisher-root input:focus-visible,
-.publisher-root select:focus-visible {
+.publisher-root select:focus-visible,
+.publisher-root textarea:focus-visible {
   outline: 0.2rem solid var(--publisher-color-focus);
   outline-offset: 0.16rem;
 }
@@ -258,6 +259,50 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   color: var(--publisher-color-text);
   font: 0.8rem/1.35 var(--publisher-font-mono);
   box-shadow: 0 0.8rem 2rem color-mix(in srgb, var(--publisher-color-text) 18%, transparent);
+}
+
+.publisher-reader-selection-editor {
+  display: grid;
+  gap: 0.7rem;
+  width: min(20rem, calc(100vw - 2rem));
+  padding: 0.85rem;
+  border-color: var(--publisher-color-border);
+  background: var(--publisher-color-surface);
+  color: var(--publisher-color-text);
+  cursor: default;
+}
+
+.publisher-reader-selection-editor label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.publisher-reader-selection-editor textarea {
+  width: 100%;
+  min-height: 5rem;
+  resize: vertical;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--publisher-color-border);
+  border-radius: var(--publisher-control-radius);
+  background: var(--publisher-color-canvas);
+  color: var(--publisher-color-text);
+  font: 1rem/1.35 var(--publisher-font-body);
+}
+
+.publisher-reader-selection-editor > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.publisher-reader-selection-editor button {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--publisher-color-border);
+  border-radius: var(--publisher-control-radius);
+  background: var(--publisher-color-canvas);
+  color: var(--publisher-color-text);
+  font: inherit;
+  cursor: pointer;
 }
 
 .publisher-reader-panel > header {

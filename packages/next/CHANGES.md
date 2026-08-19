@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Added a focused, mobile-contained optional note editor to canonical passage capture without invalidating the selected range.
+- Extended the clean packed-host Chrome proof through note entry, key-event stability, and persisted note identity.
 - Added canonical same-section passage selection, viewport-clamped save controls, atomic local capture, and bookmark engagement events.
 - Extended the clean packed-host Chrome proof through real DOM selection geometry and persisted portable block offsets.
 - Completed the bounded default settings interface with publication-policy font choice and added reactive saved passages to publication search.

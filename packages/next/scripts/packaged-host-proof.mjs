@@ -1479,6 +1479,67 @@ async function assertHydratedReaderTools({
         expression:
           'document.querySelector(".publisher-reader-selection-action")?.click()',
       });
+      let selectionEditor;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const editor = document.querySelector(".publisher-reader-selection-editor");',
+            '  const note = editor?.querySelector("textarea");',
+            "  const rect = editor?.getBoundingClientRect();",
+            "  return {",
+            "    focused: document.activeElement === note,",
+            "    visible: editor !== null && rect !== undefined && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,",
+            "  };",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        selectionEditor = evaluated.result?.value;
+        if (selectionEditor?.focused === true) break;
+        await wait(50);
+      }
+      assert.deepEqual(selectionEditor, { focused: true, visible: true });
+      const selectionNote = "Return to this selected passage.";
+      const enteredSelectionNote = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const note = document.querySelector(".publisher-reader-selection-editor textarea");',
+          "  if (!(note instanceof HTMLTextAreaElement)) return false;",
+          '  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;',
+          `  setter?.call(note, ${JSON.stringify("Return to this selected passage.")});`,
+          '  note.dispatchEvent(new Event("input", { bubbles: true }));',
+          '  note.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "e" }));',
+          "  return true;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(enteredSelectionNote.result?.value, true);
+      await wait(250);
+      const retainedSelectionNote = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const editor = document.querySelector(".publisher-reader-selection-editor");',
+          '  const note = editor?.querySelector("textarea");',
+          '  return editor !== null && note?.value === ' + JSON.stringify(selectionNote) + ";",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(retainedSelectionNote.result?.value, true);
+      const savedSelectionNote = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const save = Array.from(document.querySelectorAll(".publisher-reader-selection-editor button"))',
+          '    .find((button) => button.textContent === "Save");',
+          "  save?.click();",
+          "  return save !== undefined;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(savedSelectionNote.result?.value, true);
       let capturedSelection;
       for (let attempt = 0; attempt < 100; attempt += 1) {
         const evaluated = await page.send("Runtime.evaluate", {
@@ -1489,6 +1550,7 @@ async function assertHydratedReaderTools({
             "  return {",
             "    count: live.length,",
             "    quote: live[0]?.quote ?? \"\",",
+            "    note: live[0]?.note ?? \"\",",
             "    startBlockId: live[0]?.range?.start?.blockId ?? \"\",",
             '    status: document.querySelector(".publisher-reader-selection-status")?.textContent ?? "",',
             "  };",
@@ -1503,6 +1565,7 @@ async function assertHydratedReaderTools({
       assert.deepEqual(capturedSelection, {
         count: 1,
         quote: selectedPassage.result.value.quote,
+        note: selectionNote,
         startBlockId: selectedPassage.result.value.blockId,
         status: "Saved passage.",
       });

@@ -98,8 +98,9 @@ without network access. Single and bulk removal now require labeled modal
 confirmation, deliberate focus movement, and absorbing synchronization
 tombstones. Canonical passage selection now refuses mismatched DOM text and
 cross-section ranges before translating visible UTF-16 offsets into portable
-block anchors. Virtualized presentation, margin markers, note editing at capture,
-and secondary Reader surfaces remain planned.
+block anchors. Its viewport-contained capture editor stores an optional private
+note without invalidating the selected range. Virtualized presentation, margin
+markers, and secondary Reader surfaces remain planned.
 
 ### Preferences and focus
 
@@ -263,9 +264,9 @@ The following are accepted scope, not release blockers waiting for another
 product decision:
 
 1. Add publication heatmaps, recent sections, and next-section recommendations.
-2. Add virtualized bookmark presentation, margin markers, and note editing at capture.
+2. Add virtualized bookmark presentation and margin markers.
 3. Project the remaining capability-sliced client artifacts.
-4. Complete bookmark markers, virtualized collections, note editing, and focus markup.
+4. Complete bookmark markers, virtualized collections, and focus markup.
 5. Add the default narration player and timing interaction.
 6. Add atomic offline package planning and official service worker integration.
 7. Add cross-tab synchronization notifications and richer synchronized-status surfaces.

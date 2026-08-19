@@ -290,6 +290,7 @@ export function PublisherReaderRail({
   const bookmarkQueryRef = useRef<HTMLInputElement>(null);
   const bookmarkDeleteConfirmRef = useRef<HTMLButtonElement>(null);
   const bookmarkDeleteTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const selectionNoteRef = useRef<HTMLTextAreaElement>(null);
   const preferencesKey = useMemo(
     () => createReaderPreferencesStorageKey(publicationId),
     [publicationId],
@@ -348,6 +349,8 @@ export function PublisherReaderRail({
   const [bookmarkQuery, setBookmarkQuery] = useState("");
   const [bookmarkDeletePending, setBookmarkDeletePending] = useState<ReaderBookmarkDeletion | null>(null);
   const [readerSelection, setReaderSelection] = useState<PublisherReaderSelection | null>(null);
+  const [selectionEditing, setSelectionEditing] = useState(false);
+  const [selectionNote, setSelectionNote] = useState("");
   const [selectionMessage, setSelectionMessage] = useState("");
   const [searchIndex, setSearchIndex] = useState<ReaderSearchIndex | null>(null);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
@@ -883,9 +886,12 @@ export function PublisherReaderRail({
       if (timer !== 0) window.clearTimeout(timer);
       timer = 0;
     };
+    const actionHasFocus = (): boolean =>
+      document.activeElement instanceof Element &&
+      document.activeElement.closest(".publisher-reader-selection-action") !== null;
     const read = (): void => {
       clearTimer();
-      if (pointerDown) return;
+      if (pointerDown || actionHasFocus()) return;
       const captured = readPublisherReaderSelection(
         window.getSelection(),
         currentWorkId,
@@ -893,6 +899,8 @@ export function PublisherReaderRail({
         window.location.pathname,
       );
       if (captured !== null) setSelectionMessage("");
+      setSelectionEditing(false);
+      setSelectionNote("");
       setReaderSelection(captured);
     };
     const schedule = (delay: number): void => {
@@ -913,6 +921,7 @@ export function PublisherReaderRail({
       schedule(0);
     };
     const onSelectionChange = (): void => {
+      if (actionHasFocus()) return;
       const selection = window.getSelection();
       if (selection === null || selection.isCollapsed) {
         clearTimer();
@@ -939,6 +948,10 @@ export function PublisherReaderRail({
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [currentSection, currentWorkId]);
+
+  useEffect(() => {
+    if (selectionEditing) selectionNoteRef.current?.focus();
+  }, [selectionEditing]);
 
   const currentProgress = currentSection === undefined
     ? null
@@ -1005,11 +1018,13 @@ export function PublisherReaderRail({
     let saved = false;
     bookmarksStore.update((current) => {
       try {
+        const note = selectionNote.trim();
         const next = addReaderBookmark(
           current,
           {
             id: createClientEventId(now),
             ...captured.input,
+            ...(note.length === 0 ? {} : { note }),
           },
           { publicationId, now },
         );
@@ -1040,6 +1055,8 @@ export function PublisherReaderRail({
     engagementRef.current = event;
     safeLocalWrite(engagementKey, serializeReaderEngagementState(event));
     setReaderSelection(null);
+    setSelectionEditing(false);
+    setSelectionNote("");
     setSelectionMessage("Saved passage.");
     window.getSelection()?.removeAllRanges();
   };
@@ -1437,18 +1454,38 @@ export function PublisherReaderRail({
       )}
     </aside>
     {readerSelection === null || portalTarget === null ? null : createPortal(
-      <button
-        className="publisher-reader-selection-action"
-        style={{
-          top: readerSelection.top,
-          left: readerSelection.left,
-        }}
-        type="button"
-        onPointerDown={(event) => event.preventDefault()}
-        onClick={saveReaderSelection}
-      >
-        Save passage
-      </button>,
+      selectionEditing ? (
+        <div
+          className="publisher-reader-selection-action publisher-reader-selection-editor"
+          style={{
+            top: Math.max(
+              window.scrollY + 8,
+              Math.min(readerSelection.top, window.scrollY + window.innerHeight - 220),
+            ),
+            left: window.scrollX + window.innerWidth / 2,
+          }}
+          role="dialog"
+          aria-label="Save selected passage"
+        >
+          <label>Optional note
+            <textarea ref={selectionNoteRef} maxLength={280} value={selectionNote} onChange={(event) => setSelectionNote(event.currentTarget.value)} />
+          </label>
+          <div>
+            <button type="button" onClick={() => { setSelectionEditing(false); setSelectionNote(""); }}>Cancel</button>
+            <button type="button" onClick={saveReaderSelection}>Save</button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="publisher-reader-selection-action"
+          style={{ top: readerSelection.top, left: readerSelection.left }}
+          type="button"
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={() => setSelectionEditing(true)}
+        >
+          Save passage
+        </button>
+      ),
       portalTarget,
     )}
     {selectionMessage.length === 0 || portalTarget === null ? null : createPortal(
