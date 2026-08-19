@@ -105,3 +105,10 @@ publication ID and current operations reject it. Before enabling a current data
 client against an upgraded project, review those rows and explicitly assign each
 one to its real publication. Do not infer the mapping when a project has served
 more than one publication.
+
+The server export implements the provider-neutral `/api/sync` contract. It reads
+the authenticated user from the cookie-scoped Supabase client, takes publication
+identity only from Publisher's validated provider context, and never accepts
+either identity from browser data. Progress and consent use publication-scoped
+upserts, bookmarks use the locked merge function, and engagement retries use the
+publication-scoped client event identity.

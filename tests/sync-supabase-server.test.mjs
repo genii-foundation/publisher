@@ -219,3 +219,80 @@ test("account deletion maps unauthenticated and provider failures", async () => 
   }));
   assert.equal(await failed.deleteAccount({}), "failed");
 });
+
+test("remote transfer derives reader and publication scope on the server", async () => {
+  const calls = [];
+  const rows = {
+    reader_progress: { progress: { schemaVersion: 1, publicationId: "field-notes", entries: {} }, schema_version: 1 },
+    reader_bookmarks: { bookmarks: { bookmarks: {} }, schema_version: 1 },
+    reader_sync_consent: {
+      consent_version: 1,
+      copy_version: "reader-sync-consent-1",
+      granted: true,
+      granted_at: "2026-08-18T00:00:00.000Z",
+      revoked_at: null,
+    },
+  };
+  function query(table) {
+    return {
+      select(columns) { calls.push(["select", table, columns]); return this; },
+      eq(column, value) { calls.push(["eq", table, column, value]); return this; },
+      async maybeSingle() { return { data: rows[table] ?? null, error: null }; },
+      async upsert(value, options) { calls.push(["upsert", table, value, options]); return { error: null }; },
+    };
+  }
+  const provider = createPublisherSupabaseSyncProvider(options({
+    createServerClient() {
+      return {
+        auth: {
+          async getUser() {
+            calls.push(["get-user"]);
+            return { data: { user: { id: "reader-1" } }, error: null };
+          },
+        },
+        from: query,
+        async rpc(name, input) {
+          calls.push(["rpc", name, input]);
+          return { error: null };
+        },
+      };
+    },
+  }));
+  const context = {
+    publicationId: "field-notes",
+    capabilities: ["bookmarks", "engagement", "progress"],
+  };
+  const read = await provider.readRemoteState({ context });
+  assert.equal(read.progress.value.publicationId, "field-notes");
+  assert.ok(calls.some((entry) => entry[0] === "eq" && entry[2] === "publication_id" && entry[3] === "field-notes"));
+
+  const transferred = await provider.transferRemoteState({
+    context,
+    transfer: {
+      progress: { value: rows.reader_progress.progress, schemaVersion: 1 },
+      bookmarks: { value: rows.reader_bookmarks.bookmarks, schemaVersion: 1 },
+      consent: {
+        version: 1,
+        copyVersion: "reader-sync-consent-1",
+        granted: true,
+        grantedAt: Date.parse("2026-08-18T00:00:00.000Z"),
+        revokedAt: null,
+      },
+      events: [{ clientEventId: "event-1", eventType: "section_opened", eventAt: 1 }],
+    },
+  });
+  assert.deepEqual(transferred.uploadedEventIds, ["event-1"]);
+  const progressWrite = calls.find((entry) => entry[0] === "upsert" && entry[1] === "reader_progress");
+  assert.equal(progressWrite[2].user_id, "reader-1");
+  assert.equal(progressWrite[2].publication_id, "field-notes");
+  assert.deepEqual(progressWrite[3], { onConflict: "user_id,publication_id" });
+  const bookmarkMerge = calls.find((entry) => entry[0] === "rpc");
+  assert.equal(bookmarkMerge[2].incoming_publication_id, "field-notes");
+  const eventWrite = calls.find((entry) => entry[0] === "upsert" && entry[1] === "reader_engagement_events");
+  assert.equal(eventWrite[2][0].user_id, "reader-1");
+  assert.equal(eventWrite[2][0].publication_id, "field-notes");
+  assert.deepEqual(eventWrite[3], {
+    onConflict: "user_id,publication_id,client_event_id",
+    ignoreDuplicates: true,
+  });
+});

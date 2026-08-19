@@ -616,13 +616,19 @@ Next.js 16.2.12 otherwise resolves versions affected by four high-severity advis
 The attributed framework-error gate is also closed. The package supplies separate client-safe error components, the complete host contract wires every required framework surface, and the automated proof checks static, runtime, and hydrated browser behavior.
 
 The generated host reserves `/api/auth/start`, `/api/auth/verify`,
-`/api/session`, `/auth/callback`, and `/api/account` for optional
+`/api/session`, `/api/sync`, `/auth/callback`, and `/api/account` for optional
 synchronization. Every route returns the same opaque 404 when the publication has
 no synchronization artifact. An author may select a matching provider through
 `publisher.config.ts`. The renderer validates provider identity and capabilities,
 owns input bounds, callback redirects, session and deletion responses, and rejects
 cross-origin state changes before provider code executes. Provider configuration
 and credentials remain server only.
+
+`GET /api/sync` reads the authenticated reader's state for the validated
+publication. `POST /api/sync` transfers bounded progress, bookmarks, consent,
+and engagement values for declared capabilities. The browser supplies neither a
+user ID nor a publication ID. Provider output is validated before it becomes a
+response, and provider failures collapse to one opaque unavailable result.
 
 When synchronization is declared, the default Reader adds an account panel. It
 records explicit versioned consent before requesting an email link, accepts a

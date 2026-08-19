@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Added server-only publication-scoped reads and transfers for progress, bookmarks, consent, and idempotent engagement events.
 - Added a re-runnable publication-scoping migration for every synchronized row, bookmark lock, event identity, and retention boundary while preserving old rows under an explicit legacy marker.
 - Added server-side email link requests, one-time code verification, session inspection, and sign-out behind the provider-neutral renderer contract.
 - Added a server-only provider for authentication callback exchange and authenticated account deletion.

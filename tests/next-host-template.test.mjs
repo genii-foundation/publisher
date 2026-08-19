@@ -72,6 +72,7 @@ test("the host contract declares exactly the author host file set", () => {
       "app/api/auth/start/route.ts",
       "app/api/auth/verify/route.ts",
       "app/api/session/route.ts",
+      "app/api/sync/route.ts",
       "app/auth/callback/route.ts",
       "app/error.tsx",
       "app/global-error.tsx",
@@ -141,6 +142,12 @@ test("the host contract declares exactly the author host file set", () => {
       summary:
         "Add provider-neutral email authentication and session route surfaces for the default reader controls.",
     },
+    {
+      from: "0.6.0",
+      to: "0.7.0",
+      summary:
+        "Add provider-neutral publication-scoped Reader data transfer routes.",
+    },
   ]);
 });
 
@@ -152,6 +159,7 @@ test("synchronization routes delegate through the checked server-only bridge", (
     "app/api/auth/start/route.ts",
     "app/api/auth/verify/route.ts",
     "app/api/session/route.ts",
+    "app/api/sync/route.ts",
   ]) {
     const contents = contentsOf(result, path);
     assert.match(contents, /publisher-sync-routes\.js/u);

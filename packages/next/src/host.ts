@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.6.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.7.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -178,9 +178,15 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.5.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.6.0",
       summary:
         "Add provider-neutral email authentication and session route surfaces for the default reader controls.",
+    }),
+    Object.freeze({
+      from: "0.6.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Add provider-neutral publication-scoped Reader data transfer routes.",
     }),
   ]);
 
@@ -437,6 +443,15 @@ export function createPublisherNextHostTemplate(
         "",
         "export const GET = syncRoutes.sessionRead;",
         "export const DELETE = syncRoutes.sessionDelete;",
+      ),
+    },
+    {
+      path: "app/api/sync/route.ts",
+      contents: lines(
+        'import { syncRoutes } from "../../../publisher-sync-routes.js";',
+        "",
+        "export const GET = syncRoutes.syncRead;",
+        "export const POST = syncRoutes.syncTransfer;",
       ),
     },
     {

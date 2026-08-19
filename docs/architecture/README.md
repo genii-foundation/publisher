@@ -24,5 +24,6 @@ These records define the accepted foundation of GENII Publisher.
 20. [ADR 0020: Nano ID transitive security pin](./0020-nanoid-transitive-security-pin.md)
 21. [ADR 0021: Reader authentication and consent boundary](./0021-reader-authentication-and-consent.md)
 22. [ADR 0022: Publication-scoped synchronization storage](./0022-publication-scoped-synchronization.md)
+23. [ADR 0023: Provider-neutral Reader data transfer](./0023-provider-neutral-reader-data-transfer.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

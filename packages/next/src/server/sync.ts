@@ -24,5 +24,11 @@ export type {
   PublisherNextSyncProviderContext,
   PublisherNextSyncRoutes,
   PublisherSyncAccountDeletionResult,
+  PublisherSyncConsentRecord,
+  PublisherSyncEngagementEvent,
+  PublisherSyncRemoteDocument,
+  PublisherSyncRemoteState,
   PublisherSyncSession,
+  PublisherSyncTransferInput,
+  PublisherSyncTransferResult,
 } from "./sync-routes.js";

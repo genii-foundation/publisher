@@ -1460,6 +1460,19 @@ export async function runPackagedHostProof(
           "    async deleteAccount() {",
           '      return "deleted";',
           "    },",
+          "    async readRemoteState() {",
+          "      return { progress: null, bookmarks: null, consent: null };",
+          "    },",
+          "    async transferRemoteState({ transfer }) {",
+          "      return {",
+          "        state: {",
+          "          progress: transfer.progress ?? null,",
+          "          bookmarks: null,",
+          "          consent: transfer.consent ?? null,",
+          "        },",
+          "        uploadedEventIds: [],",
+          "      };",
+          "    },",
           "  },",
           "});",
           "",
@@ -2011,6 +2024,9 @@ export async function runPackagedHostProof(
         startedAuthentication,
         verifiedAuthentication,
         configuredSession,
+        configuredSyncRead,
+        configuredSyncTransfer,
+        rejectedSyncTransfer,
         rejectedDeletion,
         configuredDeletion,
       ] = await Promise.all([
@@ -2043,6 +2059,36 @@ export async function runPackagedHostProof(
           redirect: "manual",
         }),
         fetch(`${host.origin}/api/session`, { redirect: "manual" }),
+        fetch(`${host.origin}/api/sync`, { redirect: "manual" }),
+        fetch(`${host.origin}/api/sync`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: host.origin,
+          },
+          body: JSON.stringify({
+            progress: {
+              value: {
+                schemaVersion: 1,
+                publicationId: reader.publicationId,
+                entries: {},
+              },
+              schemaVersion: 1,
+            },
+          }),
+          redirect: "manual",
+        }),
+        fetch(`${host.origin}/api/sync`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: "https://evil.example",
+          },
+          body: JSON.stringify({
+            progress: { value: {}, schemaVersion: 1 },
+          }),
+          redirect: "manual",
+        }),
         fetch(`${host.origin}/api/account`, {
           method: "DELETE",
           headers: { origin: "https://evil.example" },
@@ -2065,6 +2111,19 @@ export async function runPackagedHostProof(
       });
       assert.equal(configuredSession.status, 200);
       assert.deepEqual(await configuredSession.json(), { authenticated: false });
+      assert.equal(configuredSyncRead.status, 200);
+      assert.deepEqual(await configuredSyncRead.json(), {
+        progress: null,
+        bookmarks: null,
+        consent: null,
+      });
+      assert.equal(configuredSyncTransfer.status, 200);
+      assert.equal(
+        (await configuredSyncTransfer.json()).state.progress.value.publicationId,
+        reader.publicationId,
+      );
+      assert.equal(rejectedSyncTransfer.status, 403);
+      assert.deepEqual(await rejectedSyncTransfer.json(), { error: "Invalid origin." });
       assert.equal(rejectedDeletion.status, 403);
       assert.deepEqual(await rejectedDeletion.json(), { error: "Invalid origin." });
       assert.equal(configuredDeletion.status, 200);

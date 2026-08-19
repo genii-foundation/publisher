@@ -59,6 +59,15 @@ function provider(overrides = {}) {
     async deleteAccount() {
       return "deleted";
     },
+    async readRemoteState() {
+      return { progress: null, bookmarks: null, consent: null };
+    },
+    async transferRemoteState() {
+      return {
+        state: { progress: null, bookmarks: null, consent: null },
+        uploadedEventIds: [],
+      };
+    },
     ...overrides,
   });
 }
@@ -92,6 +101,8 @@ test("an absent synchronization artifact produces opaque dormant routes", async 
     routes.sessionRead(new Request("https://reader.example/api/session")),
     routes.sessionDelete(new Request("https://reader.example/api/session", { method: "DELETE" })),
     routes.accountDeletion(new Request("https://reader.example/api/account", { method: "DELETE" })),
+    routes.syncRead(new Request("https://reader.example/api/sync")),
+    routes.syncTransfer(new Request("https://reader.example/api/sync", { method: "POST" })),
   ])) {
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), { error: "Not found." });
@@ -205,6 +216,74 @@ test("session routes validate provider output and own sign-out responses", async
     (await invalid.sessionRead(new Request("https://reader.example/api/session"))).status,
     503,
   );
+});
+
+test("Reader data transfer is bounded, publication scoped, and provider neutral", async () => {
+  const calls = [];
+  const routes = createPublisherNextSyncRoutes({
+    sync,
+    provider: provider({
+      async readRemoteState(input) {
+        calls.push(["read", input]);
+        return {
+          progress: { value: { schemaVersion: 1, publicationId: "field-notes", entries: {} }, schemaVersion: 1 },
+          bookmarks: null,
+          consent: null,
+        };
+      },
+      async transferRemoteState(input) {
+        calls.push(["transfer", input]);
+        return {
+          state: {
+            progress: input.transfer.progress ?? null,
+            bookmarks: null,
+            consent: input.transfer.consent ?? null,
+          },
+          uploadedEventIds: [],
+        };
+      },
+    }),
+  });
+  const read = await routes.syncRead(new Request("https://reader.example/api/sync"));
+  assert.equal(read.status, 200);
+  assert.equal((await read.json()).progress.value.publicationId, "field-notes");
+  assert.equal(calls[0][1].context.publicationId, "field-notes");
+
+  const transfer = await routes.syncTransfer(new Request("https://reader.example/api/sync", {
+    method: "POST",
+    headers: { origin: "https://reader.example" },
+    body: JSON.stringify({
+      progress: {
+        value: { schemaVersion: 1, publicationId: "field-notes", entries: {} },
+        schemaVersion: 1,
+      },
+      consent: {
+        version: 1,
+        copyVersion: "reader-sync-consent-1",
+        granted: true,
+        grantedAt: 1,
+        revokedAt: null,
+      },
+    }),
+  }));
+  assert.equal(transfer.status, 200);
+  assert.equal(calls[1][1].context.publicationId, "field-notes");
+  assert.equal(calls[1][1].transfer.progress.schemaVersion, 1);
+
+  const hostile = await routes.syncTransfer(new Request("https://reader.example/api/sync", {
+    method: "POST",
+    headers: { origin: "https://evil.example" },
+    body: JSON.stringify({ progress: { value: {}, schemaVersion: 1 } }),
+  }));
+  assert.equal(hostile.status, 403);
+  assert.equal(calls.length, 2);
+
+  const undeclared = await routes.syncTransfer(new Request("https://reader.example/api/sync", {
+    method: "POST",
+    body: JSON.stringify({ bookmarks: { value: { bookmarks: {} }, schemaVersion: 1 } }),
+  }));
+  assert.equal(undeclared.status, 400);
+  assert.equal(calls.length, 2);
 });
 
 test("declared synchronization requires a matching capable provider", () => {

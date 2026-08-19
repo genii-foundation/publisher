@@ -33,6 +33,47 @@ export type PublisherSyncSession =
       readonly email?: string;
     };
 
+export interface PublisherSyncRemoteDocument {
+  readonly value: Readonly<Record<string, unknown>>;
+  readonly schemaVersion: number;
+}
+
+export interface PublisherSyncConsentRecord {
+  readonly version: number;
+  readonly copyVersion: string;
+  readonly granted: boolean;
+  readonly grantedAt: number | null;
+  readonly revokedAt: number | null;
+}
+
+export interface PublisherSyncEngagementEvent {
+  readonly clientEventId: string;
+  readonly eventType: string;
+  readonly eventAt: number;
+  readonly sectionId?: string;
+  readonly contentHash?: string;
+  readonly route?: string;
+  readonly payload?: Readonly<Record<string, string | number | boolean | null>>;
+}
+
+export interface PublisherSyncRemoteState {
+  readonly progress: PublisherSyncRemoteDocument | null;
+  readonly bookmarks: PublisherSyncRemoteDocument | null;
+  readonly consent: PublisherSyncConsentRecord | null;
+}
+
+export interface PublisherSyncTransferInput {
+  readonly progress?: PublisherSyncRemoteDocument;
+  readonly bookmarks?: PublisherSyncRemoteDocument;
+  readonly consent?: PublisherSyncConsentRecord;
+  readonly events?: readonly PublisherSyncEngagementEvent[];
+}
+
+export interface PublisherSyncTransferResult {
+  readonly state: PublisherSyncRemoteState;
+  readonly uploadedEventIds: readonly string[];
+}
+
 export interface PublisherNextSyncProviderContext {
   readonly publicationId: string;
   readonly buildId: string;
@@ -72,6 +113,15 @@ export interface PublisherNextSyncProvider {
     readonly request: Request;
     readonly context: PublisherNextSyncProviderContext;
   }): Promise<PublisherSyncAccountDeletionResult>;
+  readRemoteState(input: {
+    readonly request: Request;
+    readonly context: PublisherNextSyncProviderContext;
+  }): Promise<PublisherSyncRemoteState | null>;
+  transferRemoteState(input: {
+    readonly transfer: PublisherSyncTransferInput;
+    readonly request: Request;
+    readonly context: PublisherNextSyncProviderContext;
+  }): Promise<PublisherSyncTransferResult | null>;
 }
 
 export interface PublisherNextSyncRoutes {
@@ -81,6 +131,8 @@ export interface PublisherNextSyncRoutes {
   readonly sessionRead: (request: Request) => Promise<Response>;
   readonly sessionDelete: (request: Request) => Promise<Response>;
   readonly accountDeletion: (request: Request) => Promise<Response>;
+  readonly syncRead: (request: Request) => Promise<Response>;
+  readonly syncTransfer: (request: Request) => Promise<Response>;
 }
 
 export interface PublisherNextHostConfig {
@@ -149,16 +201,19 @@ function dormantRoutes(): PublisherNextSyncRoutes {
     sessionRead: notFound,
     sessionDelete: notFound,
     accountDeletion: notFound,
+    syncRead: notFound,
+    syncTransfer: notFound,
   });
 }
 
 async function boundedJson(
   request: Request,
+  maximumBytes = 8192,
 ): Promise<Readonly<Record<string, unknown>> | null> {
   const declared = request.headers.get("content-length");
   if (declared !== null) {
     const length = Number(declared);
-    if (!Number.isSafeInteger(length) || length < 0 || length > 8192) {
+    if (!Number.isSafeInteger(length) || length < 0 || length > maximumBytes) {
       return null;
     }
   }
@@ -171,7 +226,7 @@ async function boundedJson(
       const { done, value } = await reader.read();
       if (done) break;
       length += value.byteLength;
-      if (length > 8192) {
+      if (length > maximumBytes) {
         await reader.cancel();
         return null;
       }
@@ -248,6 +303,186 @@ function safeSession(value: PublisherSyncSession | null): PublisherSyncSession |
     });
   }
   return null;
+}
+
+function plainDataRecord(value: unknown): Readonly<Record<string, unknown>> | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return null;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    if (Object.getOwnPropertySymbols(value).length > 0) return null;
+    for (const descriptor of Object.values(descriptors)) {
+      if (!descriptor.enumerable || !("value" in descriptor)) return null;
+    }
+    return Object.freeze(Object.fromEntries(
+      Object.entries(descriptors).map(([key, descriptor]) => [key, descriptor.value]),
+    ));
+  } catch {
+    return null;
+  }
+}
+
+function exactKeys(
+  value: Readonly<Record<string, unknown>>,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): boolean {
+  const keys = Object.keys(value);
+  const allowed = new Set([...required, ...optional]);
+  return required.every((key) => keys.includes(key)) && keys.every((key) => allowed.has(key));
+}
+
+function safeNonnegativeInteger(value: unknown): number | null {
+  return Number.isSafeInteger(value) && (value as number) >= 0 ? value as number : null;
+}
+
+function safeEpochMilliseconds(value: unknown): number | null {
+  const timestamp = safeNonnegativeInteger(value);
+  return timestamp !== null && timestamp <= 8_640_000_000_000_000 ? timestamp : null;
+}
+
+function safeRemoteDocument(value: unknown, maximumBytes: number): PublisherSyncRemoteDocument | null {
+  const record = plainDataRecord(value);
+  if (record === null || !exactKeys(record, ["value", "schemaVersion"])) return null;
+  const payloadRecord = plainDataRecord(record.value);
+  const schemaVersion = safeNonnegativeInteger(record.schemaVersion);
+  if (payloadRecord === null || schemaVersion === null || schemaVersion < 1) return null;
+  try {
+    const serialized = JSON.stringify(payloadRecord);
+    if (new TextEncoder().encode(serialized).byteLength > maximumBytes) return null;
+    const detached = plainDataRecord(JSON.parse(serialized));
+    if (detached === null) return null;
+    return Object.freeze({ value: detached, schemaVersion });
+  } catch {
+    return null;
+  }
+}
+
+function safeConsent(value: unknown): PublisherSyncConsentRecord | null {
+  const record = plainDataRecord(value);
+  if (
+    record === null ||
+    !exactKeys(record, ["version", "copyVersion", "granted", "grantedAt", "revokedAt"])
+  ) return null;
+  const version = safeNonnegativeInteger(record.version);
+  const grantedAt = record.grantedAt === null ? null : safeEpochMilliseconds(record.grantedAt);
+  const revokedAt = record.revokedAt === null ? null : safeEpochMilliseconds(record.revokedAt);
+  if (
+    version === null || version < 1 ||
+    typeof record.copyVersion !== "string" ||
+    record.copyVersion.length < 1 || record.copyVersion.length > 64 ||
+    typeof record.granted !== "boolean" ||
+    grantedAt === null && record.grantedAt !== null ||
+    revokedAt === null && record.revokedAt !== null
+  ) return null;
+  return Object.freeze({
+    version,
+    copyVersion: record.copyVersion,
+    granted: record.granted,
+    grantedAt,
+    revokedAt,
+  });
+}
+
+function safeEngagementEvent(value: unknown): PublisherSyncEngagementEvent | null {
+  const record = plainDataRecord(value);
+  if (
+    record === null ||
+    !exactKeys(record, ["clientEventId", "eventType", "eventAt"], ["sectionId", "contentHash", "route", "payload"])
+  ) return null;
+  const eventAt = safeEpochMilliseconds(record.eventAt);
+  if (
+    typeof record.clientEventId !== "string" || record.clientEventId.length < 1 || record.clientEventId.length > 128 ||
+    typeof record.eventType !== "string" || record.eventType.length < 1 || record.eventType.length > 64 ||
+    eventAt === null
+  ) return null;
+  for (const [key, maximum] of [["sectionId", 128], ["contentHash", 128], ["route", 512]] as const) {
+    const candidate = record[key];
+    if (candidate !== undefined && (typeof candidate !== "string" || candidate.length > maximum)) return null;
+  }
+  const payload = record.payload === undefined ? undefined : plainDataRecord(record.payload);
+  if (payload === null) return null;
+  if (payload !== undefined) {
+    if (Object.keys(payload).length > 64) return null;
+    for (const candidate of Object.values(payload)) {
+      if (candidate !== null && typeof candidate !== "string" && typeof candidate !== "number" && typeof candidate !== "boolean") return null;
+      if (typeof candidate === "number" && !Number.isFinite(candidate)) return null;
+    }
+    if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > 8192) return null;
+  }
+  return Object.freeze({
+    clientEventId: record.clientEventId,
+    eventType: record.eventType,
+    eventAt,
+    ...(record.sectionId === undefined ? {} : { sectionId: record.sectionId as string }),
+    ...(record.contentHash === undefined ? {} : { contentHash: record.contentHash as string }),
+    ...(record.route === undefined ? {} : { route: record.route as string }),
+    ...(payload === undefined ? {} : { payload: payload as Readonly<Record<string, string | number | boolean | null>> }),
+  });
+}
+
+function safeTransfer(
+  value: Readonly<Record<string, unknown>>,
+  capabilities: readonly SyncCapability[],
+): PublisherSyncTransferInput | null {
+  if (!exactKeys(value, [], ["progress", "bookmarks", "consent", "events"]) || Object.keys(value).length === 0) return null;
+  const enabled = new Set(capabilities);
+  const progress = value.progress === undefined ? undefined : safeRemoteDocument(value.progress, 262_144);
+  const bookmarks = value.bookmarks === undefined ? undefined : safeRemoteDocument(value.bookmarks, 4_194_304);
+  const consent = value.consent === undefined ? undefined : safeConsent(value.consent);
+  let events: readonly PublisherSyncEngagementEvent[] | undefined;
+  if (value.events !== undefined) {
+    if (!Array.isArray(value.events) || value.events.length > 256) return null;
+    const inspected = value.events.map(safeEngagementEvent);
+    if (inspected.some((event) => event === null)) return null;
+    events = Object.freeze(inspected as PublisherSyncEngagementEvent[]);
+  }
+  if (
+    value.progress !== undefined && (progress === null || !enabled.has("progress")) ||
+    value.bookmarks !== undefined && (bookmarks === null || !enabled.has("bookmarks")) ||
+    value.events !== undefined && (!enabled.has("engagement")) ||
+    value.consent !== undefined && consent === null
+  ) return null;
+  const validProgress = progress === null ? undefined : progress;
+  const validBookmarks = bookmarks === null ? undefined : bookmarks;
+  const validConsent = consent === null ? undefined : consent;
+  return Object.freeze({
+    ...(validProgress === undefined ? {} : { progress: validProgress }),
+    ...(validBookmarks === undefined ? {} : { bookmarks: validBookmarks }),
+    ...(validConsent === undefined ? {} : { consent: validConsent }),
+    ...(events === undefined ? {} : { events }),
+  });
+}
+
+function safeRemoteState(
+  value: unknown,
+  capabilities?: readonly SyncCapability[],
+): PublisherSyncRemoteState | null {
+  const record = plainDataRecord(value);
+  if (record === null || !exactKeys(record, ["progress", "bookmarks", "consent"])) return null;
+  const progress = record.progress === null ? null : safeRemoteDocument(record.progress, 262_144);
+  const bookmarks = record.bookmarks === null ? null : safeRemoteDocument(record.bookmarks, 4_194_304);
+  const consent = record.consent === null ? null : safeConsent(record.consent);
+  if (progress === null && record.progress !== null || bookmarks === null && record.bookmarks !== null || consent === null && record.consent !== null) return null;
+  if (capabilities !== undefined) {
+    const enabled = new Set(capabilities);
+    if (progress !== null && !enabled.has("progress") || bookmarks !== null && !enabled.has("bookmarks")) return null;
+  }
+  return Object.freeze({ progress, bookmarks, consent });
+}
+
+function safeTransferResult(
+  value: unknown,
+  capabilities: readonly SyncCapability[],
+): PublisherSyncTransferResult | null {
+  const record = plainDataRecord(value);
+  if (record === null || !exactKeys(record, ["state", "uploadedEventIds"]) || !Array.isArray(record.uploadedEventIds) || record.uploadedEventIds.length > 256) return null;
+  const state = safeRemoteState(record.state, capabilities);
+  if (state === null) return null;
+  const uploadedEventIds = record.uploadedEventIds;
+  if (uploadedEventIds.some((id) => typeof id !== "string" || id.length < 1 || id.length > 128)) return null;
+  return Object.freeze({ state, uploadedEventIds: Object.freeze([...uploadedEventIds]) as readonly string[] });
 }
 
 function safeNextPath(value: string | null, fallback: string): string {
@@ -350,6 +585,8 @@ function validateProvider(
     "getSession",
     "signOut",
     "deleteAccount",
+    "readRemoteState",
+    "transferRemoteState",
   ]);
   if (providerKeys.some((key) => !providerFields.has(key))) {
     throw new TypeError("The synchronization provider contains an unsupported field.");
@@ -377,6 +614,8 @@ function validateProvider(
   const getSession = exactDataProperty(provider, "getSession");
   const signOut = exactDataProperty(provider, "signOut");
   const deleteAccount = exactDataProperty(provider, "deleteAccount");
+  const readRemoteState = exactDataProperty(provider, "readRemoteState");
+  const transferRemoteState = exactDataProperty(provider, "transferRemoteState");
   for (const [method, implementation] of Object.entries({
     exchangeAuthCode,
     requestEmailAuthentication,
@@ -384,6 +623,8 @@ function validateProvider(
     getSession,
     signOut,
     deleteAccount,
+    readRemoteState,
+    transferRemoteState,
   })) {
     if (typeof implementation !== "function") {
       throw new TypeError(`The synchronization provider must implement ${method}.`);
@@ -399,6 +640,8 @@ function validateProvider(
     getSession: getSession as PublisherNextSyncProvider["getSession"],
     signOut: signOut as PublisherNextSyncProvider["signOut"],
     deleteAccount: deleteAccount as PublisherNextSyncProvider["deleteAccount"],
+    readRemoteState: readRemoteState as PublisherNextSyncProvider["readRemoteState"],
+    transferRemoteState: transferRemoteState as PublisherNextSyncProvider["transferRemoteState"],
   });
 }
 
@@ -550,6 +793,32 @@ export function createPublisherNextSyncRoutes(
         default:
           return json(500, "Account deletion failed.");
       }
+    },
+    syncRead: async (request: Request): Promise<Response> => {
+      try {
+        const state = safeRemoteState(await provider.readRemoteState({ request, context }), context.capabilities);
+        if (state !== null) return jsonValue(200, state);
+      } catch {
+        // Provider failures become one public response and reveal no provider detail.
+      }
+      return json(503, "Synchronization is unavailable.");
+    },
+    syncTransfer: async (request: Request): Promise<Response> => {
+      if (!sameOrigin(request)) return json(403, "Invalid origin.");
+      const body = await boundedJson(request, 4_718_592);
+      const transfer = body === null ? null : safeTransfer(body, context.capabilities);
+      if (transfer === null) return json(400, "Invalid synchronization request.");
+      try {
+        const result = safeTransferResult(await provider.transferRemoteState({
+          transfer,
+          request,
+          context,
+        }), context.capabilities);
+        if (result !== null) return jsonValue(200, result);
+      } catch {
+        // Provider failures become one public response and reveal no provider detail.
+      }
+      return json(503, "Synchronization is unavailable.");
     },
   });
 }

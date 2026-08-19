@@ -83,6 +83,56 @@ export function createPublisherSupabaseSyncProvider(options = {}) {
     });
   }
 
+  async function authenticatedClient() {
+    const client = await serverClient();
+    if (client === null) return null;
+    const result = await client.auth.getUser();
+    const user = result.data?.user;
+    if (result.error != null || user == null || typeof user.id !== "string") {
+      return null;
+    }
+    return { client, userId: user.id };
+  }
+
+  async function readState(client, publicationId, capabilities) {
+    const enabled = new Set(capabilities);
+    const [progress, bookmarks, consent] = await Promise.all([
+      enabled.has("progress") ? client.from("reader_progress")
+        .select("progress, schema_version")
+        .eq("publication_id", publicationId)
+        .maybeSingle() : Promise.resolve({ data: null, error: null }),
+      enabled.has("bookmarks") ? client.from("reader_bookmarks")
+        .select("bookmarks, schema_version")
+        .eq("publication_id", publicationId)
+        .maybeSingle() : Promise.resolve({ data: null, error: null }),
+      client.from("reader_sync_consent")
+        .select("consent_version, copy_version, granted, granted_at, revoked_at")
+        .eq("publication_id", publicationId)
+        .maybeSingle(),
+    ]);
+    if (progress.error != null || bookmarks.error != null || consent.error != null) {
+      return null;
+    }
+    const consentRow = consent.data;
+    return {
+      progress: progress.data == null ? null : {
+        value: progress.data.progress,
+        schemaVersion: progress.data.schema_version,
+      },
+      bookmarks: bookmarks.data == null ? null : {
+        value: bookmarks.data.bookmarks,
+        schemaVersion: bookmarks.data.schema_version,
+      },
+      consent: consentRow == null ? null : {
+        version: consentRow.consent_version,
+        copyVersion: consentRow.copy_version,
+        granted: consentRow.granted,
+        grantedAt: consentRow.granted_at == null ? null : Date.parse(consentRow.granted_at),
+        revokedAt: consentRow.revoked_at == null ? null : Date.parse(consentRow.revoked_at),
+      },
+    };
+  }
+
   return Object.freeze({
     kind: PUBLISHER_SYNC_PROVIDER.kind,
     package: PUBLISHER_SYNC_PROVIDER.package,
@@ -151,6 +201,74 @@ export function createPublisherSupabaseSyncProvider(options = {}) {
       if (deleted.error != null) return "failed";
       await client.auth.signOut();
       return "deleted";
+    },
+    async readRemoteState({ context }) {
+      const authenticated = await authenticatedClient();
+      if (authenticated === null) return null;
+      return readState(authenticated.client, context.publicationId, context.capabilities);
+    },
+    async transferRemoteState({ transfer, context }) {
+      const authenticated = await authenticatedClient();
+      if (authenticated === null) return null;
+      const { client, userId } = authenticated;
+      const publicationId = context.publicationId;
+      if (transfer.progress !== undefined) {
+        const result = await client.from("reader_progress").upsert({
+          user_id: userId,
+          publication_id: publicationId,
+          progress: transfer.progress.value,
+          schema_version: transfer.progress.schemaVersion,
+        }, { onConflict: "user_id,publication_id" });
+        if (result.error != null) return null;
+      }
+      if (transfer.bookmarks !== undefined) {
+        const result = await client.rpc("merge_reader_bookmarks", {
+          incoming_publication_id: publicationId,
+          incoming_bookmarks: transfer.bookmarks.value,
+          incoming_schema_version: transfer.bookmarks.schemaVersion,
+        });
+        if (result.error != null) return null;
+      }
+      if (transfer.consent !== undefined) {
+        const consent = transfer.consent;
+        const result = await client.from("reader_sync_consent").upsert({
+          user_id: userId,
+          publication_id: publicationId,
+          consent_version: consent.version,
+          copy_version: consent.copyVersion,
+          granted: consent.granted,
+          granted_at: consent.grantedAt === null ? null : new Date(consent.grantedAt).toISOString(),
+          revoked_at: consent.revokedAt === null ? null : new Date(consent.revokedAt).toISOString(),
+        }, { onConflict: "user_id,publication_id" });
+        if (result.error != null) return null;
+      }
+      const events = transfer.events ?? [];
+      if (events.length > 0) {
+        const result = await client.from("reader_engagement_events").upsert(
+          events.map((event) => ({
+            user_id: userId,
+            publication_id: publicationId,
+            client_event_id: event.clientEventId,
+            event_type: event.eventType,
+            event_at: new Date(event.eventAt).toISOString(),
+            section_id: event.sectionId ?? null,
+            content_hash: event.contentHash ?? null,
+            route: event.route ?? null,
+            payload: event.payload ?? {},
+          })),
+          {
+            onConflict: "user_id,publication_id,client_event_id",
+            ignoreDuplicates: true,
+          },
+        );
+        if (result.error != null) return null;
+      }
+      const state = await readState(client, publicationId, context.capabilities);
+      if (state === null) return null;
+      return {
+        state,
+        uploadedEventIds: events.map((event) => event.clientEventId),
+      };
     },
   });
 }
