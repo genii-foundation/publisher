@@ -31,11 +31,9 @@ export const PUBLISHER_SYNC_PROVIDER = Object.freeze({
   /**
    * Capabilities this provider serves, from the engine's closed vocabulary.
    *
-   * `account-deletion` is listed with a caveat recorded here rather than hidden:
-   * the database half exists and a reader can remove every row they own. Deleting
-   * the authentication user needs a privileged server route, which is an open
-   * decision, so a host wiring this provider today gets data deletion and must
-   * handle the account itself.
+   * `account-deletion` includes both halves: the database function removes every
+   * synchronized row the reader owns, and the server adapter authenticates the
+   * reader before invoking the privileged authentication-user deletion.
    */
   capabilities: Object.freeze([
     "account-deletion",
@@ -69,6 +67,7 @@ export const PUBLISHER_SYNC_PROVIDER = Object.freeze({
     "0004_reader_sync_api_grants.sql",
     "0005_atomic_bookmark_merge.sql",
     "0006_reader_data_deletion.sql",
+    "0007_publication_scope.sql",
   ]),
 
   /**

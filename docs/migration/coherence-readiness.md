@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 10 upgraded | 10 | Publisher implements a stronger checked contract. |
+| 11 upgraded | 11 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 32 planned | 32 | Accepted Publisher scope is not implemented yet. |
+| 31 planned | 31 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -170,6 +170,10 @@ records versioned opt-in consent, supports email links and code entry, reads the
 session, signs out, and confirms account deletion without removing local reading
 data. The reference Supabase adapter keeps the service-role key server only.
 Remote progress, bookmark, engagement, and consent transfer remain planned.
+The reference provider now scopes every stored row, bookmark lock, event
+identity, and retention query by both publication and authenticated reader.
+Existing unscoped rows are preserved under a reserved legacy marker for explicit
+review instead of being guessed into a publication.
 
 ### Toolbar, Markdown, and accessibility
 

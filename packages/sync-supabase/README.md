@@ -55,8 +55,14 @@ reaches these tables with the public anonymous key, so the client's own limits a
 not a security boundary. The bounds are generous against measured real data and
 finite against an attacker.
 
-**Retention on the append-only event log.** Events are capped per reader and the
-oldest trimmed on insert, so one account cannot grow the table without bound.
+**Publication scope on every reader row.** Progress, bookmarks, consent, event
+identity, and retention are keyed by both authenticated reader and validated
+publication ID. One provider project can serve several publications without one
+publication replacing or evicting another's state.
+
+**Retention on the append-only event log.** Events are capped per reader and
+publication and the oldest are trimmed on insert, so one account cannot grow one
+publication's history without bound.
 
 **A merge function that takes a lock.** Bookmarks are one row per reader holding a
 document. A whole-row upsert loses changes when two devices read the same row and
@@ -76,8 +82,8 @@ gets the table that serves it:
 
 | Capability | Table | Shape |
 | --- | --- | --- |
-| `progress` | `reader_progress` | one row per reader, a document |
-| `bookmarks` | `reader_bookmarks` | one row per reader, a document with tombstones, merged under a lock |
+| `progress` | `reader_progress` | one row per reader and publication, a document |
+| `bookmarks` | `reader_bookmarks` | one row per reader and publication, a document with tombstones, merged under a lock |
 | `engagement` | `reader_engagement_events` | append only, per-reader retention |
 | `account-deletion` | none | a function that removes every row a reader owns |
 
@@ -92,3 +98,10 @@ supabase db push
 ```
 
 Migrations are ordered by filename and are written to be re-runnable.
+
+Migration `0007_publication_scope.sql` preserves rows created by earlier private
+package versions under `__legacy_unscoped__`. That marker is not a valid
+publication ID and current operations reject it. Before enabling a current data
+client against an upgraded project, review those rows and explicitly assign each
+one to its real publication. Do not infer the mapping when a project has served
+more than one publication.

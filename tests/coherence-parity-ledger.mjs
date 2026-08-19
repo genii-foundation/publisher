@@ -535,9 +535,9 @@ export const SYNC_PARITY = Object.freeze([
     id: "sync.publication_isolation",
     capability: "Remote Reader data isolated by both publication and user identity",
     home: "provider",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "The reference Supabase migrations currently key progress, consent, and bookmarks only by user, which collides if one project serves more than one publication.",
+    status: "upgraded",
+    why: "Every reference provider row, key, lock, deduplication rule, and retention query is scoped by validated publication identity as well as authenticated reader. Unscoped legacy rows are preserved under a reserved marker rather than guessed into a live publication.",
+    evidence: { migration: "0007_publication_scope.sql" },
   },
   {
     id: "sync.progress",
