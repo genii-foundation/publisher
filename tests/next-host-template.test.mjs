@@ -68,6 +68,8 @@ test("the host contract declares exactly the author host file set", () => {
     result.files.map(({ path }) => path),
     [
       `app/${PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY}/page.tsx`,
+      "app/api/account/route.ts",
+      "app/auth/callback/route.ts",
       "app/error.tsx",
       "app/global-error.tsx",
       "app/layout.tsx",
@@ -112,7 +114,26 @@ test("the host contract declares exactly the author host file set", () => {
       summary:
         "Add the server-side Updates artifact and connect it to the generated application.",
     },
+    {
+      from: "0.3.0",
+      to: "0.4.0",
+      summary:
+        "Add dormant fail-closed synchronization route surfaces to every official host.",
+    },
   ]);
+});
+
+test("dormant synchronization routes fail closed without provider detail", () => {
+  const result = template();
+  for (const path of [
+    "app/auth/callback/route.ts",
+    "app/api/account/route.ts",
+  ]) {
+    const contents = contentsOf(result, path);
+    assert.match(contents, /status: 404/u);
+    assert.match(contents, /Not found\./u);
+    assert.doesNotMatch(contents, /provider|supabase|credential|environment/ui);
+  }
 });
 
 test("the file list is sorted, unique, and frozen", () => {

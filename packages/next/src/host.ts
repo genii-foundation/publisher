@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.3.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.4.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -156,9 +156,15 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.2.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.3.0",
       summary:
         "Add the server-side Updates artifact and connect it to the generated application.",
+    }),
+    Object.freeze({
+      from: "0.3.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Add dormant fail-closed synchronization route surfaces to every official host.",
     }),
   ]);
 
@@ -335,6 +341,26 @@ export function createPublisherNextHostTemplate(
         "  throw new Error(JSON.stringify(result.diagnostics));",
         "}",
         "export const publisherErrorIdentity = result.value;",
+      ),
+    },
+    {
+      path: "app/api/account/route.ts",
+      contents: lines(
+        'import { NextResponse } from "next/server";',
+        "",
+        "export function DELETE() {",
+        '  return NextResponse.json({ error: "Not found." }, { status: 404 });',
+        "}",
+      ),
+    },
+    {
+      path: "app/auth/callback/route.ts",
+      contents: lines(
+        'import { NextResponse } from "next/server";',
+        "",
+        "export function GET() {",
+        '  return NextResponse.json({ error: "Not found." }, { status: 404 });',
+        "}",
       ),
     },
     {

@@ -646,7 +646,7 @@ export const SYNC_PARITY = Object.freeze([
     home: "renderer",
     status: "planned",
     plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "ADR 0015 resolves the route decision by putting a dormant fail-closed callback in every official host contract. The route and provider delegation remain to be implemented.",
+    why: "The stable callback route now exists and fails closed without provider detail. Session exchange and validated provider delegation remain to be implemented.",
   },
   {
     id: "sync.account_deletion",
@@ -654,7 +654,7 @@ export const SYNC_PARITY = Object.freeze([
     home: "renderer",
     status: "planned",
     plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "The database half exists. The official host still needs the fail-closed privileged route and a validated provider handler.",
+    why: "The database half and stable fail-closed route exist. Same-origin privileged deletion through a validated provider handler remains to be implemented.",
   },
 ]);
 

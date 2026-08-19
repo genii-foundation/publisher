@@ -1825,6 +1825,21 @@ export async function runPackagedHostProof(
         await unknown.text(),
         /data-publisher-attribution="required"/u,
       );
+      const [dormantCallback, dormantDeletion] = await Promise.all([
+        fetch(
+          `${host.origin}/auth/callback?code=do-not-exchange&next=https%3A%2F%2Fevil.example`,
+          { redirect: "manual" },
+        ),
+        fetch(`${host.origin}/api/account`, {
+          method: "DELETE",
+          headers: { origin: "https://evil.example" },
+          redirect: "manual",
+        }),
+      ]);
+      for (const response of [dormantCallback, dormantDeletion]) {
+        assert.equal(response.status, 404);
+        assert.deepEqual(await response.json(), { error: "Not found." });
+      }
       const [frameworkNotFound, frameworkServerError] =
         await Promise.all([
           fetch(`${host.origin}/404`, {

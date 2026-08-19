@@ -161,10 +161,10 @@ The schema preserves local fallback, explicit opt in, row ownership, bounded
 payloads, atomic bookmark merge, absorbing tombstones, and complete reader-data
 deletion.
 
-Two application surfaces remain unimplemented: the authentication callback and
-account deletion route. ADR 0015 resolves the architecture by including dormant,
-fail-closed route surfaces in every official host contract. The host migration and
-validated provider delegation still need implementation.
+The official host now owns stable authentication callback and account deletion
+paths. Both return the same opaque 404 until a provider is configured, so an
+unsynchronized publication exposes no live provider surface. Validated provider
+delegation, session handling, and privileged deletion remain planned.
 
 ### Toolbar, Markdown, and accessibility
 
@@ -233,7 +233,7 @@ product decision:
 4. Add default settings, focus, progress, bookmark, and toolbar components.
 5. Add the default narration player and timing interaction.
 6. Add atomic offline package planning and official service worker integration.
-7. Add dormant synchronization routes and provider delegation to the host contract.
+7. Add validated provider delegation to the dormant synchronization routes.
 8. Generalize audio checkpoint, promotion, and manuscript publication guards.
 9. Implement multi-view Updates and multi-section build support.
 10. Adopt Coherence through a reviewed migration plan with dual-read or

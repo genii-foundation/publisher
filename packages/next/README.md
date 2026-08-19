@@ -614,4 +614,9 @@ Next.js 16.2.12 otherwise resolves versions affected by three high-severity advi
 
 The attributed framework-error gate is also closed. The package supplies separate client-safe error components, the complete host contract wires every required framework surface, and the automated proof checks static, runtime, and hydrated browser behavior.
 
+The generated host also reserves `/auth/callback` and `/api/account` for optional
+synchronization. Both routes return the same opaque 404 until a validated provider
+handler is configured. A host without synchronization therefore exposes neither
+provider identity nor a live authentication or deletion operation.
+
 These renderer-specific gates do not supersede the repository-level public release gates in the root README.
