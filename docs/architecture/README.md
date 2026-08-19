@@ -54,5 +54,6 @@ These records define the accepted foundation of GENII Publisher.
 50. [ADR 0050: Explicit extension registration and server slots](./0050-explicit-extension-registration-and-server-slots.md)
 51. [ADR 0051: Isolated client extension mount](./0051-isolated-client-extension-mount.md)
 52. [ADR 0052: Declarative extension page routes](./0052-declarative-extension-page-routes.md)
+53. [ADR 0053: Reader transport and bookmark geometry](./0053-reader-transport-and-bookmark-geometry.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

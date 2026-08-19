@@ -593,16 +593,18 @@ html[data-publisher-reader-scheme="black"] .publisher-reader-audio-host {
 
 .publisher-reader-narration-controls {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  gap: 0.5rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
   align-items: center;
 }
 
 .publisher-reader-narration-controls button {
   min-height: 2.65rem;
-  padding: 0.55rem 0.7rem;
+  min-width: 0;
+  padding: 0.55rem 0.3rem;
   border: 1px solid var(--publisher-color-border);
   border-radius: var(--publisher-control-radius);
+  font-size: 0.78rem;
 }
 
 .publisher-reader-narration-controls button:last-child {

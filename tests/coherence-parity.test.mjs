@@ -73,7 +73,7 @@ test("the Reader inventory is pinned to the current audited Coherence ref", () =
   assert.match(COHERENCE_PARITY_SOURCE.ref, /^[0-9a-f]{40}$/u);
   assert.equal(
     COHERENCE_PARITY_SOURCE.ref,
-    "423a21202ff32c5f879ca9f10e0607c1579b97a4",
+    "fe2a1c8c8b6e4df21665afbf6609cf6bef782415",
   );
   for (const entry of READER_PARITY) {
     assert.ok(

@@ -1109,8 +1109,10 @@ async function assertHydratedReaderTools({
           "  return {",
           '    alert: panel?.querySelector("[role=alert]")?.textContent ?? "",',
           '    audioRequestCount: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("publication-audio.json")).length,',
+          '    controls: Array.from(panel?.querySelectorAll(".publisher-reader-narration-controls button") ?? []).map((button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? ""),',
           '    now,',
           '    queue: panel?.querySelector(".publisher-reader-narration-now small")?.textContent ?? "",',
+          "    seekValueText: panel?.querySelector('input[aria-label=\"Recording position\"]')?.getAttribute('aria-valuetext') ?? '',",
           '    selects: panel?.querySelectorAll("select").length ?? 0,',
           '    summary: panel?.querySelector(".publisher-reader-narration-summary")?.textContent ?? "",',
           '    inViewport: (() => { const rect = document.querySelector(".publisher-reader-panel")?.getBoundingClientRect(); return rect !== undefined && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight; })(),',
@@ -1127,6 +1129,14 @@ async function assertHydratedReaderTools({
     assert.equal(narrationState?.audioRequestCount, 1);
     assert.ok(narrationState?.now.length > 0);
     assert.match(narrationState?.queue ?? "", /of 2 recordings/u);
+    assert.deepEqual(narrationState?.controls, [
+      "Previous recording",
+      "Skip back 15 seconds",
+      "Play",
+      "Skip forward 15 seconds",
+      "Next recording",
+    ]);
+    assert.match(narrationState?.seekValueText ?? "", /^0:00 of /u);
     assert.equal(narrationState?.selects, 2);
     assert.match(narrationState?.summary ?? "", /recorded across 2 timed clips/u);
     assert.equal(narrationState?.inViewport, true, "Listen panel escaped the viewport.");
@@ -1144,6 +1154,8 @@ async function assertHydratedReaderTools({
     const clickedPlay = await page.send("Runtime.evaluate", {
       expression: [
         "(() => {",
+        '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+        "  globalThis.__publisherNarrationAudioElement = audio;",
         '  const button = Array.from(document.querySelectorAll(".publisher-reader-narration-controls button"))',
         '    .find((candidate) => candidate.textContent === "Play");',
         "  button?.click();",
@@ -1196,6 +1208,49 @@ async function assertHydratedReaderTools({
       returnByValue: true,
     });
     assert.equal(soughtNarration.result?.value, true, "Persistent audio element was unavailable for timing proof.");
+
+    const skippedBack = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+        '  const button = Array.from(document.querySelectorAll("button")).find((candidate) => candidate.getAttribute("aria-label") === "Skip back 15 seconds");',
+        "  if (!(audio instanceof HTMLAudioElement) || !(button instanceof HTMLButtonElement)) return null;",
+        "  button.click();",
+        "  return audio.currentTime;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(skippedBack.result?.value, 0);
+    const skippedForward = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+        '  const button = Array.from(document.querySelectorAll("button")).find((candidate) => candidate.getAttribute("aria-label") === "Skip forward 15 seconds");',
+        "  if (!(audio instanceof HTMLAudioElement) || !(button instanceof HTMLButtonElement)) return null;",
+        "  button.click();",
+        "  return { currentTime: audio.currentTime, duration: audio.duration };",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.ok(skippedForward.result?.value?.currentTime > 0);
+    assert.ok(
+      skippedForward.result?.value?.currentTime <=
+        skippedForward.result?.value?.duration,
+    );
+    await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+        "  if (!(audio instanceof HTMLAudioElement)) return false;",
+        "  audio.currentTime = 4;",
+        '  audio.dispatchEvent(new Event("timeupdate"));',
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
 
     const refusedNarrationIntent = await page.send("Runtime.evaluate", {
       expression: [
@@ -1320,6 +1375,16 @@ async function assertHydratedReaderTools({
       await wait(25);
     }
     assert.notEqual(advancedTitle, queueAdvanced.result?.value?.before);
+    const reusedQueueAudio = await page.send("Runtime.evaluate", {
+      expression:
+        'globalThis.__publisherNarrationAudioElement === document.querySelector(".publisher-reader-audio-host > audio")',
+      returnByValue: true,
+    });
+    assert.equal(
+      reusedQueueAudio.result?.value,
+      true,
+      "Narration replaced the user-authorized audio element between recordings.",
+    );
 
     const crossRouteNavigation = await page.send("Runtime.evaluate", {
       expression: [
@@ -1352,6 +1417,7 @@ async function assertHydratedReaderTools({
           '    target: globalThis.__publisherNarrationCrossRouteTarget ?? "",',
           '    title: document.querySelector(".publisher-reader-narration-now strong")?.textContent ?? "",',
           '    targetTitle: globalThis.__publisherNarrationCrossRouteTitle ?? "",',
+          '    reusedAudio: globalThis.__publisherNarrationAudioElement === audio,',
           "  };",
           "})()",
         ].join("\n"),
@@ -1373,6 +1439,7 @@ async function assertHydratedReaderTools({
       target: crossRouteNavigation.result.value,
       title: advancedTitle,
       targetTitle: advancedTitle,
+      reusedAudio: true,
     });
     await page.send("Runtime.evaluate", {
       expression: "history.back()",
@@ -2266,6 +2333,68 @@ async function assertHydratedReaderTools({
         manuscriptMarkerCount: 0,
         quote: `Saved passage: ${selectedPassage.result.value.quote.slice(0, 80)}`,
       });
+      const insertedTransientReaderUi = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const marker = document.querySelector(".publisher-reader-bookmark-marker");',
+          '  const blockId = marker?.getAttribute("data-publisher-start-block");',
+          '  const block = blockId === null || blockId === undefined ? null : document.querySelector(`[data-publisher-block="${CSS.escape(blockId)}"]`);',
+          "  if (!(marker instanceof HTMLElement) || !(block instanceof HTMLElement)) return null;",
+          '  const transient = document.createElement("span");',
+          '  transient.dataset.publisherReaderTransientUi = "true";',
+          '  transient.dataset.publisherTransientGeometryProof = "true";',
+          '  transient.textContent = "Transient renderer control text that is not manuscript prose.";',
+          '  transient.style.cssText = "position:fixed;inset:0 auto auto 0;font-size:200px;line-height:1";',
+          "  block.prepend(transient);",
+          "  globalThis.__publisherBookmarkMarkerBeforeTransient = {",
+          "    height: marker.style.height,",
+          "    top: marker.style.top,",
+          "  };",
+          '  window.dispatchEvent(new Event("resize"));',
+          "  return true;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(insertedTransientReaderUi.result?.value, true);
+      await wait(100);
+      let transientReaderUiGeometry;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const marker = document.querySelector(".publisher-reader-bookmark-marker");',
+            '  const transient = document.querySelector("[data-publisher-transient-geometry-proof=true]");',
+            "  return {",
+            "    before: globalThis.__publisherBookmarkMarkerBeforeTransient ?? null,",
+            '    height: marker instanceof HTMLElement ? marker.style.height : "",',
+            '    top: marker instanceof HTMLElement ? marker.style.top : "",',
+            '    transientText: transient?.textContent ?? "",',
+            "  };",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        transientReaderUiGeometry = evaluated.result?.value;
+        if (transientReaderUiGeometry?.transientText.length > 0) break;
+        await wait(50);
+      }
+      assert.deepEqual(
+        {
+          height: transientReaderUiGeometry?.height,
+          top: transientReaderUiGeometry?.top,
+        },
+        transientReaderUiGeometry?.before,
+        `Transient Reader UI changed bookmark geometry: ${JSON.stringify(transientReaderUiGeometry)}`,
+      );
+      await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  document.querySelector("[data-publisher-transient-geometry-proof=true]")?.remove();',
+          '  window.dispatchEvent(new Event("resize"));',
+          "})()",
+        ].join("\n"),
+      });
       const openedMarkerBookmark = await page.send("Runtime.evaluate", {
         expression: [
           "(() => {",
@@ -2551,9 +2680,10 @@ async function assertAccessibleManuscriptExtensions({
         "  const target = action.dataset.publisherHeadingHref ?? '';",
         "  action.click();",
         "  region.focus();",
-        "  return {",
-        '    actionLabel: action.getAttribute("aria-label") ?? "",',
-        '    activeRegion: document.activeElement === region,',
+          "  return {",
+          '    actionLabel: action.getAttribute("aria-label") ?? "",',
+          '    actionTransient: action.dataset.publisherReaderTransientUi ?? "",',
+          '    activeRegion: document.activeElement === region,',
         '    caption: table.querySelector("caption")?.textContent ?? "",',
         '    columnHeaders: table.querySelectorAll("th[scope=col]").length,',
         '    headingText: heading.textContent ?? "",',
@@ -2570,6 +2700,7 @@ async function assertAccessibleManuscriptExtensions({
     });
     assert.notEqual(before.result?.value, null);
     assert.match(before.result.value.actionLabel, /^Copy link to /u);
+    assert.equal(before.result.value.actionTransient, "true");
     assert.equal(before.result.value.activeRegion, true);
     assert.ok(before.result.value.caption.startsWith("Table in "));
     assert.equal(before.result.value.columnHeaders, 2);
@@ -2588,6 +2719,7 @@ async function assertAccessibleManuscriptExtensions({
           '  copied: globalThis.__publisherCopiedHeadingHref ?? "",',
           '  headingText: document.querySelector(".publisher-linkable-heading h1, .publisher-linkable-heading h2, .publisher-linkable-heading h3, .publisher-linkable-heading h4, .publisher-linkable-heading h5, .publisher-linkable-heading h6")?.textContent ?? "",',
           '  status: document.querySelector(".publisher-heading-status")?.textContent ?? "",',
+          '  statusTransient: document.querySelector(".publisher-heading-status")?.getAttribute("data-publisher-reader-transient-ui") ?? "",',
           "})",
         ].join("\n"),
         returnByValue: true,
@@ -2599,6 +2731,7 @@ async function assertAccessibleManuscriptExtensions({
     assert.equal(copied?.copied, before.result.value.target);
     assert.equal(copied?.headingText, before.result.value.headingText);
     assert.equal(copied?.status, "Link copied");
+    assert.equal(copied?.statusTransient, "true");
   } finally {
     page.close();
   }
@@ -3778,7 +3911,7 @@ export async function runPackagedHostProof(
     const narratedSections = reader.works.flatMap((work) =>
       work.sections.filter((section) => section.navigable));
     assert.ok(narratedSections.length >= 2);
-    const proofAudioDurationSeconds = 8;
+    const proofAudioDurationSeconds = 20;
     const timedSection = narratedSections[0];
     const timedSectionProfile = createReaderNarrationSectionTextProfile(
       timedSection,
@@ -3829,7 +3962,7 @@ export async function runPackagedHostProof(
             audioVersionId: `${section.id}.calm`,
             href: "/proof.wav",
             format: "wav",
-            byteSize: createProofWav().byteLength,
+            byteSize: createProofWav(proofAudioDurationSeconds).byteLength,
             ...(index === 0
               ? { timingsByteSize: Buffer.byteLength(timingDocumentText) }
               : {}),
@@ -3846,7 +3979,7 @@ export async function runPackagedHostProof(
             audioVersionId: `${section.id}.bright`,
             href: "/proof.wav",
             format: "wav",
-            byteSize: createProofWav().byteLength,
+            byteSize: createProofWav(proofAudioDurationSeconds).byteLength,
             durationSeconds: proofAudioDurationSeconds,
           })),
           narratedSectionCount: 1,
@@ -4017,7 +4150,7 @@ export async function runPackagedHostProof(
       ),
       writeFile(
         join(hostRoot, "public", "proof.wav"),
-        createProofWav(),
+        createProofWav(proofAudioDurationSeconds),
       ),
       writeFile(
         join(hostRoot, "public", "proof.timings.json"),

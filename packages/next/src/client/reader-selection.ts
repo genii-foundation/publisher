@@ -13,6 +13,10 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import type { ReaderBookmarkInput } from "@genii-foundation/publisher-reader/bookmarks";
 import type { ReaderBlock, ReaderSection } from "@genii-foundation/publisher-schema/reader";
+import {
+  publisherReaderTextContent,
+  publisherReaderTextOffset,
+} from "./reader-dom-text.js";
 
 export interface PublisherReaderSelection {
   readonly input: Omit<ReaderBookmarkInput, "id">;
@@ -27,21 +31,6 @@ function owningElement(node: Node | null): Element | null {
   return node.nodeType === Node.ELEMENT_NODE
     ? node as Element
     : node.parentElement;
-}
-
-function visibleOffset(
-  block: HTMLElement,
-  container: Node,
-  offset: number,
-): number | null {
-  try {
-    const before = block.ownerDocument.createRange();
-    before.selectNodeContents(block);
-    before.setEnd(container, offset);
-    return before.toString().length;
-  } catch {
-    return null;
-  }
 }
 
 function bookmarkHref(block: ReaderBlock, fallbackPath: string): string {
@@ -84,17 +73,18 @@ export function readPublisherReaderSelection(
   ).filter((element) => {
     const id = element.dataset.publisherBlock;
     const block = id === undefined ? undefined : byId.get(id);
-    return block !== undefined && element.textContent === block.text;
+    return block !== undefined &&
+      publisherReaderTextContent(element) === block.text;
   });
   const startIndex = blockElements.indexOf(startElement);
   const endIndex = blockElements.indexOf(endElement);
   if (startIndex < 0 || endIndex < startIndex) return null;
-  const rawStart = visibleOffset(
+  const rawStart = publisherReaderTextOffset(
     startElement,
     range.startContainer,
     range.startOffset,
   );
-  const rawEnd = visibleOffset(
+  const rawEnd = publisherReaderTextOffset(
     endElement,
     range.endContainer,
     range.endOffset,
@@ -102,7 +92,7 @@ export function readPublisherReaderSelection(
   if (rawStart === null || rawEnd === null) return null;
   const selectedElements = blockElements.slice(startIndex, endIndex + 1);
   const parts = selectedElements.map((element, index) => {
-    const text = element.textContent ?? "";
+    const text = publisherReaderTextContent(element);
     const start = index === 0 ? rawStart : 0;
     const end = index === selectedElements.length - 1 ? rawEnd : text.length;
     return text.slice(start, end);

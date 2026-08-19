@@ -141,6 +141,7 @@ export function PublisherReaderNarration({
   const offline = usePublisherReaderOffline();
   const offlineAudioObjectUrlRef = useRef<string | null>(null);
   const pendingPlayRef = useRef(false);
+  const playbackAttemptRef = useRef(0);
   const timingCacheRef = useRef(new Map<string, ReaderNarrationTimingDocument>());
   const timingControllerRef = useRef<AbortController | null>(null);
   const timingSequenceRef = useRef(0);
@@ -162,6 +163,26 @@ export function PublisherReaderNarration({
   const [offlineAudioSource, setOfflineAudioSource] =
     useState<OfflineAudioSource | null>(null);
   const [message, setMessage] = useState("");
+
+  const requestPlayback = (failureMessage: string): void => {
+    const audio = audioRef.current;
+    if (audio === null) return;
+    const attempt = playbackAttemptRef.current + 1;
+    playbackAttemptRef.current = attempt;
+    void audio.play().catch(() => {
+      if (
+        playbackAttemptRef.current === attempt &&
+        audioRef.current === audio
+      ) {
+        setMessage(failureMessage);
+      }
+    });
+  };
+
+  const pausePlayback = (): void => {
+    playbackAttemptRef.current += 1;
+    audioRef.current?.pause();
+  };
 
   useEffect(() => {
     const loaded = parseReaderNarrationPreferences(safeRead(preferencesKey));
@@ -279,9 +300,7 @@ export function PublisherReaderNarration({
       onOpen();
       setMessage("");
       if (clipIndex === selectedClipIndex) {
-        void audio.play().catch(() => {
-          setMessage("Playback is ready. Press play to continue.");
-        });
+        requestPlayback("Playback is ready. Press play to continue.");
       } else {
         pendingPlayRef.current = true;
         flushSync(() => setSelectedClipIndex(clipIndex));
@@ -321,6 +340,7 @@ export function PublisherReaderNarration({
     setDuration(selectedClip?.durationSeconds ?? 0);
     setPlaying(false);
     const audio = audioRef.current;
+    playbackAttemptRef.current += 1;
     if (
       audio === null ||
       selectedClip === null ||
@@ -329,13 +349,12 @@ export function PublisherReaderNarration({
     audio.load();
     if (pendingPlayRef.current) {
       pendingPlayRef.current = false;
-      void audio.play().catch(() => {
-        setMessage("Playback is ready. Press play to continue.");
-      });
+      requestPlayback("Playback is ready. Press play to continue.");
     }
   }, [selectedAudioSource, selectedClip?.audioVersionId, selectedClip?.href]);
 
   useEffect(() => () => {
+    playbackAttemptRef.current += 1;
     timingSequenceRef.current += 1;
     timingControllerRef.current?.abort();
     if (offlineAudioObjectUrlRef.current !== null) {
@@ -385,7 +404,7 @@ export function PublisherReaderNarration({
     const nextIndex = previousSectionId === undefined
       ? -1
       : nextVoice.clips.findIndex((clip) => clip.sectionId === previousSectionId);
-    audioRef.current?.pause();
+    pausePlayback();
     setSelectedVoiceId(voiceId);
     setSelectedClipIndex(nextIndex >= 0 ? nextIndex : 0);
     updatePreferences({ selectedVoiceId: voiceId });
@@ -408,9 +427,9 @@ export function PublisherReaderNarration({
       return;
     }
     if (audio.paused) {
-      void audio.play().catch(() => setMessage("Playback could not start. Try again."));
+      requestPlayback("Playback could not start. Try again.");
     } else {
-      audio.pause();
+      pausePlayback();
     }
   };
 
@@ -419,6 +438,12 @@ export function PublisherReaderNarration({
     if (audio === null || !Number.isFinite(seconds)) return;
     audio.currentTime = Math.max(0, Math.min(seconds, duration));
     setCurrentTime(audio.currentTime);
+  };
+
+  const skip = (seconds: number): void => {
+    const audio = audioRef.current;
+    if (audio === null) return;
+    seek(audio.currentTime + seconds);
   };
 
   const finishClip = (): void => {
@@ -606,14 +631,17 @@ export function PublisherReaderNarration({
                   )}
                 </div>
                 <div className="publisher-reader-narration-controls">
-                  <button type="button" onClick={() => chooseClip(selectedClipIndex - 1, playing)} disabled={selectedClipIndex === 0}>Previous</button>
+                  <button type="button" aria-label="Previous recording" onClick={() => chooseClip(selectedClipIndex - 1, playing)} disabled={selectedClipIndex === 0}>Previous</button>
+                  <button type="button" aria-label="Skip back 15 seconds" onClick={() => skip(-15)} disabled={selectedAudioSource === undefined || duration <= 0}>Back 15</button>
                   <button className="publisher-reader-primary-action" type="button" onClick={togglePlayback}>{playing ? "Pause" : "Play"}</button>
-                  <button type="button" onClick={() => chooseClip(selectedClipIndex + 1, playing)} disabled={selectedClipIndex + 1 >= selectedVoice.clips.length}>Next</button>
+                  <button type="button" aria-label="Skip forward 15 seconds" onClick={() => skip(15)} disabled={selectedAudioSource === undefined || duration <= 0}>Ahead 15</button>
+                  <button type="button" aria-label="Next recording" onClick={() => chooseClip(selectedClipIndex + 1, playing)} disabled={selectedClipIndex + 1 >= selectedVoice.clips.length}>Next</button>
                 </div>
                 <label className="publisher-reader-narration-seek">
                   <span>{formatTime(currentTime)}</span>
                   <input
                     aria-label="Recording position"
+                    aria-valuetext={`${formatTime(currentTime)} of ${formatTime(duration)}`}
                     type="range"
                     min={0}
                     max={Math.max(0, duration)}

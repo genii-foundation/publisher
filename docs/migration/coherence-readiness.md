@@ -11,12 +11,16 @@ The original complete Coherence inventory was pinned to commit
 39 first-parent commits from 2026-07-28 through that ref. It also considers five
 direct Reader precursor changes from 2026-07-27 because those changes created the
 state, bookmark, audio, and synchronization substrate modified during the audit
-window. Focused narration parity evidence was refreshed read only through
-`423a21202ff32c5f879ca9f10e0607c1579b97a4`, dated 2026-08-19.
+window. Focused Reader parity evidence was refreshed read only through current
+Coherence `origin/main` at `fe2a1c8c8b6e4df21665afbf6609cf6bef782415`,
+dated 2026-08-19. The actionable delta came from bookmark anchoring at
+`6ed21e5bc48f747989d3cd580d5bcd24daec686f`, mobile Safari playback isolation at
+`7cc32c1dd7421678e01f2df213df75c7e0a3656f`, and dedicated audiobook transport
+controls at `b001d42e50a95c6a2f6a4d67bd6b0879bed9cf89`.
 
-The Publisher implementation baseline is the Updates integration candidate at
-`74cba43090b287fcb3295e85ebfc0edcb357a024`, stacked on the named Updates route
-checkpoint at `ab2b550459d350bf061a9d8e337a91edb1da0e06`.
+The Publisher implementation baseline preceding this focused parity refresh is
+`0d295eed5b45e4c17558e5896f0372906260cef9` on
+`feat/reader-parity-refresh`.
 
 The audit was read only with respect to Coherence. It did not modify manuscripts,
 publishing records, generated output, deployment state, or the current production
@@ -106,7 +110,10 @@ cross-section ranges before translating visible UTF-16 offsets into portable
 block anchors. Its viewport-contained capture editor stores an optional private
 note without invalidating the selected range. Exact and uniquely relocated
 ranges now receive reactive margin markers outside the manuscript DOM, including
-deterministic first measurement in background tabs. The complete 1,000-item
+deterministic first measurement in background tabs. One shared DOM text
+coordinate system excludes renderer controls from selection offsets, range
+resolution, and measured marker rectangles. Marker positions retain document
+scroll instead of being clamped in viewport coordinates. The complete 1,000-item
 collection now remains searchable and operable while a contained fixed-row
 viewport bounds mounted DOM and layout work. Saved-passage presence now reaches
 progress, current-section margin markers, and search from the same reactive
@@ -184,10 +191,13 @@ download contrast.
 
 Publisher validates, resolves, and materializes a generic narration catalog and
 its build-bound envelope. The official renderer now fetches that envelope only
-when Listen opens. Its persistent default player supplies play, pause, seek,
-bounded speed, remembered voice choice, ordered queue movement, automatic queue
-continuation, exact declared duration, queue position, timed-clip coverage, and
-unnarrated coverage. A strict browser parser refuses stale identity, unsafe URLs,
+when Listen opens. Its persistent default player supplies play, pause, 15-second
+back and forward jumps, seek, bounded speed, remembered voice choice, ordered
+queue movement, automatic queue continuation, exact declared duration, queue
+position, timed-clip coverage, and unnarrated coverage. One user-authorized media
+element survives clip and route changes. Playback attempt identity prevents a
+stale rejected promise from pausing or reporting failure against a newer clip. A
+strict browser parser refuses stale identity, unsafe URLs,
 duplicate section coverage, malformed statistics, and oversized input. The
 packed-host Chrome proof exercises a real recording and persists the chosen
 voice and speed. When a clip declares timings, playback starts first and then

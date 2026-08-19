@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Hardened Reader parity with persistent audiobook transport, 15-second jumps, stale playback isolation, and transient interface-free bookmark coordinates and geometry.
 - Reserved author-owned `publisher.extensions.mjs` from every publication source role.
 - Added explicit author extension registration, exact installed extension identity, build-time `content.project` invocation, and Reader-build-bound extension artifacts.
 - Added official Next server extension slots with narrow page context, grant enforcement, deterministic application identity, and an independently packed extension proof.

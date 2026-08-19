@@ -54,7 +54,7 @@ If you wish to allow use of your version of this file only under the terms of th
 
 export const COHERENCE_PARITY_SOURCE = Object.freeze({
   repository: "https://github.com/genii-foundation/coherence-thesis",
-  ref: "423a21202ff32c5f879ca9f10e0607c1579b97a4",
+  ref: "fe2a1c8c8b6e4df21665afbf6609cf6bef782415",
   observedThrough: "2026-08-19",
 });
 
@@ -246,9 +246,10 @@ export const READER_PARITY = Object.freeze([
     capability: "Stable margin markers instead of prose-obscuring bookmark highlights",
     home: "renderer",
     status: "upgraded",
-    why: "The official renderer accepts only exact or uniquely relocated canonical ranges, keeps every marker outside the manuscript subtree, measures immediately in background tabs, and routes the accessible marker into the existing bookmark surface.",
+    why: "The official renderer accepts only exact or uniquely relocated canonical ranges, excludes transient renderer controls from canonical text offsets and geometry, keeps every marker outside the manuscript subtree, measures immediately in background tabs, anchors against document scroll, and routes the accessible marker into the existing bookmark surface.",
     evidence: {
       decision: "docs/architecture/0034-bookmark-margin-markers.md",
+      hardeningDecision: "docs/architecture/0053-reader-transport-and-bookmark-geometry.md",
       renderer: "packages/next/src/client/reader-bookmark-markers.tsx",
       browserProof: "packages/next/scripts/packaged-host-proof.mjs",
     },
@@ -578,12 +579,14 @@ export const AUDIO_PARITY = Object.freeze([
     home: "renderer",
     status: "upgraded",
     engineProvides: "the resolved clip list per voice, in reader order",
-    why: "The official renderer now supplies a lazy build-bound player with play, pause, seek, rate, ordered previous and next controls, automatic queue continuation, and failure isolation that leaves reading available.",
+    why: "The official renderer supplies a lazy build-bound player with play, pause, 15-second jumps, seek, rate, ordered previous and next controls, automatic queue continuation, one persistent user-authorized media element across clips and routes, and stale-playback failure isolation that leaves reading available.",
     evidence: {
       decision: "docs/architecture/0039-lazy-default-narration-player.md",
+      hardeningDecision: "docs/architecture/0053-reader-transport-and-bookmark-geometry.md",
       renderer: "packages/next/src/client/reader-narration.tsx",
       browserProof: "packages/next/scripts/packaged-host-proof.mjs",
     },
+    sourcePaths: ["src/components/AudioPlayerIsland.tsx", "src/lib/audio-playback.ts"],
   },
   {
     id: "audio.voices.selection",

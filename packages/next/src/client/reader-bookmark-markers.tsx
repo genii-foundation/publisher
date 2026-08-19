@@ -22,6 +22,11 @@ import {
 import type { ReaderBlock, ReaderSection } from "@genii-foundation/publisher-schema/reader";
 import { useEffect, useState, type ReactElement } from "react";
 import { createPortal } from "react-dom";
+import {
+  publisherReaderTextClientRects,
+  publisherReaderTextContent,
+  publisherReaderTextPointForOffset,
+} from "./reader-dom-text.js";
 
 interface PublisherReaderBookmarkMarker {
   readonly bookmark: ReaderBookmark;
@@ -41,27 +46,6 @@ export interface PublisherReaderBookmarkMarkersProps {
   readonly workId: string;
 }
 
-function textPointForOffset(
-  block: HTMLElement,
-  offset: number,
-): { readonly node: Node; readonly offset: number } | null {
-  const walker = block.ownerDocument.createTreeWalker(
-    block,
-    NodeFilter.SHOW_TEXT,
-  );
-  let consumed = 0;
-  let node = walker.nextNode();
-  while (node !== null) {
-    const length = node.textContent?.length ?? 0;
-    if (consumed + length >= offset) {
-      return Object.freeze({ node, offset: offset - consumed });
-    }
-    consumed += length;
-    node = walker.nextNode();
-  }
-  return null;
-}
-
 function canonicalBlockElements(
   root: HTMLElement,
   blocks: readonly ReaderBlock[],
@@ -71,7 +55,11 @@ function canonicalBlockElements(
   for (const element of root.querySelectorAll<HTMLElement>("[data-publisher-block]")) {
     const id = element.dataset.publisherBlock;
     const block = id === undefined ? undefined : canonical.get(id);
-    if (block === undefined || element.textContent !== block.text || elements.has(block.id)) {
+    if (
+      block === undefined ||
+      publisherReaderTextContent(element) !== block.text ||
+      elements.has(block.id)
+    ) {
       continue;
     }
     elements.set(block.id, element);
@@ -90,15 +78,21 @@ function measureBookmarkMarker(
   const startElement = elements.get(resolution.range.start.blockId);
   const endElement = elements.get(resolution.range.end.blockId);
   if (startElement === undefined || endElement === undefined) return null;
-  const start = textPointForOffset(startElement, resolution.range.start.offset);
-  const end = textPointForOffset(endElement, resolution.range.end.offset);
+  const start = publisherReaderTextPointForOffset(
+    startElement,
+    resolution.range.start.offset,
+  );
+  const end = publisherReaderTextPointForOffset(
+    endElement,
+    resolution.range.end.offset,
+  );
   if (start === null || end === null) return null;
   try {
     const range = sectionRoot.ownerDocument.createRange();
     range.setStart(start.node, start.offset);
     range.setEnd(end.node, end.offset);
     if (range.collapsed) return null;
-    const boxes = Array.from(range.getClientRects()).filter(
+    const boxes = publisherReaderTextClientRects(range).filter(
       (box) => box.width > 0 && box.height > 0,
     );
     if (boxes.length === 0) return null;
@@ -111,7 +105,7 @@ function measureBookmarkMarker(
       height: Math.max(44, bottom - top + 4),
       left: Math.max(2, sectionBox.left - 24) + window.scrollX,
       startBlockId: resolution.range.start.blockId,
-      top: Math.max(0, top - 2) + window.scrollY,
+      top: top - 2 + window.scrollY,
     });
   } catch {
     return null;

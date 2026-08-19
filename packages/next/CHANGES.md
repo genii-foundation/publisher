@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Added 15-second audiobook jumps and playback-attempt isolation while preserving one media element across clips and routes.
+- Excluded transient Reader controls from canonical passage offsets and bookmark marker geometry.
 - Advanced the host contract to 0.13.0 with declarative extension pages in the exact build-time route plan.
 - Added compatible host route adapters, static generation, renderer-owned metadata and shell, slash continuity, attribution, and server-only route data.
 - Extended the independently packed extension with a real attributed page while keeping its route projection out of static browser chunks.

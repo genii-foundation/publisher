@@ -92,6 +92,7 @@ export function PublisherReaderHeadingAction({
         aria-label={`Copy link to ${title}`}
         className="publisher-heading-action"
         data-publisher-heading-href={href}
+        data-publisher-reader-transient-ui="true"
         hidden={!hydrated}
         onClick={() => {
           void copy();
@@ -120,6 +121,7 @@ export function PublisherReaderHeadingAction({
           aria-live="polite"
           className="publisher-heading-status"
           data-copy-status={status}
+          data-publisher-reader-transient-ui="true"
           role="status"
         >
           {status === "copied"

@@ -25,10 +25,18 @@ tabs, and canonically equal replacements cause no write or render churn. A
 stable empty server snapshot preserves hydration, while unavailable browser
 persistence leaves the current tab's in-memory reading state usable.
 
+Passage selection and bookmark markers share one renderer text coordinate
+system. It excludes adjacent controls and status text from canonical manuscript
+offsets and measured rectangles, while leaving those controls available to
+assistive technology. Marker geometry therefore remains stable as transient
+Reader interface text changes.
+
 The default Listen panel fetches the build-bound narration envelope only when a
 reader opens it. One persistent media element supplies play, pause, seek, bounded
-speed, remembered voice choice, previous and next movement, and automatic queue
-continuation. It joins section identities to the lazy progress catalog for human
+speed, remembered voice choice, 15-second back and forward jumps, previous and
+next movement, and automatic queue continuation. Playback attempt identity keeps
+an older rejected play promise from changing a newer clip's state. It joins
+section identities to the lazy progress catalog for human
 titles and canonical destinations, while exact duration and coverage remain
 honest when clips omit duration. Closing the panel does not destroy playback.
 When a clip declares timings, playback starts before one bounded sidecar request.
