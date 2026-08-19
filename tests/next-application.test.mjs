@@ -686,6 +686,28 @@ test("Updates configuration is required exactly when its route exists", async ()
   );
 });
 
+test("the renderer refuses a theme written for API 1.0", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const current = resolveDefaultPublisherNextTheme();
+  const result = await createPublicationNextApplication({
+    reader,
+    theme: {
+      ...current,
+      implementation: {
+        ...current.implementation,
+        apiVersion: "1.0",
+      },
+    },
+  });
+  assert.equal(result.valid, false);
+  assert.equal(
+    result.diagnostics.some(
+      ({ code }) => code === "next.theme.implementation_invalid",
+    ),
+    true,
+  );
+});
+
 test("Updates content stays inside the engine owned page shell", async () => {
   const application = await createApplication({
     updates: createUpdates({ label: "Recorded releases" }),

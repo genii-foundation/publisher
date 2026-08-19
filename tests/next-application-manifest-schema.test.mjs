@@ -112,7 +112,9 @@ test("the raw schema identity matches its public package export", () => {
 });
 
 test("the real Next application manifest satisfies the raw schema", async () => {
-  assertValid(await createRealApplicationManifest());
+  const manifest = await createRealApplicationManifest();
+  assert.equal(manifest.theme.apiVersion, "2.0");
+  assertValid(manifest);
 });
 
 test("the application manifest schema rejects unknown properties", async () => {
@@ -189,7 +191,7 @@ test("the application manifest schema rejects invalid adapter API and package fi
   const manifest = await createRealApplicationManifest();
   for (const mutate of [
     (candidate) => {
-      candidate.theme.apiVersion = "2.0";
+      candidate.theme.apiVersion = "1.0";
     },
     (candidate) => {
       candidate.theme.package = "@GENII Foundation/theme";

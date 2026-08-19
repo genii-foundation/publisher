@@ -47,7 +47,7 @@ export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_MEDIA_TYPE =
   "application/vnd.genii.publisher.next-application+json";
 export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH =
   "renderers/next/application.json";
-export const PUBLISHER_NEXT_THEME_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_THEME_API_VERSION = "2.0";
 export const PUBLISHER_NEXT_UPDATES_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION = "1.0";
@@ -179,6 +179,8 @@ export interface PublisherNextThemeTokens {
     readonly monoFamily: string;
     readonly baseSize: string;
     readonly lineHeight: number;
+    readonly defaultReaderFontFamilyId: string;
+    readonly readerFontFamilies: readonly PublisherNextReaderFontFamily[];
   };
   readonly layout: {
     readonly readingMeasure: string;
@@ -186,6 +188,12 @@ export interface PublisherNextThemeTokens {
     readonly sectionGap: string;
     readonly controlRadius: string;
   };
+}
+
+export interface PublisherNextReaderFontFamily {
+  readonly id: string;
+  readonly label: string;
+  readonly family: string;
 }
 
 export interface PublisherNextThemeInstance {

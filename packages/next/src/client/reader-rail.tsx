@@ -39,6 +39,7 @@ import {
   serializeReaderPreferences,
   updateReaderPreferences,
   type ReaderPreferences,
+  type ReaderPreferencesPolicy,
   type ReaderPreferencesUpdate,
 } from "@genii-foundation/publisher-reader/preferences";
 import {
@@ -89,6 +90,9 @@ import type {
   ReaderSection,
   Sha256Digest,
 } from "@genii-foundation/publisher-schema/reader";
+import type {
+  PublisherNextReaderFontFamily,
+} from "../types.js";
 import type { SyncEnvelope } from "@genii-foundation/publisher-schema";
 import {
   useEffect,
@@ -132,6 +136,8 @@ export interface PublisherReaderRailProps {
   readonly outline: readonly PublisherReaderOutlineEntry[];
   readonly currentSection?: ReaderSection;
   readonly currentWorkId?: string;
+  readonly defaultReaderFontFamilyId: string;
+  readonly readerFontFamilies: readonly PublisherNextReaderFontFamily[];
   readonly sync: SyncEnvelope | null;
 }
 
@@ -146,11 +152,6 @@ const SYNC_PUMP_INTERVAL_MS = 200;
 const READING_TIME_SAMPLE_INTERVAL_MS = 5_000;
 const READING_TIME_IDLE_THRESHOLD_MS = 45_000;
 const MAXIMUM_READING_TIME_SAMPLE_MS = 10_000;
-
-const DEFAULT_FONT_POLICY = Object.freeze({
-  defaultFontFamilyId: "serif",
-  fontFamilyIds: Object.freeze(["serif"]),
-});
 
 function safeLocalRead(key: string): string | null {
   try {
@@ -168,7 +169,14 @@ function safeLocalWrite(key: string, value: string): void {
   }
 }
 
-function applyPreferences(preferences: ReaderPreferences): void {
+function applyPreferences(
+  preferences: ReaderPreferences,
+  readerFontFamilies: readonly PublisherNextReaderFontFamily[],
+): void {
+  const readerFont = readerFontFamilies.find(
+    ({ id }) => id === preferences.fontFamilyId,
+  );
+  if (readerFont === undefined) return;
   const root = document.documentElement;
   root.dataset.publisherReaderScheme = preferences.colorScheme;
   root.dataset.publisherReaderMotion = preferences.motion;
@@ -177,6 +185,10 @@ function applyPreferences(preferences: ReaderPreferences): void {
   root.style.setProperty(
     "--publisher-reader-font-scale",
     String(preferences.fontScale / 100),
+  );
+  root.style.setProperty(
+    "--publisher-reader-font-family",
+    readerFont.family,
   );
 }
 
@@ -307,6 +319,8 @@ export function PublisherReaderRail({
   outline,
   currentSection,
   currentWorkId,
+  defaultReaderFontFamilyId,
+  readerFontFamilies,
   sync,
 }: PublisherReaderRailProps): ReactElement {
   const panelId = useId();
@@ -319,6 +333,12 @@ export function PublisherReaderRail({
   const bookmarkDeleteConfirmRef = useRef<HTMLButtonElement>(null);
   const bookmarkDeleteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const selectionNoteRef = useRef<HTMLTextAreaElement>(null);
+  const fontPolicy = useMemo<ReaderPreferencesPolicy>(() => Object.freeze({
+    defaultFontFamilyId: defaultReaderFontFamilyId,
+    fontFamilyIds: Object.freeze(
+      readerFontFamilies.map(({ id }) => id),
+    ),
+  }), [defaultReaderFontFamilyId, readerFontFamilies]);
   const preferencesKey = useMemo(
     () => createReaderPreferencesStorageKey(publicationId),
     [publicationId],
@@ -372,7 +392,7 @@ export function PublisherReaderRail({
   const bookmarkState = usePublisherReaderStore(bookmarksStore);
   const [openPanel, setOpenPanel] = useState<ReaderPanel | null>(null);
   const [preferences, setPreferences] = useState<ReaderPreferences>(() =>
-    createDefaultReaderPreferences(DEFAULT_FONT_POLICY));
+    createDefaultReaderPreferences(fontPolicy));
   const [query, setQuery] = useState("");
   const [bookmarkQuery, setBookmarkQuery] = useState("");
   const [bookmarkDeletePending, setBookmarkDeletePending] = useState<ReaderBookmarkDeletion | null>(null);
@@ -458,10 +478,10 @@ export function PublisherReaderRail({
   useEffect(() => {
     const loaded = parseReaderPreferences(
       safeLocalRead(preferencesKey),
-      DEFAULT_FONT_POLICY,
+      fontPolicy,
     );
     setPreferences(loaded);
-    applyPreferences(loaded);
+    applyPreferences(loaded, readerFontFamilies);
     const now = Date.now();
     consentRef.current = parseReaderSyncConsent(
       safeLocalRead(consentKey),
@@ -495,8 +515,10 @@ export function PublisherReaderRail({
     consentKey,
     currentSection,
     engagementKey,
+    fontPolicy,
     preferencesKey,
     publicationId,
+    readerFontFamilies,
   ]);
 
   useEffect(() => {
@@ -1023,12 +1045,12 @@ export function PublisherReaderRail({
     : queryReaderBookmarks(bookmarkState, { text: normalizedQuery }).slice(0, 12);
 
   const updatePreference = (update: ReaderPreferencesUpdate): void => {
-    const next = updateReaderPreferences(preferences, update, DEFAULT_FONT_POLICY);
+    const next = updateReaderPreferences(preferences, update, fontPolicy);
     setPreferences(next);
-    applyPreferences(next);
+    applyPreferences(next, readerFontFamilies);
     safeLocalWrite(
       preferencesKey,
-      serializeReaderPreferences(next, DEFAULT_FONT_POLICY),
+      serializeReaderPreferences(next, fontPolicy),
     );
   };
 
@@ -1570,7 +1592,7 @@ export function PublisherReaderRail({
               </label>
               <label>Font
                 <select value={preferences.fontFamilyId} onChange={(event) => updatePreference({ fontFamilyId: event.currentTarget.value })}>
-                  {DEFAULT_FONT_POLICY.fontFamilyIds.map((font) => <option key={font} value={font}>{font}</option>)}
+                  {readerFontFamilies.map((font) => <option key={font.id} value={font.id}>{font.label}</option>)}
                 </select>
               </label>
               <label>Color

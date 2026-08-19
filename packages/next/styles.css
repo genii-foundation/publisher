@@ -25,7 +25,10 @@ If you wish to allow use of your version of this file only under the terms of th
   overflow-wrap: break-word;
   background: var(--publisher-color-canvas);
   color: var(--publisher-color-text);
-  font-family: var(--publisher-font-body);
+  font-family: var(
+    --publisher-reader-font-family,
+    var(--publisher-reader-default-font-family, var(--publisher-font-body))
+  );
   font-size: calc(
     var(--publisher-font-size) * var(--publisher-reader-font-scale, 1)
   );

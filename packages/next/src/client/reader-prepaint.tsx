@@ -23,15 +23,22 @@ import {
   createReaderPreferencesStorageKey,
 } from "@genii-foundation/publisher-reader/preferences";
 import type { ReactElement } from "react";
+import type {
+  PublisherNextReaderFontFamily,
+} from "../types.js";
 
 export function createPublisherReaderPrepaintSource(
   publicationId: string,
+  readerFontFamilies: readonly PublisherNextReaderFontFamily[],
 ): string {
   const storageKey = createReaderPreferencesStorageKey(publicationId);
   const input = JSON.stringify({
     colorSchemes: READER_COLOR_SCHEMES,
     focusLevels: READER_FOCUS_LEVELS,
-    fontFamilyIds: ["serif"],
+    fontFamilies: readerFontFamilies.map(({ family, id }) => ({
+      family,
+      id,
+    })),
     fontScales: READER_FONT_SCALES,
     maximumBytes: MAXIMUM_READER_PREFERENCES_SERIALIZED_BYTES,
     motionPreferences: READER_MOTION_PREFERENCES,
@@ -39,18 +46,23 @@ export function createPublisherReaderPrepaintSource(
     storageKey,
   }).replace(/</gu, "\\u003c");
 
-  return `(()=>{try{const c=${input},s=localStorage.getItem(c.storageKey);if(s===null||new TextEncoder().encode(s).length>c.maximumBytes)return;const p=JSON.parse(s),own=(k)=>Object.prototype.hasOwnProperty.call(p,k),allowed=(values,value)=>values.includes(value);if(p===null||typeof p!=="object"||Array.isArray(p)||Object.getPrototypeOf(p)!==Object.prototype||Reflect.ownKeys(p).length!==7||!["schemaVersion","fontScale","fontFamilyId","colorScheme","motion","highlights","focus"].every(own)||p.schemaVersion!==c.schemaVersion||!allowed(c.fontScales,p.fontScale)||!allowed(c.fontFamilyIds,p.fontFamilyId)||!allowed(c.colorSchemes,p.colorScheme)||!allowed(c.motionPreferences,p.motion)||typeof p.highlights!=="boolean"||!allowed(c.focusLevels,p.focus))return;const r=document.documentElement;r.dataset.publisherReaderScheme=p.colorScheme;r.dataset.publisherReaderMotion=p.motion;r.dataset.publisherReaderFocus=p.focus;r.dataset.publisherReaderHighlights=p.highlights?"on":"off";r.style.setProperty("--publisher-reader-font-scale",String(p.fontScale/100))}catch{}})();`;
+  return `(()=>{try{const c=${input},s=localStorage.getItem(c.storageKey);if(s===null||new TextEncoder().encode(s).length>c.maximumBytes)return;const p=JSON.parse(s),own=(k)=>Object.prototype.hasOwnProperty.call(p,k),allowed=(values,value)=>values.includes(value),font=c.fontFamilies.find((candidate)=>candidate.id===p.fontFamilyId);if(p===null||typeof p!=="object"||Array.isArray(p)||Object.getPrototypeOf(p)!==Object.prototype||Reflect.ownKeys(p).length!==7||!["schemaVersion","fontScale","fontFamilyId","colorScheme","motion","highlights","focus"].every(own)||p.schemaVersion!==c.schemaVersion||!allowed(c.fontScales,p.fontScale)||font===undefined||!allowed(c.colorSchemes,p.colorScheme)||!allowed(c.motionPreferences,p.motion)||typeof p.highlights!=="boolean"||!allowed(c.focusLevels,p.focus))return;const r=document.documentElement;r.dataset.publisherReaderScheme=p.colorScheme;r.dataset.publisherReaderMotion=p.motion;r.dataset.publisherReaderFocus=p.focus;r.dataset.publisherReaderHighlights=p.highlights?"on":"off";r.style.setProperty("--publisher-reader-font-scale",String(p.fontScale/100));r.style.setProperty("--publisher-reader-font-family",font.family)}catch{}})();`;
 }
 
 export function PublisherReaderPrepaint({
   publicationId,
+  readerFontFamilies,
 }: {
   readonly publicationId: string;
+  readonly readerFontFamilies: readonly PublisherNextReaderFontFamily[];
 }): ReactElement {
   return (
     <script
       dangerouslySetInnerHTML={{
-        __html: createPublisherReaderPrepaintSource(publicationId),
+        __html: createPublisherReaderPrepaintSource(
+          publicationId,
+          readerFontFamilies,
+        ),
       }}
       data-publisher-reader-prepaint=""
     />

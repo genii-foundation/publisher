@@ -137,8 +137,10 @@ strong and code content, selection ranges, bookmark offsets, and assistive text.
 Publisher now applies one fully validated, publication-scoped preference
 document before body paint. Invalid or oversized storage leaves the server
 defaults untouched. The packed host verifies the actual selected background and
-text scale with hydration scripts blocked. Theme-declared font choices remain
-planned. Publication fonts, labels, colors, and defaults remain theme data.
+text scale with hydration scripts blocked. Theme API 2.0 now owns the ordered
+Reader font choices, labels, CSS families, and default. The server default,
+prepaint bootstrap, hydrated settings, and independently packed theme all use
+that same validated policy.
 
 ### Search and capability-sliced data
 

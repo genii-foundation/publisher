@@ -30,7 +30,21 @@ function executePrepaint({
   const attributes = Object.create(null);
   const properties = Object.create(null);
   const requestedKeys = [];
-  const source = createPublisherReaderPrepaintSource(publicationId);
+  const source = createPublisherReaderPrepaintSource(
+    publicationId,
+    Object.freeze([
+      Object.freeze({
+        id: "serif",
+        label: "Serif",
+        family: "Charter, serif",
+      }),
+      Object.freeze({
+        id: "field-sans",
+        label: "Field sans",
+        family: "Avenir Next, sans-serif",
+      }),
+    ]),
+  );
   vm.runInNewContext(source, {
     TextEncoder,
     document: {
@@ -60,15 +74,21 @@ function executePrepaint({
 
 test("Reader prepaint applies one fully valid publication scoped preference document", () => {
   const publicationId = "prepaint-proof";
-  const stored = serializeReaderPreferences({
-    schemaVersion: 1,
-    fontScale: 120,
-    fontFamilyId: "serif",
-    colorScheme: "black",
-    motion: "reduced",
-    highlights: false,
-    focus: "strong",
-  });
+  const stored = serializeReaderPreferences(
+    {
+      schemaVersion: 1,
+      fontScale: 120,
+      fontFamilyId: "field-sans",
+      colorScheme: "black",
+      motion: "reduced",
+      highlights: false,
+      focus: "strong",
+    },
+    {
+      defaultFontFamilyId: "serif",
+      fontFamilyIds: ["serif", "field-sans"],
+    },
+  );
   const result = executePrepaint({ publicationId, stored });
 
   assert.deepEqual(result.requestedKeys, [
@@ -82,6 +102,7 @@ test("Reader prepaint applies one fully valid publication scoped preference docu
   });
   assert.deepEqual({ ...result.properties }, {
     "--publisher-reader-font-scale": "1.2",
+    "--publisher-reader-font-family": "Avenir Next, sans-serif",
   });
   assert.doesNotMatch(result.source, /prepaint-proof.*<|<.*prepaint-proof/u);
 });

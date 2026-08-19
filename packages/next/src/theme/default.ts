@@ -50,6 +50,21 @@ const LIGHT_TOKENS: PublisherNextThemeTokens = Object.freeze({
       "SFMono-Regular, Consolas, Liberation Mono, monospace",
     baseSize: "1.0625rem",
     lineHeight: 1.72,
+    defaultReaderFontFamilyId: "serif",
+    readerFontFamilies: Object.freeze([
+      Object.freeze({
+        id: "serif",
+        label: "Serif",
+        family:
+          "Charter, Bitstream Charter, Sitka Text, Cambria, serif",
+      }),
+      Object.freeze({
+        id: "sans-serif",
+        label: "Sans serif",
+        family:
+          "Avenir Next, Avenir, Segoe UI, Helvetica Neue, sans-serif",
+      }),
+    ]),
   }),
   layout: Object.freeze({
     readingMeasure: "68ch",

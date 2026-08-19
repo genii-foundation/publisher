@@ -48,6 +48,7 @@ export type {
   PublisherNextExtensionRenderInput,
   PublisherNextExtensionSlot,
   PublisherNextJsonObject,
+  PublisherNextReaderFontFamily,
   PublisherNextTheme,
   PublisherNextThemeInstance,
   PublisherNextThemeTokens,

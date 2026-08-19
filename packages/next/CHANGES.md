@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Advanced the theme adapter API to 2.0 with validated ordered Reader font choices and an explicit default.
+- Applied the selected theme font before paint and through hydrated settings, with an independently packed custom theme browser proof.
 - Applied bounded publication-scoped Reader appearance preferences before body paint and verified them without hydration.
 - Corrected color scheme precedence so selected light, dark, and black palettes override initial inline theme defaults.
 - Advanced the host contract to 0.14.0 with awaited exact extension request dispatch through generated Proxy.

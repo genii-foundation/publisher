@@ -800,6 +800,8 @@ function createCrossTabBookmarkProof(reader, sectionPath) {
 async function assertHydratedReaderTools({
   bookmarkProof,
   browser,
+  readerFontFamily,
+  readerFontFamilyId,
   url,
 }) {
   const page = await openDevToolsPage(browser);
@@ -1560,6 +1562,48 @@ async function assertHydratedReaderTools({
       await wait(50);
     }
     assert.equal(darkPreference, true, "The default settings interface did not persist and apply color.");
+
+    const changedFont = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const labels = Array.from(document.querySelectorAll(".publisher-reader-settings label"));',
+        '  const select = labels.find((label) => label.textContent?.includes("Font"))?.querySelector("select");',
+        "  if (!(select instanceof HTMLSelectElement)) return false;",
+        '  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;',
+        `  setter?.call(select, ${JSON.stringify(readerFontFamilyId)});`,
+        '  select.dispatchEvent(new Event("change", { bubbles: true }));',
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(changedFont.result?.value, true);
+    let fontPreference;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const key = Object.keys(localStorage).find((candidate) => candidate.includes("reader.preferences"));',
+          "  const saved = key === undefined ? null : JSON.parse(localStorage.getItem(key));",
+          "  return {",
+          '    applied: document.documentElement.style.getPropertyValue("--publisher-reader-font-family"),',
+          "    computed: getComputedStyle(document.querySelector(\".publisher-manuscript\") ?? document.querySelector(\".publisher-root\")).fontFamily,",
+          "    persisted: saved?.fontFamilyId ?? null,",
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      fontPreference = evaluated.result?.value;
+      if (fontPreference?.persisted === readerFontFamilyId) break;
+      await wait(50);
+    }
+    assert.equal(fontPreference?.applied, readerFontFamily);
+    assert.equal(
+      fontPreference?.computed.replaceAll('"', ""),
+      readerFontFamily,
+    );
+    assert.equal(fontPreference?.persisted, readerFontFamilyId);
 
     const changedFocus = await page.send("Runtime.evaluate", {
       expression: [
@@ -2613,6 +2657,8 @@ async function assertHydratedReaderTools({
 async function assertReaderPreferencePrepaint({
   browser,
   publicationId,
+  readerFontFamily,
+  readerFontFamilyId,
   url,
 }) {
   const page = await openDevToolsPage(browser);
@@ -2629,7 +2675,7 @@ async function assertReaderPreferencePrepaint({
         `  localStorage.setItem(${JSON.stringify(storageKey)}, ${JSON.stringify(JSON.stringify({
           schemaVersion: 1,
           fontScale: 120,
-          fontFamilyId: "serif",
+          fontFamilyId: readerFontFamilyId,
           colorScheme: "black",
           motion: "reduced",
           highlights: false,
@@ -2655,6 +2701,7 @@ async function assertReaderPreferencePrepaint({
           "  return {",
           "    backgroundColor: style.backgroundColor,",
           "    focus: document.documentElement.dataset.publisherReaderFocus ?? null,",
+          '    fontFamily: document.documentElement.style.getPropertyValue("--publisher-reader-font-family"),',
           '    fontScale: document.documentElement.style.getPropertyValue("--publisher-reader-font-scale"),',
           "    highlights: document.documentElement.dataset.publisherReaderHighlights ?? null,",
           "    motion: document.documentElement.dataset.publisherReaderMotion ?? null,",
@@ -2675,6 +2722,7 @@ async function assertReaderPreferencePrepaint({
     assert.equal(result.motion, "reduced");
     assert.equal(result.focus, "strong");
     assert.equal(result.highlights, "off");
+    assert.equal(result.fontFamily, readerFontFamily);
     assert.equal(result.fontScale, "1.2");
     assert.equal(result.backgroundColor, "rgb(0, 0, 0)");
     assert.ok(result.scripts.length > 0);
@@ -3660,6 +3708,9 @@ export async function runPackagedHostProof(
   );
   assert.notEqual(homeRoute, undefined);
   const portableThemeAccent = "#6B3F84";
+  const portableReaderFontFamily =
+    "Trebuchet MS, Avenir Next, sans-serif";
+  const portableReaderFontFamilyId = "field-sans";
   const packedExtensionRenderSentinel =
     "PACKED_EXTENSION_SLOT_RENDERED";
   const packedExtensionClientRenderSentinel =
@@ -3744,6 +3795,19 @@ export async function runPackagedHostProof(
           '    monoFamily: "SFMono-Regular, Consolas, monospace",',
           '    baseSize: "1.0625rem",',
           "    lineHeight: 1.72,",
+          '    defaultReaderFontFamilyId: "serif",',
+          "    readerFontFamilies: Object.freeze([",
+          "      Object.freeze({",
+          '        id: "serif",',
+          '        label: "Field serif",',
+          '        family: "Charter, Cambria, serif",',
+          "      }),",
+          "      Object.freeze({",
+          `        id: "${portableReaderFontFamilyId}",`,
+          '        label: "Field sans",',
+          `        family: "${portableReaderFontFamily}",`,
+          "      }),",
+          "    ]),",
           "  }),",
           "  layout: Object.freeze({",
           '    readingMeasure: "68ch",',
@@ -3760,7 +3824,7 @@ export async function runPackagedHostProof(
           "  config: Object.freeze({}),",
           "  implementation: Object.freeze({",
           '    kind: "genii.publisher.next-theme",',
-          '    apiVersion: "1.0",',
+          '    apiVersion: "2.0",',
           "    configure() {",
           "      return Object.freeze({",
           "        valid: true,",
@@ -4800,6 +4864,8 @@ export async function runPackagedHostProof(
         await assertReaderPreferencePrepaint({
           browser,
           publicationId: reader.publicationId,
+          readerFontFamily: portableReaderFontFamily,
+          readerFontFamilyId: portableReaderFontFamilyId,
           url: `${host.origin}${homeRoute.path}`,
         });
         readerPrepaintVerified = true;
@@ -4814,6 +4880,8 @@ export async function runPackagedHostProof(
         await assertHydratedReaderTools({
           bookmarkProof: createCrossTabBookmarkProof(reader, sectionPath),
           browser,
+          readerFontFamily: portableReaderFontFamily,
+          readerFontFamilyId: portableReaderFontFamilyId,
           url: `${host.origin}${sectionPath}`,
         });
         readerToolsHydrationVerified = true;

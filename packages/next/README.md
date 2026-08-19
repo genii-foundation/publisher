@@ -500,6 +500,10 @@ const theme = resolveDefaultPublisherNextTheme({
 
 Custom theme packages return the complete closed token shape. The renderer rejects extra fields, accessors, mutable aliases, invalid CSS values, unreadable contrast, incompatible version ranges, and dimensions that could collapse the publication surface.
 
+Theme API 2.0 requires the theme to declare the ordered Reader font choices and
+their default. Themes written for API 1.0 must add this policy and update their
+adapter version before use.
+
 A separately published theme package can expose this complete adapter:
 
 ```ts
@@ -511,7 +515,7 @@ import {
 
 const implementation: PublisherNextTheme = {
   kind: "genii.publisher.next-theme",
-  apiVersion: "1.0",
+  apiVersion: "2.0",
   configure() {
     return validatePublisherNextThemeInstance({
       tokens: {
@@ -529,7 +533,20 @@ const implementation: PublisherNextTheme = {
           headingFamily: "Avenir Next, Segoe UI, sans-serif",
           monoFamily: "SFMono-Regular, Consolas, monospace",
           baseSize: "1.0625rem",
-          lineHeight: 1.72
+          lineHeight: 1.72,
+          defaultReaderFontFamilyId: "serif",
+          readerFontFamilies: [
+            {
+              id: "serif",
+              label: "Serif",
+              family: "Charter, Cambria, serif"
+            },
+            {
+              id: "field-sans",
+              label: "Field sans",
+              family: "Avenir Next, Segoe UI, sans-serif"
+            }
+          ]
         },
         layout: {
           readingMeasure: "68ch",

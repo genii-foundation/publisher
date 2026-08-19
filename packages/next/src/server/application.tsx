@@ -2842,6 +2842,10 @@ export async function createPublicationNextApplication(
             <head>
               <PublisherReaderPrepaint
                 publicationId={reader.publicationId}
+                readerFontFamilies={
+                  themeResult.value.instance.tokens.typography
+                    .readerFontFamilies
+                }
               />
             </head>
             <body>

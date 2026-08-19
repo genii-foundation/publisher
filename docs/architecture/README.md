@@ -57,5 +57,6 @@ These records define the accepted foundation of GENII Publisher.
 53. [ADR 0053: Reader transport and bookmark geometry](./0053-reader-transport-and-bookmark-geometry.md)
 54. [ADR 0054: Closed extension request handlers](./0054-closed-extension-request-handlers.md)
 55. [ADR 0055: Reader preference prepaint](./0055-reader-preference-prepaint.md)
+56. [ADR 0056: Theme declared Reader fonts](./0056-theme-declared-reader-fonts.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

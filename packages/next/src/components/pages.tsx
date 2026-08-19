@@ -715,6 +715,12 @@ function PublisherPageShell({
           publicationId={publication.id}
           publicationTitle={publication.title}
           readerBuildId={reader.buildId}
+          defaultReaderFontFamilyId={
+            theme.tokens.typography.defaultReaderFontFamilyId
+          }
+          readerFontFamilies={
+            theme.tokens.typography.readerFontFamilies
+          }
           audioPath="/publication-audio.json"
           progressPath="/publication-reader-progress.json"
           searchPath="/publication-reader-search.json"
