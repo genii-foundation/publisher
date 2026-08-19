@@ -12,19 +12,21 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 import {
-  inspectAbsoluteHttpUrl,
   validateAudioCatalogShape,
   type AudioCheckpoint,
   type AudioClip,
   type AudioClipCatalog,
   type Diagnostic,
-  type JSONValue,
   type Sha256Digest,
   type ValidationResult,
 } from "@genii-foundation/publisher-schema";
 
 import { validateAudioCheckpoint } from "./audio-checkpoint.js";
-import { hashCanonicalJson } from "./hashing.js";
+import {
+  audioCatalogSha256,
+  isPublicAudioObjectBaseUrl,
+  publicAudioObjectHref,
+} from "./audio-evidence.js";
 import { immutableSnapshot } from "./immutability.js";
 
 const CANONICAL_UTC_TIMESTAMP =
@@ -98,14 +100,6 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function catalogHash(catalog: AudioClipCatalog): Sha256Digest {
-  return hashCanonicalJson(catalog as unknown as JSONValue);
-}
-
-function objectHref(baseUrl: string, objectKey: string): string {
-  return `${baseUrl}/${objectKey}`;
-}
-
 function replacementClip(
   baseUrl: string,
   unit: AudioCheckpoint["units"][number],
@@ -113,7 +107,7 @@ function replacementClip(
   return {
     sectionId: unit.sectionId,
     audioVersionId: unit.audioVersionId,
-    href: objectHref(baseUrl, unit.audio.objectKey),
+    href: publicAudioObjectHref(baseUrl, unit.audio.objectKey),
     format: unit.audioFormat,
     byteSize: unit.audio.byteSize,
     timingsByteSize: unit.timings.byteSize,
@@ -147,7 +141,7 @@ export function planAudioCheckpointPromotion(
   const catalog = catalogResult.value;
   const checkpoint = checkpointResult.value;
   const diagnostics: Diagnostic[] = [];
-  const baseCatalogSha256 = catalogHash(catalog);
+  const baseCatalogSha256 = audioCatalogSha256(catalog);
 
   if (
     typeof captured.expectedBaseCatalogSha256 !== "string" ||
@@ -174,14 +168,7 @@ export function planAudioCheckpointPromotion(
     typeof captured.publicObjectBaseUrl === "string"
       ? captured.publicObjectBaseUrl
       : "";
-  const inspectedBaseUrl = inspectAbsoluteHttpUrl(publicObjectBaseUrl);
-  if (
-    !inspectedBaseUrl.valid ||
-    !publicObjectBaseUrl.startsWith("https://") ||
-    publicObjectBaseUrl.includes("?") ||
-    publicObjectBaseUrl.includes("#") ||
-    publicObjectBaseUrl.endsWith("/")
-  ) {
+  if (!isPublicAudioObjectBaseUrl(publicObjectBaseUrl)) {
     diagnostics.push(diagnostic(
       "audio_promotion.public_base.invalid",
       "/publicObjectBaseUrl",
@@ -337,7 +324,7 @@ export function planAudioCheckpointPromotion(
   };
   const candidateResult = validateAudioCatalogShape(candidateCatalog);
   if (!candidateResult.valid) return candidateResult;
-  const candidateCatalogSha256 = catalogHash(candidateCatalog);
+  const candidateCatalogSha256 = audioCatalogSha256(candidateCatalog);
 
   return immutableSnapshot({
     valid: true,

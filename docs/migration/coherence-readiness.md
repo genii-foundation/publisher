@@ -42,9 +42,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 32 upgraded | 32 | Publisher implements a stronger checked contract. |
+| 33 upgraded | 33 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 10 planned | 10 | Accepted Publisher scope is not implemented yet. |
+| 9 planned | 9 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -213,6 +213,14 @@ base catalog hash. It replaces only the selected clips, preserves every other
 clip and narrator, validates the candidate, and returns both catalog hashes. It
 does not contact storage or write the live catalog. ADR 0042 records the boundary.
 
+The pure narration publication guard now takes exact base and candidate catalog
+hashes, changed section, audio version, and spoken-text identities, validated
+checkpoints, the current publication and Reader build, and one canonical public
+object base. It checks every current narrator, refuses narrator removal, and
+requires the published URL, format, audio bytes, timing bytes, and duration to
+match immutable evidence exactly. Git comparison and checkpoint discovery remain
+author workflow responsibilities. ADR 0043 records the boundary.
+
 ### Synchronization
 
 The current Publisher candidate carries the closed synchronization capability
@@ -308,7 +316,7 @@ product decision:
 1. Add route-preserving playback intent.
 2. Add atomic offline package planning and official service worker integration.
 3. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
-4. Add exact-base promotion application and manuscript publication guards.
+4. Add exact-base promotion application.
 5. Adopt Coherence through a reviewed migration plan with dual-read or
     copy-and-verify state compatibility.
 
@@ -337,7 +345,7 @@ these concerns. It does not own the values that make Coherence itself.
 4. Complete local progress, preferences, bookmarks, ranges, and reactive stores.
 5. Add official renderer controls without weakening server-rendered reading.
 6. Add cross-tab synchronization notifications over the stable server routes.
-7. Add narration promotion and author publication guards.
+7. Add exact-base narration promotion application.
 8. Build offline dependency closure over the final route, Reader, and audio graph.
 9. Prove the Coherence Updates adapter and migration compatibility.
 10. Prove the same contracts with an unrelated second publication.

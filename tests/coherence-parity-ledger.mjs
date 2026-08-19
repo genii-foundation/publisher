@@ -625,9 +625,14 @@ export const AUDIO_PARITY = Object.freeze([
     id: "audio.publication.guard",
     capability: "Refusal to publish changed spoken content without matching reviewed narration evidence",
     home: "engine",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "Publisher can detect unknown catalog sections but cannot yet compare a Git base and current spoken inputs against immutable checkpoints.",
+    status: "upgraded",
+    why: "The pure guard binds the publication, Reader build, exact base and candidate catalog hashes, changed audio and spoken-text identities, every public narrator, and the exact checkpoint object URL, format, sizes, and duration. Git comparison and storage stay outside the engine.",
+    evidence: {
+      decision: "docs/architecture/0043-narration-publication-guard.md",
+      implementation: "packages/content/src/audio-publication.ts",
+      tests: "tests/audio-publication.test.mjs",
+    },
+    sourcePaths: ["scripts/audio/verify-manuscript-audio.ts"],
   },
 ]);
 

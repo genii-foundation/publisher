@@ -6,6 +6,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 - Added strict immutable narration checkpoint evidence validation without remote storage mutation.
 - Added exact-base selective narration promotion planning without storage or write authority.
+- Added a pure narration publication guard over exact catalogs, changed spoken units, and immutable checkpoints.
 
 ## 2026-08-18, GENII Foundation
 

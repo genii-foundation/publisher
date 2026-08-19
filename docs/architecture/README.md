@@ -44,5 +44,6 @@ These records define the accepted foundation of GENII Publisher.
 40. [ADR 0040: Lazy narration timings over existing text](./0040-lazy-narration-timings.md)
 41. [ADR 0041: Immutable audio checkpoint evidence](./0041-immutable-audio-checkpoints.md)
 42. [ADR 0042: Exact base selective audio promotion planning](./0042-exact-base-audio-promotion-planning.md)
+43. [ADR 0043: Narration publication evidence guard](./0043-narration-publication-guard.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.
