@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 20 upgraded | 20 | Publisher implements a stronger checked contract. |
+| 21 upgraded | 21 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 22 planned | 22 | Accepted Publisher scope is not implemented yet. |
+| 21 planned | 21 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -101,8 +101,10 @@ cross-section ranges before translating visible UTF-16 offsets into portable
 block anchors. Its viewport-contained capture editor stores an optional private
 note without invalidating the selected range. Exact and uniquely relocated
 ranges now receive reactive margin markers outside the manuscript DOM, including
-deterministic first measurement in background tabs. Virtualized presentation and
-secondary Reader surfaces remain planned.
+deterministic first measurement in background tabs. The complete 1,000-item
+collection now remains searchable and operable while a contained fixed-row
+viewport bounds mounted DOM and layout work. Secondary Reader surfaces remain
+planned.
 
 ### Preferences and focus
 
@@ -266,15 +268,14 @@ The following are accepted scope, not release blockers waiting for another
 product decision:
 
 1. Add publication heatmaps, recent sections, and next-section recommendations.
-2. Add virtualized bookmark presentation.
-3. Project the remaining capability-sliced client artifacts.
-4. Complete virtualized collections and focus markup.
-5. Add the default narration player and timing interaction.
-6. Add atomic offline package planning and official service worker integration.
-7. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
-8. Generalize audio checkpoint, promotion, and manuscript publication guards.
-9. Implement multi-view Updates and multi-section build support.
-10. Adopt Coherence through a reviewed migration plan with dual-read or
+2. Project the remaining capability-sliced client artifacts.
+3. Complete focus markup.
+4. Add the default narration player and timing interaction.
+5. Add atomic offline package planning and official service worker integration.
+6. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
+7. Generalize audio checkpoint, promotion, and manuscript publication guards.
+8. Implement multi-view Updates and multi-section build support.
+9. Adopt Coherence through a reviewed migration plan with dual-read or
     copy-and-verify state compatibility.
 
 ## Material that remains Coherence-owned

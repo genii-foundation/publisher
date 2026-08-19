@@ -378,6 +378,52 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   list-style: none;
 }
 
+.publisher-reader-bookmark-summary {
+  margin: 0;
+  color: var(--publisher-color-muted-text);
+  font-family: var(--publisher-font-mono);
+  font-size: 0.75rem;
+}
+
+.publisher-reader-bookmark-scroll {
+  max-height: min(24rem, 52vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-block: 1px solid var(--publisher-color-border);
+}
+
+.publisher-reader-bookmark-virtual-list {
+  position: relative;
+  width: 100%;
+}
+
+.publisher-reader-bookmark-virtual-list > li {
+  position: absolute;
+  inset: var(--publisher-bookmark-row-top) 0 auto;
+  height: 10rem;
+  overflow: hidden;
+  padding-block: 0.55rem;
+}
+
+.publisher-reader-bookmark-virtual-list q,
+.publisher-reader-bookmark-virtual-list p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.publisher-reader-bookmark-virtual-list q {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.publisher-reader-bookmark-virtual-list p {
+  margin-block: 0.35rem 0;
+  color: var(--publisher-color-muted-text);
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
 .publisher-reader-contents,
 .publisher-reader-breadcrumbs {
   display: grid;
@@ -757,6 +803,10 @@ html[data-publisher-reader-motion="reduced"] *::after {
     border-inline: 0;
     border-radius: calc(var(--publisher-control-radius) + 0.35rem) calc(var(--publisher-control-radius) + 0.35rem) 0 0;
     transform: none;
+  }
+
+  .publisher-reader-bookmark-scroll {
+    max-height: min(14rem, 26vh);
   }
 
   .publisher-attribution {

@@ -1708,6 +1708,136 @@ async function assertHydratedReaderTools({
         await wait(50);
       }
       assert.equal(hiddenMarkerCount, 0);
+      const fullCollectionTemplate = bookmarkProof.state.bookmarks["cross-tab-proof"];
+      const wroteFullBookmarkCollection = await peerPage.send("Runtime.evaluate", {
+        expression: [
+          "((key, publicationId, template) => {",
+          "  const bookmarks = {};",
+          "  const now = Date.now();",
+          "  for (let index = 0; index < 1000; index += 1) {",
+          '    const id = `stress-${String(index).padStart(4, "0")}`;',
+          "    bookmarks[id] = {",
+          "      ...template,",
+          "      id,",
+          "      createdAt: now - index,",
+          "      updatedAt: now - index,",
+          '      quote: `Full collection passage ${index + 1}: ${template.quote}`,',
+          '      ...(index % 3 === 0 ? { note: `Private note ${index + 1}` } : {}),',
+          "    };",
+          "  }",
+          "  localStorage.setItem(key, JSON.stringify({ schemaVersion: 1, publicationId, bookmarks }));",
+          "  return Object.keys(bookmarks).length;",
+          `})(${JSON.stringify(bookmarkProof.storageKey)}, ${JSON.stringify(bookmarkProof.state.publicationId)}, ${JSON.stringify(fullCollectionTemplate)})`,
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(wroteFullBookmarkCollection.result?.value, 1000);
+      const openedFullBookmarkCollection = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const bookmarks = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+          '    .find((button) => button.textContent?.includes("Bookmarks"));',
+          "  bookmarks?.click();",
+          "  return bookmarks !== undefined;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(openedFullBookmarkCollection.result?.value, true);
+      let clearedFullCollectionQuery = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const input = document.querySelector(".publisher-reader-bookmark-tools input[type=search]");',
+            "  if (!(input instanceof HTMLInputElement)) return false;",
+            '  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;',
+            '  setter?.call(input, "");',
+            '  input.dispatchEvent(new Event("input", { bubbles: true }));',
+            "  return true;",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        clearedFullCollectionQuery = evaluated.result?.value === true;
+        if (clearedFullCollectionQuery) break;
+        await wait(50);
+      }
+      assert.equal(clearedFullCollectionQuery, true);
+      let fullCollectionGeometry;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const panel = document.querySelector(".publisher-reader-panel");',
+            '  const scroll = document.querySelector(".publisher-reader-bookmark-scroll");',
+            '  const list = document.querySelector(".publisher-reader-bookmark-virtual-list");',
+            '  const rows = document.querySelectorAll(".publisher-reader-bookmark-virtual-list > li");',
+            "  const panelBox = panel?.getBoundingClientRect();",
+            "  const scrollBox = scroll?.getBoundingClientRect();",
+            "  return {",
+            '    summary: document.querySelector(".publisher-reader-bookmark-summary")?.textContent ?? "",',
+            "    renderedRows: rows.length,",
+            "    totalHeight: list?.getBoundingClientRect().height ?? 0,",
+            "    scrollHeight: scroll?.scrollHeight ?? 0,",
+            "    clientHeight: scroll?.clientHeight ?? 0,",
+            "    contained: panelBox !== undefined && scrollBox !== undefined && scrollBox.left >= panelBox.left && scrollBox.right <= panelBox.right && scrollBox.top >= panelBox.top && scrollBox.bottom <= panelBox.bottom,",
+            '    rowPosition: rows[0] === undefined ? "" : getComputedStyle(rows[0]).position,',
+            "  };",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        fullCollectionGeometry = evaluated.result?.value;
+        if (fullCollectionGeometry?.summary === "1,000 saved passages") break;
+        await wait(50);
+      }
+      assert.equal(fullCollectionGeometry?.summary, "1,000 saved passages");
+      assert.ok(fullCollectionGeometry.renderedRows > 0);
+      assert.ok(fullCollectionGeometry.renderedRows < 100);
+      assert.equal(fullCollectionGeometry.totalHeight, 160000);
+      assert.ok(fullCollectionGeometry.scrollHeight > fullCollectionGeometry.clientHeight);
+      assert.ok(fullCollectionGeometry.clientHeight > 0 && fullCollectionGeometry.clientHeight <= 384);
+      assert.equal(fullCollectionGeometry.contained, true);
+      assert.equal(fullCollectionGeometry.rowPosition, "absolute");
+      const scrolledFullBookmarkCollection = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const scroll = document.querySelector(".publisher-reader-bookmark-scroll");',
+          "  if (!(scroll instanceof HTMLElement)) return false;",
+          "  scroll.scrollTop = scroll.scrollHeight;",
+          '  scroll.dispatchEvent(new Event("scroll", { bubbles: true }));',
+          "  return true;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(scrolledFullBookmarkCollection.result?.value, true);
+      let finalVirtualBookmark;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const rows = Array.from(document.querySelectorAll(".publisher-reader-bookmark-virtual-list > li"));',
+            '  const row = rows.find((candidate) => candidate.textContent?.includes("Full collection passage 1000"));',
+            "  return {",
+            '    position: row?.getAttribute("aria-posinset") ?? "",',
+            '    quote: row?.querySelector("q")?.textContent ?? "",',
+            '    setSize: row?.getAttribute("aria-setsize") ?? "",',
+            "  };",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        finalVirtualBookmark = evaluated.result?.value;
+        if (finalVirtualBookmark?.position === "1000") break;
+        await wait(50);
+      }
+      assert.deepEqual(finalVirtualBookmark, {
+        position: "1000",
+        quote: `Full collection passage 1000: ${fullCollectionTemplate.quote}`,
+        setSize: "1000",
+      });
     } finally {
       peerPage.close();
     }

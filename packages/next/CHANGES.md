@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Added a contained fixed-row virtual bookmark list that preserves complete thousand-item query, export, deletion, and synchronization semantics.
+- Extended the clean packed-host Chrome proof through a reactive 1,000-bookmark peer document, bounded mounted rows, mobile containment, and accessible final-item identity.
 - Added exact and uniquely relocated bookmark margin markers without modifying or painting the manuscript text subtree.
 - Extended the clean packed-host Chrome proof through background-tab measurement, mobile marker geometry, bookmark-panel navigation, and preference-controlled removal.
 - Added a focused, mobile-contained optional note editor to canonical passage capture without invalidating the selected range.

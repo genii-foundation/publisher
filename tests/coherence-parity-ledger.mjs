@@ -226,8 +226,13 @@ export const READER_PARITY = Object.freeze([
     id: "reader.bookmarks.large_collections",
     capability: "Bounded thousand-item bookmark collections with saved-text search and virtualization",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "The official Reader queries the complete bounded document while mounting only a fixed, overscanned viewport, preserves full collection operations, exposes logical position and size to assistive technology, and contains the scroll surface on mobile.",
+    evidence: {
+      decision: "docs/architecture/0035-virtualized-bookmark-collection.md",
+      renderer: "packages/next/src/client/reader-bookmark-list.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
     sourcePaths: ["src/components/ToolbarBookmarksIsland.tsx", "src/lib/reader-bookmarks.ts"],
   },
   {

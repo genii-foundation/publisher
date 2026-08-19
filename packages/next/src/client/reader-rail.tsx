@@ -98,6 +98,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { PublisherReaderBookmarkList } from "./reader-bookmark-list.js";
 import { PublisherReaderBookmarkMarkers } from "./reader-bookmark-markers.js";
 import {
   createPublisherReaderStore,
@@ -1365,15 +1366,17 @@ export function PublisherReaderRail({
                   <button className="publisher-reader-secondary-action" onClick={(event) => { bookmarkDeleteTriggerRef.current = event.currentTarget; setBookmarkDeletePending({ kind: "all" }); }} type="button">Remove all saved passages</button>
                 </div>
                 {bookmarks.length === 0 ? <p>No saved passages match this search.</p> : (
-                  <ol className="publisher-reader-bookmarks">
-                    {bookmarks.map((bookmark) => (
-                      <li key={bookmark.id}>
-                        <a href={bookmark.href}><q>{bookmark.quote}</q></a>
-                        {bookmark.note === undefined ? null : <p>{bookmark.note}</p>}
-                        <button className="publisher-reader-secondary-action" aria-label={`Remove saved passage: ${bookmark.quote.slice(0, 80)}`} onClick={(event) => { bookmarkDeleteTriggerRef.current = event.currentTarget; setBookmarkDeletePending({ kind: "one", id: bookmark.id }); }} type="button">Remove</button>
-                      </li>
-                    ))}
-                  </ol>
+                  <>
+                    <p className="publisher-reader-bookmark-summary">{new Intl.NumberFormat().format(bookmarks.length)} saved passage{bookmarks.length === 1 ? "" : "s"}</p>
+                    <PublisherReaderBookmarkList
+                      bookmarks={bookmarks}
+                      queryKey={bookmarkQuery}
+                      onRemove={(bookmark, trigger) => {
+                        bookmarkDeleteTriggerRef.current = trigger;
+                        setBookmarkDeletePending({ kind: "one", id: bookmark.id });
+                      }}
+                    />
+                  </>
                 )}
                 {bookmarkDeletePending === null ? null : (
                   <section className="publisher-reader-bookmark-delete" role="dialog" aria-modal="true" aria-label="Confirm saved passage removal">
