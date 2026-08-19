@@ -54,8 +54,8 @@ If you wish to allow use of your version of this file only under the terms of th
 
 export const COHERENCE_PARITY_SOURCE = Object.freeze({
   repository: "https://github.com/genii-foundation/coherence-thesis",
-  ref: "c60aa2bca5aa3cc7abf0d9bd661538a247315f59",
-  observedThrough: "2026-08-03",
+  ref: "7e50161cecc0ce6039c36e4738d8c9fc90710e62",
+  observedThrough: "2026-08-18",
 });
 
 export const READER_PARITY = Object.freeze([
@@ -362,9 +362,9 @@ export const READER_PARITY = Object.freeze([
     id: "reader.updates.multiple_views",
     capability: "Paginated publication Updates and a derived literary view",
     home: "renderer",
-    status: "blocked",
-    blockedBy: "#16",
-    why: "The renderer supports one closed Updates page, but the host contract cannot configure it and the route model cannot express both current views.",
+    status: "upgraded",
+    why: "Author-owned catalogs now supply stable named views, Publisher binds them to the Reader build, and the generated host expands bounded pagination without importing publication history rules.",
+    evidence: { file: "packages/next/src/routes.ts" },
     sourcePaths: ["src/app/updates/page.tsx", "src/app/updates/literary/page.tsx"],
   },
 ]);

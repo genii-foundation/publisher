@@ -68,15 +68,14 @@ A manifest that exists but cannot be parsed is refused rather than treated as
 declaring nothing. Returning no protection from an unreadable manifest would turn
 a typo into an unprotected tree.
 
-An Updates route is not servable by the Next renderer. If your manifest declares
-`routes.updates`, `build` refuses before writing anything and names the route,
-because writing the artifact would leave a host that fails to start. Updates
-support is a known gap rather than a bug in your manifest.
+An Updates route requires a top level `updates` block and a catalog written by
+the publication's authoring pipeline. `build` validates the catalog, binds it to
+the Reader build, and writes the artifact the Next host imports. The engine
+records the declared adapter for provenance but never executes it.
 
-If you want a working publication to start from, copy `fixtures/canonical-tide-tables`.
-It is the one fixture the shipped renderer can serve end to end. The other two
-declare Updates routes and exist to exercise the protocol rather than to be
-copied.
+Use `fixtures/canonical-field-notes` for a compact single Updates view, or
+`fixtures/declared-night-dispatch` for named ordinary and literary views with
+pagination. `fixtures/canonical-tide-tables` proves Updates remains optional.
 
 Three things that catch people, all refused with the file and the field named:
 
@@ -455,16 +454,9 @@ refuses an artifact containing anything else. That refusal happens before a byte
 is written, because the alternative is a successful build and a host that will not
 boot, which is a much worse place to find out.
 
-```
-/home/you/estuary cannot serve this publication.
-  host.route_kind_unsupported   /routes/active
-    This publication has 1 updates route(s) that @genii-foundation/publisher-next
-    cannot serve: /updates. Writing the artifact would leave a host that fails to
-    start, so nothing has been written. Remove the route from your publication
-    manifest, or use a renderer that serves it.
-```
-
-`status` reports the same thing under "This host cannot serve".
+The official Next renderer declares home, work, collection, section, and Updates
+routes. A third party renderer may support a smaller set. `status` reports any
+unsupported route or generated data artifact before a build writes anything.
 
 A renderer that declares no capability set at all is refused rather than assumed
 capable. An absent declaration and a claim of full support are different claims,

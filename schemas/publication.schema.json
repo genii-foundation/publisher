@@ -61,6 +61,9 @@
     "audio": {
       "$ref": "#/$defs/audio"
     },
+    "updates": {
+      "$ref": "#/$defs/updates"
+    },
     "sync": {
       "$ref": "#/$defs/sync"
     },
@@ -441,6 +444,23 @@
           "$ref": "#/$defs/relativePath"
         }
       }
+    },
+    "updates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter",
+        "catalog"
+      ],
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/packageReference"
+        },
+        "catalog": {
+          "$ref": "#/$defs/relativePath"
+        }
+      },
+      "description": "An authoring pipeline and its plain Updates catalog. The adapter is recorded for provenance and never executed by the engine."
     },
     "sync": {
       "type": "object",

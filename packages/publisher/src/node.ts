@@ -36,6 +36,16 @@ export {
   buildSyncEnvelope,
   resolvePublicationSync,
 } from "./node/sync.js";
+export {
+  buildUpdatesEnvelope,
+  resolvePublicationUpdates,
+} from "./node/updates.js";
+export type {
+  BuildUpdatesEnvelopeInput,
+  BuiltUpdatesEnvelope,
+  ResolvedPublicationUpdates,
+  ResolvePublicationUpdatesInput,
+} from "./node/updates.js";
 export type {
   BuildSyncEnvelopeInput,
   BuiltSyncEnvelope,
@@ -47,6 +57,7 @@ export {
 export {
   AUDIO_DATA_ARTIFACT,
   SEARCH_DATA_ARTIFACT,
+  UPDATES_DATA_ARTIFACT,
   assertHostCanCarryDataArtifact,
   assertHostCanServe,
   findUnsupportedHostFeatures,
@@ -86,6 +97,7 @@ export type {
 } from "./node/compile.js";
 export type {
   LoadedPublicationCompilationSources,
+  LoadedUpdatesCatalog,
   LoadPublicationCompilationSourcesInput,
   LoadPublicationCompilationSourcesResult,
   PublicationSourceLoaderLimits,

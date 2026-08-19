@@ -199,7 +199,7 @@ test("the real renderer takes a publication from nothing to a current artifact",
     readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
   );
   assert.equal(state.renderer, realRenderer);
-  assert.equal(state.hostContractVersion, "0.2.0");
+  assert.equal(state.hostContractVersion, "0.3.0");
 
   // Status now wants an artifact.
   const middle = run(hostRoot, ["status"]);
@@ -300,7 +300,7 @@ test("rolling back an initialization of the real contract removes all of it", (t
   );
 });
 
-test("the real renderer refuses a publication it cannot serve", (t) => {
+test("the real renderer serves a publication with materialized Updates", (t) => {
   const hostRoot = realHost(t, {
     publication: join(repositoryRoot, "fixtures", "canonical-field-notes"),
   });
@@ -313,14 +313,9 @@ test("the real renderer refuses a publication it cannot serve", (t) => {
   commitAll(hostRoot, "initialize");
 
   const built = run(hostRoot, ["build"]);
-  assert.equal(built.status, 1, `must refuse:\n${built.stdout}`);
-  assert.match(built.stderr, /cannot serve/u);
-  assert.match(built.stderr, /updates route/u);
-  // Nothing written, so the host is still whatever it was.
-  assert.equal(
-    existsSync(join(hostRoot, "publication-reader.json")),
-    false,
-  );
+  assert.equal(built.status, 0, built.stderr);
+  assert.ok(existsSync(join(hostRoot, "publication-reader.json")));
+  assert.ok(existsSync(join(hostRoot, "publication-updates.json")));
 });
 
 // ------------------------------------------- the stubs must match reality

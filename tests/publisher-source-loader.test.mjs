@@ -3121,10 +3121,11 @@ test("private filesystem seam opens each declared source once and invokes two bo
     loaded.sources.map(({ path }) => path),
     DECLARED_PATHS,
   );
-  assert.equal(openCalls.size, DECLARED_PATHS.length);
-  assert.equal(readCalls.size, DECLARED_PATHS.length);
-  assert.equal(closeCalls.size, DECLARED_PATHS.length);
-  assert.equal(descriptorStatCalls.size, DECLARED_PATHS.length);
+  const declaredFileCount = DECLARED_PATHS.length + 1;
+  assert.equal(openCalls.size, declaredFileCount);
+  assert.equal(readCalls.size, declaredFileCount);
+  assert.equal(closeCalls.size, declaredFileCount);
+  assert.equal(descriptorStatCalls.size, declaredFileCount);
   assert.ok(directoryReadCalls.size > 0);
   for (const count of directoryReadCalls.values()) {
     assert.equal(count, 1, "A stable directory was enumerated twice.");
@@ -3151,6 +3152,8 @@ test("private filesystem seam opens each declared source once and invokes two bo
       maximums.get(absolutePath),
       absolutePath.endsWith(".md")
         ? PUBLISHER_SOURCE_LOADER_LIMITS.maximumManuscriptBytes
+        : absolutePath.endsWith("publishing/updates.json")
+          ? PUBLISHER_SOURCE_LOADER_LIMITS.maximumUpdatesCatalogBytes
         : PUBLISHER_SOURCE_LOADER_LIMITS.maximumManifestBytes,
       `${absolutePath} did not receive its role-specific read bound`,
     );

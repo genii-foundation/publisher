@@ -627,7 +627,7 @@ test("Updates content stays inside the engine owned page shell", async () => {
   const metadata = await application.generateMetadata({
     params: Promise.resolve({ segments: ["updates"] }),
   });
-  assert.equal(metadata.title, "Updates | Renderer Proof");
+  assert.equal(metadata.title, "Publication Updates | Renderer Proof");
 });
 
 test("Updates load once and bind their snapshot to application identity", async () => {

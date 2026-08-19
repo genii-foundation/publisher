@@ -2,6 +2,11 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher Next.js renderer is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-18, GENII Foundation
+
+- Advanced the host contract to 0.3.0 with a server-side Updates artifact and a sequential migration edge.
+- Rendered build-bound named Updates views, expanded bounded pagination into static routes, and kept metadata and navigation renderer owned.
+
 ## 2026-08-13, GENII Foundation
 
 - Advanced the host contract to 0.2.0 with a required public destination for the lazy, Reader-build-bound search artifact.

@@ -25,6 +25,8 @@ import {
   publicationValidator,
   readerEnvelopeValidator,
   syncEnvelopeValidator,
+  updatesCatalogValidator,
+  updatesEnvelopeValidator,
   workValidator,
 } from "./generated-validators.js";
 import type {
@@ -40,6 +42,8 @@ import type {
   ManifestKind,
   PublicationManifest,
   SyncEnvelope,
+  UpdatesCatalog,
+  UpdatesEnvelope,
   ValidationResult,
   WorkManifest,
 } from "./types.js";
@@ -714,6 +718,18 @@ export function validateSyncEnvelopeShape(
   input: unknown,
 ): ValidationResult<SyncEnvelope> {
   return validateShape(syncEnvelopeValidator, input);
+}
+
+export function validateUpdatesCatalogShape(
+  input: unknown,
+): ValidationResult<UpdatesCatalog> {
+  return validateShape(updatesCatalogValidator, input);
+}
+
+export function validateUpdatesEnvelopeShape(
+  input: unknown,
+): ValidationResult<UpdatesEnvelope> {
+  return validateShape(updatesEnvelopeValidator, input);
 }
 
 export function validateManifestShape<K extends ManifestKind>(

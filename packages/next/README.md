@@ -501,9 +501,9 @@ The host imports that package explicitly and passes `theme` to `createPublicatio
 
 ## Updates
 
-If the reader declares an Updates route, the host must supply one compatible Updates adapter. If it does not declare that route, supplying an adapter is an error. GENII Publisher never fabricates publication history.
+If the reader declares an Updates route, the host must supply either one compatible Updates adapter or a validated Updates envelope bound to that Reader build. Supplying both is an error. The generated host uses the envelope written by the Publisher build, so no authoring adapter executes inside Next. GENII Publisher never fabricates publication history.
 
-The adapter loads a closed plain-data view once while the application is created. GENII Publisher validates and deeply freezes the result, hashes it into `manifest.updates.viewHash` and the application build identity, then renders every element itself. Repeated page renders reuse that snapshot. Adapters cannot return React nodes, metadata, scripts, styles, HTML, event handlers, or arbitrary element properties. Text that resembles markup remains escaped text.
+Each named view is loaded once while the application is created. GENII Publisher validates and freezes the result, hashes all views into `manifest.updates.viewHash` and the application build identity, then renders every element itself. A declared pagination template expands into static pages from page two onward, while the canonical route owns page one. Repeated page renders reuse the snapshot. Adapters cannot return React nodes, metadata, scripts, styles, HTML, event handlers, or arbitrary element properties. Text that resembles markup remains escaped text.
 
 ```ts
 import type {
@@ -557,6 +557,9 @@ const result = await createPublicationNextApplication({
   updates,
 });
 ```
+
+Generated hosts instead pass the materialized envelope as `updatesData`. Its
+publication and Reader build identities must match exactly.
 
 ## Continuity
 

@@ -18,5 +18,6 @@ These records define the accepted foundation of GENII Publisher.
 14. [ADR 0014: Narration and synchronization boundary](./0014-narration-boundary.md)
 15. [ADR 0015: Opinionated reader application and parity boundary](./0015-opinionated-reader-application.md)
 16. [ADR 0016: Declared Markdown section structure](./0016-declared-markdown-section-structure.md)
+17. [ADR 0017: Updates catalog and rendering boundary](./0017-updates-catalog-and-rendering-boundary.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

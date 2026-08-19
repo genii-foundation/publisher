@@ -56,6 +56,8 @@ export interface HostCapabilities {
 export const AUDIO_DATA_ARTIFACT = "audio";
 /** The data artifact identifier lazy full-text search is published under. */
 export const SEARCH_DATA_ARTIFACT = "search";
+/** The data artifact identifier Updates is published under. */
+export const UPDATES_DATA_ARTIFACT = "updates";
 
 export interface UnsupportedHostFeature {
   /** What the artifact contains that the host cannot serve. */

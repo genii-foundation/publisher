@@ -139,6 +139,11 @@ export interface PublisherNextSectionPage
 export interface PublisherNextUpdatesPage
   extends PublisherNextPageBase {
   readonly kind: "updates";
+  readonly viewId: string;
+  readonly pageNumber: number;
+  readonly pageSize?: number;
+  readonly previousPath?: string;
+  readonly nextPath?: string;
 }
 
 export interface PublisherNextUpdatesEntry {
@@ -310,4 +315,5 @@ export interface CreatePublicationNextApplicationOptions {
   readonly reader: unknown;
   readonly theme?: ResolvedPublisherNextTheme;
   readonly updates?: ResolvedPublisherNextUpdates;
+  readonly updatesData?: unknown;
 }

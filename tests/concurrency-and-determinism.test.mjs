@@ -74,9 +74,9 @@ const expectedDigests = Object.freeze({
   // Updates targets now carry their stable view identity, so these two Reader
   // artifacts moved together. Remeasured on 22.12.0, 24.18.0, and 26.4.0.
   "canonical-field-notes":
-    "dcc268d4ceb100671132a77e6daacdd0",
+    "6ca79b38cfe18e38697c696cffac15f8",
   "declared-night-dispatch":
-    "aa20f88a42b68f8eb1d3b0646763967c",
+    "520e15c5f7ca6d492a9b46f08fd9c773",
   "canonical-narrated-tides":
     "4a26cdd81b0374c8c2ef4140d086a7b0",
 });

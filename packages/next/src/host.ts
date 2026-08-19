@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.2.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.3.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -81,6 +81,10 @@ export const PUBLISHER_NEXT_AUDIO_DATA_PATH =
 export const PUBLISHER_NEXT_SYNC_DATA_PATH =
   "public/publication-sync.json";
 
+/** Server-side Updates data bound to the Reader build. */
+export const PUBLISHER_NEXT_UPDATES_DATA_PATH =
+  "publication-updates.json";
+
 export interface PublisherNextHostCapabilities {
   /**
    * Route target kinds the generated host can serve.
@@ -114,14 +118,13 @@ export interface PublisherNextHostCapabilities {
  * engine must be able to decide what a host can serve without executing anything
  * that package supplies.
  *
- * Updates is deliberately absent. Supporting it means deciding how an author
- * supplies Updates data, which is a product question rather than an omission to
- * paper over.
+ * Updates is served from a materialized artifact. The authoring adapter that
+ * interprets source history never runs in this host.
  */
 export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
   Object.freeze({
-    routeKinds: Object.freeze(["home", "work", "collection", "section"]),
-    dataArtifacts: Object.freeze(["audio", "search", "sync"]),
+    routeKinds: Object.freeze(["home", "work", "collection", "section", "updates"]),
+    dataArtifacts: Object.freeze(["audio", "search", "sync", "updates"]),
   });
 
 export interface PublisherNextHostMigration {
@@ -147,9 +150,15 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
   Object.freeze([
     Object.freeze({
       from: "0.1.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.2.0",
       summary:
         "Add the required lazy search artifact destination to the official host contract.",
+    }),
+    Object.freeze({
+      from: "0.2.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Add the server-side Updates artifact and connect it to the generated application.",
     }),
   ]);
 
@@ -188,6 +197,8 @@ export interface PublisherNextHostTemplate {
   readonly audioDataPath?: string;
   /** Where the sync envelope belongs, when this renderer can serve one. */
   readonly syncDataPath?: string;
+  /** Where the server-side Updates envelope belongs. */
+  readonly updatesDataPath?: string;
   readonly files: readonly PublisherNextHostFile[];
 }
 
@@ -230,9 +241,13 @@ export function createPublisherNextHostTemplate(
       path: "next.config.mjs",
       contents: lines(
         `import reader from "./${PUBLISHER_NEXT_READER_DATA_PATH}" with { type: "json" };`,
+        'import { existsSync, readFileSync } from "node:fs";',
+        'import { join } from "node:path";',
         'import { createPublisherNextConfig, createPublisherNextRoutePlan } from "@genii-foundation/publisher-next/config";',
         "",
-        "const routePlan = createPublisherNextRoutePlan(reader);",
+        `const updatesPath = join(process.cwd(), "${PUBLISHER_NEXT_UPDATES_DATA_PATH}");`,
+        'const updatesData = existsSync(updatesPath) ? JSON.parse(readFileSync(updatesPath, "utf8")) : undefined;',
+        "const routePlan = createPublisherNextRoutePlan(reader, updatesData);",
         "if (!routePlan.valid) {",
         "  throw new Error(JSON.stringify(routePlan.diagnostics));",
         "}",
@@ -295,10 +310,14 @@ export function createPublisherNextHostTemplate(
     {
       path: "publisher-application.js",
       contents: lines(
+        'import { existsSync, readFileSync } from "node:fs";',
+        'import { join } from "node:path";',
         `import reader from "./${PUBLISHER_NEXT_READER_DATA_PATH}" with { type: "json" };`,
         'import { createPublicationNextApplication } from "@genii-foundation/publisher-next/server";',
         "",
-        "const created = await createPublicationNextApplication({ reader });",
+        `const updatesPath = join(process.cwd(), "${PUBLISHER_NEXT_UPDATES_DATA_PATH}");`,
+        'const updatesData = existsSync(updatesPath) ? JSON.parse(readFileSync(updatesPath, "utf8")) : undefined;',
+        "const created = await createPublicationNextApplication({ reader, updatesData });",
         "if (!created.valid) {",
         "  throw new Error(JSON.stringify(created.diagnostics));",
         "}",
@@ -503,6 +522,7 @@ export function createPublisherNextHostTemplate(
     searchDataPath: PUBLISHER_NEXT_SEARCH_DATA_PATH,
     audioDataPath: PUBLISHER_NEXT_AUDIO_DATA_PATH,
     syncDataPath: PUBLISHER_NEXT_SYNC_DATA_PATH,
+    updatesDataPath: PUBLISHER_NEXT_UPDATES_DATA_PATH,
     files: Object.freeze(
       files.map((file) => Object.freeze({ ...file })),
     ),

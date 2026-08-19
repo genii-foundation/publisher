@@ -31,6 +31,7 @@ import {
 import type {
   PublisherNextPage,
   PublisherNextThemeInstance,
+  PublisherNextUpdatesPage,
   PublisherNextUpdatesView,
 } from "../types.js";
 import { PublisherAttribution } from "./attribution.js";
@@ -476,8 +477,10 @@ function SectionPage({
 
 function UpdatesPage({
   updates,
+  page,
 }: {
   readonly updates: PublisherNextUpdatesView;
+  readonly page: PublisherNextUpdatesPage;
 }): ReactElement {
   return (
     <section className="publisher-updates">
@@ -520,6 +523,16 @@ function UpdatesPage({
           ))}
         </ol>
       )}
+      {page.previousPath === undefined && page.nextPath === undefined ? null : (
+        <nav aria-label="Updates pagination">
+          {page.previousPath === undefined ? null : (
+            <a href={page.previousPath}>Previous updates</a>
+          )}
+          {page.nextPath === undefined ? null : (
+            <a href={page.nextPath}>Next updates</a>
+          )}
+        </nav>
+      )}
     </section>
   );
 }
@@ -558,7 +571,7 @@ async function PageBody({
           "The Updates route has no configured renderer.",
         );
       }
-      return <UpdatesPage updates={updates} />;
+      return <UpdatesPage updates={updates} page={page} />;
   }
 }
 

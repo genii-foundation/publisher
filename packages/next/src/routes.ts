@@ -13,6 +13,7 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import {
   normalizePortableRepositoryText,
+  validateUpdatesEnvelopeShape,
 } from "@genii-foundation/publisher-schema";
 import type {
   ContentRoute,
@@ -20,6 +21,21 @@ import type {
   PublicationReaderEnvelope,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
+
+type PlannedRoute = ContentRoute | {
+  readonly path: string;
+  readonly target: {
+    readonly kind: "updates";
+    readonly viewId: string;
+    readonly pagination: {
+      readonly path: string;
+      readonly pageSize: number;
+    };
+    readonly pageNumber: number;
+    readonly previousPath?: string;
+    readonly nextPath?: string;
+  };
+};
 
 import type { PublisherNextRouteParams } from "./types.js";
 
@@ -31,7 +47,7 @@ export interface PublisherNextRoutePlan {
   ) =>
     | {
         readonly status: "resolved";
-        readonly route: ContentRoute;
+        readonly route: PlannedRoute;
       }
     | {
         readonly status: "not-found";
@@ -171,6 +187,7 @@ function inspectSegments(
 
 export function createPublisherNextRoutePlan(
   reader: PublicationReaderEnvelope,
+  updatesData?: unknown,
 ): ValidationResult<PublisherNextRoutePlan> {
   const nonRootSlashPolicies = new Set(
     reader.routes.active
@@ -185,15 +202,155 @@ export function createPublisherNextRoutePlan(
         : nonRootSlashPolicies.has(true)
           ? "trailing"
           : "no-trailing";
-  const routesBySegments = new Map<string, ContentRoute>();
+  const routes: PlannedRoute[] = [...reader.routes.active];
+  if (updatesData !== undefined) {
+    const validated = validateUpdatesEnvelopeShape(updatesData);
+    if (!validated.valid) {
+      return validated;
+    }
+    if (
+      validated.value.publicationId !== reader.publicationId ||
+      validated.value.buildId !== reader.buildId
+    ) {
+      return Object.freeze({
+        valid: false as const,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.updates.data_stale",
+            "/updatesData",
+            "The Updates artifact is not bound to this Reader build.",
+            "identity",
+            {},
+          ),
+        ]),
+      });
+    }
+    const expectedViewIds = new Set(
+      reader.routes.active.flatMap((route) =>
+        route.target.kind === "updates"
+          ? [route.target.viewId]
+          : [],
+      ),
+    );
+    const seenViewIds = new Set<string>();
+    for (const [index, view] of validated.value.views.entries()) {
+      if (seenViewIds.has(view.id)) {
+        return Object.freeze({
+          valid: false as const,
+          diagnostics: Object.freeze([
+            diagnostic(
+              "next.updates.view_duplicate",
+              `/updatesData/views/${index}/id`,
+              `The Updates artifact declares view "${view.id}" more than once.`,
+              "uniqueItems",
+              { viewId: view.id },
+            ),
+          ]),
+        });
+      }
+      if (!expectedViewIds.has(view.id)) {
+        return Object.freeze({
+          valid: false as const,
+          diagnostics: Object.freeze([
+            diagnostic(
+              "next.updates.view_undeclared",
+              `/updatesData/views/${index}/id`,
+              `The Updates artifact declares view "${view.id}" without a matching Reader route.`,
+              "route",
+              { viewId: view.id },
+            ),
+          ]),
+        });
+      }
+      seenViewIds.add(view.id);
+    }
+    for (const viewId of expectedViewIds) {
+      if (!seenViewIds.has(viewId)) {
+        return Object.freeze({
+          valid: false as const,
+          diagnostics: Object.freeze([
+            diagnostic(
+              "next.updates.view_missing",
+              "/updatesData/views",
+              `Reader Updates route "${viewId}" has no matching artifact view.`,
+              "required",
+              { viewId },
+            ),
+          ]),
+        });
+      }
+    }
+    const viewById = new Map(
+      validated.value.views.map((view) => [view.id, view] as const),
+    );
+    for (const route of reader.routes.active) {
+      if (
+        route.target.kind !== "updates" ||
+        route.target.pagination === undefined
+      ) {
+        continue;
+      }
+      const view = viewById.get(route.target.viewId);
+      if (view === undefined) {
+        continue;
+      }
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          view.entries.length / route.target.pagination.pageSize,
+        ),
+      );
+      for (let pageNumber = 2; pageNumber <= totalPages; pageNumber += 1) {
+        routes.push(Object.freeze({
+          path: route.target.pagination.path.replace(
+            "{page}",
+            String(pageNumber),
+          ),
+          target: Object.freeze({
+            kind: "updates" as const,
+            viewId: route.target.viewId,
+            pagination: route.target.pagination,
+            pageNumber,
+            previousPath:
+              pageNumber === 2
+                ? route.path
+                : route.target.pagination.path.replace(
+                    "{page}",
+                    String(pageNumber - 1),
+                  ),
+            ...(pageNumber === totalPages
+              ? {}
+              : {
+                  nextPath: route.target.pagination.path.replace(
+                    "{page}",
+                    String(pageNumber + 1),
+                  ),
+                }),
+          }),
+        }));
+      }
+      const canonicalIndex = routes.indexOf(route);
+      if (canonicalIndex >= 0 && totalPages > 1) {
+        routes[canonicalIndex] = Object.freeze({
+          path: route.path,
+          target: Object.freeze({
+            ...route.target,
+            pageNumber: 1,
+            nextPath: route.target.pagination.path.replace("{page}", "2"),
+          }),
+        });
+      }
+    }
+  }
+  const routesBySegments = new Map<string, PlannedRoute>();
   const staticParams: PublisherNextRouteParams[] = [];
 
   for (
     let index = 0;
-    index < reader.routes.active.length;
+    index < routes.length;
     index += 1
   ) {
-    const route = reader.routes.active[index];
+    const route = routes[index];
     if (route === undefined) {
       continue;
     }

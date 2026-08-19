@@ -236,9 +236,18 @@ Editorial packages are independent inputs, not engine internals. A foundation or
 
 The pure schema runtime validates package reference syntax and manifest relationships only. It does not inspect an installation. Later engine orchestration verifies that referenced theme, extension, audio, and sync packages are installed at exact author-controlled versions and declare compatible engine and protocol ranges.
 
-## Optional audio and sync
+## Optional audio, Updates, and sync
 
 The presence of `audio` enables an audio adapter. Its optional catalog is a repository relative source path. The adapter contract determines the catalog contents.
+
+The presence of `updates` names an authoring adapter and a required repository
+relative catalog path. The adapter interprets author-owned history, path
+classification, and title corrections outside the engine. Publisher records the
+package reference, reads only the declared plain JSON catalog, checks its
+publication and named views against `routes.updates`, and emits a separate
+Reader-build-bound envelope. A compact string route uses the stable view identity
+`updates`. An array declares stable view IDs, canonical paths, and optional page
+templates with bounded page sizes.
 
 The presence of `sync` enables an installed provider for the listed capabilities. `sync.capabilities` is an independent provider feature list, not the closed `extensions[].capabilities` grant vocabulary. Sync is always opt in and must preserve a local fallback. Absence of `sync` means reading progress and preferences remain local. The generic protocol contains no provider project IDs, database tables, credentials, or vendor specific policy.
 

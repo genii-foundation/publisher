@@ -34,6 +34,9 @@ import type {
   ReaderWork,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
+import {
+  validateUpdatesEnvelopeShape,
+} from "@genii-foundation/publisher-schema";
 import type { Metadata, NextConfig } from "next";
 import { notFound } from "next/navigation.js";
 import {
@@ -136,7 +139,7 @@ interface ConfiguredUpdatesState {
 }
 
 interface ResolvedUpdatesState extends ConfiguredUpdatesState {
-  readonly view: PublisherNextUpdatesView;
+  readonly views: ReadonlyMap<string, PublisherNextUpdatesView>;
   readonly viewHash: ReturnType<typeof hashCanonicalJson>;
 }
 
@@ -1114,6 +1117,61 @@ function resolveUpdates(
   );
 }
 
+function resolveUpdatesData(
+  value: unknown,
+  reader: PublicationReaderEnvelope,
+): ValidationResult<ConfiguredUpdatesState> {
+  const validated = validateUpdatesEnvelopeShape(value);
+  if (!validated.valid) {
+    return validated;
+  }
+  const envelope = validated.value;
+  if (
+    envelope.publicationId !== reader.publicationId ||
+    envelope.buildId !== reader.buildId
+  ) {
+    return failure(
+      "next.updates.data_stale",
+      "/updatesData",
+      "The Updates artifact is not bound to this Reader build.",
+      "identity",
+    );
+  }
+  const views = new Map(
+    envelope.views.map(({ id, ...view }) => [
+      id,
+      Object.freeze(view),
+    ] as const),
+  );
+  const config = Object.freeze({
+    buildId: envelope.buildId,
+    catalogSha256: envelope.source.catalogSha256,
+  });
+  const instance: PublisherNextUpdatesInstance = Object.freeze({
+    load(page: PublisherNextUpdatesPage) {
+      const view = views.get(page.viewId);
+      if (view === undefined) {
+        throw new TypeError(
+          `No Updates view is bound to route "${page.viewId}".`,
+        );
+      }
+      return view;
+    },
+  });
+  return success(
+    Object.freeze({
+      identity: Object.freeze({
+        package: "@genii-foundation/publisher-next",
+        version: PUBLISHER_NEXT_VERSION,
+        rendererCompatibility: PUBLISHER_NEXT_VERSION,
+      }),
+      config,
+      configHash: hashCanonicalJson(config),
+      instance,
+    }),
+  );
+}
+
 function pageResolver(
   reader: PublicationReaderEnvelope,
   routePlan: PublisherNextRoutePlan,
@@ -1162,7 +1220,13 @@ function pageResolver(
     );
 
   const toPage = (
-    route: ContentRoute,
+    route: ContentRoute & {
+      readonly target: ContentRoute["target"] & {
+        readonly pageNumber?: number;
+        readonly previousPath?: string;
+        readonly nextPath?: string;
+      };
+    },
   ): PublisherNextPage | null => {
     const base = {
       path: route.path,
@@ -1189,7 +1253,21 @@ function pageResolver(
         });
         break;
       case "updates":
-        page = Object.freeze({ ...base, kind: "updates" });
+        page = Object.freeze({
+          ...base,
+          kind: "updates",
+          viewId: route.target.viewId,
+          pageNumber: route.target.pageNumber ?? 1,
+          ...(route.target.pagination === undefined
+            ? {}
+            : { pageSize: route.target.pagination.pageSize }),
+          ...(route.target.previousPath === undefined
+            ? {}
+            : { previousPath: route.target.previousPath }),
+          ...(route.target.nextPath === undefined
+            ? {}
+            : { nextPath: route.target.nextPath }),
+        });
         break;
       case "work": {
         const work = workById.get(route.target.workId);
@@ -1308,7 +1386,10 @@ function pageResolver(
   });
 }
 
-function metadataForPage(page: PublisherNextPage): Metadata {
+function metadataForPage(
+  page: PublisherNextPage,
+  updatesView?: PublisherNextUpdatesView,
+): Metadata {
   let title: string;
   let description: string | undefined;
   switch (page.kind) {
@@ -1330,8 +1411,11 @@ function metadataForPage(page: PublisherNextPage): Metadata {
       description = page.work.summary ?? page.publication.description;
       break;
     case "updates":
-      title = `Updates | ${page.publication.title}`;
-      description = page.publication.description;
+      title = `${updatesView?.title ?? "Updates"}${
+        page.pageNumber === 1 ? "" : `, page ${page.pageNumber}`
+      } | ${page.publication.title}`;
+      description =
+        updatesView?.description ?? page.publication.description;
       break;
   }
   const canonical =
@@ -1425,7 +1509,7 @@ export async function createPublicationNextApplication(
     const inspectedOptions = inspectRecord(
       options,
       ["reader"],
-      ["theme", "updates"],
+      ["theme", "updates", "updatesData"],
     );
     if (inspectedOptions === null) {
       return failure(
@@ -1447,7 +1531,14 @@ export async function createPublicationNextApplication(
       return markdownResult;
     }
     const markdownForBlock = markdownResult.value;
-    const routePlanResult = createPublisherNextRoutePlan(reader);
+    const suppliedUpdatesData = valueOf(
+      inspectedOptions,
+      "updatesData",
+    );
+    const routePlanResult = createPublisherNextRoutePlan(
+      reader,
+      suppliedUpdatesData,
+    );
     if (!routePlanResult.valid) {
       return routePlanResult;
     }
@@ -1456,7 +1547,22 @@ export async function createPublicationNextApplication(
       ({ target }) => target.kind === "updates",
     );
     const suppliedUpdates = valueOf(inspectedOptions, "updates");
-    if (hasUpdatesRoute && suppliedUpdates === undefined) {
+    if (
+      suppliedUpdates !== undefined &&
+      suppliedUpdatesData !== undefined
+    ) {
+      return failure(
+        "next.updates.ambiguous",
+        "/updates",
+        "Supply either an Updates adapter or a materialized Updates artifact, not both.",
+        "oneOf",
+      );
+    }
+    if (
+      hasUpdatesRoute &&
+      suppliedUpdates === undefined &&
+      suppliedUpdatesData === undefined
+    ) {
       return failure(
         "next.updates.required",
         "/updates",
@@ -1464,7 +1570,11 @@ export async function createPublicationNextApplication(
         "required",
       );
     }
-    if (!hasUpdatesRoute && suppliedUpdates !== undefined) {
+    if (
+      !hasUpdatesRoute &&
+      (suppliedUpdates !== undefined ||
+        suppliedUpdatesData !== undefined)
+    ) {
       return failure(
         "next.updates.unexpected",
         "/updates",
@@ -1488,6 +1598,15 @@ export async function createPublicationNextApplication(
         return updatesResult;
       }
       configuredUpdates = updatesResult.value;
+    } else if (suppliedUpdatesData !== undefined) {
+      const updatesResult = resolveUpdatesData(
+        suppliedUpdatesData,
+        reader,
+      );
+      if (!updatesResult.valid) {
+        return updatesResult;
+      }
+      configuredUpdates = updatesResult.value;
     }
     const resolver = pageResolver(reader, routePlan);
     const errorIdentityResult =
@@ -1501,42 +1620,45 @@ export async function createPublicationNextApplication(
     }
     let updatesState: ResolvedUpdatesState | null = null;
     if (configuredUpdates !== null) {
-      const updatesRouteIndex = reader.routes.active.findIndex(
-        ({ target }) => target.kind === "updates",
-      );
-      const updatesParams =
-        routePlan.staticParams[updatesRouteIndex];
-      const updatesPage =
-        updatesParams === undefined
-          ? Object.freeze({
-              status: "invalid" as const,
-              issue: "updates-route",
-            })
-          : resolver.resolve(updatesParams.segments);
-      if (
-        updatesPage.status !== "resolved" ||
-        updatesPage.page.kind !== "updates"
-      ) {
-        return failure(
-          "next.updates.route_invalid",
-          "/routes/active",
-          "The declared Updates route could not resolve to its closed page model.",
-          "route",
+      const views = new Map<string, PublisherNextUpdatesView>();
+      for (const route of reader.routes.active) {
+        if (route.target.kind !== "updates") {
+          continue;
+        }
+        const updatesPage = resolver.resolve(
+          route.path === "/"
+            ? undefined
+            : route.path
+                .slice(1, route.path.endsWith("/") ? -1 : undefined)
+                .split("/")
+                .map(decodeURIComponent),
         );
-      }
-      const loaded = await loadUpdatesView(
-        configuredUpdates.instance,
-        updatesPage.page,
-        updatesInternalHrefs(reader),
-      );
-      if (!loaded.valid) {
-        return loaded;
+        if (
+          updatesPage.status !== "resolved" ||
+          updatesPage.page.kind !== "updates"
+        ) {
+          return failure(
+            "next.updates.route_invalid",
+            "/routes/active",
+            "A declared Updates route could not resolve to its closed page model.",
+            "route",
+          );
+        }
+        const loaded = await loadUpdatesView(
+          configuredUpdates.instance,
+          updatesPage.page,
+          updatesInternalHrefs(reader),
+        );
+        if (!loaded.valid) {
+          return loaded;
+        }
+        views.set(updatesPage.page.viewId, loaded.value);
       }
       updatesState = Object.freeze({
         ...configuredUpdates,
-        view: loaded.value,
+        views,
         viewHash: hashCanonicalJson(
-          loaded.value as unknown as JSONValue,
+          Object.fromEntries(views) as unknown as JSONValue,
         ),
       });
     }
@@ -1561,7 +1683,22 @@ export async function createPublicationNextApplication(
       }
       const updatesView =
         page.kind === "updates"
-          ? (updatesState?.view ?? null)
+          ? (() => {
+              const view = updatesState?.views.get(page.viewId);
+              if (view === undefined) {
+                return null;
+              }
+              if (page.pageSize === undefined) {
+                return view;
+              }
+              const start = (page.pageNumber - 1) * page.pageSize;
+              return Object.freeze({
+                ...view,
+                entries: Object.freeze(
+                  view.entries.slice(start, start + page.pageSize),
+                ),
+              });
+            })()
           : null;
       return PublisherPageView({
         homePath: resolver.homePath,
@@ -1604,7 +1741,12 @@ export async function createPublicationNextApplication(
       if (resolved.status !== "resolved") {
         notFound();
       }
-      return metadataForPage(resolved.page);
+      return metadataForPage(
+        resolved.page,
+        resolved.page.kind === "updates"
+          ? updatesState?.views.get(resolved.page.viewId)
+          : undefined,
+      );
     };
     const rootProps = Object.freeze({
       params: Promise.resolve(Object.freeze({})),

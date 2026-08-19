@@ -18,6 +18,8 @@ import type {
   AudioEnvelope,
   CollectionManifest,
   SyncEnvelope,
+  UpdatesCatalog,
+  UpdatesEnvelope,
   PublicationManifest,
   WorkManifest,
 } from "./types.js";
@@ -43,3 +45,5 @@ export const readerEnvelopeValidator: StandaloneValidateFunction<PublicationRead
 export const audioCatalogValidator: StandaloneValidateFunction<AudioClipCatalog>;
 export const audioEnvelopeValidator: StandaloneValidateFunction<AudioEnvelope>;
 export const syncEnvelopeValidator: StandaloneValidateFunction<SyncEnvelope>;
+export const updatesCatalogValidator: StandaloneValidateFunction<UpdatesCatalog>;
+export const updatesEnvelopeValidator: StandaloneValidateFunction<UpdatesEnvelope>;

@@ -4,7 +4,7 @@ These directories model unrelated, invented publications. They exist to prove th
 
 `canonical-field-notes` uses the default roots and manifest names. It also declares a theme, an optional audio adapter, and a `station-index` extension with the single `content.project` grant.
 
-`canonical-tide-tables` is the only one the shipped Next renderer can serve, because it declares no Updates route. The other two do, and that renderer has no way to supply Updates data, so a build against them is refused before anything is written. This is the fixture to copy when starting a publication, and the one the real renderer lifecycle test uses.
+`canonical-tide-tables` proves that Updates remains optional. `canonical-field-notes` supplies one compact legacy Updates route and a plain catalog. `declared-night-dispatch` supplies named ordinary and literary views with paginated routes. The shipped Next renderer serves all three without executing authoring code.
 
 `canonical-structured-essay` declares three durable sections inside one Markdown manuscript. Its work manifest owns IDs, preorder hierarchy, public routes, and continuity while exact block selectors locate section boundaries without deriving identity from headings.
 

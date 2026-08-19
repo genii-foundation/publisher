@@ -41,6 +41,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import {
   assertHostCanServe,
@@ -86,25 +87,31 @@ async function build(publicationRoot) {
   return built.value.reader;
 }
 
-/** Exactly what the generated host does: the reader alone. */
-async function createAsGeneratedHostDoes(reader) {
-  return await createPublicationNextApplication({ reader });
+async function buildOutput(publicationRoot) {
+  const built = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  return built.value;
+}
+
+/** Exactly what the generated host does: bound artifacts, with no authoring code. */
+async function createAsGeneratedHostDoes(built) {
+  return await createPublicationNextApplication({
+    reader: built.reader,
+    ...(built.updates === undefined
+      ? {}
+      : { updatesData: built.updates.envelope }),
+  });
 }
 
 // -------------------------------------------------- the declaration is true
 
 test("every route kind the contract claims is one the application really serves", async (t) => {
-  // A publication with the Updates route removed exercises home, work,
-  // collection, and section, which is every kind the contract claims.
-  const publicationRoot = editablePublication(
-    t,
-    "canonical-field-notes",
-    (manifest) => {
-      delete manifest.routes.updates;
-      delete manifest.continuity;
-    },
-  );
-  const reader = await build(publicationRoot);
+  const publicationRoot = join(fixtureRoot, "canonical-field-notes");
+  const built = await buildOutput(publicationRoot);
+  const reader = built.reader;
 
   const kinds = new Set(
     reader.routes.active.map((route) => route.target.kind),
@@ -116,67 +123,103 @@ test("every route kind the contract claims is one the application really serves"
     );
   }
 
-  const created = await createAsGeneratedHostDoes(reader);
+  const created = await createAsGeneratedHostDoes(built);
   assert.ok(
     created.valid,
     `the contract claims these kinds work: ${JSON.stringify(created.diagnostics)}`,
   );
 });
 
-test("the kind the contract disclaims is one the application really refuses", async () => {
+test("the Updates kind the contract claims is served from bound data", async () => {
   // Without this, the declaration could quietly become a lie in the safe
   // direction: disclaiming something that actually works, and refusing builds
   // for no reason.
-  const reader = await build(join(fixtureRoot, "canonical-field-notes"));
+  const built = await buildOutput(join(fixtureRoot, "canonical-field-notes"));
+  const reader = built.reader;
   assert.ok(
     reader.routes.active.some(({ target }) => target.kind === "updates"),
     "this fixture is supposed to declare an Updates route",
   );
   assert.equal(
     PUBLISHER_NEXT_HOST_CAPABILITIES.routeKinds.includes("updates"),
-    false,
+    true,
   );
 
-  const created = await createAsGeneratedHostDoes(reader);
-  assert.equal(
-    created.valid,
-    false,
-    "the contract disclaims Updates, so the application must actually refuse it",
+  const created = await createAsGeneratedHostDoes(built);
+  assert.ok(created.valid, JSON.stringify(created.diagnostics));
+});
+
+test("named Updates views expand declared pagination into static pages", async () => {
+  const built = await buildOutput(
+    join(fixtureRoot, "declared-night-dispatch"),
   );
-  assert.ok(
-    created.diagnostics.some(
-      (item) => item.code === "next.updates.required",
-    ),
-    JSON.stringify(created.diagnostics),
+  const created = await createAsGeneratedHostDoes(built);
+  assert.ok(created.valid, JSON.stringify(created.diagnostics));
+  const application = created.value;
+  const pageTwo = application.resolveRoute(["dispatch-log", "2"]);
+  assert.equal(pageTwo.status, "resolved");
+  assert.equal(pageTwo.page.kind, "updates");
+  assert.equal(pageTwo.page.viewId, "all");
+  assert.equal(pageTwo.page.pageNumber, 2);
+  const html = renderToStaticMarkup(
+    await application.renderPage(pageTwo.page),
+  );
+  assert.match(html, /Signal Lantern published/u);
+  assert.doesNotMatch(html, /Platform Bell published/u);
+  assert.match(html, /href="\/dispatch-log"/u);
+  const metadata = await application.generateMetadata({
+    params: Promise.resolve({
+      segments: ["dispatch-log", "2"],
+    }),
+  });
+  assert.equal(metadata.title, "Dispatch log, page 2 | Night Dispatch");
+
+  const literaryPageTwo = application.resolveRoute([
+    "dispatch-log",
+    "literary",
+    "2",
+  ]);
+  assert.equal(literaryPageTwo.status, "resolved");
+  assert.equal(literaryPageTwo.page.viewId, "literary");
+});
+
+test("the renderer rejects stale and ambiguous Updates artifacts", async () => {
+  const built = await buildOutput(
+    join(fixtureRoot, "declared-night-dispatch"),
+  );
+  const stale = structuredClone(built.updates.envelope);
+  stale.buildId = `sha256:${"0".repeat(64)}`;
+  const staleResult = await createPublicationNextApplication({
+    reader: built.reader,
+    updatesData: stale,
+  });
+  assert.equal(staleResult.valid, false);
+  assert.equal(staleResult.diagnostics[0].code, "next.updates.data_stale");
+
+  const duplicate = structuredClone(built.updates.envelope);
+  duplicate.views.push(structuredClone(duplicate.views[0]));
+  const duplicateResult = await createPublicationNextApplication({
+    reader: built.reader,
+    updatesData: duplicate,
+  });
+  assert.equal(duplicateResult.valid, false);
+  assert.equal(
+    duplicateResult.diagnostics[0].code,
+    "next.updates.view_duplicate",
   );
 });
 
 // ------------------------------------------------------- the check catches it
 
 for (const fixture of ["canonical-field-notes", "declared-night-dispatch"]) {
-  test(`${fixture} is refused before anything is written`, async () => {
+  test(`${fixture} is accepted with materialized Updates data`, async () => {
     const reader = await build(join(fixtureRoot, fixture));
     const decision = assertHostCanServe({
       reader,
       capabilities: readHostCapabilities(nextHostModule),
       renderer: "@genii-foundation/publisher-next",
     });
-    assert.equal(decision.valid, false);
-    const [first] = decision.diagnostics;
-    assert.equal(first.code, "host.route_kind_unsupported");
-    assert.match(first.message, /updates route/u);
-    // The route path the manifest actually declares, not a guessed one. This
-    // fixture puts Updates at /dispatch-log, which is the point: the message has
-    // to name what the author wrote or they cannot find it.
-    const declared = JSON.parse(
-      readFileSync(join(fixtureRoot, fixture, "publication.json"), "utf8"),
-    ).routes.updates;
-    assert.equal(typeof declared, "string");
-    assert.ok(
-      first.message.includes(declared),
-      `the refusal must name ${declared}, got: ${first.message}`,
-    );
-    assert.match(first.message, /fails to start/u);
+    assert.ok(decision.valid, JSON.stringify(decision.diagnostics));
   });
 }
 
@@ -186,10 +229,12 @@ test("a publication the host can serve is accepted", async (t) => {
     "declared-night-dispatch",
     (manifest) => {
       delete manifest.routes.updates;
+      delete manifest.updates;
       delete manifest.continuity;
     },
   );
-  const reader = await build(publicationRoot);
+  const built = await buildOutput(publicationRoot);
+  const reader = built.reader;
   const decision = assertHostCanServe({
     reader,
     capabilities: readHostCapabilities(nextHostModule),
@@ -199,7 +244,7 @@ test("a publication the host can serve is accepted", async (t) => {
 
   // And the application really does start, which is the claim the check is
   // standing in for.
-  const created = await createAsGeneratedHostDoes(reader);
+  const created = await createAsGeneratedHostDoes(built);
   assert.ok(created.valid, JSON.stringify(created.diagnostics));
 });
 
@@ -349,7 +394,7 @@ test("the engine's own renderer resolves, with its import-only exports", (t) => 
     `the renderer must resolve:\n${planned.stderr}`,
   );
   assert.match(planned.stdout, /Renderer\s+@genii-foundation\/publisher-next/u);
-  assert.match(planned.stdout, /Contract\s+0\.2\.0/u);
+  assert.match(planned.stdout, /Contract\s+0\.3\.0/u);
 });
 
 test("a genuinely missing renderer says where it looked", (t) => {

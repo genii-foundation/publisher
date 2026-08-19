@@ -682,7 +682,7 @@ test("the audit's engine side claims match the schema and the code", async () =>
   // not kept alive as current migration claims.
   assert.equal(schema.$defs.stableId.maxLength, 128);
   assert.ok(
-    audit.includes("c60aa2bca5aa3cc7abf0d9bd661538a247315f59"),
+    audit.includes("7e50161cecc0ce6039c36e4738d8c9fc90710e62"),
     "the audit must name the exact Coherence ref its current measurements use",
   );
 });

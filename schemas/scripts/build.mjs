@@ -82,6 +82,14 @@ const validatorDefinitions = Object.freeze([
     exportName: "syncEnvelopeValidator",
     fileName: "sync-envelope.schema.json",
   },
+  {
+    exportName: "updatesCatalogValidator",
+    fileName: "updates-catalog.schema.json",
+  },
+  {
+    exportName: "updatesEnvelopeValidator",
+    fileName: "updates-envelope.schema.json",
+  },
 ]);
 const embeddedRuntimeDefinitions = Object.freeze([
   {

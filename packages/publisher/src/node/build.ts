@@ -59,6 +59,7 @@ import type {
   PublicationReaderEnvelope,
   ReaderAudience,
   SyncEnvelope,
+  UpdatesEnvelope,
   ValidationResult,
   WorkSectionDeclaration,
 } from "@genii-foundation/publisher-schema";
@@ -80,6 +81,13 @@ import {
 import type {
   ResolvedPublicationSync,
 } from "./sync.js";
+import {
+  buildUpdatesEnvelope,
+  resolvePublicationUpdates,
+} from "./updates.js";
+import type {
+  ResolvedPublicationUpdates,
+} from "./updates.js";
 import {
   compileLoadedPublicationContent,
 } from "./compile.js";
@@ -471,6 +479,11 @@ export interface BuiltPublicationReader {
     /** Canonical JSON text, exactly as it would be written. */
     readonly text: string;
   };
+  readonly updates?: {
+    readonly resolved: ResolvedPublicationUpdates;
+    readonly envelope: UpdatesEnvelope;
+    readonly text: string;
+  };
 }
 
 /**
@@ -614,6 +627,76 @@ export async function buildPublicationReader(
     });
   }
 
+  let updates: BuiltPublicationReader["updates"];
+  const declaredUpdates = loaded.value.publication.updates;
+  const updatesCatalog = loaded.value.updatesCatalog;
+  const hasUpdatesRoute = loaded.value.publication.routes.updates !== undefined;
+  if (declaredUpdates === undefined) {
+    if (updatesCatalog !== undefined) {
+      return invalidResult([
+        buildDiagnostic(
+          "build.updates_catalog_undeclared",
+          "/updates/catalog",
+          "An Updates catalog was loaded for a publication whose manifest declares none.",
+          {},
+        ),
+      ]);
+    }
+    if (hasUpdatesRoute) {
+      return invalidResult([
+        buildDiagnostic(
+          "build.updates_configuration_missing",
+          "/updates",
+          "This publication declares Updates routes but no Updates catalog. Add the top level updates block and its catalog, or remove the routes.",
+          {},
+        ),
+      ]);
+    }
+  } else if (!hasUpdatesRoute) {
+    return invalidResult([
+      buildDiagnostic(
+        "build.updates_route_missing",
+        "/routes/updates",
+        "This publication declares Updates data but no Updates route can render it.",
+        {},
+      ),
+    ]);
+  } else if (updatesCatalog === undefined) {
+    return invalidResult([
+      buildDiagnostic(
+        "build.updates_catalog_missing",
+        "/updates/catalog",
+        "This publication declares Updates data but its catalog was not loaded.",
+        {},
+      ),
+    ]);
+  } else {
+    const resolvedUpdates = resolvePublicationUpdates({
+      catalog: updatesCatalog.catalog,
+      declaredCatalogPath: updatesCatalog.path,
+      publicationId: reader.value.publicationId,
+      routes: loaded.value.publication.routes,
+    });
+    if (!resolvedUpdates.valid) {
+      return invalidResult(resolvedUpdates.diagnostics);
+    }
+    const updatesEnvelope = buildUpdatesEnvelope({
+      updates: resolvedUpdates.value,
+      adapter: declaredUpdates.adapter,
+      publicationId: reader.value.publicationId,
+      buildId: reader.value.buildId,
+      catalogText: updatesCatalog.text,
+    });
+    if (!updatesEnvelope.valid) {
+      return invalidResult(updatesEnvelope.diagnostics);
+    }
+    updates = Object.freeze({
+      resolved: resolvedUpdates.value,
+      envelope: updatesEnvelope.value.envelope,
+      text: updatesEnvelope.value.text,
+    });
+  }
+
   let text: string;
   try {
     text = serializePublicationReaderEnvelope(reader.value);
@@ -639,6 +722,7 @@ export async function buildPublicationReader(
       search,
       ...(audio === undefined ? {} : { audio }),
       ...(sync === undefined ? {} : { sync }),
+      ...(updates === undefined ? {} : { updates }),
     }),
     diagnostics: sortAndFreezeDiagnostics([]),
   });

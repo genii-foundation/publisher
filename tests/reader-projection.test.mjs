@@ -444,10 +444,10 @@ test("both fixture publications project into deterministic public reader artifac
       // Route targets now carry the stable Updates view identity. That changes
       // the Reader bytes and every identity derived from them, deliberately.
       buildId:
-        "sha256:67206ed8deb83193076a6d113558a6c291fc015aa956342f890837223efba09c",
+        "sha256:29fad0fa1eb40471da8cdb8b901c804d02ef9002374c81476dd1306f00d625ff",
       byteLength: 6010,
       artifactHash:
-        "sha256:bab751a20b34b5c1d909f3b0b5b560c647f14c3ffaa87bf2a2ac56e685f0d5bc",
+        "sha256:e204a5dbd5ede30a88b58c6f9ffec221b3b7f52e329b454a8fcfa1332b458817",
     },
     {
       directory: "declared-night-dispatch",
@@ -455,10 +455,10 @@ test("both fixture publications project into deterministic public reader artifac
       workIds: ["signal-lantern", "platform-bell"],
       collectionIds: ["after-dark"],
       buildId:
-        "sha256:9dec0414fcd327d0bee8cdc6a55fe651f174d8cf5c33e293ad0be31f9b1e6a6b",
-      byteLength: 8746,
+        "sha256:dc0947466e0d23fca185c43b577ed9848b969254d9c132aaf7cee8410ae2b6a8",
+      byteLength: 8949,
       artifactHash:
-        "sha256:96c770607d7f0c47dc23647e9ea1a53fa540d5f860279bf9ec11990669b98099",
+        "sha256:4a702ddd3defac32ebf7fad8b051f09ea5118e00301ce9b470f991d75f30c7d6",
     },
   ];
 
@@ -1080,7 +1080,7 @@ test("an all-draft publication has a valid empty public content result", async (
   assert.deepEqual(reader.routes.redirects, []);
   assert.deepEqual(
     reader.routes.active.map(({ target }) => target.kind),
-    ["home", "updates"],
+    ["home", "updates", "updates"],
   );
   assert.deepEqual(reader.statistics, {
     workCount: 0,

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://publisher.genii.foundation/schemas/updates-catalog.schema.json",
+  "title": "GENII Publisher Updates catalog",
+  "description": "Author-owned, renderer-neutral Updates data. An authoring adapter interprets source history and writes this file. The engine reads the file as data and never executes the adapter.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "publicationId", "views"],
+  "properties": {
+    "$schema": {
+      "const": "https://publisher.genii.foundation/schemas/updates-catalog.schema.json"
+    },
+    "schemaVersion": { "const": "1.0" },
+    "publicationId": { "$ref": "#/$defs/stableId" },
+    "views": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": { "$ref": "#/$defs/view" }
+    }
+  },
+  "$defs": {
+    "stableId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "href": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^/(?!/)(?!.*//)(?!.*(?:^|/)\\.{1,2}(?:/|$))[A-Za-z0-9._~!$&'()*+,;=:@%/?#-]+$"
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "publishedAt": {
+          "type": "string",
+          "oneOf": [
+            { "format": "date" },
+            { "format": "date-time" }
+          ]
+        },
+        "href": { "$ref": "#/$defs/href" }
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "entries"],
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "emptyMessage": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "entries": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": { "$ref": "#/$defs/entry" }
+        }
+      }
+    }
+  }
+}

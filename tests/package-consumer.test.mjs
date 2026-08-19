@@ -338,6 +338,8 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "third-party-licenses/unicode-15.1.0-LICENSE-MIT.txt",
       "third-party-licenses/unicode-data-LICENSE.txt",
       "tsconfig.json",
+      "updates-catalog.schema.json",
+      "updates-envelope.schema.json",
       "work.schema.json",
     ].sort();
     assert.deepEqual(packedPaths, expectedPackedPaths);

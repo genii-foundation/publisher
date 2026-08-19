@@ -104,6 +104,52 @@ export interface AudioConfiguration {
   readonly catalog?: string;
 }
 
+export interface UpdatesConfiguration {
+  readonly adapter: PackageReference;
+  readonly catalog: string;
+}
+
+export interface UpdatesCatalogEntry {
+  readonly id: string;
+  readonly title: string;
+  readonly summary?: string;
+  readonly publishedAt?: string;
+  readonly href?: string;
+}
+
+export interface UpdatesCatalogView {
+  readonly id: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly emptyMessage?: string;
+  readonly entries: readonly UpdatesCatalogEntry[];
+}
+
+export interface UpdatesCatalog {
+  readonly $schema?:
+    "https://publisher.genii.foundation/schemas/updates-catalog.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly views: readonly UpdatesCatalogView[];
+}
+
+export interface UpdatesEnvelopeSource {
+  readonly adapter: PackageReference;
+  readonly catalogPath: string;
+  readonly catalogSha256: string;
+}
+
+export interface UpdatesEnvelope {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/updates-envelope.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly engineVersion: string;
+  readonly buildId: string;
+  readonly source: UpdatesEnvelopeSource;
+  readonly views: readonly UpdatesCatalogView[];
+}
+
 export interface AudioClip {
   readonly sectionId: string;
   readonly audioVersionId: string;
@@ -316,6 +362,7 @@ export interface PublicationManifest {
   readonly theme?: PackageReference;
   readonly extensions?: readonly ExtensionReference[];
   readonly audio?: AudioConfiguration;
+  readonly updates?: UpdatesConfiguration;
   readonly sync?: SyncConfiguration;
   readonly routes: PublicationRoutes;
   readonly continuity?: ContinuityConfiguration;

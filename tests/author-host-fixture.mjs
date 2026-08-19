@@ -103,12 +103,14 @@ export function installRenderer(
     omitAudioDataPath = false,
     syncDataPath,
     omitSyncDataPath = false,
+    updatesDataPath,
+    omitUpdatesDataPath = false,
     files,
     migrations = [],
     omitMigrations = false,
     capabilities = {
       routeKinds: ["collection", "home", "section", "updates", "work"],
-      dataArtifacts: ["audio", "search", "sync"],
+      dataArtifacts: ["audio", "search", "sync", "updates"],
     },
     omitCapabilities = false,
   } = {},
@@ -127,6 +129,9 @@ export function installRenderer(
   const syncPath = omitSyncDataPath
     ? undefined
     : (syncDataPath ?? `public/${short}-sync.json`);
+  const updatesPath = omitUpdatesDataPath
+    ? undefined
+    : (updatesDataPath ?? `${short}-updates.json`);
   const declared =
     files ??
     [
@@ -183,6 +188,9 @@ export function installRenderer(
       ...(syncPath === undefined
         ? []
         : [`    syncDataPath: ${JSON.stringify(syncPath)},`]),
+      ...(updatesPath === undefined
+        ? []
+        : [`    updatesDataPath: ${JSON.stringify(updatesPath)},`]),
       "    files: [",
       '      { path: "package.json", contents: JSON.stringify({ name: input.hostPackageName }, null, 2) + "\\n" },',
       `      ...${JSON.stringify(declared)},`,
@@ -198,6 +206,7 @@ export function installRenderer(
     searchDataPath: searchPath,
     audioDataPath: audioPath,
     syncDataPath: syncPath,
+    updatesDataPath: updatesPath,
     generatedPath: `${short}-app.js`,
   };
 }

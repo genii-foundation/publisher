@@ -465,6 +465,7 @@ test("declared content compiles without canonical path assumptions", async () =>
     [
       "/",
       "/dispatch-log",
+      "/dispatch-log/literary",
       "/dispatch/signal-lantern",
       "/dispatch/platform-bell",
       "/sequences/after-dark",

@@ -64,6 +64,7 @@ import {
 import {
   AUDIO_DATA_ARTIFACT,
   SEARCH_DATA_ARTIFACT,
+  UPDATES_DATA_ARTIFACT,
   assertHostCanCarryDataArtifact,
   assertHostCanServe,
   readHostCapabilities,
@@ -888,6 +889,19 @@ async function runBuild(options) {
             "Consent      opt-in, with local reading unaffected",
           ],
         },
+    built.value.updates === undefined
+      ? null
+      : {
+          id: UPDATES_DATA_ARTIFACT,
+          noun: "Updates",
+          label: "Updates",
+          declaredPath: template.updatesDataPath,
+          text: built.value.updates.text,
+          detail: [
+            `Views        ${built.value.updates.resolved.views.length.toLocaleString("en-US")}`,
+            `Reader build ${built.value.updates.envelope.buildId}`,
+          ],
+        },
   ].filter(Boolean);
 
   // Before anything is written. A publication declaring an artifact against a
@@ -1238,6 +1252,14 @@ async function runStatus(options) {
                   label: "Sync",
                   declaredPath: template.syncDataPath,
                   text: built.value.sync.text,
+                },
+            built.value.updates === undefined
+              ? null
+              : {
+                  id: UPDATES_DATA_ARTIFACT,
+                  label: "Updates",
+                  declaredPath: template.updatesDataPath,
+                  text: built.value.updates.text,
                 },
           ].filter(Boolean);
           const capabilities = readHostCapabilities(rendererModule ?? {});

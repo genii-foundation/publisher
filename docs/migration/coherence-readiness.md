@@ -7,8 +7,8 @@ database change, package publication, or deployment.
 ## Authorities
 
 The Coherence inventory is pinned to commit
-`c60aa2bca5aa3cc7abf0d9bd661538a247315f59`, dated 2026-08-03. The audit covers
-35 first-parent commits from 2026-07-28 through that ref. It also considers five
+`7e50161cecc0ce6039c36e4738d8c9fc90710e62`, dated 2026-08-18. The audit covers
+39 first-parent commits from 2026-07-28 through that ref. It also considers five
 direct Reader precursor changes from 2026-07-27 because those changes created the
 state, bookmark, audio, and synchronization substrate modified during the audit
 window.
@@ -41,10 +41,10 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 7 upgraded | 7 | Publisher implements a stronger checked contract. |
+| 8 upgraded | 8 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
 | 34 planned | 34 | Accepted Publisher scope is not implemented yet. |
-| 1 blocked | 1 | A named repository issue still blocks the capability. |
+| 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
 9 provider capabilities, and 2 author-tooling capabilities. Publication-specific
@@ -201,14 +201,16 @@ This is no longer the broken source-loader handoff described by the first projec
 continuity note. The remaining distance is application parity and Coherence
 adoption, not recovery of the foundation.
 
-## Blocking gaps
+## Recently closed gap
 
-### Updates integration, issue #16
+### Updates integration
 
-The renderer can render one closed Updates view, but the generated host cannot
-configure it. Coherence also has paginated ordinary and literary views. The
-adapter and route contract must express both without importing Coherence history
-or presentation rules into the engine.
+Publisher now accepts author-owned plain Updates catalogs, validates stable named
+views against Reader route authority, binds the result to one Reader build, and
+serves paginated ordinary and literary views through the generated Next host.
+Coherence still owns Git interpretation, literary path classification, title
+corrections, and its durable snapshot. Migration proof must regenerate that
+catalog at the exact acceptance ref and compare every entry and page.
 
 Multi-section compilation is no longer blocked. Work manifests can now declare
 preorder section structure with durable IDs, hierarchy, routes, continuity, and
@@ -264,7 +266,7 @@ these concerns. It does not own the values that make Coherence itself.
 6. Add provider-neutral synchronization and the two stable server routes.
 7. Add default narration playback and author publication guards.
 8. Build offline dependency closure over the final route, Reader, and audio graph.
-9. Complete Updates and migration compatibility.
+9. Prove the Coherence Updates adapter and migration compatibility.
 10. Prove the same contracts with an unrelated second publication.
 
 ## Coherence acceptance gates

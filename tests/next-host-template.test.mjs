@@ -99,12 +99,20 @@ test("the host contract declares exactly the author host file set", () => {
   );
   assert.equal(result.searchDataPath, PUBLISHER_NEXT_SEARCH_DATA_PATH);
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("search"));
-  assert.deepEqual(PUBLISHER_NEXT_HOST_MIGRATIONS, [{
-    from: "0.1.0",
-    to: "0.2.0",
-    summary:
-      "Add the required lazy search artifact destination to the official host contract.",
-  }]);
+  assert.deepEqual(PUBLISHER_NEXT_HOST_MIGRATIONS, [
+    {
+      from: "0.1.0",
+      to: "0.2.0",
+      summary:
+        "Add the required lazy search artifact destination to the official host contract.",
+    },
+    {
+      from: "0.2.0",
+      to: "0.3.0",
+      summary:
+        "Add the server-side Updates artifact and connect it to the generated application.",
+    },
+  ]);
 });
 
 test("the file list is sorted, unique, and frozen", () => {
