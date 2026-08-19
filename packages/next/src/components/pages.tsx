@@ -138,6 +138,36 @@ function readerOutline(page: PublisherNextPage): readonly PublisherReaderOutline
   );
 }
 
+function readerSectionTrail(
+  work: ReaderWork,
+  section: ReaderSection,
+): readonly ReaderSection[] {
+  const byId = new Map(work.sections.map((candidate) => [candidate.id, candidate]));
+  const reversed: ReaderSection[] = [];
+  const seen = new Set<string>();
+  let current: ReaderSection | undefined = section;
+  while (current !== undefined && !seen.has(current.id)) {
+    reversed.push(current);
+    seen.add(current.id);
+    current = current.parentId === null
+      ? undefined
+      : byId.get(current.parentId);
+  }
+  return Object.freeze(reversed.reverse());
+}
+
+function readerBreadcrumbs(page: PublisherNextPage): readonly PublisherReaderOutlineEntry[] {
+  if (page.kind !== "section") return Object.freeze([]);
+  return Object.freeze(readerSectionTrail(page.work, page.section).map((section) =>
+    Object.freeze({
+      id: section.id,
+      title: section.title,
+      href: sectionHref(page.work.route, section),
+      depth: section.depth,
+    })
+  ));
+}
+
 function SectionContent({
   assetHrefs,
   headingLevel,
@@ -411,9 +441,20 @@ function SectionPage({
       lang={page.work.language}
     >
       <header>
-        <p>
-          <a href={page.work.route}>{page.work.title}</a>
-        </p>
+        <nav className="publisher-breadcrumbs" aria-label="Breadcrumb">
+          <ol>
+            <li><a href={page.work.route}>{page.work.title}</a></li>
+            {readerSectionTrail(page.work, page.section).map((section) => (
+              <li key={section.id}>
+                {section.id === page.section.id ? (
+                  <span aria-current="page">{section.title}</span>
+                ) : (
+                  <a href={sectionHref(page.work.route, section)}>{section.title}</a>
+                )}
+              </li>
+            ))}
+          </ol>
+        </nav>
         <h1
           {...(headingBlock === null
             ? {}
@@ -592,6 +633,7 @@ interface PublisherPageShellProps {
   readonly pageKind: PublisherNextPage["kind"] | "not-found";
   readonly reader?: {
     readonly buildId: Sha256Digest;
+    readonly breadcrumbs: readonly PublisherReaderOutlineEntry[];
     readonly currentSection?: ReaderSection;
     readonly outline: readonly PublisherReaderOutlineEntry[];
     readonly sync: SyncEnvelope | null;
@@ -631,6 +673,7 @@ function PublisherPageShell({
             ? {}
             : { currentSection: reader.currentSection })}
           outline={reader.outline}
+          breadcrumbs={reader.breadcrumbs}
           publicationId={publication.id}
           publicationTitle={publication.title}
           readerBuildId={reader.buildId}
@@ -672,6 +715,7 @@ export async function PublisherPageView({
           ? { currentSection: page.section }
           : {}),
         outline: readerOutline(page),
+        breadcrumbs: readerBreadcrumbs(page),
         sync,
       }}
       theme={theme}

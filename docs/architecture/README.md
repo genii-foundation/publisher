@@ -31,5 +31,6 @@ These records define the accepted foundation of GENII Publisher.
 27. [ADR 0027: Default Reader progress session](./0027-default-reader-progress-session.md)
 28. [ADR 0028: Readable bookmark export](./0028-readable-bookmark-export.md)
 29. [ADR 0029: Confirmed bookmark deletion](./0029-confirmed-bookmark-deletion.md)
+30. [ADR 0030: Contextual Reader breadcrumbs](./0030-contextual-reader-breadcrumbs.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

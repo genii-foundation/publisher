@@ -97,8 +97,13 @@ export const READER_PARITY = Object.freeze([
     id: "reader.hierarchy.breadcrumbs",
     capability: "Part and chapter hierarchy with contextual breadcrumbs",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "Server-rendered work and section ancestry follows validated parent identities and canonical Reader destinations, while the hydrated contents surface presents the same current path and active outline identity.",
+    evidence: {
+      decision: "docs/architecture/0030-contextual-reader-breadcrumbs.md",
+      renderer: "packages/next/src/components/pages.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
     sourcePaths: ["src/components/ChapterReader.tsx", "src/lib/manuscript-labels.ts"],
   },
   {

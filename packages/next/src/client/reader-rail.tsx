@@ -108,6 +108,7 @@ export interface PublisherReaderOutlineEntry {
 }
 
 export interface PublisherReaderRailProps {
+  readonly breadcrumbs: readonly PublisherReaderOutlineEntry[];
   readonly publicationId: string;
   readonly publicationTitle: string;
   readonly readerBuildId: Sha256Digest;
@@ -266,6 +267,7 @@ function createClientEventId(now: number): string {
 }
 
 export function PublisherReaderRail({
+  breadcrumbs,
   publicationId,
   publicationTitle,
   readerBuildId,
@@ -1101,15 +1103,28 @@ export function PublisherReaderRail({
           </header>
 
           {openPanel === "outline" ? (
-            outline.length === 0 ? <p>This page has no section outline.</p> : (
-              <ol className="publisher-reader-outline">
-                {outline.map((entry) => (
-                  <li key={entry.id} style={{ "--publisher-outline-depth": entry.depth } as React.CSSProperties}>
-                    <a href={entry.href}>{entry.title}</a>
-                  </li>
-                ))}
-              </ol>
-            )
+            <div className="publisher-reader-contents">
+              {breadcrumbs.length === 0 ? null : (
+                <nav className="publisher-reader-breadcrumbs" aria-label="Current section path">
+                  <ol>
+                    {breadcrumbs.map((entry, index) => (
+                      <li key={entry.id}>
+                        {index === breadcrumbs.length - 1 ? <span aria-current="page">{entry.title}</span> : <a href={entry.href}>{entry.title}</a>}
+                      </li>
+                    ))}
+                  </ol>
+                </nav>
+              )}
+              {outline.length === 0 ? <p>This page has no section outline.</p> : (
+                <ol className="publisher-reader-outline">
+                  {outline.map((entry) => (
+                    <li key={entry.id} style={{ "--publisher-outline-depth": entry.depth } as React.CSSProperties}>
+                      <a href={entry.href} aria-current={currentSection?.id === entry.id ? "page" : undefined}>{entry.title}</a>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           ) : null}
 
           {openPanel === "progress" ? (

@@ -733,6 +733,39 @@ async function assertHydratedReaderTools({
       "The hydrated Reader rail was not reachable inside the mobile viewport.",
     );
 
+    const openedContents = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+        '    .find((candidate) => candidate.textContent?.includes("Contents"));',
+        "  button?.click();",
+        "  return button !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(openedContents.result?.value, true);
+    let contentsContext;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "({",
+          '  currentPath: document.querySelector(".publisher-reader-breadcrumbs [aria-current=page]")?.textContent ?? "",',
+          '  currentOutline: document.querySelector(".publisher-reader-outline [aria-current=page]")?.textContent ?? "",',
+          "})",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      contentsContext = evaluated.result?.value;
+      if (contentsContext?.currentPath.length > 0) break;
+      await wait(50);
+    }
+    assert.ok(contentsContext?.currentPath.length > 0);
+    assert.equal(
+      contentsContext?.currentOutline,
+      contentsContext?.currentPath,
+    );
+
     const opened = await page.send("Runtime.evaluate", {
       expression: [
         "(() => {",

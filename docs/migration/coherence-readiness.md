@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 16 upgraded | 16 | Publisher implements a stronger checked contract. |
+| 17 upgraded | 17 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 26 planned | 26 | Accepted Publisher scope is not implemented yet. |
+| 25 planned | 25 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -126,7 +126,10 @@ rejects identity drift and fabricated folds. Unicode and diacritic handling plus
 original-text snippet offsets improve on Coherence's ASCII fold. The default
 Reader rail fetches that artifact only when search opens and supplies loading,
 failure, no-result, and bounded result states. Bookmark-augmented results plus
-separate outline and breadcrumb artifacts remain planned.
+separate outline and breadcrumb artifacts remain planned. The default section
+page now renders work and section ancestry without JavaScript from validated
+parent identities and canonical destinations. The hydrated contents panel shows
+the same current path and marks its active outline entry.
 
 ### Complete offline packages
 

@@ -315,6 +315,9 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
   assert.deepEqual(headingOutline(firstHtml), [
     { level: 1, text: "Opening" },
   ]);
+  assert.match(firstHtml, /class="publisher-breadcrumbs"/u);
+  assert.match(firstHtml, /aria-label="Breadcrumb"/u);
+  assert.match(firstHtml, /aria-current="page">Opening<\/span>/u);
   assert.match(firstHtml, /<em>safe<\/em>/);
   assert.match(
     firstHtml,
