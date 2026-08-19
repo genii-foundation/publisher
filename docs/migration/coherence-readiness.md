@@ -13,9 +13,9 @@ direct Reader precursor changes from 2026-07-27 because those changes created th
 state, bookmark, audio, and synchronization substrate modified during the audit
 window.
 
-The Publisher implementation baseline is the narration and synchronization
-candidate at `db026685465344f9f4c112149389e26b85fc4d54`, stacked on Publisher
-main at `22557b4bef658efa6951539c34dadc910cf8a2a2`.
+The Publisher implementation baseline is the Updates integration candidate at
+`74cba43090b287fcb3295e85ebfc0edcb357a024`, stacked on the named Updates route
+checkpoint at `ab2b550459d350bf061a9d8e337a91edb1da0e06`.
 
 The audit was read only with respect to Coherence. It did not modify manuscripts,
 publishing records, generated output, deployment state, or the current production
