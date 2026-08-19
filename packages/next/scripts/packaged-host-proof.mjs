@@ -167,6 +167,19 @@ function runNpm(args, options = {}) {
   }
 }
 
+function withoutFocusMarkup(html) {
+  let normalized = html;
+  let previous;
+  do {
+    previous = normalized;
+    normalized = normalized.replace(
+      /<span class="publisher-focus-(?:word|emphasis(?: publisher-focus-emphasis-(?:light|normal|strong))?)">([^<]*)<\/span>/gu,
+      "$1",
+    );
+  } while (normalized !== previous);
+  return normalized;
+}
+
 function packagePath(value) {
   return value.split(sep).join("/");
 }
@@ -733,6 +746,30 @@ async function assertHydratedReaderTools({
       "The hydrated Reader rail was not reachable inside the mobile viewport.",
     );
 
+    const focusMarkup = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const word = document.querySelector(".publisher-manuscript .publisher-focus-word");',
+        '  const block = word?.closest("[data-publisher-block]");',
+        "  globalThis.__publisherFocusProof = {",
+        '    wordText: word?.textContent ?? "",',
+        '    blockText: block?.textContent ?? "",',
+        "  };",
+        "  return {",
+        '    wordText: word?.textContent ?? "",',
+        '    blockText: block?.textContent ?? "",',
+        '    emphasisCount: word?.querySelectorAll(".publisher-focus-emphasis").length ?? 0,',
+        '    excludedCount: document.querySelectorAll(".publisher-manuscript code .publisher-focus-word, .publisher-manuscript pre .publisher-focus-word, .publisher-manuscript strong .publisher-focus-word").length,',
+        "  };",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.ok(focusMarkup.result?.value?.wordText.length > 0);
+    assert.ok(focusMarkup.result?.value?.blockText.length > 0);
+    assert.ok(focusMarkup.result?.value?.emphasisCount > 0);
+    assert.equal(focusMarkup.result?.value?.excludedCount, 0);
+
     const openedContents = await page.send("Runtime.evaluate", {
       expression: [
         "(() => {",
@@ -961,6 +998,56 @@ async function assertHydratedReaderTools({
       await wait(50);
     }
     assert.equal(darkPreference, true, "The default settings interface did not persist and apply color.");
+
+    const changedFocus = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const labels = Array.from(document.querySelectorAll(".publisher-reader-settings label"));',
+        '  const select = labels.find((label) => label.textContent?.includes("Focus"))?.querySelector("select");',
+        "  if (!(select instanceof HTMLSelectElement)) return false;",
+        '  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;',
+        '  setter?.call(select, "strong");',
+        '  select.dispatchEvent(new Event("change", { bubbles: true }));',
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(changedFocus.result?.value, true);
+    let strongFocus;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const key = Object.keys(localStorage).find((candidate) => candidate.includes("reader.preferences"));',
+          "  const saved = key === undefined ? null : JSON.parse(localStorage.getItem(key));",
+          '  const word = document.querySelector(".publisher-manuscript .publisher-focus-word");',
+          '  const block = word?.closest("[data-publisher-block]");',
+          '  const emphasis = word?.querySelector(".publisher-focus-emphasis");',
+          "  return {",
+          '    applied: document.documentElement.dataset.publisherReaderFocus === "strong",',
+          '    persisted: saved?.focus === "strong",',
+          '    weight: emphasis === null || emphasis === undefined ? "" : getComputedStyle(emphasis).fontWeight,',
+          '    wordPreserved: word?.textContent === globalThis.__publisherFocusProof?.wordText,',
+          '    blockPreserved: block?.textContent === globalThis.__publisherFocusProof?.blockText,',
+          '    excludedCount: document.querySelectorAll(".publisher-manuscript code .publisher-focus-word, .publisher-manuscript pre .publisher-focus-word, .publisher-manuscript strong .publisher-focus-word").length,',
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      strongFocus = evaluated.result?.value;
+      if (strongFocus?.applied === true && strongFocus.persisted === true) break;
+      await wait(50);
+    }
+    assert.deepEqual(strongFocus, {
+      applied: true,
+      persisted: true,
+      weight: "650",
+      wordPreserved: true,
+      blockPreserved: true,
+      excludedCount: 0,
+    });
 
     const openedSync = await page.send("Runtime.evaluate", {
       expression: [
@@ -1436,15 +1523,35 @@ async function assertHydratedReaderTools({
           '  const block = document.querySelector(".publisher-manuscript [data-publisher-block]");',
           "  if (!(block instanceof HTMLElement)) return null;",
           '  block.scrollIntoView({ block: "center" });',
-          "  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);",
-          "  let node = walker.nextNode();",
-          "  while (node !== null && !/\\S{4}/u.test(node.textContent ?? \"\")) node = walker.nextNode();",
-          "  if (!(node instanceof Text)) return null;",
-          '  const match = /\\S{4,}/u.exec(node.textContent ?? "");',
+          '  const match = /\\S{4,}/u.exec(block.textContent ?? "");',
           "  if (match === null || match.index === undefined) return null;",
+          "  const startOffset = match.index;",
+          "  const endOffset = match.index + Math.min(match[0].length, 12);",
+          "  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);",
+          "  let consumed = 0;",
+          "  let startNode = null;",
+          "  let startNodeOffset = 0;",
+          "  let endNode = null;",
+          "  let endNodeOffset = 0;",
+          "  let node = walker.nextNode();",
+          "  while (node instanceof Text) {",
+          "    const length = node.data.length;",
+          "    if (startNode === null && startOffset >= consumed && startOffset <= consumed + length) {",
+          "      startNode = node;",
+          "      startNodeOffset = startOffset - consumed;",
+          "    }",
+          "    if (endOffset >= consumed && endOffset <= consumed + length) {",
+          "      endNode = node;",
+          "      endNodeOffset = endOffset - consumed;",
+          "      break;",
+          "    }",
+          "    consumed += length;",
+          "    node = walker.nextNode();",
+          "  }",
+          "  if (!(startNode instanceof Text) || !(endNode instanceof Text)) return null;",
           "  const range = document.createRange();",
-          "  range.setStart(node, match.index);",
-          "  range.setEnd(node, match.index + Math.min(match[0].length, 12));",
+          "  range.setStart(startNode, startNodeOffset);",
+          "  range.setEnd(endNode, endNodeOffset);",
           "  const selection = window.getSelection();",
           "  selection?.removeAllRanges();",
           "  selection?.addRange(range);",
@@ -2874,6 +2981,7 @@ export async function runPackagedHostProof(
           renderedResponses.map((response) => response.text()),
         )
       ).join("\n");
+      const semanticHtml = withoutFocusMarkup(html);
       for (const expected of [
         "Renderer Proof",
         "Café + Field Notes",
@@ -2886,7 +2994,7 @@ export async function runPackagedHostProof(
         "https://github.com/genii-foundation/publisher",
       ]) {
         assert.ok(
-          html.includes(expected),
+          semanticHtml.includes(expected),
           `Server HTML omitted ${expected}.`,
         );
       }

@@ -636,6 +636,27 @@ html[data-publisher-reader-focus="strong"] .publisher-attribution {
   opacity: 0.35;
 }
 
+html[data-publisher-reader-focus="light"] .publisher-root {
+  --publisher-focus-weight: 550;
+}
+
+html[data-publisher-reader-focus="normal"] .publisher-root {
+  --publisher-focus-weight: 600;
+}
+
+html[data-publisher-reader-focus="strong"] .publisher-root {
+  --publisher-focus-weight: 650;
+}
+
+html[data-publisher-reader-focus="light"] .publisher-focus-emphasis-light,
+html[data-publisher-reader-focus="normal"] .publisher-focus-emphasis-light,
+html[data-publisher-reader-focus="normal"] .publisher-focus-emphasis-normal,
+html[data-publisher-reader-focus="strong"] .publisher-focus-emphasis-light,
+html[data-publisher-reader-focus="strong"] .publisher-focus-emphasis-normal,
+html[data-publisher-reader-focus="strong"] .publisher-focus-emphasis-strong {
+  font-weight: var(--publisher-focus-weight);
+}
+
 html[data-publisher-reader-motion="reduced"] *,
 html[data-publisher-reader-motion="reduced"] *::before,
 html[data-publisher-reader-motion="reduced"] *::after {

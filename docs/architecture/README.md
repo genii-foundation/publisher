@@ -37,5 +37,6 @@ These records define the accepted foundation of GENII Publisher.
 33. [ADR 0033: Optional bookmark capture note](./0033-optional-bookmark-capture-note.md)
 34. [ADR 0034: Bookmark margin markers](./0034-bookmark-margin-markers.md)
 35. [ADR 0035: Virtualized bookmark collection](./0035-virtualized-bookmark-collection.md)
+36. [ADR 0036: Focus text ownership](./0036-focus-text-ownership.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

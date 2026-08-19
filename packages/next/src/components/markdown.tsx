@@ -29,6 +29,7 @@ import {
 import ReactMarkdown, {
   type Components,
 } from "react-markdown";
+import { publisherFocusMarkupPlugin } from "./focus-markup.js";
 
 function isSafeOriginRelativeUrl(value: string): boolean {
   if (value.startsWith("#")) {
@@ -119,6 +120,7 @@ export function PublisherMarkdownInline({
         h5: InlineHeading,
         h6: InlineHeading,
       }}
+      rehypePlugins={[publisherFocusMarkupPlugin]}
       skipHtml
       urlTransform={publisherMarkdownUrlTransform}
     >
@@ -145,6 +147,7 @@ export function PublisherMarkdownBlock({
     >
       <ReactMarkdown
         components={safeMarkdownComponents(assetHrefs)}
+        rehypePlugins={[publisherFocusMarkupPlugin]}
         skipHtml
         urlTransform={publisherMarkdownUrlTransform}
       >

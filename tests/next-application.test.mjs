@@ -32,6 +32,7 @@ import {
   resolveDefaultPublisherNextTheme,
 } from "../packages/next/dist/theme/default.js";
 import {
+  PublisherMarkdownInline,
   publisherMarkdownUrlTransform,
 } from "../packages/next/dist/components/markdown.js";
 import {
@@ -138,6 +139,19 @@ function headingOutline(html) {
       text: contents.replace(/<[^>]+>/gu, ""),
     }),
   );
+}
+
+function withoutFocusMarkup(html) {
+  let normalized = html;
+  let previous;
+  do {
+    previous = normalized;
+    normalized = normalized.replace(
+      /<span class="publisher-focus-(?:word|emphasis(?: publisher-focus-emphasis-(?:light|normal|strong))?)">([^<]*)<\/span>/gu,
+      "$1",
+    );
+  } while (normalized !== previous);
+  return normalized;
 }
 
 test("home catalogs expose only published works and collections", async () => {
@@ -247,7 +261,7 @@ test("unlisted and archived works remain directly readable", async () => {
     const html = renderToStaticMarkup(
       await application.renderPage(resolution.page),
     );
-    assert.match(html, new RegExp(item.title));
+    assert.match(withoutFocusMarkup(html), new RegExp(item.title));
     if (resolution.page.kind === "work") {
       assert.deepEqual(headingOutline(html), [
         { level: 1, text: item.title },
@@ -290,13 +304,14 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
     "works",
     "café+notes",
   ]);
+  const semanticWorkHtml = withoutFocusMarkup(workHtml);
   assert.deepEqual(headingOutline(workHtml), [
     { level: 1, text: "Café + Field Notes" },
     { level: 2, text: "Opening" },
     { level: 2, text: "Next" },
   ]);
   assert.match(
-    workHtml,
+    semanticWorkHtml,
     /<a href="\/readings\/plus\+two">First<\/a>/u,
   );
   assert.doesNotMatch(workHtml, /Semantic navigation only/u);
@@ -312,20 +327,21 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
   const firstHtml = renderToStaticMarkup(
     await application.renderPage(first.page),
   );
+  const semanticFirstHtml = withoutFocusMarkup(firstHtml);
   assert.deepEqual(headingOutline(firstHtml), [
     { level: 1, text: "Opening" },
   ]);
   assert.match(firstHtml, /class="publisher-breadcrumbs"/u);
   assert.match(firstHtml, /aria-label="Breadcrumb"/u);
   assert.match(firstHtml, /aria-current="page">Opening<\/span>/u);
-  assert.match(firstHtml, /<em>safe<\/em>/);
+  assert.match(semanticFirstHtml, /<em>safe<\/em>/);
   assert.match(
-    firstHtml,
+    semanticFirstHtml,
     /<a href="\/readings\/plus\+two">First<\/a>/u,
   );
   assert.doesNotMatch(firstHtml, /Semantic navigation only/u);
   assert.match(
-    firstHtml,
+    semanticFirstHtml,
     /href="https:\/\/example\.com">good link<\/a>/u,
   );
   for (const block of first.page.section.blocks) {
@@ -389,7 +405,7 @@ test("paragraph-first sections retain normalized section headings", async () => 
     { level: 2, text: "Next" },
   ]);
   assert.match(
-    html,
+    withoutFocusMarkup(html),
     /<a href="\/readings\/plus\+two">First<\/a> <em>safe<\/em> line/u,
   );
 });
@@ -405,7 +421,7 @@ test("source-backed heading links survive normalized work and section outlines",
     "café+notes",
   ]);
   assert.match(
-    workHtml,
+    withoutFocusMarkup(workHtml),
     /<h2[^>]*><a href="\/readings\/plus\+two">Opening<\/a><\/h2>/u,
   );
   assert.deepEqual(headingOutline(workHtml), [
@@ -419,7 +435,7 @@ test("source-backed heading links survive normalized work and section outlines",
     "café+one",
   ]);
   assert.match(
-    sectionHtml,
+    withoutFocusMarkup(sectionHtml),
     /<h1[^>]*><a href="\/readings\/plus\+two">Opening<\/a><\/h1>/u,
   );
   assert.deepEqual(headingOutline(sectionHtml), [
@@ -928,7 +944,7 @@ test("origin root helpers do not assume the declared home route", async () => {
   const rootHtml = renderToStaticMarkup(
     await application.RootPage(),
   );
-  assert.match(rootHtml, /Old Record/);
+  assert.match(withoutFocusMarkup(rootHtml), /Old Record/);
   assert.doesNotMatch(rootHtml, /data-publisher-page="home"/);
   assert.equal(
     (await application.generateRootMetadata()).title,
@@ -1191,6 +1207,24 @@ test("Markdown URLs reject malformed UTF-8 percent escapes", () => {
       "https://example.com/%F4%90%80%80",
     ),
     "https://example.com/%F4%90%80%80",
+  );
+});
+
+test("Markdown focus markup preserves one text occurrence and existing emphasis", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownInline, {
+      assetHrefs: new Set(),
+      markdown: "Alpha, beta 123 and **strong words** with `code words`.",
+    }),
+  );
+  assert.match(html, /publisher-focus-emphasis-light/);
+  assert.match(html, /publisher-focus-emphasis-normal/);
+  assert.match(html, /publisher-focus-emphasis-strong/);
+  assert.doesNotMatch(html, /<strong>[^<]*publisher-focus/u);
+  assert.doesNotMatch(html, /<code>[^<]*publisher-focus/u);
+  assert.equal(
+    html.replace(/<[^>]+>/gu, ""),
+    "Alpha, beta 123 and strong words with code words.",
   );
 });
 

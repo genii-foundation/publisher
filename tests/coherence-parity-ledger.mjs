@@ -318,8 +318,13 @@ export const READER_PARITY = Object.freeze([
     id: "reader.focus.text_ownership",
     capability: "Focus markup preserving one accessible text occurrence and narration offsets",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "The official renderer transforms eligible Markdown words during server rendering, keeps one exact text occurrence, excludes strong and code content, and proves that focus changes preserve selection, bookmark offsets, and marker resolution.",
+    evidence: {
+      decision: "docs/architecture/0036-focus-text-ownership.md",
+      renderer: "packages/next/src/components/focus-markup.ts",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
     sourcePaths: ["src/components/MarkdownBody.tsx"],
   },
   {

@@ -8,6 +8,12 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Connected the default Reader to provider-neutral local-first synchronization and proved its authenticated browser transfer through the packed host.
 - Added the backward-compatible named and paginated Updates route contract as the first part of generated-host Updates integration.
 - Added author-owned Updates catalogs, Reader-build-bound envelopes, generated-host materialization, named view rendering, and static pagination without executing authoring adapters.
+- Added conservative Reader progress sessions with one opening per visit, visible active reading time, return counts, revision status, and explicit completion.
+- Added readable bookmark export plus accessible confirmed removal with synchronization tombstones.
+- Added contextual Reader breadcrumbs, complete bounded settings, and bookmark-aware search.
+- Added canonical passage selection with optional private notes and reactive margin markers outside the manuscript DOM.
+- Added a virtualized Reader bookmark collection that keeps all 1,000 supported saved passages searchable and operable with bounded browser layout work.
+- Added server rendered focus markup that preserves one exact manuscript text occurrence, semantic emphasis, selection ranges, bookmark offsets, and assistive text.
 
 ## 2026-08-13, GENII Foundation
 
