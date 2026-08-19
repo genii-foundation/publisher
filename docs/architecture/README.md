@@ -59,5 +59,6 @@ These records define the accepted foundation of GENII Publisher.
 55. [ADR 0055: Reader preference prepaint](./0055-reader-preference-prepaint.md)
 56. [ADR 0056: Theme declared Reader fonts](./0056-theme-declared-reader-fonts.md)
 57. [ADR 0057: Explicit Reader state bootstrap](./0057-explicit-reader-state-bootstrap.md)
+58. [ADR 0058: Exact Next.js 16.3.1 host stack](./0058-exact-next-16-3-1-host-stack.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

@@ -17,7 +17,7 @@
     "@supabase/supabase-js": "2.110.0"
   },
   "peerDependencies": {
-    "next": "16.2.12"
+    "next": "16.3.1"
   },
   "repository": {
     "type": "git",

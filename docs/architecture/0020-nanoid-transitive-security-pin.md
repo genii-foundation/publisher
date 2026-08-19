@@ -14,7 +14,7 @@ size input. Nano ID 3.3.18 fixes the advisory within the compatible major line.
 ## Decision
 
 `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` and this workspace pin Nano ID 3.3.18
-beneath Next 16.2.12. The packed-host proof resolves the exact version, performs
+beneath Next 16.3.1. The packed-host proof resolves the exact version, performs
 an offline frozen reinstall, runs the production audit, and refuses any
 vulnerability finding.
 

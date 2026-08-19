@@ -85,14 +85,15 @@ The reference author host pins the complete renderer toolchain. Do not use versi
   },
   "packageManager": "npm@10.9.0",
   "overrides": {
-    "next@16.2.12": {
+    "next@16.3.1": {
+      "nanoid": "3.3.18",
       "postcss": "8.5.24",
       "sharp": "0.35.3"
     }
   },
   "dependencies": {
     "@genii-foundation/publisher-next": "0.1.0-alpha.0",
-    "next": "16.2.12",
+    "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -107,7 +108,7 @@ The reference author host pins the complete renderer toolchain. Do not use versi
 
 The package also accepts Node.js 24 and 26 through its declared engine range, and CI verifies those major lines. Node.js 22.12.0 and npm 10.9.0 are the exact reference-host pins.
 
-The `overrides` object is mandatory. Package-manager overrides declared by a dependency do not propagate into the consuming root. Copy `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` from the installed renderer into the root `package.json`, regenerate the root lockfile, inspect the diff, and commit it. The clean-host proof generates that lockfile from one clean resolution, reinstalls it offline with `npm ci`, resolves Nano ID 3.3.18, PostCSS 8.5.24, and Sharp 0.35.3 beneath Next.js 16.2.12, produces a real WebP through Next Image Optimization, and reports zero production vulnerabilities. An engine upgrade that changes this exported object is a host migration, not a casual dependency bump.
+The `overrides` object is mandatory. Package-manager overrides declared by a dependency do not propagate into the consuming root. Copy `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` from the installed renderer into the root `package.json`, regenerate the root lockfile, inspect the diff, and commit it. The clean-host proof generates that lockfile from one clean resolution, reinstalls it offline with `npm ci`, resolves Nano ID 3.3.18, PostCSS 8.5.24, and Sharp 0.35.3 beneath Next.js 16.3.1, produces a real WebP through Next Image Optimization, and reports zero production vulnerabilities. An engine upgrade that changes this exported object is a host migration, not a casual dependency bump.
 
 ## Thin host
 
@@ -449,6 +450,7 @@ Check in the corresponding Next declaration file:
 /// <reference types="next/image-types/global" />
 /// <reference types="next/navigation-types/compat/navigation" />
 import "./.next/types/routes.d.ts";
+import "./.next/types/root-params.d.ts";
 
 // NOTE: This file should not be edited
 // see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
@@ -823,7 +825,8 @@ Canonical source: `https://github.com/genii-foundation/publisher`
 
 ## Dependency override and release evidence
 
-Next.js 16.2.12 otherwise resolves versions affected by four high-severity advisories:
+The verified Next.js 16.3.1 host graph still requires exact consuming-root
+overrides for three transitive packages covered by four high-severity advisories:
 
 - Nano ID 3.3.16 is affected by [GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8), patched in 3.3.18.
 - PostCSS 8.4.31 is affected by [GHSA-6g55-p6wh-862q](https://github.com/advisories/GHSA-6g55-p6wh-862q), patched in 8.5.12, and [GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849), patched in 8.5.18.

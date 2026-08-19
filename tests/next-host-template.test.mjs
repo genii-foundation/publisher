@@ -43,7 +43,7 @@ const input = Object.freeze({
   hostPackageName: "probe-host",
   dependencies: Object.freeze({
     "@genii-foundation/publisher-next": "0.1.0-alpha.0",
-    next: "16.2.12",
+    next: "16.3.1",
   }),
   devDependencies: Object.freeze({ typescript: "5.9.4" }),
   overrides: Object.freeze({ postcss: "8.5.24" }),
@@ -225,7 +225,30 @@ test("the host contract declares exactly the author host file set", () => {
         "Add readerStateBootstrap to publisher.config.ts only while an explicit legacy local-state compatibility window is active.",
       ],
     },
+    {
+      from: "0.15.0",
+      to: "0.16.0",
+      summary:
+        "Refresh the checked Next declaration file for the exact Next.js 16.3.1 generated type roots.",
+    },
   ]);
+});
+
+test("the checked Next declaration file matches the exact framework generator", () => {
+  assert.equal(
+    contentsOf(template(), "next-env.d.ts"),
+    [
+      '/// <reference types="next" />',
+      '/// <reference types="next/image-types/global" />',
+      '/// <reference types="next/navigation-types/compat/navigation" />',
+      'import "./.next/types/routes.d.ts";',
+      'import "./.next/types/root-params.d.ts";',
+      "",
+      "// NOTE: This file should not be edited",
+      "// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.",
+      "",
+    ].join("\n"),
+  );
 });
 
 test("the Proxy awaits closed request dispatch before falling through", () => {

@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.15.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.16.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -274,12 +274,18 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.14.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.15.0",
       summary:
         "Connect an optional build-bound Reader state bootstrap through the server-only author configuration.",
       manualSteps: Object.freeze([
         "Add readerStateBootstrap to publisher.config.ts only while an explicit legacy local-state compatibility window is active.",
       ]),
+    }),
+    Object.freeze({
+      from: "0.15.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Refresh the checked Next declaration file for the exact Next.js 16.3.1 generated type roots.",
     }),
   ]);
 
@@ -583,6 +589,7 @@ export function createPublisherNextHostTemplate(
         '/// <reference types="next/image-types/global" />',
         '/// <reference types="next/navigation-types/compat/navigation" />',
         'import "./.next/types/routes.d.ts";',
+        'import "./.next/types/root-params.d.ts";',
         "",
         "// NOTE: This file should not be edited",
         "// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.",

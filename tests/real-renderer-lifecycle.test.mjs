@@ -263,7 +263,7 @@ test("the real renderer takes a publication from nothing to a current artifact",
     readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
   );
   assert.equal(state.renderer, realRenderer);
-  assert.equal(state.hostContractVersion, "0.15.0");
+  assert.equal(state.hostContractVersion, "0.16.0");
   const hostManifest = JSON.parse(
     readFileSync(join(hostRoot, "package.json"), "utf8"),
   );

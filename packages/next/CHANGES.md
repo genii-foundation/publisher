@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Advanced the host contract to 0.16.0 with the checked Next.js 16.3.1 declaration roots, preventing production builds from mutating host source.
+- Advanced the exact reference host to Next.js 16.3.1 while retaining React 19.2.8, React DOM 19.2.8, TypeScript 7.0.2, and the complete transitive security override.
 - Advanced the application manifest to 1.1 and the host contract to 0.15.0 with an explicit build-bound Reader state bootstrap.
 - Added frozen publication-scoped target keys, bounded synchronous source, script-escape refusal, deterministic copied and refused reports, and failure isolation before preference prepaint.
 - Advanced the theme adapter API to 2.0 with validated ordered Reader font choices and an explicit default.

@@ -68,17 +68,18 @@ project may be created.
 
 ### Exact host dependencies
 
-The Publisher candidate currently requires exact Next.js 16.2.12, React 19.2.8,
+The Publisher candidate now requires exact Next.js 16.3.1, React 19.2.8,
 React DOM 19.2.8, and its reference TypeScript 7.0.2 toolchain. The Coherence
-baseline currently pins Next.js 16.3.1, React 19.2.4, React DOM 19.2.4, and a
-TypeScript 5 range.
+baseline already pins Next.js 16.3.1 but still pins React 19.2.4, React DOM
+19.2.4, and a TypeScript 5 range.
 
 The preview branch must not suppress peer errors or accept two framework copies.
-Before candidate installation, Publisher must either validate and declare the
-exact Coherence stack or Coherence must adopt the exact validated Publisher stack.
-The chosen versions must be exact in `package.json` and `package-lock.json`, pass
-both repositories' relevant gates, and appear once in the installed dependency
-graph. A framework downgrade is not assumed safe.
+Publisher must validate this exact framework stack before candidate installation.
+Coherence must then retain Next.js 16.3.1, adopt the validated React, React DOM,
+and TypeScript versions, copy the complete consuming-root overrides, and
+regenerate its lockfile with npm 10.9.0. The chosen versions must be exact in
+`package.json` and `package-lock.json`, pass both repositories' relevant gates,
+and appear once in the installed dependency graph.
 
 ### Local state compatibility interface
 

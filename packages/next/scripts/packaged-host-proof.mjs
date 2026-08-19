@@ -3591,8 +3591,8 @@ async function listHostSourcePaths(root) {
   return paths;
 }
 
-async function hashHostSources(root) {
-  const hash = createHash("sha256");
+async function snapshotHostSources(root) {
+  const sources = [];
 
   async function visit(directory) {
     const entries = await readdir(directory, {
@@ -3614,10 +3614,12 @@ async function hashHostSources(root) {
         await visit(path);
       } else if (entry.isFile()) {
         const sourcePath = packagePath(relative(root, path));
-        hash.update(sourcePath);
-        hash.update("\0");
-        hash.update(await readFile(path));
-        hash.update("\0");
+        sources.push(Object.freeze({
+          path: sourcePath,
+          hash: createHash("sha256")
+            .update(await readFile(path))
+            .digest("hex"),
+        }));
       } else {
         throw new Error(
           `Unexpected non-file host source entry: ${path}`,
@@ -3627,7 +3629,7 @@ async function hashHostSources(root) {
   }
 
   await visit(root);
-  return hash.digest("hex");
+  return Object.freeze(sources);
 }
 
 async function removeOwnedTemporaryRoot(targetPath) {
@@ -4683,16 +4685,16 @@ export async function runPackagedHostProof(
         recursive: true,
       }),
     ]);
-    const sourceHashBeforeBuild = await hashHostSources(hostRoot);
+    const sourceSnapshotBeforeBuild = await snapshotHostSources(hostRoot);
     const buildOutput = runNpm(["run", "build"], {
       cwd: hostRoot,
       env: proofEnvironment,
       label: "clean packed Next host build",
     });
-    const sourceHashAfterBuild = await hashHostSources(hostRoot);
-    assert.equal(
-      sourceHashAfterBuild,
-      sourceHashBeforeBuild,
+    const sourceSnapshotAfterBuild = await snapshotHostSources(hostRoot);
+    assert.deepEqual(
+      sourceSnapshotAfterBuild,
+      sourceSnapshotBeforeBuild,
       "next build mutated the thin host source tree.",
     );
     if (browserExecutable !== undefined) {
