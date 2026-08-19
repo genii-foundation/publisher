@@ -49,6 +49,11 @@ function extensionRegistration({
   serverMarker = "EXTENSION_SERVER_DATA",
   renderer = true,
   rendererCompatibility = ">=0.1.0-alpha.0 <0.2.0",
+  host = true,
+  hostCalls = [],
+  hostCompatibility = ">=0.1.0-alpha.0 <0.2.0",
+  hostRender,
+  routePath = "/field-station",
 }) {
   return {
     id,
@@ -80,6 +85,23 @@ function extensionRegistration({
           diagnostics: [],
         };
       },
+      ...(capabilities.includes("host.route")
+        ? {
+            routes() {
+              return {
+                valid: true,
+                value: [{
+                  id: "field-station",
+                  path: routePath,
+                  title: "Field station",
+                  description: "Observations from the declared route.",
+                  data: { marker: "EXTENSION_ROUTE_DATA" },
+                }],
+                diagnostics: [],
+              };
+            },
+          }
+        : {}),
     },
     ...(renderer
       ? {
@@ -109,6 +131,26 @@ function extensionRegistration({
           },
         }
       : {}),
+    ...(host && capabilities.includes("host.route")
+      ? {
+          host: {
+            kind: "genii.publisher.next-host-extension",
+            apiVersion: "1.0",
+            rendererCompatibility: hostCompatibility,
+            renderRoute(input) {
+              hostCalls.push(input);
+              if (hostRender !== undefined) {
+                return hostRender(input);
+              }
+              return createElement(
+                "p",
+                { "data-extension-route-body": input.page.routeId },
+                `${input.page.data.marker}:${input.serverData.marker}`,
+              );
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -127,6 +169,29 @@ function clientFixture(t) {
     "content.project",
     "renderer.client",
   ];
+  writeFileSync(
+    manifestPath,
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    "utf8",
+  );
+  return publicationRoot;
+}
+
+function routeFixture(
+  t,
+  capabilities = ["content.project", "host.route"],
+) {
+  const root = mkdtempSync(join(tmpdir(), "publisher-route-extension-"));
+  t.after(() => rmSync(root, { force: true, recursive: true }));
+  const publicationRoot = join(root, "publication");
+  cpSync(
+    join(repositoryRoot, "fixtures", "canonical-field-notes"),
+    publicationRoot,
+    { recursive: true },
+  );
+  const manifestPath = join(publicationRoot, "publication.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.extensions[0].capabilities = capabilities;
   writeFileSync(
     manifestPath,
     `${JSON.stringify(manifest, null, 2)}\n`,
@@ -294,6 +359,144 @@ test("granted client code receives only its browser projection at one fixed moun
       "renderer.client",
     ),
     true,
+  );
+});
+
+test("host.route adds a static attributed page through a narrow compatible adapter", async (t) => {
+  const calls = [];
+  const clientCalls = [];
+  const hostCalls = [];
+  const capabilities = [
+    "content.project",
+    "renderer.slot",
+    "renderer.client",
+    "host.route",
+  ];
+  const registration = extensionRegistration({
+    id: "station-index",
+    packageName: "@example/station-index-extension",
+    capabilities,
+    calls,
+    clientCalls,
+    hostCalls,
+  });
+  const built = await buildPublicationReader({
+    publicationRoot: routeFixture(t, capabilities),
+    audience: "public",
+    extensions: [registration],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const created = await createFromBuild(built.value, [registration]);
+  assert.ok(created.valid, JSON.stringify(created.diagnostics, null, 2));
+  const resolved = created.value.resolveRoute(["field-station"]);
+  assert.equal(resolved.status, "resolved");
+  assert.equal(resolved.page.kind, "extension");
+  assert.equal(resolved.page.extensionId, "station-index");
+  assert.equal(resolved.page.data.marker, "EXTENSION_ROUTE_DATA");
+  const html = renderToStaticMarkup(
+    await created.value.renderPage(resolved.page),
+  );
+  assert.match(html, /data-publisher-page="extension"/u);
+  assert.match(html, /<h1>Field station<\/h1>/u);
+  assert.match(html, /data-extension-route-body="field-station"/u);
+  assert.match(html, /data-publisher-slot="page.before-main"/u);
+  assert.match(html, /data-publisher-client="page\.client"/u);
+  assert.match(html, /EXTENSION_ROUTE_DATA:EXTENSION_SERVER_DATA/u);
+  assert.match(html, /data-publisher-attribution="required"/u);
+  assert.equal(hostCalls.length, 1);
+  assert.deepEqual(Object.keys(hostCalls[0]).sort(), ["page", "serverData"]);
+  assert.ok(Object.isFrozen(hostCalls[0]));
+  assert.ok(Object.isFrozen(hostCalls[0].page));
+  assert.equal(Object.hasOwn(hostCalls[0], "request"), false);
+  assert.equal(Object.hasOwn(hostCalls[0], "response"), false);
+  assert.equal(Object.hasOwn(hostCalls[0], "environment"), false);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0].page.extension, {
+    id: "station-index",
+    routeId: "field-station",
+  });
+  assert.equal(Object.hasOwn(calls[0].page, "data"), false);
+  assert.equal(clientCalls.length, 1);
+  assert.deepEqual(clientCalls[0].page.extension, {
+    id: "station-index",
+    routeId: "field-station",
+  });
+  assert.equal(Object.hasOwn(clientCalls[0].page, "data"), false);
+  assert.ok(
+    created.value.staticParams.some(
+      ({ segments }) => segments?.join("/") === "field-station",
+    ),
+  );
+  const slash = created.value.handleRequest(
+    new Request("https://example.test/field-station/"),
+  );
+  assert.equal(slash?.status, 308);
+  assert.equal(slash?.headers.get("location"), "https://example.test/field-station");
+  const metadata = await created.value.generateMetadata({
+    params: Promise.resolve({ segments: ["field-station"] }),
+  });
+  assert.equal(
+    metadata.title,
+    "Field station | Rain Gauge Journal",
+  );
+  assert.equal(
+    metadata.description,
+    "Observations from the declared route.",
+  );
+  const identity = created.value.manifest.extensions.entries[0];
+  assert.equal(identity.hostApiVersion, "1.0");
+  assert.equal(
+    identity.hostCompatibility,
+    ">=0.1.0-alpha.0 <0.2.0",
+  );
+});
+
+test("host route failures identify public ownership without leaking the thrown value", async (t) => {
+  const registration = extensionRegistration({
+    id: "station-index",
+    packageName: "@example/station-index-extension",
+    capabilities: ["content.project", "host.route"],
+    hostRender() {
+      throw new Error("PRIVATE_HOST_ROUTE_SECRET");
+    },
+  });
+  const built = await buildPublicationReader({
+    publicationRoot: routeFixture(t),
+    audience: "public",
+    extensions: [registration],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const created = await createFromBuild(built.value, [registration]);
+  assert.ok(created.valid, JSON.stringify(created.diagnostics, null, 2));
+  const resolved = created.value.resolveRoute(["field-station"]);
+  assert.equal(resolved.status, "resolved");
+  await assert.rejects(
+    () => created.value.renderPage(resolved.page),
+    (error) => {
+      assert.match(error.message, /station-index/u);
+      assert.match(error.message, /field-station/u);
+      assert.doesNotMatch(error.message, /PRIVATE_HOST_ROUTE_SECRET/u);
+      return true;
+    },
+  );
+});
+
+test("host.route requires a compatible host adapter", async (t) => {
+  const registration = extensionRegistration({
+    id: "station-index",
+    packageName: "@example/station-index-extension",
+    capabilities: ["content.project", "host.route"],
+    host: false,
+  });
+  const built = await buildPublicationReader({
+    publicationRoot: routeFixture(t),
+    audience: "public",
+    extensions: [registration],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  assertDiagnostic(
+    await createFromBuild(built.value, [registration]),
+    "next.extension.host_invalid",
   );
 });
 

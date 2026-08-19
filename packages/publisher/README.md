@@ -29,7 +29,11 @@ The registration supplies its exact package version, engine compatibility,
 supported capabilities, and implementation. Every manifest declaration must
 match one registration in declaration order. Publisher invokes
 `content.project` only when granted and materializes its canonical result in a
-Reader-build-bound extension artifact. `publisher.extensions.mjs` is never
+Reader-build-bound extension artifact. A separate `host.route` grant invokes
+the extension's build-time route projector with public publication identity,
+its own config and payloads, and its own optional server projection. Publisher
+validates canonical paths and collisions before recording those descriptors in
+the same artifact. `publisher.extensions.mjs` is never
 created, rewritten, or treated as publication source by lifecycle commands.
 
 ## Source snapshot boundary

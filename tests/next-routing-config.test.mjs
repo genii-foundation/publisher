@@ -23,6 +23,9 @@ import {
 import {
   createPublisherNextRoutePlan,
 } from "../packages/next/dist/routes.js";
+import {
+  hashCanonicalJson,
+} from "../packages/content/dist/index.js";
 
 import {
   createFixtureReader,
@@ -40,6 +43,24 @@ function assertValid(result) {
 
 const UNICODE_15_1_NFC_DRIFT_SEGMENT =
   "q\u{1acf}\u0323";
+
+function extensionData(reader, routes) {
+  const basis = {
+    schemaVersion: "1.0",
+    publicationId: reader.publicationId,
+    engineVersion: reader.engineVersion,
+    readerBuildId: reader.buildId,
+    extensions: [{
+      id: "route-proof",
+      package: "@example/route-proof",
+      version: "1.0.0",
+      capabilities: ["host.route"],
+      config: {},
+      routes,
+    }],
+  };
+  return { ...basis, buildId: hashCanonicalJson(basis) };
+}
 
 test("the route plan preserves exact decoded segments", async () => {
   const reader = await createFixtureReader();
@@ -170,6 +191,53 @@ test("the route plan preserves exact decoded segments", async () => {
   assert.equal(Object.isFrozen(plan), true);
   assert.equal(Object.isFrozen(plan.staticParams), true);
   assert.equal(Object.isFrozen(plan.staticParams[0]), true);
+});
+
+test("declarative extension pages join static routing and collision checks", async () => {
+  const reader = await createFixtureReader();
+  const route = {
+    id: "field-station",
+    path: "/field-station",
+    title: "Field station",
+    data: { marker: "SERVER_ROUTE_DATA" },
+  };
+  const plan = assertValid(
+    createPublisherNextRoutePlan(
+      reader,
+      undefined,
+      extensionData(reader, [route]),
+    ),
+  );
+  assert.ok(plan.activePaths.includes("/field-station"));
+  assert.ok(
+    plan.staticParams.some(
+      ({ segments }) => segments?.join("/") === "field-station",
+    ),
+  );
+  assert.deepEqual(plan.resolve(["field-station"]), {
+    status: "resolved",
+    route: {
+      path: "/field-station",
+      target: {
+        kind: "extension",
+        extensionId: "route-proof",
+        routeId: "field-station",
+        title: "Field station",
+        data: { marker: "SERVER_ROUTE_DATA" },
+      },
+    },
+  });
+
+  const collision = createPublisherNextRoutePlan(
+    reader,
+    undefined,
+    extensionData(reader, [{ ...route, path: "/" }]),
+  );
+  assert.equal(collision.valid, false);
+  assert.equal(
+    collision.diagnostics[0].code,
+    "next.extension.route_invalid",
+  );
 });
 
 test("the route plan uses the pinned Unicode 15.1 normalization contract", async () => {

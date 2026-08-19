@@ -286,7 +286,9 @@
         "capabilities",
         "projectionHash",
         "rendererApiVersion",
-        "rendererCompatibility"
+        "rendererCompatibility",
+        "hostApiVersion",
+        "hostCompatibility"
       ],
       "properties": {
         "id": {
@@ -301,13 +303,14 @@
         "capabilities": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 3,
+          "maxItems": 4,
           "uniqueItems": true,
           "items": {
             "enum": [
               "content.project",
               "renderer.slot",
-              "renderer.client"
+              "renderer.client",
+              "host.route"
             ]
           }
         },
@@ -325,6 +328,28 @@
           ]
         },
         "rendererCompatibility": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          ]
+        },
+        "hostApiVersion": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "const": "1.0"
+            }
+          ]
+        },
+        "hostCompatibility": {
           "oneOf": [
             {
               "type": "null"

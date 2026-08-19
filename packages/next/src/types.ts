@@ -50,6 +50,7 @@ export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH =
 export const PUBLISHER_NEXT_THEME_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_UPDATES_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_SLOTS = Object.freeze([
   "page.before-main",
   "page.after-main",
@@ -88,6 +89,10 @@ export interface PublisherNextExtensionPageContext {
     readonly id: string;
     readonly title: string;
   };
+  readonly extension?: {
+    readonly id: string;
+    readonly routeId: string;
+  };
 }
 
 export interface PublisherNextExtensionRenderInput {
@@ -111,6 +116,21 @@ export interface PublisherNextExtensionRenderer {
     input: PublisherNextExtensionRenderInput,
   ) => ReactNode | Promise<ReactNode>;
   readonly Client?: ComponentType<PublisherNextExtensionClientProps>;
+}
+
+export interface PublisherNextExtensionHost {
+  readonly kind: "genii.publisher.next-host-extension";
+  readonly apiVersion:
+    typeof PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION;
+  readonly rendererCompatibility: string;
+  readonly renderRoute: (
+    input: PublisherNextExtensionRouteRenderInput,
+  ) => ReactNode | Promise<ReactNode>;
+}
+
+export interface PublisherNextExtensionRouteRenderInput {
+  readonly page: PublisherNextExtensionRoutePage;
+  readonly serverData?: JSONValue;
 }
 
 export interface PublisherNextThemeTokens {
@@ -206,6 +226,16 @@ export interface PublisherNextUpdatesPage
   readonly nextPath?: string;
 }
 
+export interface PublisherNextExtensionRoutePage
+  extends PublisherNextPageBase {
+  readonly kind: "extension";
+  readonly extensionId: string;
+  readonly routeId: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly data?: JSONValue;
+}
+
 export interface PublisherNextUpdatesEntry {
   readonly id: string;
   readonly title: string;
@@ -226,7 +256,8 @@ export type PublisherNextPage =
   | PublisherNextWorkPage
   | PublisherNextCollectionPage
   | PublisherNextSectionPage
-  | PublisherNextUpdatesPage;
+  | PublisherNextUpdatesPage
+  | PublisherNextExtensionRoutePage;
 
 export interface PublisherNextUpdatesInstance {
   readonly load: (
@@ -301,6 +332,9 @@ export interface PublisherNextApplicationManifest {
       readonly rendererApiVersion:
         typeof PUBLISHER_NEXT_EXTENSION_API_VERSION | null;
       readonly rendererCompatibility: string | null;
+      readonly hostApiVersion:
+        typeof PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION | null;
+      readonly hostCompatibility: string | null;
     }[];
   } | null;
   readonly sync: {

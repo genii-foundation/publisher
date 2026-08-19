@@ -3456,6 +3456,11 @@ export async function runPackagedHostProof(
     "PACKED_EXTENSION_CLIENT_DATA_ONLY";
   const packedExtensionServerSentinel =
     "PACKED_EXTENSION_SERVER_DATA_ONLY";
+  const packedExtensionRouteDataSentinel =
+    "PACKED_EXTENSION_ROUTE_DATA_ONLY";
+  const packedExtensionRouteRenderSentinel =
+    "PACKED_EXTENSION_ROUTE_RENDERED";
+  const packedExtensionRoutePath = "/extension-field-station";
 
   const temporaryRoot = await mkdtemp(
     join(tmpdir(), "genii-publisher-next-host-"),
@@ -3575,7 +3580,7 @@ export async function runPackagedHostProof(
           '  package: "@example/packed-publication-extension",',
           '  version: "1.0.0",',
           '  engineCompatibility: ">=0.1.0-alpha.0 <2.0.0",',
-          '  capabilities: Object.freeze(["content.project", "renderer.slot", "renderer.client"]),',
+          '  capabilities: Object.freeze(["content.project", "renderer.slot", "renderer.client", "host.route"]),',
           "  implementation: Object.freeze({",
           '    kind: "genii.publisher.extension",',
           '    apiVersion: "1.0",',
@@ -3596,6 +3601,19 @@ export async function runPackagedHostProof(
           "        }),",
           "      });",
           "    },",
+          "    routes() {",
+          "      return Object.freeze({",
+          "        valid: true,",
+          "        diagnostics: Object.freeze([]),",
+          "        value: Object.freeze([Object.freeze({",
+          '          id: "field-station",',
+          `          path: "${packedExtensionRoutePath}",`,
+          '          title: "Extension field station",',
+          '          description: "A route supplied by the packed extension proof.",',
+          `          data: Object.freeze({ marker: "${packedExtensionRouteDataSentinel}" }),`,
+          "        })]),",
+          "      });",
+          "    },",
           "  }),",
           "  renderer: Object.freeze({",
           '    kind: "genii.publisher.next-extension",',
@@ -3604,6 +3622,14 @@ export async function runPackagedHostProof(
           "    Client: PackedExtensionClient,",
           "    renderSlot({ slot, serverData }) {",
           `      return \`${packedExtensionRenderSentinel}:\${slot}:\${serverData.marker}\`;`,
+          "    },",
+          "  }),",
+          "  host: Object.freeze({",
+          '    kind: "genii.publisher.next-host-extension",',
+          '    apiVersion: "1.0",',
+          '    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",',
+          "    renderRoute({ page, serverData }) {",
+          `      return \`${packedExtensionRouteRenderSentinel}:\${page.data.marker}:\${serverData.marker}\`;`,
           "    },",
           "  }),",
           "});",
@@ -3838,6 +3864,7 @@ export async function runPackagedHostProof(
         "content.project",
         "renderer.slot",
         "renderer.client",
+        "host.route",
       ]),
       config: Object.freeze({}),
       serverData: Object.freeze({
@@ -3849,6 +3876,17 @@ export async function runPackagedHostProof(
         marker: packedExtensionClientDataSentinel,
         publicationId: reader.publicationId,
       }),
+      routes: Object.freeze([
+        Object.freeze({
+          id: "field-station",
+          path: packedExtensionRoutePath,
+          title: "Extension field station",
+          description: "A route supplied by the packed extension proof.",
+          data: Object.freeze({
+            marker: packedExtensionRouteDataSentinel,
+          }),
+        }),
+      ]),
     });
     const extensionBasis = Object.freeze({
       schemaVersion: "1.0",
@@ -4390,6 +4428,7 @@ export async function runPackagedHostProof(
       "unsafe link",
       packedExtensionClientDataSentinel,
       packedExtensionServerSentinel,
+      packedExtensionRouteDataSentinel,
     ]) {
       assert.equal(
         clientChunks.includes(manuscriptSentinel),
@@ -4423,9 +4462,10 @@ export async function runPackagedHostProof(
       );
     }
     try {
-      renderedRoutes = reader.routes.active.map(
-        ({ path }) => path,
-      );
+      renderedRoutes = [
+        ...reader.routes.active.map(({ path }) => path),
+        packedExtensionRoutePath,
+      ];
       const renderedResponses = await Promise.all(
         renderedRoutes.map((path) =>
           fetch(`${host.origin}${path}`, {
@@ -4467,6 +4507,9 @@ export async function runPackagedHostProof(
         packedExtensionClientRenderSentinel,
         packedExtensionClientDataSentinel,
         packedExtensionServerSentinel,
+        packedExtensionRouteDataSentinel,
+        packedExtensionRouteRenderSentinel,
+        "Extension field station",
       ]) {
         assert.ok(
           semanticHtml.includes(expected),

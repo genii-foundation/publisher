@@ -611,9 +611,32 @@ The packed proof requires the client module in browser chunks, keeps both
 projection sentinels out of those static chunks, hydrates a real interaction,
 and contains a deliberate client failure.
 
-`host.route` and `host.handler` are not implemented. Capability grants decide
-which documented interface Publisher invokes, but they do not sandbox explicitly
-imported JavaScript.
+With a `host.route` grant, the extension implementation may project an ordered
+list of canonical public page descriptors during the Publisher build. The
+official Next registration must also provide a compatible `host` adapter:
+
+```js
+host: {
+  kind: "genii.publisher.next-host-extension",
+  apiVersion: "1.0",
+  rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+  renderRoute({ page, serverData }) {
+    return <StationIndex data={page.data} station={serverData} />;
+  },
+}
+```
+
+The route projector receives only public publication identity, its own config
+and payloads, and its own server projection when separately granted. The host
+adapter receives only the issued immutable extension page and its own optional
+server data. Publisher owns the canonical path, metadata, static parameters,
+slash continuity, heading, shell, error surfaces, slots, client mount, and
+required attribution. Route data is server data and is not sent to client
+extension props.
+
+`host.handler` remains unimplemented. Capability grants decide which documented
+interface Publisher invokes, but they do not sandbox explicitly imported
+JavaScript.
 
 ## Updates
 

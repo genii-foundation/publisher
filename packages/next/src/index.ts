@@ -26,6 +26,7 @@ export {
   PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
   PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT,
   PUBLISHER_NEXT_EXTENSION_API_VERSION,
+  PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION,
   PUBLISHER_NEXT_EXTENSION_SLOTS,
   PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES,
   PUBLISHER_NEXT_THEME_API_VERSION,
@@ -34,8 +35,11 @@ export {
 } from "./types.js";
 export type {
   PublisherNextExtensionClientProps,
+  PublisherNextExtensionHost,
   PublisherNextExtensionPageContext,
   PublisherNextExtensionRenderer,
+  PublisherNextExtensionRoutePage,
+  PublisherNextExtensionRouteRenderInput,
   PublisherNextExtensionRenderInput,
   PublisherNextExtensionSlot,
   PublisherNextJsonObject,

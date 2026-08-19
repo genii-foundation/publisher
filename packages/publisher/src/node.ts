@@ -78,6 +78,8 @@ export type {
   PublisherExtensionImplementation,
   PublisherExtensionProjectInput,
   PublisherExtensionProjection,
+  PublisherExtensionRouteProjectInput,
+  PublisherExtensionRouteProjection,
   PublisherExtensionRegistration,
   ResolvedPublisherExtensions,
 } from "./node/extensions.js";

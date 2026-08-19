@@ -136,11 +136,11 @@ export function createPublisherNextContinuityHandler(
   const redirects = new Map<string, RedirectTarget>();
   const activePaths = new Set<string>();
   const activePathsBySegmentKey = new Map<string, string>();
-  for (const route of reader.routes.active) {
-    activePaths.add(route.path);
-    const key = canonicalSegmentKey(route.path);
+  for (const path of routePlan.activePaths) {
+    activePaths.add(path);
+    const key = canonicalSegmentKey(path);
     if (key !== null) {
-      activePathsBySegmentKey.set(key, route.path);
+      activePathsBySegmentKey.set(key, path);
     }
   }
   for (const redirect of reader.routes.redirects) {
@@ -154,19 +154,19 @@ export function createPublisherNextContinuityHandler(
   }
 
   let canonicalSlashRedirectCount = 0;
-  for (const route of reader.routes.active) {
-    if (route.path === "/") {
+  for (const path of routePlan.activePaths) {
+    if (path === "/") {
       continue;
     }
-    const alias = route.path.endsWith("/")
-      ? route.path.slice(0, -1)
-      : `${route.path}/`;
+    const alias = path.endsWith("/")
+      ? path.slice(0, -1)
+      : `${path}/`;
     if (!redirects.has(alias)) {
       redirects.set(
         alias,
         Object.freeze({
           status: 308,
-          to: route.path,
+          to: path,
         }),
       );
       canonicalSlashRedirectCount += 1;

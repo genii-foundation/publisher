@@ -32,7 +32,6 @@ import {
   type ReaderBlockMarkdownLink,
 } from "@genii-foundation/publisher-reader/markdown";
 import type {
-  ContentRoute,
   Diagnostic,
   ExtensionCapability,
   JSONValue,
@@ -91,6 +90,7 @@ import type {
 } from "../continuity.js";
 import {
   createPublisherNextRoutePlan,
+  type PublisherNextPlannedRoute,
   type PublisherNextRoutePlan,
 } from "../routes.js";
 import {
@@ -108,6 +108,7 @@ import {
   PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
   PUBLISHER_NEXT_EXTENSION_API_VERSION,
   PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT,
+  PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION,
   PUBLISHER_NEXT_EXTENSION_SLOTS,
   PUBLISHER_NEXT_THEME_API_VERSION,
   PUBLISHER_NEXT_UPDATES_API_VERSION,
@@ -119,6 +120,7 @@ import type {
   PublisherNextApplicationArtifact,
   PublisherNextApplicationManifest,
   PublisherNextExtensionPageContext,
+  PublisherNextExtensionHost,
   PublisherNextExtensionRenderer,
   PublisherNextExtensionSlot,
   PublisherNextJsonObject,
@@ -179,6 +181,7 @@ interface ResolvedExtensionEntry {
   readonly capabilities: readonly ExtensionCapability[];
   readonly projectionHash: Sha256Digest;
   readonly renderer: PublisherNextExtensionRenderer | null;
+  readonly host: PublisherNextExtensionHost | null;
   readonly clientData?: JSONValue;
   readonly serverData?: JSONValue;
 }
@@ -535,6 +538,7 @@ const SUPPORTED_EXTENSION_CAPABILITIES = Object.freeze([
   "content.project",
   "renderer.slot",
   "renderer.client",
+  "host.route",
 ] as const);
 
 function snapshotExtensionData(
@@ -667,7 +671,7 @@ function resolveExtensions(
     const entry = inspectRecord(
       entryValue,
       ["id", "package", "version", "capabilities", "config"],
-      ["serverData", "clientData"],
+      ["serverData", "clientData", "routes"],
     );
     const registration = inspectRecord(
       registrations[index],
@@ -679,7 +683,7 @@ function resolveExtensions(
         "capabilities",
         "implementation",
       ],
-      ["renderer"],
+      ["renderer", "host"],
     );
     if (entry === null || registration === null) {
       return failure(
@@ -740,6 +744,7 @@ function resolveExtensions(
       );
     }
     const clientData = valueOf(entry, "clientData");
+    const routeData = valueOf(entry, "routes");
     if (
       clientData !== undefined &&
       !entryCapabilities.includes("renderer.client")
@@ -748,6 +753,19 @@ function resolveExtensions(
         "next.extension.client_data_ungranted",
         `${path}/clientData`,
         "Browser data requires the renderer.client grant.",
+        "extensionCapability",
+      );
+    }
+    if (
+      (entryCapabilities.includes("host.route") &&
+        !Array.isArray(routeData)) ||
+      (!entryCapabilities.includes("host.route") &&
+        routeData !== undefined)
+    ) {
+      return failure(
+        "next.extension.route_data_ungranted",
+        `${path}/routes`,
+        "Declarative route data requires the host.route grant, and every host.route grant requires route data.",
         "extensionCapability",
       );
     }
@@ -817,6 +835,51 @@ function resolveExtensions(
           : {}),
       });
     }
+    const hostValue = valueOf(registration, "host");
+    let host: PublisherNextExtensionHost | null = null;
+    if (granted.includes("host.route")) {
+      const inspectedHost = inspectRecord(
+        hostValue,
+        [
+          "kind",
+          "apiVersion",
+          "rendererCompatibility",
+          "renderRoute",
+        ],
+      );
+      const hostCompatibility = inspectedHost === null
+        ? undefined
+        : valueOf(inspectedHost, "rendererCompatibility");
+      const renderRoute = inspectedHost === null
+        ? undefined
+        : valueOf(inspectedHost, "renderRoute");
+      if (
+        inspectedHost === null ||
+        valueOf(inspectedHost, "kind") !==
+          "genii.publisher.next-host-extension" ||
+        valueOf(inspectedHost, "apiVersion") !==
+          PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION ||
+        typeof hostCompatibility !== "string" ||
+        validRange(hostCompatibility) === null ||
+        !satisfies(PUBLISHER_NEXT_VERSION, hostCompatibility, {
+          includePrerelease: true,
+        }) ||
+        typeof renderRoute !== "function"
+      ) {
+        return failure(
+          "next.extension.host_invalid",
+          `/extensions/${index}/host`,
+          "The host.route grant requires one compatible official Next host adapter.",
+          "extensionHost",
+        );
+      }
+      host = Object.freeze({
+        kind: "genii.publisher.next-host-extension" as const,
+        apiVersion: PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION,
+        rendererCompatibility: hostCompatibility,
+        renderRoute: renderRoute as PublisherNextExtensionHost["renderRoute"],
+      });
+    }
     entries.push(Object.freeze({
       id,
       package: packageName,
@@ -824,6 +887,7 @@ function resolveExtensions(
       capabilities: granted,
       projectionHash: hashCanonicalJson(entryValue as JSONValue),
       renderer,
+      host,
       ...(clientData === undefined
         ? {}
         : { clientData: clientData as JSONValue }),
@@ -848,6 +912,9 @@ function extensionPageContext(
   const section = page.kind === "section"
     ? Object.freeze({ id: page.section.id, title: page.section.title })
     : undefined;
+  const extension = page.kind === "extension"
+    ? Object.freeze({ id: page.extensionId, routeId: page.routeId })
+    : undefined;
   return Object.freeze({
     kind: page.kind,
     path: page.path,
@@ -858,7 +925,39 @@ function extensionPageContext(
     }),
     ...(work === undefined ? {} : { work }),
     ...(section === undefined ? {} : { section }),
+    ...(extension === undefined ? {} : { extension }),
   });
+}
+
+async function renderExtensionRoute(
+  extensions: ResolvedExtensionsState | null,
+  page: Extract<PublisherNextPage, { readonly kind: "extension" }>,
+) {
+  const extension = extensions?.entries.find(
+    ({ id }) => id === page.extensionId,
+  );
+  const renderRoute = extension?.host?.renderRoute;
+  if (
+    extension === undefined ||
+    !extension.capabilities.includes("host.route") ||
+    renderRoute === undefined
+  ) {
+    throw new TypeError(
+      `Extension route ${JSON.stringify(page.routeId)} has no compatible host adapter.`,
+    );
+  }
+  try {
+    return await renderRoute(Object.freeze({
+      page,
+      ...(extension.serverData === undefined
+        ? {}
+        : { serverData: extension.serverData }),
+    }));
+  } catch {
+    throw new TypeError(
+      `Extension ${JSON.stringify(extension.id)} threw while rendering route ${JSON.stringify(page.routeId)}.`,
+    );
+  }
 }
 
 async function renderExtensionSlot(
@@ -1680,13 +1779,7 @@ function pageResolver(
     );
 
   const toPage = (
-    route: ContentRoute & {
-      readonly target: ContentRoute["target"] & {
-        readonly pageNumber?: number;
-        readonly previousPath?: string;
-        readonly nextPath?: string;
-      };
-    },
+    route: PublisherNextPlannedRoute,
   ): PublisherNextPage | null => {
     const base = {
       path: route.path,
@@ -1717,16 +1810,35 @@ function pageResolver(
           ...base,
           kind: "updates",
           viewId: route.target.viewId,
-          pageNumber: route.target.pageNumber ?? 1,
+          pageNumber: "pageNumber" in route.target
+            ? route.target.pageNumber
+            : 1,
           ...(route.target.pagination === undefined
             ? {}
             : { pageSize: route.target.pagination.pageSize }),
-          ...(route.target.previousPath === undefined
+          ...(!("previousPath" in route.target) ||
+              route.target.previousPath === undefined
             ? {}
             : { previousPath: route.target.previousPath }),
-          ...(route.target.nextPath === undefined
+          ...(!("nextPath" in route.target) ||
+              route.target.nextPath === undefined
             ? {}
             : { nextPath: route.target.nextPath }),
+        });
+        break;
+      case "extension":
+        page = Object.freeze({
+          ...base,
+          kind: "extension",
+          extensionId: route.target.extensionId,
+          routeId: route.target.routeId,
+          title: route.target.title,
+          ...(route.target.description === undefined
+            ? {}
+            : { description: route.target.description }),
+          ...(route.target.data === undefined
+            ? {}
+            : { data: route.target.data }),
         });
         break;
       case "work": {
@@ -1877,6 +1989,10 @@ function metadataForPage(
       description =
         updatesView?.description ?? page.publication.description;
       break;
+    case "extension":
+      title = `${page.title} | ${page.publication.title}`;
+      description = page.description ?? page.publication.description;
+      break;
   }
   const canonical =
     page.publication.canonicalUrl === undefined
@@ -1958,6 +2074,9 @@ function createApplicationArtifact(
             rendererApiVersion: extension.renderer?.apiVersion ?? null,
             rendererCompatibility:
               extension.renderer?.rendererCompatibility ?? null,
+            hostApiVersion: extension.host?.apiVersion ?? null,
+            hostCompatibility:
+              extension.host?.rendererCompatibility ?? null,
           })),
         ),
       });
@@ -2096,6 +2215,7 @@ export async function createPublicationNextApplication(
     const routePlanResult = createPublisherNextRoutePlan(
       reader,
       suppliedUpdatesData,
+      valueOf(inspectedOptions, "extensionData"),
     );
     if (!routePlanResult.valid) {
       return routePlanResult;
@@ -2304,10 +2424,16 @@ export async function createPublicationNextApplication(
         extensions,
         page,
       );
+      const extensionRouteBody = page.kind === "extension"
+        ? await renderExtensionRoute(extensions, page)
+        : undefined;
       return PublisherPageView({
         afterMain,
         beforeMain,
         clientExtensions,
+        ...(extensionRouteBody === undefined
+          ? {}
+          : { extensionRouteBody }),
         homePath: resolver.homePath,
         markdownForBlock,
         page,

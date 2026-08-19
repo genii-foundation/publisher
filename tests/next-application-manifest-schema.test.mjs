@@ -238,9 +238,16 @@ test("the application manifest schema records every implemented extension render
       projectionHash: `sha256:${"2".repeat(64)}`,
       rendererApiVersion: "1.0",
       rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+      hostApiVersion: null,
+      hostCompatibility: null,
     }],
   };
   assertValid(manifest);
   manifest.extensions.entries[0].capabilities.push("host.route");
+  manifest.extensions.entries[0].hostApiVersion = "1.0";
+  manifest.extensions.entries[0].hostCompatibility =
+    ">=0.1.0-alpha.0 <0.2.0";
+  assertValid(manifest);
+  manifest.extensions.entries[0].capabilities.push("host.handler");
   assertInvalid(manifest);
 });

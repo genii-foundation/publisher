@@ -12,17 +12,26 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 import {
+  PUBLICATION_PROTOCOL_LIMITS,
   normalizePortableRepositoryText,
   validateUpdatesEnvelopeShape,
 } from "@genii-foundation/publisher-schema";
+import {
+  inspectCanonicalRoutePath,
+} from "@genii-foundation/publisher-schema/routes";
+import {
+  canonicalizeJson,
+  hashCanonicalJson,
+} from "@genii-foundation/publisher-content";
 import type {
   ContentRoute,
   Diagnostic,
+  JSONValue,
   PublicationReaderEnvelope,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
 
-type PlannedRoute = ContentRoute | {
+export type PublisherNextPlannedRoute = ContentRoute | {
   readonly path: string;
   readonly target: {
     readonly kind: "updates";
@@ -35,6 +44,16 @@ type PlannedRoute = ContentRoute | {
     readonly previousPath?: string;
     readonly nextPath?: string;
   };
+} | {
+  readonly path: string;
+  readonly target: {
+    readonly kind: "extension";
+    readonly extensionId: string;
+    readonly routeId: string;
+    readonly title: string;
+    readonly description?: string;
+    readonly data?: JSONValue;
+  };
 };
 
 import type { PublisherNextRouteParams } from "./types.js";
@@ -42,12 +61,13 @@ import type { PublisherNextRouteParams } from "./types.js";
 export interface PublisherNextRoutePlan {
   readonly slashPolicy: "none" | "no-trailing" | "trailing" | "mixed";
   readonly staticParams: readonly PublisherNextRouteParams[];
+  readonly activePaths: readonly string[];
   readonly resolve: (
     segments: unknown,
   ) =>
     | {
         readonly status: "resolved";
-        readonly route: PlannedRoute;
+        readonly route: PublisherNextPlannedRoute;
       }
     | {
         readonly status: "not-found";
@@ -56,6 +76,249 @@ export interface PublisherNextRoutePlan {
         readonly status: "invalid";
         readonly issue: string;
       };
+}
+
+const EXTENSION_ID = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u;
+const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/u;
+
+function exactJsonObject(
+  value: JSONValue | undefined,
+  required: readonly string[],
+  optional: readonly string[] = [],
+): Readonly<Record<string, JSONValue>> | null {
+  if (value === undefined || value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const keys = Object.keys(value);
+  const allowed = new Set([...required, ...optional]);
+  if (
+    required.some((key) => !Object.hasOwn(value, key)) ||
+    keys.some((key) => !allowed.has(key))
+  ) {
+    return null;
+  }
+  return value as Readonly<Record<string, JSONValue>>;
+}
+
+function extensionRoutesFor(
+  reader: PublicationReaderEnvelope,
+  extensionData: unknown,
+): ValidationResult<readonly PublisherNextPlannedRoute[]> {
+  if (extensionData === undefined) {
+    return Object.freeze({
+      valid: true,
+      value: Object.freeze([]),
+      diagnostics: Object.freeze([]),
+    });
+  }
+  let data: JSONValue;
+  try {
+    data = JSON.parse(canonicalizeJson(extensionData as JSONValue)) as JSONValue;
+  } catch {
+    return Object.freeze({
+      valid: false,
+      diagnostics: Object.freeze([
+        diagnostic(
+          "next.extension.routes_data_invalid",
+          "/extensionData",
+          "Extension route data must be finite canonical JSON.",
+          "json",
+          {},
+        ),
+      ]),
+    });
+  }
+  const envelope = exactJsonObject(data, [
+    "schemaVersion",
+    "publicationId",
+    "engineVersion",
+    "readerBuildId",
+    "extensions",
+    "buildId",
+  ]);
+  if (envelope === null) {
+    return Object.freeze({
+      valid: false,
+      diagnostics: Object.freeze([
+        diagnostic(
+          "next.extension.routes_data_shape_invalid",
+          "/extensionData",
+          "Extension route data must use the closed build-bound artifact shape.",
+          "properties",
+          {},
+        ),
+      ]),
+    });
+  }
+  const extensions = envelope.extensions;
+  const buildId = envelope.buildId;
+  const basis = Object.freeze({
+    schemaVersion: envelope.schemaVersion,
+    publicationId: envelope.publicationId,
+    engineVersion: envelope.engineVersion,
+    readerBuildId: envelope.readerBuildId,
+    extensions,
+  });
+  if (
+    envelope.schemaVersion !== "1.0" ||
+    envelope.publicationId !== reader.publicationId ||
+    envelope.engineVersion !== reader.engineVersion ||
+    envelope.readerBuildId !== reader.buildId ||
+    typeof buildId !== "string" ||
+    !SHA256_DIGEST.test(buildId) ||
+    hashCanonicalJson(basis as JSONValue) !== buildId ||
+    !Array.isArray(extensions) ||
+    extensions.length === 0 ||
+    extensions.length > 1_000
+  ) {
+    return Object.freeze({
+      valid: false,
+      diagnostics: Object.freeze([
+        diagnostic(
+          "next.extension.routes_data_identity_invalid",
+          "/extensionData",
+          "Extension route data must belong to this exact Reader build.",
+          "identity",
+          {},
+        ),
+      ]),
+    });
+  }
+  const planned: PublisherNextPlannedRoute[] = [];
+  const seenExtensionIds = new Set<string>();
+  const ownedPaths = new Set([
+    ...reader.routes.active.map(({ path }) => path),
+    ...reader.routes.redirects.map(({ from }) => from),
+  ]);
+  for (const [extensionIndex, value] of extensions.entries()) {
+    const path = `/extensionData/extensions/${extensionIndex}`;
+    const entry = exactJsonObject(
+      value,
+      ["id", "package", "version", "capabilities", "config"],
+      ["serverData", "clientData", "routes"],
+    );
+    if (
+      entry === null ||
+      typeof entry.id !== "string" ||
+      !EXTENSION_ID.test(entry.id) ||
+      seenExtensionIds.has(entry.id)
+    ) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.extension.route_entry_invalid",
+            path,
+            "Extension route entries must use the closed extension artifact shape.",
+            "properties",
+            {},
+          ),
+        ]),
+      });
+    }
+    seenExtensionIds.add(entry.id);
+    const capabilities = entry.capabilities;
+    const routes = entry.routes;
+    const granted = Array.isArray(capabilities) &&
+      capabilities.length > 0 &&
+      capabilities.every(
+        (capability, index) =>
+          typeof capability === "string" &&
+          capabilities.indexOf(capability) === index,
+      ) &&
+      capabilities.includes("host.route");
+    if (!Array.isArray(capabilities) || capabilities.length === 0) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.extension.route_grant_invalid",
+            `${path}/capabilities`,
+            "Extension route capabilities must be one nonempty unique string list.",
+            "extensionCapability",
+            {},
+          ),
+        ]),
+      });
+    }
+    if ((granted && !Array.isArray(routes)) || (!granted && routes !== undefined)) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.extension.route_grant_invalid",
+            `${path}/routes`,
+            "Declarative routes require the host.route grant, and every host.route grant requires a route list.",
+            "extensionCapability",
+            {},
+          ),
+        ]),
+      });
+    }
+    if (!granted || !Array.isArray(routes)) {
+      continue;
+    }
+    const localRouteIds = new Set<string>();
+    for (const [routeIndex, routeValue] of routes.entries()) {
+      const routePath = `${path}/routes/${routeIndex}`;
+      const route = exactJsonObject(
+        routeValue,
+        ["id", "path", "title"],
+        ["description", "data"],
+      );
+      if (
+        route === null ||
+        typeof route.id !== "string" ||
+        !EXTENSION_ID.test(route.id) ||
+        localRouteIds.has(route.id) ||
+        typeof route.path !== "string" ||
+        !inspectCanonicalRoutePath(route.path).valid ||
+        ownedPaths.has(route.path) ||
+        typeof route.title !== "string" ||
+        route.title.length === 0 ||
+        route.title.length > 512 ||
+        route.title.includes("\u0000") ||
+        (route.description !== undefined &&
+          (typeof route.description !== "string" ||
+            route.description.length === 0 ||
+            route.description.length > 4_000 ||
+            route.description.includes("\u0000"))) ||
+        planned.length + reader.routes.active.length >=
+          PUBLICATION_PROTOCOL_LIMITS.maximumActiveRoutes
+      ) {
+        return Object.freeze({
+          valid: false,
+          diagnostics: Object.freeze([
+            diagnostic(
+              "next.extension.route_invalid",
+              routePath,
+              "Extension routes require a bounded ID, canonical path, public text, and finite JSON data.",
+              "route",
+              {},
+            ),
+          ]),
+        });
+      }
+      localRouteIds.add(route.id);
+      ownedPaths.add(route.path);
+      planned.push(Object.freeze({
+        path: route.path,
+        target: Object.freeze({
+          kind: "extension" as const,
+          extensionId: entry.id,
+          routeId: route.id,
+          title: route.title,
+          ...(route.description === undefined ? {} : { description: route.description }),
+          ...(route.data === undefined ? {} : { data: route.data }),
+        }),
+      }));
+    }
+  }
+  return Object.freeze({
+    valid: true,
+    value: Object.freeze(planned),
+    diagnostics: Object.freeze([]),
+  });
 }
 
 function diagnostic(
@@ -188,21 +451,9 @@ function inspectSegments(
 export function createPublisherNextRoutePlan(
   reader: PublicationReaderEnvelope,
   updatesData?: unknown,
+  extensionData?: unknown,
 ): ValidationResult<PublisherNextRoutePlan> {
-  const nonRootSlashPolicies = new Set(
-    reader.routes.active
-      .filter(({ path }) => path !== "/")
-      .map(({ path }) => path.endsWith("/")),
-  );
-  const slashPolicy =
-    nonRootSlashPolicies.size === 0
-      ? "none"
-      : nonRootSlashPolicies.size > 1
-        ? "mixed"
-        : nonRootSlashPolicies.has(true)
-          ? "trailing"
-          : "no-trailing";
-  const routes: PlannedRoute[] = [...reader.routes.active];
+  const routes: PublisherNextPlannedRoute[] = [...reader.routes.active];
   if (updatesData !== undefined) {
     const validated = validateUpdatesEnvelopeShape(updatesData);
     if (!validated.valid) {
@@ -342,7 +593,39 @@ export function createPublisherNextRoutePlan(
       }
     }
   }
-  const routesBySegments = new Map<string, PlannedRoute>();
+  const extensionRoutes = extensionRoutesFor(reader, extensionData);
+  if (!extensionRoutes.valid) {
+    return extensionRoutes;
+  }
+  routes.push(...extensionRoutes.value);
+  if (routes.length > PUBLICATION_PROTOCOL_LIMITS.maximumActiveRoutes) {
+    return Object.freeze({
+      valid: false,
+      diagnostics: Object.freeze([
+        diagnostic(
+          "next.route.count_exceeded",
+          "/routes/active",
+          "The expanded route plan exceeds the protocol route limit.",
+          "maxItems",
+          { maximum: PUBLICATION_PROTOCOL_LIMITS.maximumActiveRoutes },
+        ),
+      ]),
+    });
+  }
+  const nonRootSlashPolicies = new Set(
+    routes
+      .filter(({ path }) => path !== "/")
+      .map(({ path }) => path.endsWith("/")),
+  );
+  const slashPolicy =
+    nonRootSlashPolicies.size === 0
+      ? "none"
+      : nonRootSlashPolicies.size > 1
+        ? "mixed"
+        : nonRootSlashPolicies.has(true)
+          ? "trailing"
+          : "no-trailing";
+  const routesBySegments = new Map<string, PublisherNextPlannedRoute>();
   const staticParams: PublisherNextRouteParams[] = [];
 
   for (
@@ -379,9 +662,11 @@ export function createPublisherNextRoutePlan(
   }
 
   const frozenParams = Object.freeze(staticParams);
+  const activePaths = Object.freeze(routes.map(({ path }) => path));
   const plan: PublisherNextRoutePlan = Object.freeze({
     slashPolicy,
     staticParams: frozenParams,
+    activePaths,
     resolve(segments: unknown) {
       const inspected = inspectSegments(segments);
       if (!inspected.valid) {

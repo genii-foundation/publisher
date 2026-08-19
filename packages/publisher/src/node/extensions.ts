@@ -20,7 +20,11 @@ import type {
 } from "@genii-foundation/publisher-content";
 import {
   EXTENSION_CAPABILITIES,
+  PUBLICATION_PROTOCOL_LIMITS,
 } from "@genii-foundation/publisher-schema";
+import {
+  inspectCanonicalRoutePath,
+} from "@genii-foundation/publisher-schema/routes";
 import type {
   CompiledContentPayload,
   CompiledExtension,
@@ -62,6 +66,21 @@ export interface PublisherExtensionProjection {
   readonly clientData?: JSONValue;
 }
 
+export interface PublisherExtensionRouteProjectInput {
+  readonly publication: PublicationReaderEnvelope["publication"];
+  readonly config: Readonly<Record<string, JSONValue>>;
+  readonly payloads: readonly CompiledContentPayload[];
+  readonly serverData?: JSONValue;
+}
+
+export interface PublisherExtensionRouteProjection {
+  readonly id: string;
+  readonly path: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly data?: JSONValue;
+}
+
 export interface PublisherExtensionImplementation {
   readonly kind: "genii.publisher.extension";
   readonly apiVersion: typeof PUBLISHER_EXTENSION_API_VERSION;
@@ -70,6 +89,11 @@ export interface PublisherExtensionImplementation {
   ) =>
     | ValidationResult<PublisherExtensionProjection>
     | Promise<ValidationResult<PublisherExtensionProjection>>;
+  readonly routes?: (
+    input: PublisherExtensionRouteProjectInput,
+  ) =>
+    | ValidationResult<readonly PublisherExtensionRouteProjection[]>
+    | Promise<ValidationResult<readonly PublisherExtensionRouteProjection[]>>;
 }
 
 export interface PublisherExtensionRegistration {
@@ -80,6 +104,7 @@ export interface PublisherExtensionRegistration {
   readonly capabilities: readonly ExtensionCapability[];
   readonly implementation: PublisherExtensionImplementation;
   readonly renderer?: unknown;
+  readonly host?: unknown;
 }
 
 export interface ResolvedPublisherExtensions {
@@ -95,6 +120,7 @@ export interface PublisherExtensionDataEntry {
   readonly config: Readonly<Record<string, JSONValue>>;
   readonly serverData?: JSONValue;
   readonly clientData?: JSONValue;
+  readonly routes?: readonly PublisherExtensionRouteProjection[];
 }
 
 export interface PublisherExtensionDataEnvelope {
@@ -297,6 +323,125 @@ function freezeJson(value: JSONValue): JSONValue {
   return value;
 }
 
+const EXTENSION_ROUTE_ID =
+  /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u;
+
+function snapshotExtensionRoutes(
+  value: unknown,
+  path: string,
+  diagnostics: Diagnostic[],
+  ownedPaths: Map<string, string>,
+  remainingRouteCount: number,
+): readonly PublisherExtensionRouteProjection[] {
+  const inspected = inspectArray(value, remainingRouteCount);
+  if (inspected === null) {
+    diagnostics.push(
+      diagnostic(
+        "publisher.extension.routes_invalid",
+        path,
+        "Extension routes must be a bounded array of declarative page descriptors.",
+        "type",
+        { maximum: remainingRouteCount },
+      ),
+    );
+    return Object.freeze([]);
+  }
+  const routes: PublisherExtensionRouteProjection[] = [];
+  const localIds = new Set<string>();
+  inspected.forEach((candidate, index) => {
+    const routePath = `${path}/${index}`;
+    const record = inspectRecord(
+      candidate,
+      ["id", "path", "title"],
+      ["description", "data"],
+    );
+    if (record === null) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.route_invalid",
+          routePath,
+          "Extension route descriptors use the closed id, path, title, description, and data shape.",
+          "properties",
+        ),
+      );
+      return;
+    }
+    const id = record.id;
+    const publicPath = record.path;
+    const title = record.title;
+    const description = record.description;
+    const inspectedPath = inspectCanonicalRoutePath(publicPath);
+    if (
+      typeof id !== "string" ||
+      id.length > 128 ||
+      !EXTENSION_ROUTE_ID.test(id) ||
+      typeof publicPath !== "string" ||
+      !inspectedPath.valid ||
+      typeof title !== "string" ||
+      title.length === 0 ||
+      title.length > 512 ||
+      title.includes("\u0000") ||
+      (description !== undefined &&
+        (typeof description !== "string" ||
+          description.length === 0 ||
+          description.length > 4_000 ||
+          description.includes("\u0000")))
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.route_identity_invalid",
+          routePath,
+          "Extension routes require a stable ID, canonical path, and bounded public text.",
+          "route",
+        ),
+      );
+      return;
+    }
+    if (localIds.has(id)) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.route_id_duplicate",
+          `${routePath}/id`,
+          `Extension route ID "${id}" appears more than once.`,
+          "uniqueItems",
+          { id },
+        ),
+      );
+      return;
+    }
+    const existingOwner = ownedPaths.get(publicPath);
+    if (existingOwner !== undefined) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.route_path_collision",
+          `${routePath}/path`,
+          `Extension route path "${publicPath}" is already owned by ${existingOwner}.`,
+          "unique",
+          { path: publicPath, existingOwner },
+        ),
+      );
+      return;
+    }
+    const data = record.data === undefined
+      ? undefined
+      : snapshotJson(
+          record.data,
+          `${routePath}/data`,
+          diagnostics,
+        );
+    localIds.add(id);
+    ownedPaths.set(publicPath, `extension route "${id}"`);
+    routes.push(Object.freeze({
+      id,
+      path: publicPath,
+      title,
+      ...(description === undefined ? {} : { description }),
+      ...(data === undefined ? {} : { data: freezeJson(data) }),
+    }));
+  });
+  return Object.freeze(routes);
+}
+
 export function resolvePublisherExtensions(
   publication: PublicationManifest,
   registrationsInput: unknown,
@@ -327,7 +472,7 @@ export function resolvePublisherExtensions(
         "capabilities",
         "implementation",
       ],
-      ["renderer"],
+      ["renderer", "host"],
     );
     if (record === null) {
       diagnostics.push(
@@ -352,7 +497,7 @@ export function resolvePublisherExtensions(
     const implementationRecord = inspectRecord(
       record.implementation,
       ["kind", "apiVersion"],
-      ["project"],
+      ["project", "routes"],
     );
     if (
       typeof id !== "string" ||
@@ -370,7 +515,9 @@ export function resolvePublisherExtensions(
       implementationRecord.kind !== "genii.publisher.extension" ||
       implementationRecord.apiVersion !== PUBLISHER_EXTENSION_API_VERSION ||
       (implementationRecord.project !== undefined &&
-        typeof implementationRecord.project !== "function")
+        typeof implementationRecord.project !== "function") ||
+      (implementationRecord.routes !== undefined &&
+        typeof implementationRecord.routes !== "function")
     ) {
       diagnostics.push(
         diagnostic(
@@ -391,6 +538,19 @@ export function resolvePublisherExtensions(
           "publisher.extension.projector_missing",
           `${path}/implementation/project`,
           "An extension supporting content.project must supply its projector.",
+          "required",
+        ),
+      );
+    }
+    if (
+      capabilities.includes("host.route") &&
+      typeof implementationRecord.routes !== "function"
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.route_projector_missing",
+          `${path}/implementation/routes`,
+          "An extension supporting host.route must supply its route projector.",
           "required",
         ),
       );
@@ -423,10 +583,20 @@ export function resolvePublisherExtensions(
                 PublisherExtensionImplementation["project"]
               >,
             }),
+        ...(implementationRecord.routes === undefined
+          ? {}
+          : {
+              routes: implementationRecord.routes as NonNullable<
+                PublisherExtensionImplementation["routes"]
+              >,
+            }),
       }) as PublisherExtensionImplementation,
       ...(record.renderer === undefined
         ? {}
         : { renderer: record.renderer }),
+      ...(record.host === undefined
+        ? {}
+        : { host: record.host }),
     }));
   });
 
@@ -497,6 +667,14 @@ export async function projectPublisherExtensions(input: {
 }>> {
   const diagnostics: Diagnostic[] = [];
   const entries: PublisherExtensionDataEntry[] = [];
+  const ownedRoutePaths = new Map<string, string>();
+  for (const route of input.reader.routes.active) {
+    ownedRoutePaths.set(route.path, "an active publication route");
+  }
+  for (const redirect of input.reader.routes.redirects) {
+    ownedRoutePaths.set(redirect.from, "a publication redirect");
+  }
+  let projectedRouteCount = 0;
   for (const [index, compiled] of input.content.extensions.entries()) {
     const registration = input.registrations[index];
     if (
@@ -515,6 +693,15 @@ export async function projectPublisherExtensions(input: {
       );
       continue;
     }
+    const config = compiled.config ?? Object.freeze({});
+    const payloads = Object.freeze(
+      compiled.payloadIds.map((payloadId) =>
+        input.content.payloads.find(({ id }) => id === payloadId),
+      ).filter(
+        (payload): payload is CompiledContentPayload =>
+          payload !== undefined,
+      ),
+    );
     let projection: PublisherExtensionProjection = {};
     if (compiled.capabilities.includes("content.project")) {
       let result: unknown;
@@ -522,15 +709,8 @@ export async function projectPublisherExtensions(input: {
         result = await registration.implementation.project?.(
           Object.freeze({
             content: input.content,
-            config: compiled.config ?? Object.freeze({}),
-            payloads: Object.freeze(
-              compiled.payloadIds.map((payloadId) =>
-                input.content.payloads.find(({ id }) => id === payloadId),
-              ).filter(
-                (payload): payload is CompiledContentPayload =>
-                  payload !== undefined,
-              ),
-            ),
+            config,
+            payloads,
           }),
         );
       } catch {
@@ -616,13 +796,72 @@ export async function projectPublisherExtensions(input: {
           : { clientData: freezeJson(clientData) }),
       });
     }
+    let routes: readonly PublisherExtensionRouteProjection[] | undefined;
+    if (compiled.capabilities.includes("host.route")) {
+      let result: unknown;
+      try {
+        result = await registration.implementation.routes?.(
+          Object.freeze({
+            publication: input.reader.publication,
+            config,
+            payloads,
+            ...(projection.serverData === undefined
+              ? {}
+              : { serverData: projection.serverData }),
+          }),
+        );
+      } catch {
+        diagnostics.push(
+          diagnostic(
+            "publisher.extension.route_projector_threw",
+            `/extensions/${index}/routes`,
+            `Extension "${compiled.id}" threw while projecting routes.`,
+            "extensionRouteProjector",
+          ),
+        );
+        continue;
+      }
+      const resultRecord = inspectRecord(
+        result,
+        ["valid", "value", "diagnostics"],
+      );
+      if (
+        resultRecord === null ||
+        resultRecord.valid !== true ||
+        !Array.isArray(resultRecord.diagnostics)
+      ) {
+        diagnostics.push(
+          diagnostic(
+            "publisher.extension.route_projector_invalid",
+            `/extensions/${index}/routes`,
+            `Extension "${compiled.id}" did not return a valid route projection result.`,
+            "extensionRouteProjector",
+          ),
+        );
+        continue;
+      }
+      routes = snapshotExtensionRoutes(
+        resultRecord.value,
+        `/extensions/${index}/routes`,
+        diagnostics,
+        ownedRoutePaths,
+        Math.max(
+          0,
+          PUBLICATION_PROTOCOL_LIMITS.maximumActiveRoutes -
+            input.reader.routes.active.length -
+            projectedRouteCount,
+        ),
+      );
+      projectedRouteCount += routes.length;
+    }
     entries.push(Object.freeze({
       id: compiled.id,
       package: compiled.package,
       version: compiled.version,
       capabilities: Object.freeze([...compiled.capabilities]),
-      config: compiled.config ?? Object.freeze({}),
+      config,
       ...projection,
+      ...(routes === undefined ? {} : { routes }),
     }));
   }
   if (diagnostics.length > 0) {

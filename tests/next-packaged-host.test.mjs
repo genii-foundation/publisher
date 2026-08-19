@@ -76,17 +76,22 @@ test("the packed renderer builds a thin host with server rendered prose", async 
   assert.deepEqual(result.frameworkErrorStatuses, [404, 500]);
   assert.deepEqual(
     result.renderedRoutes,
-    reader.routes.active.map(({ path }) => path),
+    [
+      ...reader.routes.active.map(({ path }) => path),
+      "/extension-field-station",
+    ],
   );
   assert.ok(result.renderedRoutes.includes("/"));
   assert.ok(result.renderedRoutes.includes("/home"));
   assert.ok(
     result.renderedRoutes.includes("/works/caf%C3%A9+notes/"),
   );
+  assert.ok(result.renderedRoutes.includes("/extension-field-station"));
   assert.deepEqual(result.htmlFiles, [
     "_not-found.html",
     "collections/field-notes.html",
     "collections/retired.html",
+    "extension-field-station.html",
     "home.html",
     "index.html",
     "readings/café+one.html",

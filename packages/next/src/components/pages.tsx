@@ -587,10 +587,12 @@ function UpdatesPage({
 }
 
 async function PageBody({
+  extensionRouteBody,
   markdownForBlock,
   page,
   updates,
 }: {
+  readonly extensionRouteBody?: ReactNode;
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: PublisherNextPage;
   readonly updates: PublisherNextUpdatesView | null;
@@ -621,6 +623,21 @@ async function PageBody({
         );
       }
       return <UpdatesPage updates={updates} page={page} />;
+    case "extension":
+      if (extensionRouteBody === undefined) {
+        throw new TypeError(
+          "The extension route has no configured host renderer.",
+        );
+      }
+      return (
+        <section data-publisher-extension-route={page.routeId}>
+          <h1>{page.title}</h1>
+          {page.description === undefined ? null : (
+            <p>{page.description}</p>
+          )}
+          {extensionRouteBody}
+        </section>
+      );
   }
 }
 
@@ -628,6 +645,7 @@ export interface PublisherPageViewProps {
   readonly afterMain?: ReactNode;
   readonly beforeMain?: ReactNode;
   readonly clientExtensions?: ReactNode;
+  readonly extensionRouteBody?: ReactNode;
   readonly homePath: string;
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: PublisherNextPage;
@@ -720,6 +738,7 @@ export async function PublisherPageView({
   afterMain,
   beforeMain,
   clientExtensions,
+  extensionRouteBody,
   homePath,
   markdownForBlock,
   page,
@@ -729,6 +748,7 @@ export async function PublisherPageView({
   updates,
 }: PublisherPageViewProps): Promise<ReactElement> {
   const body = await PageBody({
+    extensionRouteBody,
     markdownForBlock,
     page,
     updates,

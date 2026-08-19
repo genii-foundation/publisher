@@ -74,6 +74,38 @@ function assertDiagnostic(result, code) {
   );
 }
 
+async function routeProjectionInput({
+  capabilities = ["host.route"],
+  implementation,
+} = {}) {
+  const built = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+    extensions: [registration()],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const content = structuredClone(built.value.content);
+  content.extensions[0].capabilities = capabilities;
+  return {
+    content,
+    reader: built.value.reader,
+    registrations: [registration({
+      capabilities: ["content.project", "host.route"],
+      implementation: implementation ?? {
+        kind: "genii.publisher.extension",
+        apiVersion: "1.0",
+        routes() {
+          return {
+            valid: true,
+            value: [],
+            diagnostics: [],
+          };
+        },
+      },
+    })],
+  };
+}
+
 test("a declaration is never treated as an executable extension registration", async () => {
   const result = await buildPublicationReader({
     publicationRoot,
@@ -172,6 +204,25 @@ test("registration shape, compatibility, grants, and projectors are closed", () 
   assertDiagnostic(
     resolvePublisherExtensions(manifest(), hostileRegistry),
     "publisher.extension.registry_invalid",
+  );
+  assertDiagnostic(
+    resolvePublisherExtensions(
+      {
+        extensions: [{
+          id: "station-index",
+          package: "@example/station-index-extension",
+          capabilities: ["host.route"],
+        }],
+      },
+      [registration({
+        capabilities: ["host.route"],
+        implementation: {
+          kind: "genii.publisher.extension",
+          apiVersion: "1.0",
+        },
+      })],
+    ),
+    "publisher.extension.route_projector_missing",
   );
 });
 
@@ -283,4 +334,113 @@ test("projection snapshots are deterministic and detached from extension mutatio
   assert.ok(
     Object.isFrozen(first.value.extensions.envelope.extensions[0].serverData),
   );
+});
+
+test("host.route receives narrow frozen input and emits detached build-bound routes", async () => {
+  let received;
+  const source = { nested: { count: 1 } };
+  const input = await routeProjectionInput({
+    implementation: {
+      kind: "genii.publisher.extension",
+      apiVersion: "1.0",
+      routes(value) {
+        received = value;
+        return {
+          valid: true,
+          value: [{
+            id: "field-station",
+            path: "/field-station",
+            title: "Field station",
+            description: "A declared extension page.",
+            data: source,
+          }],
+          diagnostics: [],
+        };
+      },
+    },
+  });
+  const result = await projectPublisherExtensions(input);
+  assert.ok(result.valid, JSON.stringify(result.diagnostics, null, 2));
+  assert.deepEqual(Object.keys(received).sort(), [
+    "config",
+    "payloads",
+    "publication",
+  ]);
+  assert.ok(Object.isFrozen(received));
+  assert.ok(Object.isFrozen(received.config));
+  assert.ok(Object.isFrozen(received.payloads));
+  const route = result.value.envelope.extensions[0].routes[0];
+  assert.equal(route.path, "/field-station");
+  assert.ok(Object.isFrozen(route));
+  assert.ok(Object.isFrozen(route.data));
+  source.nested.count = 2;
+  assert.equal(route.data.nested.count, 1);
+});
+
+test("host.route collisions, invalid JSON, and thrown projectors fail closed", async () => {
+  const cases = [
+    {
+      routes() {
+        return {
+          valid: true,
+          value: [{ id: "home", path: "/", title: "Collision" }],
+          diagnostics: [],
+        };
+      },
+      code: "publisher.extension.route_path_collision",
+    },
+    {
+      routes() {
+        return {
+          valid: true,
+          value: [{
+            id: "bad-data",
+            path: "/bad-data",
+            title: "Bad data",
+            data: { value: Number.NaN },
+          }],
+          diagnostics: [],
+        };
+      },
+      code: "publisher.extension.projection_json_invalid",
+    },
+    {
+      routes() {
+        throw new Error("PRIVATE_ROUTE_SECRET");
+      },
+      code: "publisher.extension.route_projector_threw",
+    },
+  ];
+  for (const item of cases) {
+    const input = await routeProjectionInput({
+      implementation: {
+        kind: "genii.publisher.extension",
+        apiVersion: "1.0",
+        routes: item.routes,
+      },
+    });
+    assertDiagnostic(await projectPublisherExtensions(input), item.code);
+  }
+});
+
+test("an ungranted route projector stays inert", async () => {
+  let invoked = false;
+  const input = await routeProjectionInput({
+    capabilities: ["content.project"],
+    implementation: {
+      kind: "genii.publisher.extension",
+      apiVersion: "1.0",
+      project() {
+        return { valid: true, value: {}, diagnostics: [] };
+      },
+      routes() {
+        invoked = true;
+        return { valid: true, value: [], diagnostics: [] };
+      },
+    },
+  });
+  const result = await projectPublisherExtensions(input);
+  assert.ok(result.valid, JSON.stringify(result.diagnostics, null, 2));
+  assert.equal(invoked, false);
+  assert.equal(result.value.envelope.extensions[0].routes, undefined);
 });

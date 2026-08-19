@@ -127,6 +127,7 @@ test("the host contract declares exactly the author host file set", () => {
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("search"));
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("progress"));
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("extensions"));
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.routeKinds.includes("extension"));
   assert.deepEqual(PUBLISHER_NEXT_HOST_MIGRATIONS, [
     {
       from: "0.1.0",
@@ -202,6 +203,12 @@ test("the host contract declares exactly the author host file set", () => {
       to: "0.12.0",
       summary:
         "Declare the device-width viewport required by mobile Reader controls and extension surfaces.",
+    },
+    {
+      from: "0.12.0",
+      to: "0.13.0",
+      summary:
+        "Add build-time declarative extension pages to the official route plan.",
     },
   ]);
 });

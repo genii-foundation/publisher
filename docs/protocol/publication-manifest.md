@@ -222,7 +222,7 @@ Every extension must declare a nonempty `capabilities` array with unique members
 - `host.route` permits declarative public page routes subject to canonical route and collision validation.
 - `host.handler` permits server request handlers through host-owned factories and validation.
 
-No grant implies another, and there is no wildcard. Package configuration, package exports, and installed metadata cannot widen the author-reviewed grant list. Publisher orchestration implements `content.project`, and the official Next renderer implements `renderer.slot` plus `renderer.client`. Routes and handlers remain separate unimplemented surfaces.
+No grant implies another, and there is no wildcard. Package configuration, package exports, and installed metadata cannot widen the author-reviewed grant list. Publisher orchestration implements `content.project` plus build-time `host.route` projection. The official Next renderer implements `renderer.slot`, `renderer.client`, and declarative `host.route` pages. `host.handler` remains a separate unimplemented surface.
 
 Package configuration must contain JSON data only. Secrets do not belong in `publication.json`. Providers resolve private credentials from their runtime environment.
 

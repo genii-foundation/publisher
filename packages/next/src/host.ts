@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.12.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.13.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -150,6 +150,7 @@ export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
       "collection",
       "section",
       "updates",
+      "extension",
     ]),
     dataArtifacts: Object.freeze([
       "audio",
@@ -255,9 +256,15 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.11.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.12.0",
       summary:
         "Declare the device-width viewport required by mobile Reader controls and extension surfaces.",
+    }),
+    Object.freeze({
+      from: "0.12.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Add build-time declarative extension pages to the official route plan.",
     }),
   ]);
 
@@ -488,7 +495,9 @@ export function createPublisherNextHostTemplate(
         "",
         `const updatesPath = join(process.cwd(), "${PUBLISHER_NEXT_UPDATES_DATA_PATH}");`,
         'const updatesData = existsSync(updatesPath) ? JSON.parse(readFileSync(updatesPath, "utf8")) : undefined;',
-        "const routePlan = createPublisherNextRoutePlan(reader, updatesData);",
+        `const extensionPath = join(process.cwd(), "${PUBLISHER_NEXT_EXTENSION_DATA_PATH}");`,
+        'const extensionData = existsSync(extensionPath) ? JSON.parse(readFileSync(extensionPath, "utf8")) : undefined;',
+        "const routePlan = createPublisherNextRoutePlan(reader, updatesData, extensionData);",
         "if (!routePlan.valid) {",
         "  throw new Error(JSON.stringify(routePlan.diagnostics));",
         "}",
