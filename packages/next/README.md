@@ -25,6 +25,11 @@ tabs, and canonically equal replacements cause no write or render churn. A
 stable empty server snapshot preserves hydration, while unavailable browser
 persistence leaves the current tab's in-memory reading state usable.
 
+On phones, the Reader rail stays fixed to the viewport and scrolls its native
+action buttons internally. At 320 pixels, maximum Reader text size cannot widen
+the page or reduce the controls below 44 pixels. Listen remains directly visible,
+and keyboard focus brings every secondary action into view.
+
 The root layout applies one bounded, publication-scoped preference document
 before body paint. It accepts only the complete Reader preference schema and
 the renderer's closed value policy. Invalid or unavailable storage leaves the

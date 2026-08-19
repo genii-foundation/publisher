@@ -45,8 +45,10 @@ word playback, and mobile viewport containment. It also injects large transient
 renderer text into a bookmarked block, waits for measurement, and requires the
 marker's top and height to remain unchanged.
 
-The parity ledger is pinned to Coherence
-`fe2a1c8c8b6e4df21665afbf6609cf6bef782415` and names the audited source paths.
+This decision's transport and geometry audit used Coherence
+`fe2a1c8c8b6e4df21665afbf6609cf6bef782415`. The current parity authority lives
+in the ledger and migration readiness record, which may advance without rewriting
+this historical decision.
 
 ## Consequences
 

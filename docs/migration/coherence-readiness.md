@@ -12,14 +12,19 @@ The original complete Coherence inventory was pinned to commit
 direct Reader precursor changes from 2026-07-27 because those changes created the
 state, bookmark, audio, and synchronization substrate modified during the audit
 window. Focused Reader parity evidence was refreshed read only through current
-Coherence `origin/main` at `fe2a1c8c8b6e4df21665afbf6609cf6bef782415`,
+Coherence `origin/main` at `d250a760b51a071037af0c18ac73cc3131312f09`,
 dated 2026-08-19. The actionable delta came from bookmark anchoring at
 `6ed21e5bc48f747989d3cd580d5bcd24daec686f`, mobile Safari playback isolation at
 `7cc32c1dd7421678e01f2df213df75c7e0a3656f`, and dedicated audiobook transport
-controls at `b001d42e50a95c6a2f6a4d67bd6b0879bed9cf89`.
+controls at `b001d42e50a95c6a2f6a4d67bd6b0879bed9cf89`. The latest narrow-toolbar
+change at `d250a760b51a071037af0c18ac73cc3131312f09` keeps maximum Reader text
+preferences from enlarging phone controls, retains direct playback access, and
+places secondary actions behind one named surface at 340 pixels and below. It
+changes no Reader state schema, narration engine, synchronization contract,
+offline behavior, route, or manuscript behavior.
 
-The Publisher implementation baseline preceding this focused parity refresh is
-`0d295eed5b45e4c17558e5896f0372906260cef9` on
+The Publisher implementation baseline assessed by this focused parity refresh is
+`31255c268a03571fe61e52a85f8542de16b0a694` on
 `feat/reader-parity-refresh`.
 
 The audit was read only with respect to Coherence. It did not modify manuscripts,
@@ -393,12 +398,17 @@ product decision:
 
 The executable, reversible sequence is recorded in
 [`coherence-adoption-plan.md`](coherence-adoption-plan.md). It is pinned to exact
-Publisher and Coherence commits, names the remaining host dependency
-reconciliation and Coherence-specific state adapter acceptance work, preserves
-the current Coherence workbench and provider state, and stops before merge or
-production deployment. Publisher's generic closed bootstrap hook is complete.
-The remaining state work is the Coherence adapter and its fixtures, not another
-renderer interface.
+Publisher and Coherence commits, names the remaining state projection and
+Coherence-specific adapter acceptance work, preserves the current Coherence
+workbench and provider state, and stops before merge or production deployment.
+Publisher's closed executable bootstrap boundary is complete. The current
+source-only limit cannot carry Coherence's complete section, historical hash,
+and paragraph mapping census. Publisher must add a separately bounded,
+immutable, build-bound projection before progress and bookmark migration can be
+lossless. Valid textured preferences, detailed progress evidence, system voice
+choices, pitch, several narration rates, and the legacy last-sync display also
+need an explicit compatible target or honest refusal policy. A narrow happy-path
+fixture cannot close this gate.
 
 ## Material that remains Coherence-owned
 
@@ -470,9 +480,11 @@ The migration is not accepted until all of these hold:
 9. From a cold browser, an installed offline package supports reload, navigation,
    search, bookmarks, and timed narration. A failed update preserves the prior
    complete package.
-10. Desktop and mobile browser review proves viewport reachability, keyboard and
-    screen-reader behavior, geometry stability, prepaint, reduced motion, and
-    contrast.
+10. Desktop, 393-pixel, and 320-pixel browser review proves viewport reachability,
+    maximum saved text size, no page or control overflow, at least 44-pixel control
+    height, direct playback access, every secondary action, keyboard focus and
+    Escape behavior, screen-reader behavior, geometry stability, prepaint,
+    reduced motion, and contrast.
 11. Packed consumers and the supported Node matrix prove exact pins,
     deterministic artifacts, protected source, transactional migration, and
     rollback.

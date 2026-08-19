@@ -54,7 +54,7 @@ If you wish to allow use of your version of this file only under the terms of th
 
 export const COHERENCE_PARITY_SOURCE = Object.freeze({
   repository: "https://github.com/genii-foundation/coherence-thesis",
-  ref: "fe2a1c8c8b6e4df21665afbf6609cf6bef782415",
+  ref: "d250a760b51a071037af0c18ac73cc3131312f09",
   observedThrough: "2026-08-19",
 });
 
@@ -424,9 +424,16 @@ export const READER_PARITY = Object.freeze([
     capability: "Toolbar menus that remain reachable and stable in supported viewports",
     home: "renderer",
     status: "added",
-    why: "The official rail uses a bounded desktop panel and a viewport-bounded mobile sheet above fixed bottom controls, with visible focus and Escape dismissal.",
+    why: "The official rail uses a bounded desktop panel and a viewport-bounded mobile sheet above fixed bottom controls. At 320 pixels, maximum Reader text size cannot widen the document, Listen remains directly visible, and every native action button stays at least 44 pixels tall and keyboard reachable through the internally scrolling rail.",
     evidence: { file: "packages/next/styles.css" },
-    sourcePaths: ["src/app/globals.css", "tests/e2e/toolbar.spec.ts"],
+    sourcePaths: [
+      "src/app/globals.css",
+      "src/components/SiteShell.tsx",
+      "src/components/ToolbarOverflowIsland.tsx",
+      "tests/e2e/bookmarks.spec.ts",
+      "tests/e2e/settings.spec.ts",
+      "tests/e2e/toolbar.spec.ts",
+    ],
   },
   {
     id: "reader.accessibility.content",

@@ -100,6 +100,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type FocusEvent,
   type FormEvent,
   type ReactElement,
   type ReactNode,
@@ -1325,7 +1326,22 @@ export function PublisherReaderRail({
       }>
         <span aria-hidden="true">{currentProgress?.progress?.percent ?? "§"}</span>
       </div>
-      <div className="publisher-reader-rail-actions">
+      <div
+        className="publisher-reader-rail-actions"
+        onFocusCapture={(event: FocusEvent<HTMLDivElement>) => {
+          const rail = event.currentTarget;
+          const target = event.target;
+          if (
+            rail.scrollWidth > rail.clientWidth &&
+            target instanceof HTMLButtonElement
+          ) {
+            target.scrollIntoView({
+              block: "nearest",
+              inline: "nearest",
+            });
+          }
+        }}
+      >
         <button aria-controls={panelId} aria-expanded={openPanel === "outline"} onClick={() => toggle("outline")} type="button">
           <RailIcon><path d="M5 6h14M5 12h14M5 18h14" /></RailIcon><span>Contents</span>
         </button>

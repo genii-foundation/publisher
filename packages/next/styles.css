@@ -22,7 +22,7 @@ If you wish to allow use of your version of this file only under the terms of th
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   background: var(--publisher-color-canvas);
   color: var(--publisher-color-text);
   font-family: var(
@@ -1134,6 +1134,9 @@ html[data-publisher-reader-motion="reduced"] *::after {
     grid-auto-columns: minmax(3.5rem, 1fr);
     grid-auto-flow: column;
     grid-template-columns: none;
+    width: 100%;
+    min-width: 0;
+    max-width: 100vw;
     overflow-x: auto;
     border-inline: 0;
     border-bottom: 0;

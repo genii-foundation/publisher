@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Raised the real lifecycle package proof's machine-time allowance above observed clean-install variance without changing its package or integrity assertions.
+- Refreshed Coherence Reader parity through its narrow-phone toolbar correction and hardened the official Reader against 320-pixel page overflow at maximum text size.
 - Added closed extension request handlers with build-bound owned paths, exact methods, bounded detached requests, validated responses, and packed-host proof.
 - Hardened Reader parity with persistent audiobook transport, 15-second jumps, stale playback isolation, and transient interface-free bookmark coordinates and geometry.
 - Reserved author-owned `publisher.extensions.mjs` from every publication source role.

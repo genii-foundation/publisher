@@ -73,7 +73,7 @@ test("the Reader inventory is pinned to the current audited Coherence ref", () =
   assert.match(COHERENCE_PARITY_SOURCE.ref, /^[0-9a-f]{40}$/u);
   assert.equal(
     COHERENCE_PARITY_SOURCE.ref,
-    "fe2a1c8c8b6e4df21665afbf6609cf6bef782415",
+    "d250a760b51a071037af0c18ac73cc3131312f09",
   );
   for (const entry of READER_PARITY) {
     assert.ok(
@@ -355,11 +355,11 @@ test("the Coherence adoption plan pins authority and rollback boundaries", () =>
   );
   assert.match(
     plan,
-    /Publisher implementation baseline: `dae8cb5e5a634205d9e6f5ab127f578a73d3eec7`/u,
+    /Publisher implementation baseline: `31255c268a03571fe61e52a85f8542de16b0a694`/u,
   );
   assert.match(
     plan,
-    /Coherence acceptance baseline: `74438453f03a1a3f9fa1f9dcf14206fc6d38a6ab`/u,
+    /Coherence acceptance baseline: `d250a760b51a071037af0c18ac73cc3131312f09`/u,
   );
   assert.match(
     plan,
@@ -373,6 +373,10 @@ test("the Coherence adoption plan pins authority and rollback boundaries", () =>
   assert.match(
     plan,
     /@genii-foundation\/publisher-sync-supabase` is currently private at version\s+`0\.0\.0`/u,
+  );
+  assert.match(
+    plan,
+    /separately bounded, immutable, build-bound projection/u,
   );
   assert.doesNotMatch(plan, /\.\.\/(?:publisher|coherence-thesis)/u);
   for (let gate = 1; gate <= 14; gate += 1) {

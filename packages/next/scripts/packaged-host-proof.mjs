@@ -2758,6 +2758,167 @@ async function assertReaderPreferencePrepaint({
   }
 }
 
+async function assertNarrowReaderTools({
+  browser,
+  extensionLongToken,
+  publicationId,
+  readerFontFamilyId,
+  url,
+}) {
+  const page = await openDevToolsPage(browser);
+  const storageKey =
+    `genii.publisher.reader.preferences.v1.${publicationId}`;
+  const preferenceDocument = JSON.stringify({
+    schemaVersion: 1,
+    fontScale: 125,
+    fontFamilyId: readerFontFamilyId,
+    colorScheme: "system",
+    motion: "full",
+    highlights: true,
+    focus: "none",
+  });
+  const labels = Object.freeze([
+    "Contents",
+    "Progress",
+    "Listen",
+    "Search",
+    "Offline",
+    "Bookmarks",
+    "Settings",
+    "Sync",
+  ]);
+  try {
+    await page.send("Page.addScriptToEvaluateOnNewDocument", {
+      source: [
+        "try {",
+        `  localStorage.setItem(${JSON.stringify(storageKey)}, ${JSON.stringify(preferenceDocument)});`,
+        "} catch {}",
+      ].join("\n"),
+    });
+    await page.send("Emulation.setDeviceMetricsOverride", {
+      width: 320,
+      height: 720,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+    const navigation = await page.send("Page.navigate", { url });
+    assert.equal(
+      navigation.errorText,
+      undefined,
+      `Narrow Reader tools navigation failed: ${navigation.errorText}`,
+    );
+
+    let ready;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const rail = document.querySelector(".publisher-reader-rail");',
+          '  const actions = document.querySelector(".publisher-reader-rail-actions");',
+          '  const buttons = Array.from(actions?.querySelectorAll("button") ?? []);',
+          '  const listen = buttons.find((button) => button.textContent?.includes("Listen"));',
+          '  const extensionText = Array.from(document.querySelectorAll("[data-publisher-extension]"), (element) => element.textContent ?? "").join("\\n");',
+          "  const railRect = rail?.getBoundingClientRect();",
+          "  const listenRect = listen?.getBoundingClientRect();",
+          "  return {",
+          '    complete: document.readyState === "complete",',
+          "    layoutWidth: document.documentElement.clientWidth,",
+          "    pageScrollWidth: document.documentElement.scrollWidth,",
+          '    fontScale: document.documentElement.style.getPropertyValue("--publisher-reader-font-scale"),',
+          "    railInViewport: railRect !== undefined && railRect.left >= 0 && railRect.right <= innerWidth && railRect.top >= 0 && railRect.bottom <= innerHeight,",
+          "    listenInViewport: listenRect !== undefined && listenRect.left >= 0 && listenRect.right <= innerWidth && listenRect.top >= 0 && listenRect.bottom <= innerHeight,",
+          "    controlCount: buttons.length,",
+          "    allControlsTallEnough: buttons.every((button) => button.getBoundingClientRect().height >= 44),",
+          "    labels: buttons.map((button) => button.textContent?.trim() ?? \"\"),",
+          "    actionsScrollsInternally: actions instanceof HTMLElement && actions.scrollWidth > actions.clientWidth,",
+          `    longExtensionTextPresent: extensionText.includes(${JSON.stringify(extensionLongToken)}),`,
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      ready = evaluated.result?.value;
+      if (ready?.complete === true && ready.controlCount === labels.length) {
+        break;
+      }
+      await wait(100);
+    }
+    assert.deepEqual(
+      ready,
+      {
+        complete: true,
+        layoutWidth: 320,
+        pageScrollWidth: 320,
+        fontScale: "1.25",
+        railInViewport: true,
+        listenInViewport: true,
+        controlCount: labels.length,
+        allControlsTallEnough: true,
+        labels,
+        actionsScrollsInternally: true,
+        longExtensionTextPresent: true,
+      },
+      "The maximum Reader text preference, narrow controls, or unbroken extension text escaped the mobile viewport.",
+    );
+
+    await page.send("Runtime.evaluate", {
+      expression:
+        "if (document.activeElement instanceof HTMLElement) document.activeElement.blur()",
+    });
+    const keyboardLabels = [];
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "Tab",
+        code: "Tab",
+        nativeVirtualKeyCode: 9,
+        windowsVirtualKeyCode: 9,
+      });
+      await page.send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "Tab",
+        code: "Tab",
+        nativeVirtualKeyCode: 9,
+        windowsVirtualKeyCode: 9,
+      });
+      const active = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          "  const button = document.activeElement;",
+          '  if (!(button instanceof HTMLButtonElement) || !button.matches(".publisher-reader-rail-actions button")) return null;',
+          "  const rect = button.getBoundingClientRect();",
+          "  return {",
+          '    label: button.textContent?.trim() ?? "",',
+          "    inViewport: rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,",
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      if (active.result?.value === null) continue;
+      assert.equal(
+        active.result.value.inViewport,
+        true,
+        `${active.result.value.label} did not scroll into view from Tab focus.`,
+      );
+      if (keyboardLabels.at(-1) !== active.result.value.label) {
+        keyboardLabels.push(active.result.value.label);
+      }
+      if (keyboardLabels.length === labels.length) break;
+    }
+    assert.deepEqual(
+      keyboardLabels,
+      labels,
+      "Tab focus did not reach every narrow Reader action in order.",
+    );
+  } finally {
+    await page.send("Runtime.evaluate", {
+      expression: `try { localStorage.removeItem(${JSON.stringify(storageKey)}); } catch {}`,
+    }).catch(() => undefined);
+    page.close();
+  }
+}
+
 async function assertAccessibleManuscriptExtensions({
   browser,
   url,
@@ -3739,6 +3900,8 @@ export async function runPackagedHostProof(
   const portableReaderFontFamilyId = "field-sans";
   const packedExtensionRenderSentinel =
     "PACKED_EXTENSION_SLOT_RENDERED";
+  const packedExtensionLongToken =
+    `PACKED_EXTENSION_UNBROKEN_${"x".repeat(512)}`;
   const packedExtensionClientRenderSentinel =
     "PACKED_EXTENSION_CLIENT_RENDERED";
   const packedExtensionClientDataSentinel =
@@ -3939,7 +4102,7 @@ export async function runPackagedHostProof(
           '    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",',
           "    Client: PackedExtensionClient,",
           "    renderSlot({ slot, serverData }) {",
-          `      return \`${packedExtensionRenderSentinel}:\${slot}:\${serverData.marker}\`;`,
+          `      return \`${packedExtensionRenderSentinel}:\${slot}:\${serverData.marker}:${packedExtensionLongToken}\`;`,
           "    },",
           "  }),",
           "  host: Object.freeze({",
@@ -4939,6 +5102,13 @@ export async function runPackagedHostProof(
           bookmarkProof: createCrossTabBookmarkProof(reader, sectionPath),
           browser,
           readerFontFamily: portableReaderFontFamily,
+          readerFontFamilyId: portableReaderFontFamilyId,
+          url: `${host.origin}${sectionPath}`,
+        });
+        await assertNarrowReaderTools({
+          browser,
+          extensionLongToken: packedExtensionLongToken,
+          publicationId: reader.publicationId,
           readerFontFamilyId: portableReaderFontFamilyId,
           url: `${host.origin}${sectionPath}`,
         });

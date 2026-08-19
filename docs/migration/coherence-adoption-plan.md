@@ -1,8 +1,8 @@
 # Coherence adoption plan
 
 - Status: prepared implementation plan, pending review
-- Publisher implementation baseline: `dae8cb5e5a634205d9e6f5ab127f578a73d3eec7`
-- Coherence acceptance baseline: `74438453f03a1a3f9fa1f9dcf14206fc6d38a6ab`
+- Publisher implementation baseline: `31255c268a03571fe61e52a85f8542de16b0a694`
+- Coherence acceptance baseline: `d250a760b51a071037af0c18ac73cc3131312f09`
 - Coherence branch authority: committed `origin/main`
 - Production authority: unchanged
 
@@ -110,6 +110,23 @@ Publisher key syntax. During the rollback window it must dual-read and preserve 
 legacy values. Any dual-write behavior must be limited to fields that can be mapped
 without loss and must have round-trip tests. Legacy cache names are evidence for
 offline-package replacement, not mutable state to rename in place.
+
+The executable source alone cannot contain the complete Coherence translation
+census. The committed route mapping already exceeds the 32,768 byte source limit
+before block identities and historical hashes are added. Publisher must first add
+one separately bounded, immutable, build-bound projection. Its exact JSON bytes,
+hash, and size must contribute to application identity, and the browser must receive
+only a frozen parsed value beside the frozen context. The projection may contain
+committed publication identities and mappings. It may never contain private Reader
+state.
+
+Acceptance fixtures must cover every currently valid legacy shape, not only values
+that happen to fit Publisher today. Textured preferences, progress fields without
+target equivalents, truncated section and paragraph hashes, system narration
+voices, nondefault pitch, unsupported rates, and the legacy last-sync display need
+an explicit compatible representation or a documented refusal. Any record that
+would be dropped, truncated, guessed, or ambiguously mapped refuses its entire
+concern and leaves every legacy byte unchanged.
 
 ### Supabase adapter choice
 
@@ -323,8 +340,10 @@ maps an exact candidate to all fourteen gates:
 8. Spoken-content audio identity with matching immutable clip and timing evidence.
 9. Cold offline reload, navigation, search, bookmarks, timed narration, and retained
    package behavior after a failed update.
-10. Desktop and mobile viewport, keyboard, screen-reader, geometry, prepaint,
-    reduced-motion, and contrast evidence.
+10. Desktop, 393-pixel, and 320-pixel viewport evidence with maximum saved text
+    size, no page or control overflow, at least 44-pixel control height, direct
+    playback access, every secondary action, keyboard focus and Escape behavior,
+    screen-reader behavior, geometry, prepaint, reduced motion, and contrast.
 11. Packed consumers, supported Node matrix, exact pins, deterministic artifacts,
     protected source, transactional migration, and rollback.
 12. The unrelated second publication release rehearsal against the same five

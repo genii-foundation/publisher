@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Contained the mobile Reader rail and long extension text at 320 pixels, with packed Chrome proof for maximum text size, direct playback access, and every native action button.
 - Advanced the host contract to 0.16.0 with the checked Next.js 16.3.1 declaration roots, preventing production builds from mutating host source.
 - Advanced the exact reference host to Next.js 16.3.1 while retaining React 19.2.8, React DOM 19.2.8, TypeScript 7.0.2, and the complete transitive security override.
 - Advanced the application manifest to 1.1 and the host contract to 0.15.0 with an explicit build-bound Reader state bootstrap.
