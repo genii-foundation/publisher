@@ -260,13 +260,15 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 }
 
 .publisher-reader-search,
-.publisher-reader-settings {
+.publisher-reader-settings,
+.publisher-reader-sync {
   display: grid;
   gap: 0.9rem;
 }
 
 .publisher-reader-search label,
-.publisher-reader-settings label {
+.publisher-reader-settings label,
+.publisher-reader-sync label {
   display: grid;
   gap: 0.35rem;
   color: var(--publisher-color-muted-text);
@@ -275,7 +277,8 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 }
 
 .publisher-reader-search input,
-.publisher-reader-settings select {
+.publisher-reader-settings select,
+.publisher-reader-sync input {
   width: 100%;
   min-height: 2.65rem;
   padding: 0.55rem 0.7rem;
@@ -284,6 +287,40 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   background: var(--publisher-color-canvas);
   color: var(--publisher-color-text);
   font: 1rem/1.3 var(--publisher-font-body);
+}
+
+.publisher-reader-sync form,
+.publisher-reader-sync-account,
+.publisher-reader-sync-consent,
+.publisher-reader-sync-delete {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.publisher-reader-sync-consent,
+.publisher-reader-sync-delete {
+  padding: 0.9rem;
+  border: 1px solid var(--publisher-color-border);
+  border-radius: var(--publisher-control-radius);
+}
+
+.publisher-reader-sync-consent h3,
+.publisher-reader-sync-consent p,
+.publisher-reader-sync-account p {
+  margin: 0;
+}
+
+.publisher-reader-sync-consent > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.publisher-reader-sync-delete label {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  font-family: var(--publisher-font-body);
+  font-size: 0.85rem;
 }
 
 .publisher-reader-search-results strong,

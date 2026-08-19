@@ -15,6 +15,7 @@ import type {
   ReaderBlock,
   ReaderPublicationIdentity,
   ReaderSection,
+  SyncEnvelope,
   ReaderWork,
   Sha256Digest,
 } from "@genii-foundation/publisher-schema";
@@ -580,6 +581,7 @@ export interface PublisherPageViewProps {
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: PublisherNextPage;
   readonly readerBuildId: Sha256Digest;
+  readonly sync: SyncEnvelope | null;
   readonly theme: PublisherNextThemeInstance;
   readonly updates: PublisherNextUpdatesView | null;
 }
@@ -592,6 +594,7 @@ interface PublisherPageShellProps {
     readonly buildId: Sha256Digest;
     readonly currentSection?: ReaderSection;
     readonly outline: readonly PublisherReaderOutlineEntry[];
+    readonly sync: SyncEnvelope | null;
   };
   readonly publication: ReaderPublicationIdentity;
   readonly theme: PublisherNextThemeInstance;
@@ -631,6 +634,7 @@ function PublisherPageShell({
           publicationId={publication.id}
           readerBuildId={reader.buildId}
           searchPath="/publication-reader-search.json"
+          sync={reader.sync}
         />
       )}
       <main id="publisher:main">{body}</main>
@@ -646,6 +650,7 @@ export async function PublisherPageView({
   markdownForBlock,
   page,
   readerBuildId,
+  sync,
   theme,
   updates,
 }: PublisherPageViewProps): Promise<ReactElement> {
@@ -666,6 +671,7 @@ export async function PublisherPageView({
           ? { currentSection: page.section }
           : {}),
         outline: readerOutline(page),
+        sync,
       }}
       theme={theme}
     />

@@ -394,7 +394,7 @@ test("the engine's own renderer resolves, with its import-only exports", (t) => 
     `the renderer must resolve:\n${planned.stderr}`,
   );
   assert.match(planned.stdout, /Renderer\s+@genii-foundation\/publisher-next/u);
-  assert.match(planned.stdout, /Contract\s+0\.5\.0/u);
+  assert.match(planned.stdout, /Contract\s+0\.6\.0/u);
 });
 
 test("a genuinely missing renderer says where it looked", (t) => {

@@ -653,7 +653,7 @@ async function assertHydratedReaderTools({
       ready = evaluated.result?.value;
       if (
         ready?.complete === true &&
-        ready.controls === 4 &&
+        ready.controls === 5 &&
         ready.inViewport === true
       ) {
         break;
@@ -662,7 +662,7 @@ async function assertHydratedReaderTools({
     }
     assert.deepEqual(
       ready,
-      { complete: true, controls: 4, inViewport: true },
+      { complete: true, controls: 5, inViewport: true },
       "The hydrated Reader rail was not reachable inside the mobile viewport.",
     );
 
@@ -754,6 +754,132 @@ async function assertHydratedReaderTools({
       resultCount > 0,
       "The hydrated Reader search returned no result for a known section title.",
     );
+
+    const openedSync = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const buttons = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"));',
+        '  const sync = buttons.find((button) => button.textContent?.includes("Sync"));',
+        "  sync?.click();",
+        "  return sync !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(openedSync.result?.value, true);
+    let signedOutReady = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          'document.querySelector(".publisher-reader-sync input[type=email]") !== null',
+        returnByValue: true,
+      });
+      signedOutReady = evaluated.result?.value === true;
+      if (signedOutReady) break;
+      await wait(100);
+    }
+    assert.equal(signedOutReady, true, "The sync panel did not reach its signed-out state.");
+    const emailFocused = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const input = document.querySelector(".publisher-reader-sync input[type=email]");',
+        "  if (!(input instanceof HTMLInputElement)) return false;",
+        "  input.focus();",
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(emailFocused.result?.value, true);
+    for (const character of "reader@example.com") {
+      await page.send("Input.dispatchKeyEvent", {
+        type: "char",
+        text: character,
+        unmodifiedText: character,
+      });
+    }
+    const submittedEmail = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-sync button"))',
+        '    .find((candidate) => candidate.textContent?.includes("Sign in to sync"));',
+        "  button?.click();",
+        "  return button !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(submittedEmail.result?.value, true);
+    const continued = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-sync-consent button"))',
+        '    .find((candidate) => candidate.textContent?.includes("Continue"));',
+        "  button?.click();",
+        "  return button !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(continued.result?.value, true);
+    let consentState;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const code = document.querySelector(".publisher-reader-sync input[autocomplete=one-time-code]");',
+          "  const key = Object.keys(localStorage).find((candidate) => candidate.includes(\"sync-consent\"));",
+          "  return { hasCode: code !== null, consent: key === undefined ? null : JSON.parse(localStorage.getItem(key)) };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      consentState = evaluated.result?.value;
+      if (consentState?.hasCode === true) break;
+      await wait(100);
+    }
+    assert.equal(consentState?.consent?.granted, true);
+    assert.equal(consentState?.consent?.copyVersion, "1.0");
+    const codeFocused = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const input = document.querySelector(".publisher-reader-sync input[autocomplete=one-time-code]");',
+        "  if (!(input instanceof HTMLInputElement)) return false;",
+        "  input.focus();",
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(codeFocused.result?.value, true);
+    for (const character of "12345678") {
+      await page.send("Input.dispatchKeyEvent", {
+        type: "char",
+        text: character,
+        unmodifiedText: character,
+      });
+    }
+    await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-sync button"))',
+        '    .find((candidate) => candidate.textContent?.includes("Verify code"));',
+        "  button?.click();",
+        "})()",
+      ].join("\n"),
+    });
+    let signedIn = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          'document.querySelector(".publisher-reader-sync-account")?.textContent?.includes("reader@example.com") === true',
+        returnByValue: true,
+      });
+      signedIn = evaluated.result?.value === true;
+      if (signedIn) break;
+      await wait(100);
+    }
+    assert.equal(signedIn, true, "The default sync controls did not complete code sign-in.");
   } finally {
     page.close();
   }
@@ -1317,6 +1443,20 @@ export async function runPackagedHostProof(
           "    async exchangeAuthCode({ code }) {",
           '      return code === "packed-proof-code";',
           "    },",
+          "    async requestEmailAuthentication({ email }) {",
+          '      return email === "reader@example.com";',
+          "    },",
+          "    async verifyEmailAuthentication({ email, code }) {",
+          '      return email === "reader@example.com" && code === "12345678"',
+          '        ? { authenticated: true, email }',
+          "        : null;",
+          "    },",
+          "    async getSession() {",
+          '      return { authenticated: false };',
+          "    },",
+          "    async signOut() {",
+          "      return true;",
+          "    },",
           "    async deleteAccount() {",
           '      return "deleted";',
           "    },",
@@ -1866,11 +2006,43 @@ export async function runPackagedHostProof(
         await unknown.text(),
         /data-publisher-attribution="required"/u,
       );
-      const [configuredCallback, rejectedDeletion, configuredDeletion] = await Promise.all([
+      const [
+        configuredCallback,
+        startedAuthentication,
+        verifiedAuthentication,
+        configuredSession,
+        rejectedDeletion,
+        configuredDeletion,
+      ] = await Promise.all([
         fetch(
           `${host.origin}/auth/callback?code=packed-proof-code&next=https%3A%2F%2Fevil.example`,
           { redirect: "manual" },
         ),
+        fetch(`${host.origin}/api/auth/start`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: host.origin,
+          },
+          body: JSON.stringify({
+            email: "reader@example.com",
+            next: "https://evil.example/private",
+          }),
+          redirect: "manual",
+        }),
+        fetch(`${host.origin}/api/auth/verify`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            origin: host.origin,
+          },
+          body: JSON.stringify({
+            email: "reader@example.com",
+            code: "12345678",
+          }),
+          redirect: "manual",
+        }),
+        fetch(`${host.origin}/api/session`, { redirect: "manual" }),
         fetch(`${host.origin}/api/account`, {
           method: "DELETE",
           headers: { origin: "https://evil.example" },
@@ -1884,10 +2056,26 @@ export async function runPackagedHostProof(
       ]);
       assert.equal(configuredCallback.status, 302);
       assert.equal(configuredCallback.headers.get("location"), `${host.origin}/home`);
+      assert.equal(startedAuthentication.status, 202);
+      assert.deepEqual(await startedAuthentication.json(), { ok: true });
+      assert.equal(verifiedAuthentication.status, 200);
+      assert.deepEqual(await verifiedAuthentication.json(), {
+        authenticated: true,
+        email: "reader@example.com",
+      });
+      assert.equal(configuredSession.status, 200);
+      assert.deepEqual(await configuredSession.json(), { authenticated: false });
       assert.equal(rejectedDeletion.status, 403);
       assert.deepEqual(await rejectedDeletion.json(), { error: "Invalid origin." });
       assert.equal(configuredDeletion.status, 200);
       assert.deepEqual(await configuredDeletion.json(), { ok: true });
+      const configuredSignOut = await fetch(`${host.origin}/api/session`, {
+        method: "DELETE",
+        headers: { origin: host.origin },
+        redirect: "manual",
+      });
+      assert.equal(configuredSignOut.status, 200);
+      assert.deepEqual(await configuredSignOut.json(), { ok: true });
       const [frameworkNotFound, frameworkServerError] =
         await Promise.all([
           fetch(`${host.origin}/404`, {

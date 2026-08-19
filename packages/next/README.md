@@ -605,8 +605,9 @@ Canonical source: `https://github.com/genii-foundation/publisher`
 
 ## Dependency override and release evidence
 
-Next.js 16.2.12 otherwise resolves versions affected by three high-severity advisories:
+Next.js 16.2.12 otherwise resolves versions affected by four high-severity advisories:
 
+- Nano ID 3.3.16 is affected by [GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8), patched in 3.3.18.
 - PostCSS 8.4.31 is affected by [GHSA-6g55-p6wh-862q](https://github.com/advisories/GHSA-6g55-p6wh-862q), patched in 8.5.12, and [GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849), patched in 8.5.18.
 - Optional sharp 0.34.5 is affected by [GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj), patched in 0.35.0.
 
@@ -614,13 +615,19 @@ Next.js 16.2.12 otherwise resolves versions affected by three high-severity advi
 
 The attributed framework-error gate is also closed. The package supplies separate client-safe error components, the complete host contract wires every required framework surface, and the automated proof checks static, runtime, and hydrated browser behavior.
 
-The generated host also reserves `/auth/callback` and `/api/account` for optional
-synchronization. Both routes return the same opaque 404 when the publication has
+The generated host reserves `/api/auth/start`, `/api/auth/verify`,
+`/api/session`, `/auth/callback`, and `/api/account` for optional
+synchronization. Every route returns the same opaque 404 when the publication has
 no synchronization artifact. An author may select a matching provider through
 `publisher.config.ts`. The renderer validates provider identity and capabilities,
-owns callback redirects and deletion responses, and rejects cross-origin deletion
-before provider code executes. Provider configuration and credentials remain
-server only.
+owns input bounds, callback redirects, session and deletion responses, and rejects
+cross-origin state changes before provider code executes. Provider configuration
+and credentials remain server only.
+
+When synchronization is declared, the default Reader adds an account panel. It
+records explicit versioned consent before requesting an email link, accepts a
+one-time code, reads the session, signs out, and requires separate confirmation
+for account deletion. Local progress and bookmarks remain available throughout.
 
 ```ts
 import { definePublisherNextHostConfig } from "@genii-foundation/publisher-next/server/sync";

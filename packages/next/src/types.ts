@@ -20,6 +20,7 @@ import type {
   ReaderSection,
   ReaderWork,
   Sha256Digest,
+  SyncEnvelope,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
 import type { Metadata, NextConfig } from "next";
@@ -230,6 +231,14 @@ export interface PublisherNextApplicationManifest {
     readonly configHash: Sha256Digest;
     readonly viewHash: Sha256Digest;
   } | null;
+  readonly sync: {
+    readonly schemaVersion: SyncEnvelope["schemaVersion"];
+    readonly buildId: Sha256Digest;
+    readonly providerPackage: string;
+    readonly consent: "opt-in";
+    readonly localFallback: true;
+    readonly capabilities: readonly SyncEnvelope["capabilities"][number][];
+  } | null;
   readonly continuity: {
     readonly mode: "proxy";
     readonly explicitRedirectCount: number;
@@ -314,6 +323,7 @@ export interface PublicationNextApplication {
 
 export interface CreatePublicationNextApplicationOptions {
   readonly reader: unknown;
+  readonly syncData?: unknown;
   readonly theme?: ResolvedPublisherNextTheme;
   readonly updates?: ResolvedPublisherNextUpdates;
   readonly updatesData?: unknown;

@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 9 upgraded | 9 | Publisher implements a stronger checked contract. |
+| 10 upgraded | 10 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 33 planned | 33 | Accepted Publisher scope is not implemented yet. |
+| 32 planned | 32 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -161,14 +161,15 @@ The schema preserves local fallback, explicit opt in, row ownership, bounded
 payloads, atomic bookmark merge, absorbing tombstones, and complete reader-data
 deletion.
 
-The official host now owns stable authentication callback and account deletion
-paths. Both return the same opaque 404 for an unsynchronized publication. An
-author can select a matching provider through server-only host configuration.
-The renderer owns safe callback redirects, rejects cross-origin deletion before
-provider execution, and maps provider results to fixed responses. The reference
-Supabase adapter authenticates the current reader before privileged deletion and
-keeps the service-role key server only. Default sign-in, consent, synchronization,
-sign-out, and deletion controls remain planned.
+The official host now owns stable email authentication, session, callback, and
+account deletion paths. Every route returns the same opaque 404 for an
+unsynchronized publication. An author can select a matching provider through
+server-only host configuration. The renderer owns input bounds, safe callback
+redirects, same-origin state changes, and fixed responses. The default Reader
+records versioned opt-in consent, supports email links and code entry, reads the
+session, signs out, and confirms account deletion without removing local reading
+data. The reference Supabase adapter keeps the service-role key server only.
+Remote progress, bookmark, engagement, and consent transfer remain planned.
 
 ### Toolbar, Markdown, and accessibility
 

@@ -109,6 +109,7 @@ async function createApplication(options = {}) {
   return assertValid(
     await createPublicationNextApplication({
       reader,
+      ...(options.syncData === undefined ? {} : { syncData: options.syncData }),
       theme:
         options.theme ?? resolveDefaultPublisherNextTheme(),
       ...(options.omitUpdates || !includeUpdates
@@ -162,6 +163,7 @@ test("home catalogs expose only published works and collections", async () => {
   assert.match(html, />Search</u);
   assert.match(html, />Bookmarks</u);
   assert.match(html, />Settings</u);
+  assert.doesNotMatch(html, />Sync</u);
   assert.doesNotMatch(html, /Quiet Draft/);
   assert.doesNotMatch(html, /Old Record/);
   assert.doesNotMatch(html, /Retired Notes/);
@@ -172,6 +174,42 @@ test("home catalogs expose only published works and collections", async () => {
     { level: 2, text: "Collections" },
     { level: 3, text: "Field Notes" },
   ]);
+});
+
+test("a matching synchronization artifact enables only the progressive account surface", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const syncData = {
+    $schema: "https://publisher.genii.foundation/schemas/sync-envelope.schema.json",
+    schemaVersion: "1.0",
+    publicationId: reader.publicationId,
+    engineVersion: reader.engineVersion,
+    buildId: reader.buildId,
+    provider: { package: "@example/provider" },
+    consent: "opt-in",
+    localFallback: true,
+    capabilities: ["account-deletion", "progress"],
+  };
+  const application = await createApplication({ reader, syncData });
+  const html = await renderResolved(application, undefined);
+  assert.match(html, />Sync</u);
+  assert.doesNotMatch(html, /provider|supabase|service-role/ui);
+  assert.deepEqual(application.manifest.sync, {
+    schemaVersion: "1.0",
+    buildId: reader.buildId,
+    providerPackage: "@example/provider",
+    consent: "opt-in",
+    localFallback: true,
+    capabilities: ["account-deletion", "progress"],
+  });
+  const localOnly = await createApplication({ reader });
+  assert.notEqual(application.manifest.buildId, localOnly.manifest.buildId);
+
+  const mismatched = await createPublicationNextApplication({
+    reader,
+    syncData: { ...syncData, buildId: `sha256:${"b".repeat(64)}` },
+  });
+  assert.equal(mismatched.valid, false);
+  assert.equal(mismatched.diagnostics[0].code, "next.sync.identity_mismatch");
 });
 
 test("unlisted and archived works remain directly readable", async () => {

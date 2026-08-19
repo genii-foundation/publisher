@@ -34,7 +34,13 @@ function options(overrides = {}) {
       return {
         auth: {
           async exchangeCodeForSession() { return { error: null }; },
-          async getUser() { return { data: { user: { id: "reader-1" } }, error: null }; },
+          async signInWithOtp() { return { error: null }; },
+          async verifyOtp() {
+            return { data: { user: { id: "reader-1", email: "reader@example.com" } }, error: null };
+          },
+          async getUser() {
+            return { data: { user: { id: "reader-1", email: "reader@example.com" } }, error: null };
+          },
           async signOut() { return { error: null }; },
         },
       };
@@ -59,6 +65,72 @@ test("the reference provider declares the exact closed identity and capabilities
     "progress",
   ]);
   assert.ok(Object.isFrozen(provider));
+});
+
+test("email authentication and session methods use only the cookie-scoped client", async () => {
+  const calls = [];
+  const provider = createPublisherSupabaseSyncProvider(options({
+    createServerClient() {
+      return {
+        auth: {
+          async signInWithOtp(input) {
+            calls.push(["start", input]);
+            return { error: null };
+          },
+          async verifyOtp(input) {
+            calls.push(["verify", input]);
+            return {
+              data: { user: { id: "reader-1", email: "reader@example.com" } },
+              error: null,
+            };
+          },
+          async getUser() {
+            calls.push(["session"]);
+            return {
+              data: { user: { id: "reader-1", email: "reader@example.com" } },
+              error: null,
+            };
+          },
+          async signOut() {
+            calls.push(["sign-out"]);
+            return { error: null };
+          },
+        },
+      };
+    },
+    createClient() {
+      throw new Error("authentication must not create an administrative client");
+    },
+  }));
+  assert.equal(await provider.requestEmailAuthentication({
+    email: "reader@example.com",
+    callbackUrl: "https://reader.example/auth/callback",
+  }), true);
+  assert.deepEqual(await provider.verifyEmailAuthentication({
+    email: "reader@example.com",
+    code: "12345678",
+  }), {
+    authenticated: true,
+    email: "reader@example.com",
+  });
+  assert.deepEqual(await provider.getSession({}), {
+    authenticated: true,
+    email: "reader@example.com",
+  });
+  assert.equal(await provider.signOut({}), true);
+  assert.deepEqual(calls, [
+    ["start", {
+      email: "reader@example.com",
+      options: { emailRedirectTo: "https://reader.example/auth/callback" },
+    }],
+    ["verify", {
+      email: "reader@example.com",
+      token: "12345678",
+      type: "email",
+    }],
+    ["session"],
+    ["sign-out"],
+  ]);
 });
 
 test("missing or malformed server environment fails closed without creating clients", async () => {

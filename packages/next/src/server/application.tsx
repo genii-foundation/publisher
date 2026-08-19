@@ -35,8 +35,10 @@ import type {
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
 import {
+  validateSyncEnvelopeShape,
   validateUpdatesEnvelopeShape,
 } from "@genii-foundation/publisher-schema";
+import type { SyncEnvelope } from "@genii-foundation/publisher-schema";
 import type { Metadata, NextConfig } from "next";
 import { notFound } from "next/navigation.js";
 import {
@@ -1438,6 +1440,7 @@ function createApplicationArtifact(
   reader: PublicationReaderEnvelope,
   theme: ResolvedThemeState,
   updates: ResolvedUpdatesState | null,
+  sync: SyncEnvelope | null,
   continuity: PublisherNextContinuityHandler,
 ): PublisherNextApplicationArtifact {
   const artifactDescriptor = Object.freeze({
@@ -1471,6 +1474,16 @@ function createApplicationArtifact(
     canonicalSlashRedirectCount:
       continuity.canonicalSlashRedirectCount,
   });
+  const syncIdentity = sync === null
+    ? null
+    : Object.freeze({
+        schemaVersion: sync.schemaVersion,
+        buildId: reader.buildId,
+        providerPackage: sync.provider.package,
+        consent: sync.consent,
+        localFallback: sync.localFallback,
+        capabilities: Object.freeze([...sync.capabilities]),
+      });
   const basis = Object.freeze({
     schemaVersion: PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
     publicationId: reader.publicationId,
@@ -1480,6 +1493,7 @@ function createApplicationArtifact(
     source,
     theme: themeIdentity,
     updates: updatesIdentity,
+    sync: syncIdentity,
     continuity: continuityIdentity,
   });
   const buildId = hashCanonicalJson(
@@ -1509,7 +1523,7 @@ export async function createPublicationNextApplication(
     const inspectedOptions = inspectRecord(
       options,
       ["reader"],
-      ["theme", "updates", "updatesData"],
+      ["syncData", "theme", "updates", "updatesData"],
     );
     if (inspectedOptions === null) {
       return failure(
@@ -1526,6 +1540,24 @@ export async function createPublicationNextApplication(
       return readerResult;
     }
     const reader = readerResult.value;
+    const suppliedSyncData = valueOf(inspectedOptions, "syncData");
+    let sync: SyncEnvelope | null = null;
+    if (suppliedSyncData !== undefined) {
+      const syncResult = validateSyncEnvelopeShape(suppliedSyncData);
+      if (!syncResult.valid) return syncResult;
+      if (
+        syncResult.value.publicationId !== reader.publicationId ||
+        syncResult.value.buildId !== reader.buildId
+      ) {
+        return failure(
+          "next.sync.identity_mismatch",
+          "/syncData",
+          "The synchronization artifact does not belong to this Reader build.",
+          "identity",
+        );
+      }
+      sync = syncResult.value;
+    }
     const markdownResult = prepareReaderMarkdown(reader);
     if (!markdownResult.valid) {
       return markdownResult;
@@ -1670,6 +1702,7 @@ export async function createPublicationNextApplication(
       reader,
       themeResult.value,
       updatesState,
+      sync,
       continuity,
     );
 
@@ -1705,6 +1738,7 @@ export async function createPublicationNextApplication(
         markdownForBlock,
         page,
         readerBuildId: reader.buildId,
+        sync,
         theme: themeResult.value.instance,
         updates: updatesView,
       });

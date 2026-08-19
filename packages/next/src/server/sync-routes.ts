@@ -12,6 +12,7 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 import {
+  SYNC_CAPABILITIES,
   validateSyncEnvelopeShape,
 } from "@genii-foundation/publisher-schema";
 import type {
@@ -24,6 +25,13 @@ export type PublisherSyncAccountDeletionResult =
   | "failed"
   | "unauthorized"
   | "unavailable";
+
+export type PublisherSyncSession =
+  | { readonly authenticated: false }
+  | {
+      readonly authenticated: true;
+      readonly email?: string;
+    };
 
 export interface PublisherNextSyncProviderContext {
   readonly publicationId: string;
@@ -40,6 +48,26 @@ export interface PublisherNextSyncProvider {
     readonly request: Request;
     readonly context: PublisherNextSyncProviderContext;
   }): Promise<boolean>;
+  requestEmailAuthentication(input: {
+    readonly email: string;
+    readonly callbackUrl: string;
+    readonly request: Request;
+    readonly context: PublisherNextSyncProviderContext;
+  }): Promise<boolean>;
+  verifyEmailAuthentication(input: {
+    readonly email: string;
+    readonly code: string;
+    readonly request: Request;
+    readonly context: PublisherNextSyncProviderContext;
+  }): Promise<PublisherSyncSession | null>;
+  getSession(input: {
+    readonly request: Request;
+    readonly context: PublisherNextSyncProviderContext;
+  }): Promise<PublisherSyncSession | null>;
+  signOut(input: {
+    readonly request: Request;
+    readonly context: PublisherNextSyncProviderContext;
+  }): Promise<boolean>;
   deleteAccount(input: {
     readonly request: Request;
     readonly context: PublisherNextSyncProviderContext;
@@ -47,7 +75,11 @@ export interface PublisherNextSyncProvider {
 }
 
 export interface PublisherNextSyncRoutes {
+  readonly authStart: (request: Request) => Promise<Response>;
   readonly authCallback: (request: Request) => Promise<Response>;
+  readonly authVerify: (request: Request) => Promise<Response>;
+  readonly sessionRead: (request: Request) => Promise<Response>;
+  readonly sessionDelete: (request: Request) => Promise<Response>;
   readonly accountDeletion: (request: Request) => Promise<Response>;
 }
 
@@ -85,15 +117,137 @@ export interface CreatePublisherNextSyncRoutesInput {
 }
 
 function json(status: number, error: string): Response {
-  return Response.json({ error }, { status });
+  return Response.json({ error }, {
+    status,
+    headers: { "cache-control": "no-store" },
+  });
+}
+
+function jsonValue(status: number, value: unknown): Response {
+  return Response.json(value, {
+    status,
+    headers: { "cache-control": "no-store" },
+  });
+}
+
+function redirect(location: URL): Response {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      "cache-control": "no-store",
+      location: location.href,
+    },
+  });
 }
 
 function dormantRoutes(): PublisherNextSyncRoutes {
   const notFound = async (): Promise<Response> => json(404, "Not found.");
   return Object.freeze({
+    authStart: notFound,
     authCallback: notFound,
+    authVerify: notFound,
+    sessionRead: notFound,
+    sessionDelete: notFound,
     accountDeletion: notFound,
   });
+}
+
+async function boundedJson(
+  request: Request,
+): Promise<Readonly<Record<string, unknown>> | null> {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    const length = Number(declared);
+    if (!Number.isSafeInteger(length) || length < 0 || length > 8192) {
+      return null;
+    }
+  }
+  if (request.body === null) return null;
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > 8192) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const parsed: unknown = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(parsed);
+    if (Object.getOwnPropertySymbols(parsed).length > 0) return null;
+    for (const descriptor of Object.values(descriptors)) {
+      if (!descriptor.enumerable || !("value" in descriptor)) return null;
+    }
+    return Object.freeze(Object.fromEntries(
+      Object.entries(descriptors).map(([key, descriptor]) => [key, descriptor.value]),
+    ));
+  } catch {
+    return null;
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function exactString(
+  value: Readonly<Record<string, unknown>>,
+  key: string,
+  maximum: number,
+): string | null {
+  const keys = Object.keys(value);
+  if (!keys.includes(key)) return null;
+  const candidate = value[key];
+  if (
+    typeof candidate !== "string" ||
+    candidate.length === 0 ||
+    candidate.length > maximum
+  ) {
+    return null;
+  }
+  return candidate;
+}
+
+function safeSession(value: PublisherSyncSession | null): PublisherSyncSession | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  let authenticated: unknown;
+  let email: unknown;
+  try {
+    const keys = Reflect.ownKeys(value);
+    if (keys.some((key) => key !== "authenticated" && key !== "email")) return null;
+    authenticated = exactDataProperty(value, "authenticated");
+    email = keys.includes("email") ? exactDataProperty(value, "email") : undefined;
+  } catch {
+    return null;
+  }
+  if (authenticated === false && email === undefined) {
+    return Object.freeze({ authenticated: false });
+  }
+  if (
+    authenticated === true &&
+    (email === undefined ||
+      (typeof email === "string" && email.length > 0 && email.length <= 320))
+  ) {
+    return Object.freeze({
+      authenticated: true,
+      ...(email === undefined ? {} : { email }),
+    });
+  }
+  return null;
 }
 
 function safeNextPath(value: string | null, fallback: string): string {
@@ -128,6 +282,51 @@ function exactDataProperty(
   return descriptor.value;
 }
 
+function safeCapabilities(value: unknown): readonly SyncCapability[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError("The synchronization provider must declare its capabilities.");
+  }
+  let descriptors: Readonly<Record<string, PropertyDescriptor>>;
+  let keys: readonly PropertyKey[];
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(value) as Readonly<
+      Record<string, PropertyDescriptor>
+    >;
+    keys = Reflect.ownKeys(value);
+  } catch {
+    throw new TypeError("The synchronization provider capabilities could not be inspected.");
+  }
+  const length = descriptors.length?.value;
+  if (!Number.isSafeInteger(length) || length < 0 || length > 4) {
+    throw new TypeError("The synchronization provider must declare its capabilities.");
+  }
+  const expectedKeys = new Set<PropertyKey>(["length"]);
+  for (let index = 0; index < length; index += 1) {
+    expectedKeys.add(String(index));
+  }
+  if (keys.some((key) => !expectedKeys.has(key))) {
+    throw new TypeError("The synchronization provider capabilities contain an unsupported field.");
+  }
+  const allowed = new Set<unknown>(SYNC_CAPABILITIES);
+  const capabilities: SyncCapability[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = descriptors[String(index)];
+    if (
+      descriptor === undefined ||
+      !descriptor.enumerable ||
+      !("value" in descriptor) ||
+      !allowed.has(descriptor.value)
+    ) {
+      throw new TypeError("The synchronization provider declares an unsupported capability.");
+    }
+    capabilities.push(descriptor.value as SyncCapability);
+  }
+  if (new Set(capabilities).size !== capabilities.length) {
+    throw new TypeError("The synchronization provider declares a capability twice.");
+  }
+  return Object.freeze(capabilities);
+}
+
 function validateProvider(
   provider: PublisherNextSyncProvider,
   sync: SyncEnvelope,
@@ -135,35 +334,72 @@ function validateProvider(
   if (provider === null || typeof provider !== "object") {
     throw new TypeError("A synchronization provider is required for this publication.");
   }
-  if (exactDataProperty(provider, "kind") !== "genii.publisher.sync-provider") {
+  let providerKeys: readonly PropertyKey[];
+  try {
+    providerKeys = Reflect.ownKeys(provider);
+  } catch {
+    throw new TypeError("The synchronization provider could not be inspected.");
+  }
+  const providerFields = new Set<PropertyKey>([
+    "kind",
+    "package",
+    "capabilities",
+    "exchangeAuthCode",
+    "requestEmailAuthentication",
+    "verifyEmailAuthentication",
+    "getSession",
+    "signOut",
+    "deleteAccount",
+  ]);
+  if (providerKeys.some((key) => !providerFields.has(key))) {
+    throw new TypeError("The synchronization provider contains an unsupported field.");
+  }
+  const kind = exactDataProperty(provider, "kind");
+  if (kind !== "genii.publisher.sync-provider") {
     throw new TypeError("The synchronization provider has an unsupported kind.");
   }
-  if (exactDataProperty(provider, "package") !== sync.provider.package) {
+  const packageName = exactDataProperty(provider, "package");
+  if (packageName !== sync.provider.package) {
     throw new TypeError("The synchronization provider does not match the publication declaration.");
   }
-  const capabilities = exactDataProperty(provider, "capabilities");
-  if (!Array.isArray(capabilities) || capabilities.length > 4) {
-    throw new TypeError("The synchronization provider must declare its capabilities.");
-  }
-  const offered = new Set<unknown>();
-  for (let index = 0; index < capabilities.length; index += 1) {
-    const capability = exactDataProperty(capabilities, String(index));
-    if (offered.has(capability)) {
-      throw new TypeError("The synchronization provider declares a capability twice.");
-    }
-    offered.add(capability);
-  }
+  const capabilities = safeCapabilities(
+    exactDataProperty(provider, "capabilities"),
+  );
+  const offered = new Set<unknown>(capabilities);
   for (const capability of sync.capabilities) {
     if (!offered.has(capability)) {
       throw new TypeError(`The synchronization provider does not serve ${capability}.`);
     }
   }
-  for (const method of ["exchangeAuthCode", "deleteAccount"] as const) {
-    if (typeof exactDataProperty(provider, method) !== "function") {
+  const exchangeAuthCode = exactDataProperty(provider, "exchangeAuthCode");
+  const requestEmailAuthentication = exactDataProperty(provider, "requestEmailAuthentication");
+  const verifyEmailAuthentication = exactDataProperty(provider, "verifyEmailAuthentication");
+  const getSession = exactDataProperty(provider, "getSession");
+  const signOut = exactDataProperty(provider, "signOut");
+  const deleteAccount = exactDataProperty(provider, "deleteAccount");
+  for (const [method, implementation] of Object.entries({
+    exchangeAuthCode,
+    requestEmailAuthentication,
+    verifyEmailAuthentication,
+    getSession,
+    signOut,
+    deleteAccount,
+  })) {
+    if (typeof implementation !== "function") {
       throw new TypeError(`The synchronization provider must implement ${method}.`);
     }
   }
-  return provider;
+  return Object.freeze({
+    kind,
+    package: packageName,
+    capabilities,
+    exchangeAuthCode: exchangeAuthCode as PublisherNextSyncProvider["exchangeAuthCode"],
+    requestEmailAuthentication: requestEmailAuthentication as PublisherNextSyncProvider["requestEmailAuthentication"],
+    verifyEmailAuthentication: verifyEmailAuthentication as PublisherNextSyncProvider["verifyEmailAuthentication"],
+    getSession: getSession as PublisherNextSyncProvider["getSession"],
+    signOut: signOut as PublisherNextSyncProvider["signOut"],
+    deleteAccount: deleteAccount as PublisherNextSyncProvider["deleteAccount"],
+  });
 }
 
 function sameOrigin(request: Request): boolean {
@@ -200,21 +436,97 @@ export function createPublisherNextSyncRoutes(
   });
 
   return Object.freeze({
+    authStart: async (request: Request): Promise<Response> => {
+      if (!sameOrigin(request)) return json(403, "Invalid origin.");
+      const input = await boundedJson(request);
+      if (input === null || Object.keys(input).some((key) => key !== "email" && key !== "next")) {
+        return json(400, "Invalid authentication request.");
+      }
+      const email = exactString(input, "email", 320)?.trim() ?? null;
+      const requestedNext = input.next === undefined
+        ? homePath
+        : typeof input.next === "string" && input.next.length <= 2048
+          ? safeNextPath(input.next, homePath)
+          : null;
+      if (email === null || !email.includes("@") || requestedNext === null) {
+        return json(400, "Invalid authentication request.");
+      }
+      const url = new URL(request.url);
+      const callbackUrl = new URL("/auth/callback", url.origin);
+      callbackUrl.searchParams.set("next", requestedNext);
+      try {
+        if (await provider.requestEmailAuthentication({
+          email,
+          callbackUrl: callbackUrl.href,
+          request,
+          context,
+        }) === true) {
+          return jsonValue(202, { ok: true });
+        }
+      } catch {
+        // Provider failures become one public response and reveal no provider detail.
+      }
+      return json(503, "Authentication could not start.");
+    },
     authCallback: async (request: Request): Promise<Response> => {
       const url = new URL(request.url);
       const code = url.searchParams.get("code");
       const next = safeNextPath(url.searchParams.get("next"), homePath);
       if (code === null || code.length === 0 || code.length > 4096) {
-        return Response.redirect(new URL(`${homePath}?auth=error`, url.origin));
+        return redirect(new URL(`${homePath}?auth=error`, url.origin));
       }
       try {
         if (await provider.exchangeAuthCode({ code, request, context }) === true) {
-          return Response.redirect(new URL(next, url.origin));
+          return redirect(new URL(next, url.origin));
         }
       } catch {
         // Provider failures become one public response and reveal no provider detail.
       }
-      return Response.redirect(new URL(`${homePath}?auth=error`, url.origin));
+      return redirect(new URL(`${homePath}?auth=error`, url.origin));
+    },
+    authVerify: async (request: Request): Promise<Response> => {
+      if (!sameOrigin(request)) return json(403, "Invalid origin.");
+      const input = await boundedJson(request);
+      if (input === null || Object.keys(input).some((key) => key !== "email" && key !== "code")) {
+        return json(400, "Invalid authentication request.");
+      }
+      const email = exactString(input, "email", 320)?.trim() ?? null;
+      const code = exactString(input, "code", 4096)?.replace(/\s+/gu, "") ?? null;
+      if (email === null || !email.includes("@") || code === null || code.length === 0) {
+        return json(400, "Invalid authentication request.");
+      }
+      try {
+        const session = safeSession(await provider.verifyEmailAuthentication({
+          email,
+          code,
+          request,
+          context,
+        }));
+        if (session?.authenticated === true) return jsonValue(200, session);
+      } catch {
+        // Provider failures become one public response and reveal no provider detail.
+      }
+      return json(401, "Authentication failed.");
+    },
+    sessionRead: async (request: Request): Promise<Response> => {
+      try {
+        const session = safeSession(await provider.getSession({ request, context }));
+        if (session !== null) return jsonValue(200, session);
+      } catch {
+        // Provider failures become one public response and reveal no provider detail.
+      }
+      return json(503, "Synchronization is unavailable.");
+    },
+    sessionDelete: async (request: Request): Promise<Response> => {
+      if (!sameOrigin(request)) return json(403, "Invalid origin.");
+      try {
+        if (await provider.signOut({ request, context }) === true) {
+          return jsonValue(200, { ok: true });
+        }
+      } catch {
+        // Provider failures become one public response and reveal no provider detail.
+      }
+      return json(503, "Sign out failed.");
     },
     accountDeletion: async (request: Request): Promise<Response> => {
       if (!sameOrigin(request)) {
@@ -228,7 +540,7 @@ export function createPublisherNextSyncRoutes(
       }
       switch (result) {
         case "deleted":
-          return Response.json({ ok: true });
+          return jsonValue(200, { ok: true });
         case "unauthorized":
           return json(401, "Unauthorized.");
         case "unavailable":

@@ -69,6 +69,9 @@ test("the host contract declares exactly the author host file set", () => {
     [
       `app/${PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY}/page.tsx`,
       "app/api/account/route.ts",
+      "app/api/auth/start/route.ts",
+      "app/api/auth/verify/route.ts",
+      "app/api/session/route.ts",
       "app/auth/callback/route.ts",
       "app/error.tsx",
       "app/global-error.tsx",
@@ -132,6 +135,12 @@ test("the host contract declares exactly the author host file set", () => {
         "Regenerate and review package-lock.json so the required Nano ID 3.3.18 override is installed.",
       ],
     },
+    {
+      from: "0.5.0",
+      to: "0.6.0",
+      summary:
+        "Add provider-neutral email authentication and session route surfaces for the default reader controls.",
+    },
   ]);
 });
 
@@ -140,6 +149,9 @@ test("synchronization routes delegate through the checked server-only bridge", (
   for (const path of [
     "app/auth/callback/route.ts",
     "app/api/account/route.ts",
+    "app/api/auth/start/route.ts",
+    "app/api/auth/verify/route.ts",
+    "app/api/session/route.ts",
   ]) {
     const contents = contentsOf(result, path);
     assert.match(contents, /publisher-sync-routes\.js/u);

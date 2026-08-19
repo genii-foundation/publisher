@@ -22,5 +22,6 @@ These records define the accepted foundation of GENII Publisher.
 18. [ADR 0018: Dormant synchronization route surfaces](./0018-dormant-synchronization-routes.md)
 19. [ADR 0019: Synchronization provider delegation](./0019-synchronization-provider-delegation.md)
 20. [ADR 0020: Nano ID transitive security pin](./0020-nanoid-transitive-security-pin.md)
+21. [ADR 0021: Reader authentication and consent boundary](./0021-reader-authentication-and-consent.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

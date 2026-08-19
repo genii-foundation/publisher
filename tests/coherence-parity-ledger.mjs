@@ -644,9 +644,9 @@ export const SYNC_PARITY = Object.freeze([
     id: "sync.auth.session",
     capability: "Signing in by emailed link or code, and holding a session",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "The stable callback now validates provider identity and exchanges a bounded code through the configured server provider. The default email-link, code-entry, session, consent, and sign-out interface remains to be implemented.",
+    status: "upgraded",
+    why: "The official Reader now records explicit versioned consent before starting sign-in, supports email links and bounded code entry through provider-neutral routes, reads the cookie-scoped session, signs out without removing local data, and keeps every public response under renderer control.",
+    evidence: { file: "packages/next/src/client/reader-rail.tsx" },
   },
   {
     id: "sync.account_deletion",

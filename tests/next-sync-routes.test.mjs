@@ -44,6 +44,18 @@ function provider(overrides = {}) {
     async exchangeAuthCode() {
       return true;
     },
+    async requestEmailAuthentication() {
+      return true;
+    },
+    async verifyEmailAuthentication({ email }) {
+      return { authenticated: true, email };
+    },
+    async getSession() {
+      return { authenticated: false };
+    },
+    async signOut() {
+      return true;
+    },
     async deleteAccount() {
       return "deleted";
     },
@@ -67,19 +79,132 @@ test("host configuration is closed and never invokes accessors", () => {
   );
 });
 
-test("an absent synchronization artifact produces two opaque dormant routes", async () => {
+test("an absent synchronization artifact produces opaque dormant routes", async () => {
   const routes = createPublisherNextSyncRoutes({
     get provider() {
       throw new Error("must not inspect a provider while synchronization is absent");
     },
   });
   for (const response of await Promise.all([
+    routes.authStart(new Request("https://reader.example/api/auth/start", { method: "POST" })),
     routes.authCallback(new Request("https://reader.example/auth/callback?code=secret")),
+    routes.authVerify(new Request("https://reader.example/api/auth/verify", { method: "POST" })),
+    routes.sessionRead(new Request("https://reader.example/api/session")),
+    routes.sessionDelete(new Request("https://reader.example/api/session", { method: "DELETE" })),
     routes.accountDeletion(new Request("https://reader.example/api/account", { method: "DELETE" })),
   ])) {
     assert.equal(response.status, 404);
     assert.deepEqual(await response.json(), { error: "Not found." });
   }
+});
+
+test("email authentication is bounded, same-origin, and provider neutral", async () => {
+  const calls = [];
+  const routes = createPublisherNextSyncRoutes({
+    sync,
+    homePath: "/library",
+    provider: provider({
+      async requestEmailAuthentication(input) {
+        calls.push(["start", input]);
+        return true;
+      },
+      async verifyEmailAuthentication(input) {
+        calls.push(["verify", input]);
+        return { authenticated: true, email: input.email };
+      },
+    }),
+  });
+  const hostile = await routes.authStart(new Request(
+    "https://reader.example/api/auth/start",
+    {
+      method: "POST",
+      headers: { origin: "https://evil.example" },
+      body: JSON.stringify({ email: "reader@example.com" }),
+    },
+  ));
+  assert.equal(hostile.status, 403);
+  assert.equal(calls.length, 0);
+
+  const started = await routes.authStart(new Request(
+    "https://reader.example/api/auth/start",
+    {
+      method: "POST",
+      headers: { origin: "https://reader.example" },
+      body: JSON.stringify({
+        email: "reader@example.com",
+        next: "https://evil.example/private",
+      }),
+    },
+  ));
+  assert.equal(started.status, 202);
+  assert.equal(started.headers.get("cache-control"), "no-store");
+  assert.equal(calls[0][1].callbackUrl, "https://reader.example/auth/callback?next=%2Flibrary");
+
+  const verified = await routes.authVerify(new Request(
+    "https://reader.example/api/auth/verify",
+    {
+      method: "POST",
+      headers: { origin: "https://reader.example" },
+      body: JSON.stringify({ email: "reader@example.com", code: " 12 34 " }),
+    },
+  ));
+  assert.equal(verified.status, 200);
+  assert.deepEqual(await verified.json(), {
+    authenticated: true,
+    email: "reader@example.com",
+  });
+  assert.equal(calls[1][1].code, "1234");
+
+  const oversized = await routes.authVerify(new Request(
+    "https://reader.example/api/auth/verify",
+    {
+      method: "POST",
+      body: JSON.stringify({ email: "reader@example.com", code: "x".repeat(9000) }),
+    },
+  ));
+  assert.equal(oversized.status, 400);
+  assert.equal(calls.length, 2);
+});
+
+test("session routes validate provider output and own sign-out responses", async () => {
+  let signedOut = 0;
+  const routes = createPublisherNextSyncRoutes({
+    sync,
+    provider: provider({
+      async getSession() {
+        return { authenticated: true, email: "reader@example.com" };
+      },
+      async signOut() {
+        signedOut += 1;
+        return true;
+      },
+    }),
+  });
+  const session = await routes.sessionRead(new Request("https://reader.example/api/session"));
+  assert.equal(session.headers.get("cache-control"), "no-store");
+  assert.deepEqual(await session.json(), {
+    authenticated: true,
+    email: "reader@example.com",
+  });
+  const signOut = await routes.sessionDelete(new Request(
+    "https://reader.example/api/session",
+    { method: "DELETE", headers: { origin: "https://reader.example" } },
+  ));
+  assert.equal(signOut.status, 200);
+  assert.equal(signedOut, 1);
+
+  const invalid = createPublisherNextSyncRoutes({
+    sync,
+    provider: provider({
+      async getSession() {
+        return { authenticated: true, email: "x".repeat(321) };
+      },
+    }),
+  });
+  assert.equal(
+    (await invalid.sessionRead(new Request("https://reader.example/api/session"))).status,
+    503,
+  );
 });
 
 test("declared synchronization requires a matching capable provider", () => {
@@ -101,6 +226,44 @@ test("declared synchronization requires a matching capable provider", () => {
     }),
     /account-deletion/u,
   );
+  assert.throws(
+    () => createPublisherNextSyncRoutes({
+      sync,
+      provider: provider({ capabilities: ["progress", "invented"] }),
+    }),
+    /unsupported capability/u,
+  );
+  assert.throws(
+    () => createPublisherNextSyncRoutes({
+      sync,
+      provider: { ...provider(), extra: true },
+    }),
+    /unsupported field/u,
+  );
+});
+
+test("validated provider methods are detached from later caller mutation", async () => {
+  let originalCalls = 0;
+  let replacementCalls = 0;
+  const mutable = {
+    ...provider(),
+    async signOut() {
+      originalCalls += 1;
+      return true;
+    },
+  };
+  const routes = createPublisherNextSyncRoutes({ sync, provider: mutable });
+  mutable.signOut = async () => {
+    replacementCalls += 1;
+    return false;
+  };
+  const response = await routes.sessionDelete(new Request(
+    "https://reader.example/api/session",
+    { method: "DELETE", headers: { origin: "https://reader.example" } },
+  ));
+  assert.equal(response.status, 200);
+  assert.equal(originalCalls, 1);
+  assert.equal(replacementCalls, 0);
 });
 
 test("the callback bounds its code and owns safe same-origin redirects", async () => {
@@ -119,6 +282,7 @@ test("the callback bounds its code and owns safe same-origin redirects", async (
     "https://reader.example/auth/callback?code=abc&next=https%3A%2F%2Fevil.example",
   ));
   assert.equal(response.status, 302);
+  assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal(response.headers.get("location"), "https://reader.example/library");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].code, "abc");

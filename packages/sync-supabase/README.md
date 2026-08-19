@@ -5,11 +5,11 @@ retention, grants, and one function that takes a lock.
 
 ## Why this is still private
 
-The official host now owns stable authentication callback and account deletion
-routes. The server export supplies a provider for those routes using exact
-Supabase dependencies and server-only environment configuration.
+The official host now owns stable email authentication, session, callback, and
+account deletion routes. The server export supplies a provider for those routes
+using exact Supabase dependencies and server-only environment configuration.
 
-The package remains private until its browser synchronization client, legal
+The package remains private until its remote data synchronization client, legal
 bundle, packed-consumer proof, provenance evidence, and release lifecycle are
 complete. Route mounting is no longer the blocker.
 

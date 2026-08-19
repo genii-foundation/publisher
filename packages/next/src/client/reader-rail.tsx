@@ -49,11 +49,14 @@ import type {
   ReaderSection,
   Sha256Digest,
 } from "@genii-foundation/publisher-schema/reader";
+import type { SyncEnvelope } from "@genii-foundation/publisher-schema";
 import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
+  type FormEvent,
   type ReactElement,
   type ReactNode,
 } from "react";
@@ -71,9 +74,13 @@ export interface PublisherReaderRailProps {
   readonly searchPath: string;
   readonly outline: readonly PublisherReaderOutlineEntry[];
   readonly currentSection?: ReaderSection;
+  readonly sync: SyncEnvelope | null;
 }
 
-type ReaderPanel = "outline" | "search" | "bookmarks" | "settings";
+type ReaderPanel = "outline" | "search" | "bookmarks" | "settings" | "sync";
+type ReaderSyncState = "idle" | "loading" | "signed-out" | "signed-in" | "unavailable";
+
+const SYNC_CONSENT_COPY_VERSION = "1.0";
 
 const DEFAULT_FONT_POLICY = Object.freeze({
   defaultFontFamilyId: "serif",
@@ -122,7 +129,23 @@ function panelLabel(panel: ReaderPanel): string {
     case "search": return "Search";
     case "bookmarks": return "Bookmarks";
     case "settings": return "Reading settings";
+    case "sync": return "Sync and account";
   }
+}
+
+function syncConsentKey(publicationId: string): string {
+  return `genii.publisher.sync-consent.v1:${encodeURIComponent(publicationId)}`;
+}
+
+function writeSyncConsent(publicationId: string, granted: boolean): void {
+  const now = new Date().toISOString();
+  safeLocalWrite(syncConsentKey(publicationId), JSON.stringify({
+    schemaVersion: 1,
+    publicationId,
+    copyVersion: SYNC_CONSENT_COPY_VERSION,
+    granted,
+    ...(granted ? { grantedAt: now } : { revokedAt: now }),
+  }));
 }
 
 export function PublisherReaderRail({
@@ -131,8 +154,11 @@ export function PublisherReaderRail({
   searchPath,
   outline,
   currentSection,
+  sync,
 }: PublisherReaderRailProps): ReactElement {
   const panelId = useId();
+  const syncEmailRef = useRef<HTMLInputElement>(null);
+  const consentContinueRef = useRef<HTMLButtonElement>(null);
   const [openPanel, setOpenPanel] = useState<ReaderPanel | null>(null);
   const [preferences, setPreferences] = useState<ReaderPreferences>(() =>
     createDefaultReaderPreferences(DEFAULT_FONT_POLICY));
@@ -142,6 +168,14 @@ export function PublisherReaderRail({
   const [query, setQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState<ReaderSearchIndex | null>(null);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const [syncState, setSyncState] = useState<ReaderSyncState>("idle");
+  const [syncEmail, setSyncEmail] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [syncCode, setSyncCode] = useState("");
+  const [syncMessage, setSyncMessage] = useState("");
+  const [consentPending, setConsentPending] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
 
   const preferencesKey = useMemo(
     () => createReaderPreferencesStorageKey(publicationId),
@@ -227,7 +261,6 @@ export function PublisherReaderRail({
 
   useEffect(() => {
     if (openPanel !== "search" || searchState !== "idle") return;
-    let active = true;
     setSearchState("loading");
     void fetch(searchPath, { credentials: "same-origin" })
       .then((response) => {
@@ -240,24 +273,54 @@ export function PublisherReaderRail({
           readerBuildId,
         });
         if (parsed === null) throw new Error("Search artifact identity mismatch.");
-        if (active) {
-          setSearchIndex(parsed);
-          setSearchState("ready");
-        }
+        setSearchIndex(parsed);
+        setSearchState("ready");
       })
       .catch(() => {
-        if (active) setSearchState("failed");
+        setSearchState("failed");
       });
-    return () => { active = false; };
   }, [openPanel, publicationId, readerBuildId, searchPath]);
 
   useEffect(() => {
+    if (sync === null || openPanel !== "sync" || syncState !== "idle") return;
+    setSyncState("loading");
+    void fetch("/api/session", { credentials: "same-origin" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Session request failed.");
+        return response.json() as Promise<{ authenticated?: unknown; email?: unknown }>;
+      })
+      .then((session) => {
+        if (session.authenticated === true) {
+          setSyncEmail(typeof session.email === "string" ? session.email : "");
+          setSyncState("signed-in");
+        } else if (session.authenticated === false) {
+          setSyncState("signed-out");
+        } else {
+          setSyncState("unavailable");
+        }
+      })
+      .catch(() => {
+        setSyncState("unavailable");
+      });
+  }, [openPanel, sync]);
+
+  useEffect(() => {
     const close = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") setOpenPanel(null);
+      if (event.key !== "Escape") return;
+      if (consentPending) {
+        setConsentPending(false);
+        syncEmailRef.current?.focus();
+      } else {
+        setOpenPanel(null);
+      }
     };
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
-  }, []);
+  }, [consentPending]);
+
+  useEffect(() => {
+    if (consentPending) consentContinueRef.current?.focus();
+  }, [consentPending]);
 
   const currentProgress = currentSection === undefined
     ? null
@@ -278,6 +341,111 @@ export function PublisherReaderRail({
 
   const toggle = (panel: ReaderPanel): void => {
     setOpenPanel((current) => current === panel ? null : panel);
+  };
+
+  const beginAuthentication = (event: FormEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    const email = syncEmail.trim();
+    if (email.length === 0) return;
+    setSyncMessage("");
+    setConsentPending(true);
+  };
+
+  const confirmAuthentication = async (): Promise<void> => {
+    const email = syncEmail.trim();
+    if (email.length === 0 || syncBusy) return;
+    setSyncBusy(true);
+    setSyncMessage("");
+    writeSyncConsent(publicationId, true);
+    try {
+      const response = await fetch("/api/auth/start", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          email,
+          next: `${window.location.pathname}${window.location.search}`,
+        }),
+      });
+      if (!response.ok) throw new Error("Authentication could not start.");
+      setPendingEmail(email);
+      setSyncCode("");
+      setConsentPending(false);
+      setSyncMessage("Check your email for a link or one-time code.");
+    } catch {
+      setSyncMessage("Sign in could not start. Try again.");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const verifyAuthentication = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+    event.preventDefault();
+    const code = syncCode.replace(/\s+/gu, "");
+    if (pendingEmail.length === 0 || code.length === 0 || syncBusy) return;
+    setSyncBusy(true);
+    setSyncMessage("");
+    try {
+      const response = await fetch("/api/auth/verify", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: pendingEmail, code }),
+      });
+      if (!response.ok) throw new Error("Authentication failed.");
+      const session = await response.json() as { authenticated?: unknown; email?: unknown };
+      if (session.authenticated !== true) throw new Error("Authentication failed.");
+      setSyncEmail(typeof session.email === "string" ? session.email : pendingEmail);
+      setPendingEmail("");
+      setSyncCode("");
+      setSyncState("signed-in");
+      setSyncMessage("Signed in. Local reading remains available if sync is interrupted.");
+    } catch {
+      setSyncMessage("Code sign in failed. Request a fresh email and try again.");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const signOut = async (): Promise<void> => {
+    if (syncBusy) return;
+    setSyncBusy(true);
+    setSyncMessage("");
+    try {
+      const response = await fetch("/api/session", {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("Sign out failed.");
+      setSyncState("signed-out");
+      setSyncMessage("Signed out. Local progress and bookmarks are still saved.");
+    } catch {
+      setSyncMessage("Sign out failed. Try again.");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const deleteAccount = async (): Promise<void> => {
+    if (syncBusy || !deletePending) return;
+    setSyncBusy(true);
+    setSyncMessage("");
+    try {
+      const response = await fetch("/api/account", {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error("Account deletion failed.");
+      writeSyncConsent(publicationId, false);
+      setDeletePending(false);
+      setSyncState("signed-out");
+      setSyncEmail("");
+      setSyncMessage("Account deleted. Local progress and bookmarks remain in this browser.");
+    } catch {
+      setSyncMessage("Account deletion failed. Try again.");
+    } finally {
+      setSyncBusy(false);
+    }
   };
 
   return (
@@ -302,6 +470,11 @@ export function PublisherReaderRail({
         <button aria-controls={panelId} aria-expanded={openPanel === "settings"} onClick={() => toggle("settings")} type="button">
           <RailIcon><path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M7 14v6" /></RailIcon><span>Settings</span>
         </button>
+        {sync === null ? null : (
+          <button aria-controls={panelId} aria-expanded={openPanel === "sync"} onClick={() => toggle("sync")} type="button">
+            <RailIcon><path d="M7 17a4 4 0 0 1 0-8 5 5 0 0 1 9.6 1.4A3.5 3.5 0 1 1 17.5 17Z" /></RailIcon><span>Sync</span>
+          </button>
+        )}
       </div>
 
       {openPanel === null ? null : (
@@ -385,6 +558,56 @@ export function PublisherReaderRail({
                 <input checked={preferences.highlights} onChange={(event) => updatePreference({ highlights: event.currentTarget.checked })} type="checkbox" />
                 Show saved highlights
               </label>
+            </div>
+          ) : null}
+
+          {openPanel === "sync" && sync !== null ? (
+            <div className="publisher-reader-sync">
+              <p>Reading progress and bookmarks stay in this browser unless you explicitly choose to sync them.</p>
+              {syncState === "loading" ? <p role="status">Checking account status…</p> : null}
+              {syncState === "unavailable" ? <p role="alert">Sync is unavailable. Local reading is unaffected.</p> : null}
+              {syncState === "signed-out" ? (
+                <>
+                  <form onSubmit={beginAuthentication}>
+                    <label htmlFor={`${panelId}-email`}>Email</label>
+                    <input ref={syncEmailRef} id={`${panelId}-email`} type="email" autoComplete="email" value={syncEmail} onChange={(event) => setSyncEmail(event.currentTarget.value)} required />
+                    <button type="submit" disabled={syncBusy}>Sign in to sync</button>
+                  </form>
+                  {consentPending ? (
+                    <section className="publisher-reader-sync-consent" role="dialog" aria-modal="true" aria-label="Confirm synchronization">
+                      <h3>Sync progress and bookmarks?</h3>
+                      <p>If you continue, this publication may store your reading progress, saved passages, and notes with its configured account provider so they can be shared between your devices.</p>
+                      <div>
+                        <button type="button" onClick={() => { setConsentPending(false); syncEmailRef.current?.focus(); }} disabled={syncBusy}>Cancel</button>
+                        <button ref={consentContinueRef} type="button" onClick={() => void confirmAuthentication()} disabled={syncBusy}>Continue</button>
+                      </div>
+                    </section>
+                  ) : null}
+                  {pendingEmail.length > 0 ? (
+                    <form onSubmit={(event) => void verifyAuthentication(event)}>
+                      <label htmlFor={`${panelId}-code`}>One-time code</label>
+                      <input id={`${panelId}-code`} type="text" inputMode="numeric" autoComplete="one-time-code" value={syncCode} onChange={(event) => setSyncCode(event.currentTarget.value)} required />
+                      <button type="submit" disabled={syncBusy}>Verify code</button>
+                    </form>
+                  ) : null}
+                </>
+              ) : null}
+              {syncState === "signed-in" ? (
+                <div className="publisher-reader-sync-account">
+                  <p><strong>Signed in</strong>{syncEmail.length === 0 ? null : <> as {syncEmail}</>}</p>
+                  <button type="button" onClick={() => void signOut()} disabled={syncBusy}>Sign out</button>
+                  {sync.capabilities.includes("account-deletion") ? (
+                    <div className="publisher-reader-sync-delete">
+                      <label>
+                        <input type="checkbox" checked={deletePending} onChange={(event) => setDeletePending(event.currentTarget.checked)} />
+                        I understand this permanently deletes the synchronization account. Local reading data in this browser is retained.
+                      </label>
+                      <button type="button" onClick={() => void deleteAccount()} disabled={!deletePending || syncBusy}>Delete sync account</button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              {syncMessage.length === 0 ? null : <p role="status" aria-live="polite">{syncMessage}</p>}
             </div>
           ) : null}
         </section>

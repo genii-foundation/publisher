@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.5.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.6.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -71,8 +71,9 @@ export const PUBLISHER_NEXT_AUDIO_DATA_PATH =
 /**
  * Host-relative location of the sync envelope.
  *
- * Under `public/` for the same reason narration is: a client fetches it and the
- * server never imports it, so adding it changes no generated file.
+ * Under `public/` because the browser-facing declaration is public. The generated
+ * application and route bridge also read the same bytes on the server so every
+ * surface binds to one validated publication and Reader build identity.
  *
  * It carries no provider configuration. That is enforced by the artifact's schema
  * rather than by anything here, because this path is public and a config is
@@ -168,12 +169,18 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.4.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.5.0",
       summary:
         "Bind synchronization routes to optional author-owned host configuration through a server-only provider contract.",
       manualSteps: Object.freeze([
         "Regenerate and review package-lock.json so the required Nano ID 3.3.18 override is installed.",
       ]),
+    }),
+    Object.freeze({
+      from: "0.5.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Add provider-neutral email authentication and session route surfaces for the default reader controls.",
     }),
   ]);
 
@@ -340,7 +347,9 @@ export function createPublisherNextHostTemplate(
         "",
         `const updatesPath = join(process.cwd(), "${PUBLISHER_NEXT_UPDATES_DATA_PATH}");`,
         'const updatesData = existsSync(updatesPath) ? JSON.parse(readFileSync(updatesPath, "utf8")) : undefined;',
-        "const created = await createPublicationNextApplication({ reader, updatesData });",
+        `const syncPath = join(process.cwd(), "${PUBLISHER_NEXT_SYNC_DATA_PATH}");`,
+        'const syncData = existsSync(syncPath) ? JSON.parse(readFileSync(syncPath, "utf8")) : undefined;',
+        "const created = await createPublicationNextApplication({ reader, syncData, updatesData });",
         "if (!created.valid) {",
         "  throw new Error(JSON.stringify(created.diagnostics));",
         "}",
@@ -398,11 +407,36 @@ export function createPublisherNextHostTemplate(
       ),
     },
     {
+      path: "app/api/auth/start/route.ts",
+      contents: lines(
+        'import { syncRoutes } from "../../../../publisher-sync-routes.js";',
+        "",
+        "export const POST = syncRoutes.authStart;",
+      ),
+    },
+    {
+      path: "app/api/auth/verify/route.ts",
+      contents: lines(
+        'import { syncRoutes } from "../../../../publisher-sync-routes.js";',
+        "",
+        "export const POST = syncRoutes.authVerify;",
+      ),
+    },
+    {
       path: "app/api/account/route.ts",
       contents: lines(
         'import { syncRoutes } from "../../../publisher-sync-routes.js";',
         "",
         "export const DELETE = syncRoutes.accountDeletion;",
+      ),
+    },
+    {
+      path: "app/api/session/route.ts",
+      contents: lines(
+        'import { syncRoutes } from "../../../publisher-sync-routes.js";',
+        "",
+        "export const GET = syncRoutes.sessionRead;",
+        "export const DELETE = syncRoutes.sessionDelete;",
       ),
     },
     {

@@ -93,6 +93,50 @@ export function createPublisherSupabaseSyncProvider(options = {}) {
       const result = await client.auth.exchangeCodeForSession(code);
       return result.error == null;
     },
+    async requestEmailAuthentication({ email, callbackUrl }) {
+      const client = await serverClient();
+      if (client === null) return false;
+      const result = await client.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: callbackUrl },
+      });
+      return result.error == null;
+    },
+    async verifyEmailAuthentication({ email, code }) {
+      const client = await serverClient();
+      if (client === null) return null;
+      const result = await client.auth.verifyOtp({
+        email,
+        token: code,
+        type: "email",
+      });
+      if (result.error != null || result.data?.user == null) return null;
+      return {
+        authenticated: true,
+        ...(typeof result.data.user.email === "string"
+          ? { email: result.data.user.email }
+          : {}),
+      };
+    },
+    async getSession() {
+      const client = await serverClient();
+      if (client === null) return null;
+      const result = await client.auth.getUser();
+      if (result.error != null) return null;
+      if (result.data?.user == null) return { authenticated: false };
+      return {
+        authenticated: true,
+        ...(typeof result.data.user.email === "string"
+          ? { email: result.data.user.email }
+          : {}),
+      };
+    },
+    async signOut() {
+      const client = await serverClient();
+      if (client === null) return false;
+      const result = await client.auth.signOut();
+      return result.error == null;
+    },
     async deleteAccount() {
       const client = await serverClient();
       if (client === null) return "unavailable";

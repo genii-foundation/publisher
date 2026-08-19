@@ -4,6 +4,9 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Advanced the host contract to 0.6.0 with provider-neutral email authentication and session routes.
+- Added the default opt-in account panel with email link and code entry, session status, sign-out, and confirmed account deletion while retaining local reading data.
+- Bound the exact synchronization declaration into application identity before rendering the account surface.
 - Advanced the host contract to 0.5.0 with optional author-owned provider configuration and a protected provider-neutral synchronization route entry.
 - Kept callback redirects, deletion origin checks, status mapping, and public error bodies under renderer authority while collapsing provider failures without detail.
 - Pinned Nano ID 3.3.18 in consuming hosts after the prior transitive version gained a high-severity denial-of-service advisory.
