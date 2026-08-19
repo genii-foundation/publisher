@@ -18,9 +18,13 @@ import {
   createReaderNarrationPreferencesStorageKey,
   parseReaderNarrationEnvelope,
   parseReaderNarrationPreferences,
+  parseReaderNarrationTimingDocument,
+  readerNarrationTimingHref,
+  readerNarrationTimingIndexForSeconds,
   serializeReaderNarrationPreferences,
   type ReaderNarrationEnvelope,
   type ReaderNarrationPreferences,
+  type ReaderNarrationTimingDocument,
 } from "@genii-foundation/publisher-reader/narration";
 import type { ReaderProgressCatalog } from "@genii-foundation/publisher-reader/progress-catalog";
 import type { Sha256Digest } from "@genii-foundation/publisher-schema/reader";
@@ -44,6 +48,15 @@ export interface PublisherReaderNarrationProps {
 }
 
 type NarrationLoadState = "idle" | "loading" | "ready" | "absent" | "failed";
+
+interface NarrationTimingState {
+  readonly bodyWordCount: number;
+  readonly document: ReaderNarrationTimingDocument;
+  readonly sectionId: string;
+  readonly titleWordCount: number;
+}
+
+const TIMING_FETCH_TIMEOUT_MILLISECONDS = 1_500;
 
 function safeRead(key: string): string | null {
   try {
@@ -71,6 +84,27 @@ function formatTime(seconds: number): string {
     : `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
+function timingSectionProfile(sectionId: string): {
+  readonly bodyWordCount: number;
+  readonly root: HTMLElement;
+  readonly textCharacters: number;
+  readonly titleWordCount: number;
+} | null {
+  if (typeof CSS.escape !== "function") return null;
+  const root = document.querySelector<HTMLElement>(
+    `[data-publisher-section="${CSS.escape(sectionId)}"]`,
+  );
+  if (root === null) return null;
+  const bodyWordCount = Number(root.dataset.publisherNarrationBodyWords);
+  const textCharacters = Number(root.dataset.publisherNarrationTextCharacters);
+  const titleWordCount = Number(root.dataset.publisherNarrationTitleWords);
+  return Number.isSafeInteger(bodyWordCount) && bodyWordCount >= 0 &&
+      Number.isSafeInteger(textCharacters) && textCharacters >= 1 &&
+      Number.isSafeInteger(titleWordCount) && titleWordCount >= 0
+    ? { bodyWordCount, root, textCharacters, titleWordCount }
+    : null;
+}
+
 export function PublisherReaderNarration({
   active,
   audioPath,
@@ -83,6 +117,10 @@ export function PublisherReaderNarration({
 }: PublisherReaderNarrationProps): ReactElement {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingPlayRef = useRef(false);
+  const timingCacheRef = useRef(new Map<string, ReaderNarrationTimingDocument>());
+  const timingControllerRef = useRef<AbortController | null>(null);
+  const timingSequenceRef = useRef(0);
+  const activeWordRef = useRef<HTMLElement | null>(null);
   const preferencesKey = useMemo(
     () => createReaderNarrationPreferencesStorageKey(publicationId),
     [publicationId],
@@ -96,6 +134,7 @@ export function PublisherReaderNarration({
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [timingState, setTimingState] = useState<NarrationTimingState | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -152,7 +191,17 @@ export function PublisherReaderNarration({
 
   const selectedClip = selectedVoice?.clips[selectedClipIndex] ?? null;
 
+  const clearActiveWord = (): void => {
+    activeWordRef.current?.classList.remove("publisher-narration-word-current");
+    activeWordRef.current = null;
+  };
+
   useEffect(() => {
+    timingSequenceRef.current += 1;
+    timingControllerRef.current?.abort();
+    timingControllerRef.current = null;
+    clearActiveWord();
+    setTimingState(null);
     setCurrentTime(0);
     setDuration(selectedClip?.durationSeconds ?? 0);
     setPlaying(false);
@@ -166,6 +215,12 @@ export function PublisherReaderNarration({
       });
     }
   }, [selectedClip?.audioVersionId, selectedClip?.href]);
+
+  useEffect(() => () => {
+    timingSequenceRef.current += 1;
+    timingControllerRef.current?.abort();
+    clearActiveWord();
+  }, []);
 
   const sectionById = useMemo(
     () => new Map(
@@ -245,6 +300,101 @@ export function PublisherReaderNarration({
     else setMessage("Narration queue complete.");
   };
 
+  const loadTimingsAfterPlaybackStarts = (): void => {
+    if (selectedClip === null || selectedVoice === null) return;
+    const href = readerNarrationTimingHref(selectedClip);
+    const profile = timingSectionProfile(selectedClip.sectionId);
+    if (href === null || profile === null) return;
+    const cacheKey = [
+      href,
+      selectedClip.sectionId,
+      selectedClip.audioVersionId,
+      selectedVoice.id,
+      profile.textCharacters,
+      selectedClip.timingsByteSize,
+    ].join("\u0000");
+    const cached = timingCacheRef.current.get(cacheKey);
+    if (cached !== undefined) {
+      setTimingState({
+        bodyWordCount: profile.bodyWordCount,
+        document: cached,
+        sectionId: selectedClip.sectionId,
+        titleWordCount: profile.titleWordCount,
+      });
+      return;
+    }
+
+    const sequence = ++timingSequenceRef.current;
+    timingControllerRef.current?.abort();
+    const controller = new AbortController();
+    timingControllerRef.current = controller;
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      TIMING_FETCH_TIMEOUT_MILLISECONDS,
+    );
+    void fetch(href, {
+      credentials: "same-origin",
+      signal: controller.signal,
+    })
+      .then((response) => response.ok ? response.text() : null)
+      .then((serialized) => serialized === null
+        ? null
+        : parseReaderNarrationTimingDocument(serialized, {
+            sectionId: selectedClip.sectionId,
+            audioVersionId: selectedClip.audioVersionId,
+            voiceId: selectedVoice.id,
+            textCharacters: profile.textCharacters,
+            timingsByteSize: selectedClip.timingsByteSize ?? 0,
+          }))
+      .catch(() => null)
+      .then((document) => {
+        if (sequence !== timingSequenceRef.current || document === null) return;
+        const bodyTimingWordCount = document.words.length - profile.titleWordCount;
+        const anchorCount = profile.root.querySelectorAll(
+          "[data-publisher-narration-word='true']",
+        ).length;
+        if (
+          bodyTimingWordCount !== profile.bodyWordCount ||
+          anchorCount !== profile.bodyWordCount
+        ) return;
+        timingCacheRef.current.set(cacheKey, document);
+        setTimingState({
+          bodyWordCount: profile.bodyWordCount,
+          document,
+          sectionId: selectedClip.sectionId,
+          titleWordCount: profile.titleWordCount,
+        });
+      })
+      .finally(() => {
+        window.clearTimeout(timeout);
+        if (sequence === timingSequenceRef.current) {
+          timingControllerRef.current = null;
+        }
+      });
+  };
+
+  useEffect(() => {
+    clearActiveWord();
+    if (!playing || timingState === null) return;
+    const timingIndex = readerNarrationTimingIndexForSeconds(
+      timingState.document,
+      currentTime,
+    );
+    if (timingIndex === null) return;
+    const bodyWordIndex = timingIndex - timingState.titleWordCount;
+    if (bodyWordIndex < 0 || bodyWordIndex >= timingState.bodyWordCount) return;
+    const profile = timingSectionProfile(timingState.sectionId);
+    if (profile === null) return;
+    const words = profile.root.querySelectorAll<HTMLElement>(
+      "[data-publisher-narration-word='true']",
+    );
+    if (words.length !== timingState.bodyWordCount) return;
+    const word = words.item(bodyWordIndex);
+    word.classList.add("publisher-narration-word-current");
+    activeWordRef.current = word;
+    return clearActiveWord;
+  }, [currentTime, playing, timingState]);
+
   return (
     <>
       <audio
@@ -258,7 +408,10 @@ export function PublisherReaderNarration({
         onEnded={finishClip}
         onError={() => setMessage("This recording could not load.")}
         onPause={() => setPlaying(false)}
-        onPlay={() => setPlaying(true)}
+        onPlay={() => {
+          setPlaying(true);
+          loadTimingsAfterPlaybackStarts();
+        }}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
       />
       {active ? (

@@ -32,7 +32,11 @@ interface HastElement extends HastParent {
 
 type HastNode = HastText | HastParent;
 
-const WORD_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}'’]*/gu;
+export interface PublisherFocusMarkupOptions {
+  readonly narrationWords?: boolean;
+}
+
+const WORD_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}'’·ˈ]*/gu;
 const FOCUS_WORD_PATTERN = /^\p{L}[\p{L}'’]*$/u;
 const EXCLUDED_ELEMENTS = new Set(["code", "pre", "strong"]);
 
@@ -43,11 +47,12 @@ function textNode(value: string): HastText {
 function elementNode(
   classNames: readonly string[],
   children: HastNode[],
+  properties: Readonly<Record<string, unknown>> = {},
 ): HastElement {
   return {
     type: "element",
     tagName: "span",
-    properties: { className: [...classNames] },
+    properties: { ...properties, className: [...classNames] },
     children,
   };
 }
@@ -78,7 +83,7 @@ function focusSegments(word: string): HastNode[] {
   return segments;
 }
 
-function focusText(value: string): HastNode[] {
+function focusText(value: string, narrationWords: boolean): HastNode[] {
   const nodes: HastNode[] = [];
   let offset = 0;
   WORD_PATTERN.lastIndex = 0;
@@ -86,9 +91,19 @@ function focusText(value: string): HastNode[] {
   while ((match = WORD_PATTERN.exec(value)) !== null) {
     if (match.index > offset) nodes.push(textNode(value.slice(offset, match.index)));
     const word = match[0];
+    const focusWord = FOCUS_WORD_PATTERN.test(word);
     nodes.push(
-      FOCUS_WORD_PATTERN.test(word)
-        ? elementNode(["publisher-focus-word"], focusSegments(word))
+      focusWord || narrationWords
+        ? elementNode(
+            [
+              ...(focusWord ? ["publisher-focus-word"] : []),
+              ...(narrationWords ? ["publisher-narration-word"] : []),
+            ],
+            focusWord ? focusSegments(word) : [textNode(word)],
+            narrationWords
+              ? { dataPublisherNarrationWord: "true" }
+              : {},
+          )
         : textNode(word),
     );
     offset = match.index + word.length;
@@ -105,11 +120,19 @@ function isText(node: HastNode): node is HastText {
   return node.type === "text" && "value" in node;
 }
 
-function transform(parent: HastParent, eligible: boolean): void {
+function transform(
+  parent: HastParent,
+  eligible: boolean,
+  narrationWords: boolean,
+): void {
   const next: HastNode[] = [];
   for (const child of parent.children) {
     if (isText(child)) {
-      next.push(...(eligible ? focusText(child.value) : [child]));
+      next.push(...(
+        eligible || narrationWords
+          ? focusText(child.value, narrationWords)
+          : [child]
+      ));
       continue;
     }
     if (isParent(child)) {
@@ -118,14 +141,16 @@ function transform(parent: HastParent, eligible: boolean): void {
         typeof child.tagName === "string" &&
         EXCLUDED_ELEMENTS.has(child.tagName)
       );
-      transform(child, childEligible);
+      transform(child, childEligible, narrationWords);
     }
     next.push(child);
   }
   parent.children = next;
 }
 
-export function publisherFocusMarkupPlugin(): (tree: unknown) => void {
+export function publisherFocusMarkupPlugin(
+  options: PublisherFocusMarkupOptions = {},
+): (tree: unknown) => void {
   return (tree: unknown): void => {
     if (
       tree === null ||
@@ -134,6 +159,6 @@ export function publisherFocusMarkupPlugin(): (tree: unknown) => void {
     ) {
       return;
     }
-    transform(tree as HastParent, true);
+    transform(tree as HastParent, true, options.narrationWords === true);
   };
 }

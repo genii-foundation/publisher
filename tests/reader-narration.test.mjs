@@ -17,8 +17,12 @@ import test from "node:test";
 import {
   createReaderNarrationPreferences,
   createReaderNarrationPreferencesStorageKey,
+  createReaderNarrationSectionTextProfile,
   parseReaderNarrationEnvelope,
   parseReaderNarrationPreferences,
+  parseReaderNarrationTimingDocument,
+  readerNarrationTimingHref,
+  readerNarrationTimingIndexForSeconds,
   serializeReaderNarrationPreferences,
 } from "../packages/reader/dist/narration.js";
 
@@ -140,4 +144,97 @@ test("voice and speed preferences are bounded and deterministic", () => {
     createReaderNarrationPreferencesStorageKey("narrated-tides"),
     "genii.publisher.reader.narrated-tides.narration",
   );
+});
+
+test("section narration text and timing hrefs follow one closed profile", () => {
+  const profile = createReaderNarrationSectionTextProfile({
+    title: "  A Quiet Opening  ",
+    blocks: [
+      { kind: "heading", text: "  A Quiet Opening  " },
+      { kind: "paragraph", text: " First   light. " },
+      { kind: "paragraph", text: "Water returns." },
+    ],
+  });
+  assert.deepEqual(profile, {
+    text: "A Quiet Opening\n\nFirst light. Water returns.",
+    textCharacters: 44,
+    titleWordCount: 3,
+    bodyWordCount: 4,
+  });
+  assert.equal(readerNarrationTimingHref({
+    href: "/audio/opening.mp3",
+    timingsByteSize: 234,
+  }), "/audio/opening.timings.json");
+  assert.equal(readerNarrationTimingHref({
+    href: "https://media.example.org/opening.opus",
+    timingsByteSize: 234,
+  }), "https://media.example.org/opening.timings.json");
+  assert.equal(readerNarrationTimingHref({
+    href: "/audio/opening",
+    timingsByteSize: 234,
+  }), null);
+});
+
+function timingFixture(overrides = {}) {
+  const text = "A Quiet Opening\n\nFirst light. Water returns.";
+  const words = Array.from(text.matchAll(/[\p{L}\p{N}][\p{L}\p{N}'’·ˈ]*/gu))
+    .map((match, index) => ({
+      charStart: match.index,
+      charEnd: match.index + match[0].length,
+      startSeconds: index * 0.5,
+      endSeconds: index * 0.5 + 0.4,
+      match: "exact",
+    }));
+  return {
+    version: 1,
+    sectionId: "opening",
+    audioVersionId: "opening.abc123",
+    voiceId: "calm",
+    textCharacters: text.length,
+    durationSeconds: words.length * 0.5,
+    exactWordCount: words.length,
+    interpolatedWordCount: 0,
+    words,
+    ...overrides,
+  };
+}
+
+function parseTiming(value, expected = {}) {
+  const serialized = JSON.stringify(value);
+  return parseReaderNarrationTimingDocument(serialized, {
+    sectionId: "opening",
+    audioVersionId: "opening.abc123",
+    voiceId: "calm",
+    textCharacters: 44,
+    timingsByteSize: Buffer.byteLength(serialized),
+    ...expected,
+  });
+}
+
+test("timing sidecars are immutable, clip bound, and searchable by media time", () => {
+  const parsed = parseTiming(timingFixture());
+  assert.ok(parsed);
+  assert.equal(Object.isFrozen(parsed), true);
+  assert.equal(Object.isFrozen(parsed.words), true);
+  assert.equal(Object.isFrozen(parsed.words[0]), true);
+  assert.equal(readerNarrationTimingIndexForSeconds(parsed, 0.7), 1);
+  assert.equal(readerNarrationTimingIndexForSeconds(parsed, 1.45), 2);
+  assert.equal(readerNarrationTimingIndexForSeconds(parsed, Number.NaN), null);
+});
+
+test("timing sidecars refuse byte, identity, shape, and alignment drift", () => {
+  assert.equal(parseTiming(timingFixture(), { timingsByteSize: 1 }), null);
+  assert.equal(parseTiming(timingFixture({ voiceId: "bright" })), null);
+  assert.equal(parseTiming(timingFixture({ surprise: true })), null);
+  const badCharacters = timingFixture();
+  badCharacters.words[0].charEnd = 1_000;
+  assert.equal(parseTiming(badCharacters), null);
+  const weakAlignment = timingFixture();
+  weakAlignment.words = weakAlignment.words.map((word, index) => ({
+    ...word,
+    match: index < 4 ? "interpolated" : "exact",
+  }));
+  weakAlignment.exactWordCount = 3;
+  weakAlignment.interpolatedWordCount = 4;
+  assert.equal(parseTiming(weakAlignment), null);
 });

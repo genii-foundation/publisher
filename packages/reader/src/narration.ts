@@ -11,7 +11,10 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-import type { Sha256Digest } from "@genii-foundation/publisher-schema/reader";
+import type {
+  ReaderSection,
+  Sha256Digest,
+} from "@genii-foundation/publisher-schema/reader";
 
 export const READER_NARRATION_PREFERENCES_SCHEMA_VERSION = 1 as const;
 export const READER_NARRATION_PLAYBACK_RATES = Object.freeze([
@@ -22,6 +25,9 @@ export const READER_NARRATION_PLAYBACK_RATES = Object.freeze([
   2,
 ] as const);
 export const MAXIMUM_READER_NARRATION_SERIALIZED_BYTES = 67_108_864;
+export const MAXIMUM_READER_NARRATION_TIMING_SERIALIZED_BYTES = 134_217_728;
+export const MINIMUM_READER_NARRATION_EXACT_TIMING_RATIO = 0.6;
+export const MAXIMUM_READER_NARRATION_INTERPOLATED_WORD_RUN = 12;
 
 export interface ReaderNarrationClip {
   readonly sectionId: string;
@@ -59,6 +65,41 @@ export interface ReaderNarrationIdentity {
   readonly readerBuildId: Sha256Digest;
 }
 
+export interface ReaderNarrationWordTiming {
+  readonly charStart: number;
+  readonly charEnd: number;
+  readonly startSeconds: number;
+  readonly endSeconds: number;
+  readonly match: "exact" | "interpolated";
+}
+
+export interface ReaderNarrationTimingDocument {
+  readonly version: 1;
+  readonly sectionId: string;
+  readonly audioVersionId: string;
+  readonly voiceId: string;
+  readonly textCharacters: number;
+  readonly durationSeconds: number;
+  readonly exactWordCount: number;
+  readonly interpolatedWordCount: number;
+  readonly words: readonly ReaderNarrationWordTiming[];
+}
+
+export interface ReaderNarrationTimingIdentity {
+  readonly sectionId: string;
+  readonly audioVersionId: string;
+  readonly voiceId: string;
+  readonly textCharacters: number;
+  readonly timingsByteSize: number;
+}
+
+export interface ReaderNarrationSectionTextProfile {
+  readonly text: string;
+  readonly textCharacters: number;
+  readonly titleWordCount: number;
+  readonly bodyWordCount: number;
+}
+
 export interface ReaderNarrationPreferences {
   readonly schemaVersion: typeof READER_NARRATION_PREFERENCES_SCHEMA_VERSION;
   readonly selectedVoiceId: string | null;
@@ -76,6 +117,8 @@ const ROOT_CLIP_HREF =
   /^\/(?!\/)(?!.*\/\/)(?!.*(?:^|\/)\.{1,2}(?:\/|$))(?!.+\/$)[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/;
 const MAXIMUM_VOICES = 64;
 const MAXIMUM_CLIPS = 50_000;
+const MAXIMUM_TIMING_WORDS = 1_000_000;
+const NARRATION_WORD_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}'’·ˈ]*/gu;
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -155,6 +198,51 @@ function positiveNumber(value: unknown, maximum: number): value is number {
     Number.isFinite(value) &&
     value > 0 &&
     value <= maximum;
+}
+
+function normalizeNarrationText(value: string): string {
+  return value.replace(/\s+/gu, " ").trim();
+}
+
+export function countReaderNarrationWords(value: string): number {
+  if (typeof value !== "string") return 0;
+  NARRATION_WORD_PATTERN.lastIndex = 0;
+  let count = 0;
+  while (NARRATION_WORD_PATTERN.exec(value) !== null) count += 1;
+  return count;
+}
+
+/**
+ * Produces the closed spoken-text profile shared by timing producers and the
+ * default renderer. A structural first heading repeats the section title and
+ * therefore is not spoken twice.
+ */
+export function createReaderNarrationSectionTextProfile(
+  section: Pick<ReaderSection, "title" | "blocks">,
+): ReaderNarrationSectionTextProfile {
+  const title = section.title.trim();
+  const first = section.blocks[0];
+  const bodyBlocks = first?.kind === "heading" && first.text === section.title
+    ? section.blocks.slice(1)
+    : section.blocks;
+  const body = normalizeNarrationText(
+    bodyBlocks.map((block) => block.text).join(" "),
+  );
+  const text = `${title}\n\n${body}`.trim();
+  return Object.freeze({
+    text,
+    textCharacters: text.length,
+    titleWordCount: countReaderNarrationWords(title),
+    bodyWordCount: countReaderNarrationWords(body),
+  });
+}
+
+export function readerNarrationTimingHref(
+  clip: Pick<ReaderNarrationClip, "href" | "timingsByteSize">,
+): string | null {
+  if (clip.timingsByteSize === undefined) return null;
+  const href = clip.href.replace(/\.[^./]+$/u, ".timings.json");
+  return href === clip.href || !validClipHref(href) ? null : href;
 }
 
 function validClipHref(value: unknown): value is string {
@@ -366,6 +454,181 @@ export function parseReaderNarrationEnvelope(
       sectionCount: statistics.sectionCount,
     }),
   });
+}
+
+function parseWordTiming(
+  value: unknown,
+  previousCharEnd: number,
+  previousStartSeconds: number,
+  textCharacters: number,
+  durationSeconds: number,
+): ReaderNarrationWordTiming | null {
+  const word = plainRecord(value);
+  if (
+    word === null ||
+    !hasKeys(word, [
+      "charStart",
+      "charEnd",
+      "startSeconds",
+      "endSeconds",
+      "match",
+    ]) ||
+    !boundedInteger(word.charStart, textCharacters) ||
+    !boundedInteger(word.charEnd, textCharacters) ||
+    word.charStart < previousCharEnd ||
+    word.charEnd <= word.charStart ||
+    typeof word.startSeconds !== "number" ||
+    !Number.isFinite(word.startSeconds) ||
+    word.startSeconds < previousStartSeconds ||
+    word.startSeconds < 0 ||
+    typeof word.endSeconds !== "number" ||
+    !Number.isFinite(word.endSeconds) ||
+    word.endSeconds < word.startSeconds ||
+    word.endSeconds > durationSeconds ||
+    (word.match !== "exact" && word.match !== "interpolated")
+  ) return null;
+  return Object.freeze({
+    charStart: word.charStart,
+    charEnd: word.charEnd,
+    startSeconds: word.startSeconds,
+    endSeconds: word.endSeconds,
+    match: word.match,
+  });
+}
+
+/** Parses one untrusted timing sidecar and binds it to its exact clip text. */
+export function parseReaderNarrationTimingDocument(
+  serialized: string,
+  expected: ReaderNarrationTimingIdentity,
+): ReaderNarrationTimingDocument | null {
+  if (
+    typeof serialized !== "string" ||
+    !stableId(expected.sectionId) ||
+    typeof expected.audioVersionId !== "string" ||
+    expected.audioVersionId.length > 256 ||
+    !OPAQUE_VERSION_ID.test(expected.audioVersionId) ||
+    !stableId(expected.voiceId) ||
+    !boundedInteger(expected.textCharacters, 16_777_216) ||
+    expected.textCharacters < 1 ||
+    !boundedInteger(
+      expected.timingsByteSize,
+      MAXIMUM_READER_NARRATION_TIMING_SERIALIZED_BYTES,
+    ) ||
+    expected.timingsByteSize < 1
+  ) return null;
+  const serializedBytes = utf8ByteLength(serialized);
+  if (
+    serializedBytes !== expected.timingsByteSize ||
+    serializedBytes > MAXIMUM_READER_NARRATION_TIMING_SERIALIZED_BYTES
+  ) return null;
+
+  let value: unknown;
+  try {
+    value = JSON.parse(serialized);
+  } catch {
+    return null;
+  }
+  const document = plainRecord(value);
+  if (
+    document === null ||
+    !hasKeys(document, [
+      "version",
+      "sectionId",
+      "audioVersionId",
+      "voiceId",
+      "textCharacters",
+      "durationSeconds",
+      "exactWordCount",
+      "interpolatedWordCount",
+      "words",
+    ]) ||
+    document.version !== 1 ||
+    document.sectionId !== expected.sectionId ||
+    document.audioVersionId !== expected.audioVersionId ||
+    document.voiceId !== expected.voiceId ||
+    document.textCharacters !== expected.textCharacters ||
+    !positiveNumber(document.durationSeconds, 86_400) ||
+    !boundedInteger(document.exactWordCount, MAXIMUM_TIMING_WORDS) ||
+    !boundedInteger(document.interpolatedWordCount, MAXIMUM_TIMING_WORDS) ||
+    !Array.isArray(document.words) ||
+    document.words.length < 1 ||
+    document.words.length > MAXIMUM_TIMING_WORDS ||
+    document.exactWordCount + document.interpolatedWordCount !==
+      document.words.length
+  ) return null;
+
+  const words: ReaderNarrationWordTiming[] = [];
+  let previousCharEnd = 0;
+  let previousStartSeconds = 0;
+  let exactWordCount = 0;
+  let interpolatedWordCount = 0;
+  let interpolatedRun = 0;
+  let longestInterpolatedRun = 0;
+  for (const value of document.words) {
+    const word = parseWordTiming(
+      value,
+      previousCharEnd,
+      previousStartSeconds,
+      expected.textCharacters,
+      document.durationSeconds,
+    );
+    if (word === null) return null;
+    words.push(word);
+    previousCharEnd = word.charEnd;
+    previousStartSeconds = word.startSeconds;
+    if (word.match === "exact") {
+      exactWordCount += 1;
+      interpolatedRun = 0;
+    } else {
+      interpolatedWordCount += 1;
+      interpolatedRun += 1;
+      longestInterpolatedRun = Math.max(
+        longestInterpolatedRun,
+        interpolatedRun,
+      );
+    }
+  }
+  if (
+    exactWordCount !== document.exactWordCount ||
+    interpolatedWordCount !== document.interpolatedWordCount ||
+    exactWordCount / words.length <
+      MINIMUM_READER_NARRATION_EXACT_TIMING_RATIO ||
+    longestInterpolatedRun > MAXIMUM_READER_NARRATION_INTERPOLATED_WORD_RUN
+  ) return null;
+
+  return Object.freeze({
+    version: 1,
+    sectionId: expected.sectionId,
+    audioVersionId: expected.audioVersionId,
+    voiceId: expected.voiceId,
+    textCharacters: expected.textCharacters,
+    durationSeconds: document.durationSeconds,
+    exactWordCount,
+    interpolatedWordCount,
+    words: Object.freeze(words),
+  });
+}
+
+export function readerNarrationTimingIndexForSeconds(
+  timings: ReaderNarrationTimingDocument,
+  seconds: number,
+): number | null {
+  if (
+    timings.words.length === 0 ||
+    typeof seconds !== "number" ||
+    !Number.isFinite(seconds)
+  ) return null;
+  let low = 0;
+  let high = timings.words.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const timing = timings.words[middle];
+    if (timing === undefined) return null;
+    if (seconds < timing.startSeconds) high = middle - 1;
+    else if (seconds > timing.endSeconds) low = middle + 1;
+    else return middle;
+  }
+  return Math.max(0, Math.min(low - 1, timings.words.length - 1));
 }
 
 export function createReaderNarrationPreferences(): ReaderNarrationPreferences {

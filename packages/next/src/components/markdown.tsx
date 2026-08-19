@@ -65,6 +65,7 @@ export interface PublisherMarkdownBlockProps {
   readonly assetHrefs: ReadonlySet<string>;
   readonly block: ReaderBlock;
   readonly markdown: string;
+  readonly narrationWords?: boolean;
   readonly renderedPath: string;
 }
 
@@ -133,6 +134,7 @@ export function PublisherMarkdownBlock({
   assetHrefs,
   block,
   markdown,
+  narrationWords = false,
   renderedPath,
 }: PublisherMarkdownBlockProps): ReactElement {
   const ownedDomId =
@@ -147,7 +149,9 @@ export function PublisherMarkdownBlock({
     >
       <ReactMarkdown
         components={safeMarkdownComponents(assetHrefs)}
-        rehypePlugins={[publisherFocusMarkupPlugin]}
+        rehypePlugins={[
+          [publisherFocusMarkupPlugin, { narrationWords }],
+        ]}
         skipHtml
         urlTransform={publisherMarkdownUrlTransform}
       >

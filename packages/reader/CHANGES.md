@@ -6,6 +6,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 - Added a strict browser-safe narration-envelope projection bound to one publication and Reader build.
 - Added versioned publication-scoped voice and playback-rate preferences without storage or media authority.
+- Added a closed spoken-text profile, strict timing-sidecar parser, derived sidecar URL, and binary media-time lookup.
 
 ## 2026-08-18, GENII Foundation
 

@@ -892,7 +892,9 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       } from "@genii-foundation/publisher-reader/search";
       import {
         createReaderNarrationPreferences,
+        createReaderNarrationSectionTextProfile,
         type ReaderNarrationPreferences,
+        type ReaderNarrationSectionTextProfile,
       } from "@genii-foundation/publisher-reader/narration";
 
       declare const input: unknown;
@@ -936,6 +938,8 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       const terms: readonly string[] = createReaderSearchTerms("portable");
       const narration: ReaderNarrationPreferences =
         createReaderNarrationPreferences();
+      declare const narrationText: ReaderNarrationSectionTextProfile;
+      void createReaderNarrationSectionTextProfile;
       void [
         READER_PROJECTOR_VERSION,
         projected,
@@ -956,6 +960,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         searchIndex,
         terms,
         narration,
+        narrationText,
       ];
     `;
     await Promise.all([
@@ -1152,6 +1157,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       } from "@genii-foundation/publisher-reader/search";
       import {
         createReaderNarrationPreferences,
+        readerNarrationTimingHref,
       } from "@genii-foundation/publisher-reader/narration";
 
       const digest = "sha256:" + "0".repeat(64);
@@ -1264,6 +1270,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         "reader",
       ]);
       assert.equal(createReaderNarrationPreferences().playbackRate, 1);
+      assert.equal(readerNarrationTimingHref({
+        href: "/audio/portable.mp3",
+        timingsByteSize: 123,
+      }), "/audio/portable.timings.json");
       console.log("browser-runtime-ok");
     `;
     const proofOutput = run(

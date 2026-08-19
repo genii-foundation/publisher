@@ -31,8 +31,11 @@ speed, remembered voice choice, previous and next movement, and automatic queue
 continuation. It joins section identities to the lazy progress catalog for human
 titles and canonical destinations, while exact duration and coverage remain
 honest when clips omit duration. Closing the panel does not destroy playback.
-Word timing highlights, route-preserving playback intent, and offline audio
-packages remain separate planned capabilities.
+When a clip declares timings, playback starts before one bounded sidecar request.
+The result must match the exact clip and spoken-text profile before it can mark
+an existing server-rendered word. No duplicate manuscript text is introduced,
+and timing failure cannot stop audio or reading. Route-preserving playback intent
+and offline audio packages remain separate planned capabilities.
 
 ## Supported toolchain
 

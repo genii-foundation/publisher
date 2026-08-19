@@ -41,5 +41,6 @@ These records define the accepted foundation of GENII Publisher.
 37. [ADR 0037: Reader progress overview](./0037-reader-progress-overview.md)
 38. [ADR 0038: Lazy Reader progress catalog](./0038-lazy-reader-progress-catalog.md)
 39. [ADR 0039: Lazy default narration player](./0039-lazy-default-narration-player.md)
+40. [ADR 0040: Lazy narration timings over existing text](./0040-lazy-narration-timings.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

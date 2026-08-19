@@ -560,6 +560,20 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   margin: 0;
 }
 
+.publisher-narration-word-current {
+  border-radius: 0.14em;
+  background: color-mix(
+    in srgb,
+    var(--publisher-color-accent) 22%,
+    transparent
+  );
+  box-shadow: 0 0 0 0.08em color-mix(
+    in srgb,
+    var(--publisher-color-accent) 35%,
+    transparent
+  );
+}
+
 .publisher-reader-search-bookmarks h3 {
   margin: 0;
   font-size: 0.9rem;

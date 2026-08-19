@@ -513,6 +513,20 @@ your pipeline's, composed however that pipeline composes it, and the engine trea
 as opaque. Regenerate the catalog when prose changes and the engine will publish what
 you regenerated.
 
+A clip may declare `timingsByteSize`. Its timing file sits beside the clip and
+replaces the clip extension with `.timings.json`. The timing document names version
+`1`, the exact section ID, audio version ID, voice ID, spoken text character count,
+duration, exact and interpolated word counts, and ordered word ranges. Each word
+records UTF-16 `charStart` and `charEnd`, `startSeconds`, `endSeconds`, and an `exact`
+or `interpolated` match. The declared byte size must equal the fetched file.
+
+The spoken text is the trimmed section title, two newline characters, and the body
+from ordered Reader blocks with whitespace collapsed to single spaces. A structural
+first heading equal to the section title is omitted from the body so the title is not
+spoken twice. At least 60 percent of timing words must be exact, and no more than 12
+interpolated words may be adjacent. The default reader starts audio before requesting
+this optional file. Missing or rejected timings disable highlighting only.
+
 Synchronization declares a provider and what a reader may choose to synchronize:
 
 ```json

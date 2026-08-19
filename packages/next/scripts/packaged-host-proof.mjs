@@ -59,6 +59,9 @@ import {
   createReaderProgressCatalog,
   serializeReaderProgressCatalog,
 } from "../../reader/dist/progress-catalog.js";
+import {
+  createReaderNarrationSectionTextProfile,
+} from "../../reader/dist/narration.js";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const repositoryRoot = fileURLToPath(
@@ -177,7 +180,7 @@ function withoutFocusMarkup(html) {
   do {
     previous = normalized;
     normalized = normalized.replace(
-      /<span class="publisher-focus-(?:word|emphasis(?: publisher-focus-emphasis-(?:light|normal|strong))?)">([^<]*)<\/span>/gu,
+      /<span(?=[^>]*class="[^"]*publisher-(?:focus|narration)-)[^>]*>([^<]*)<\/span>/gu,
       "$1",
     );
   } while (normalized !== previous);
@@ -769,6 +772,16 @@ async function assertHydratedReaderTools({
       0,
       "Narration loaded before its interface opened.",
     );
+    const timingRequestsBeforeOpen = await page.send("Runtime.evaluate", {
+      expression:
+        'performance.getEntriesByType("resource").filter((entry) => entry.name.includes("proof.timings.json")).length',
+      returnByValue: true,
+    });
+    assert.equal(
+      timingRequestsBeforeOpen.result?.value,
+      0,
+      "Narration timings loaded before playback started.",
+    );
 
     const focusMarkup = await page.send("Runtime.evaluate", {
       expression: [
@@ -778,12 +791,14 @@ async function assertHydratedReaderTools({
         "  globalThis.__publisherFocusProof = {",
         '    wordText: word?.textContent ?? "",',
         '    blockText: block?.textContent ?? "",',
+        '    manuscriptText: document.querySelector(".publisher-manuscript")?.textContent ?? "",',
         "  };",
         "  return {",
         '    wordText: word?.textContent ?? "",',
         '    blockText: block?.textContent ?? "",',
         '    emphasisCount: word?.querySelectorAll(".publisher-focus-emphasis").length ?? 0,',
         '    excludedCount: document.querySelectorAll(".publisher-manuscript code .publisher-focus-word, .publisher-manuscript pre .publisher-focus-word, .publisher-manuscript strong .publisher-focus-word").length,',
+        '    narrationAnchorCount: document.querySelectorAll("[data-publisher-narration-word=true]").length,',
         "  };",
         "})()",
       ].join("\n"),
@@ -793,6 +808,7 @@ async function assertHydratedReaderTools({
     assert.ok(focusMarkup.result?.value?.blockText.length > 0);
     assert.ok(focusMarkup.result?.value?.emphasisCount > 0);
     assert.equal(focusMarkup.result?.value?.excludedCount, 0);
+    assert.ok(focusMarkup.result?.value?.narrationAnchorCount > 0);
 
     const openedContents = await page.send("Runtime.evaluate", {
       expression: [
@@ -1018,6 +1034,16 @@ async function assertHydratedReaderTools({
     assert.equal(narrationState?.selects, 2);
     assert.match(narrationState?.summary ?? "", /recorded across 2 timed clips/u);
     assert.equal(narrationState?.inViewport, true);
+    const timingRequestsBeforePlayback = await page.send("Runtime.evaluate", {
+      expression:
+        'performance.getEntriesByType("resource").filter((entry) => entry.name.includes("proof.timings.json")).length',
+      returnByValue: true,
+    });
+    assert.equal(
+      timingRequestsBeforePlayback.result?.value,
+      0,
+      "Narration timings loaded before the recording played.",
+    );
 
     const playCenter = await page.send("Runtime.evaluate", {
       expression: [
@@ -1057,6 +1083,29 @@ async function assertHydratedReaderTools({
       await wait(25);
     }
     assert.equal(playbackStarted, true, "The default narration player did not start its recording.");
+
+    let timingState;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const activeWord = document.querySelector(".publisher-narration-word-current");',
+          "  return {",
+          '    activeWord: activeWord?.textContent ?? "",',
+          '    manuscriptUnchanged: (document.querySelector(".publisher-manuscript")?.textContent ?? "") === globalThis.__publisherFocusProof.manuscriptText,',
+          '    requestCount: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("proof.timings.json")).length,',
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      timingState = evaluated.result?.value;
+      if (timingState?.activeWord.length > 0) break;
+      await wait(25);
+    }
+    assert.equal(timingState?.requestCount, 1);
+    assert.ok(timingState?.activeWord.length > 0);
+    assert.equal(timingState?.manuscriptUnchanged, true);
 
     const queueAdvanced = await page.send("Runtime.evaluate", {
       expression: [
@@ -1422,7 +1471,7 @@ async function assertHydratedReaderTools({
         });
         peerReady =
           evaluated.result?.value?.complete === true &&
-          evaluated.result.value.controls === 6;
+          evaluated.result.value.controls === 7;
         if (peerReady) break;
         await wait(100);
       }
@@ -2699,6 +2748,7 @@ export async function runPackagedHostProof(
       `app/${basename(globalErrorRoot)}/page.tsx`,
       `app/${basename(boundaryProofRoot)}/page.tsx`,
       "public/proof.png",
+      "public/proof.timings.json",
       "public/proof.wav",
       hostTemplate.readerDataPath,
       hostTemplate.audioDataPath,
@@ -2718,6 +2768,32 @@ export async function runPackagedHostProof(
     const narratedSections = reader.works.flatMap((work) =>
       work.sections.filter((section) => section.navigable));
     assert.ok(narratedSections.length >= 2);
+    const timedSection = narratedSections[0];
+    const timedSectionProfile = createReaderNarrationSectionTextProfile(
+      timedSection,
+    );
+    const timingWords = Array.from(
+      timedSectionProfile.text.matchAll(
+        /[\p{L}\p{N}][\p{L}\p{N}'’·ˈ]*/gu,
+      ),
+    ).map((match, index, matches) => ({
+      charStart: match.index,
+      charEnd: match.index + match[0].length,
+      startSeconds: Number(((index * 2) / matches.length).toFixed(3)),
+      endSeconds: Number((((index + 1) * 2) / matches.length).toFixed(3)),
+      match: "exact",
+    }));
+    const timingDocumentText = `${JSON.stringify({
+      version: 1,
+      sectionId: timedSection.id,
+      audioVersionId: `${timedSection.id}.calm`,
+      voiceId: "calm",
+      textCharacters: timedSectionProfile.textCharacters,
+      durationSeconds: 2,
+      exactWordCount: timingWords.length,
+      interpolatedWordCount: 0,
+      words: timingWords,
+    }, null, 2)}\n`;
     const narrationEnvelope = {
       $schema: "https://publisher.genii.foundation/schemas/audio-envelope.schema.json",
       schemaVersion: "1.0",
@@ -2733,12 +2809,15 @@ export async function runPackagedHostProof(
         {
           id: "calm",
           label: "Calm",
-          clips: narratedSections.slice(0, 2).map((section) => ({
+          clips: narratedSections.slice(0, 2).map((section, index) => ({
             sectionId: section.id,
             audioVersionId: `${section.id}.calm`,
             href: "/proof.wav",
             format: "wav",
             byteSize: createProofWav().byteLength,
+            ...(index === 0
+              ? { timingsByteSize: Buffer.byteLength(timingDocumentText) }
+              : {}),
             durationSeconds: 2,
           })),
           narratedSectionCount: 2,
@@ -2851,6 +2930,11 @@ export async function runPackagedHostProof(
       writeFile(
         join(hostRoot, "public", "proof.wav"),
         createProofWav(),
+      ),
+      writeFile(
+        join(hostRoot, "public", "proof.timings.json"),
+        timingDocumentText,
+        "utf8",
       ),
       writeFile(
         join(appRoot, "layout.tsx"),

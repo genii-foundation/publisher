@@ -32,6 +32,7 @@ import {
   resolveDefaultPublisherNextTheme,
 } from "../packages/next/dist/theme/default.js";
 import {
+  PublisherMarkdownBlock,
   PublisherMarkdownInline,
   publisherMarkdownUrlTransform,
 } from "../packages/next/dist/components/markdown.js";
@@ -147,7 +148,7 @@ function withoutFocusMarkup(html) {
   do {
     previous = normalized;
     normalized = normalized.replace(
-      /<span class="publisher-focus-(?:word|emphasis(?: publisher-focus-emphasis-(?:light|normal|strong))?)">([^<]*)<\/span>/gu,
+      /<span(?=[^>]*class="[^"]*publisher-(?:focus|narration)-)[^>]*>([^<]*)<\/span>/gu,
       "$1",
     );
   } while (normalized !== previous);
@@ -1226,6 +1227,23 @@ test("Markdown focus markup preserves one text occurrence and existing emphasis"
     html.replace(/<[^>]+>/gu, ""),
     "Alpha, beta 123 and strong words with code words.",
   );
+});
+
+test("narration anchors share the spoken word profile", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: { id: "pronunciation", kind: "paragraph", text: "ka·ra ˈtone" },
+      markdown: "ka·ra ˈtone",
+      narrationWords: true,
+      renderedPath: "/works/pronunciation/",
+    }),
+  );
+  assert.equal(
+    html.match(/data-publisher-narration-word="true"/gu)?.length,
+    2,
+  );
+  assert.equal(html.replace(/<[^>]+>/gu, ""), "ka·ra ˈtone");
 });
 
 test("static routes preserve server-rendered manuscript around client tools", async () => {

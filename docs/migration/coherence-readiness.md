@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 28 upgraded | 28 | Publisher implements a stronger checked contract. |
+| 30 upgraded | 30 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 14 planned | 14 | Accepted Publisher scope is not implemented yet. |
+| 12 planned | 12 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -180,8 +180,14 @@ continuation, exact declared duration, queue position, timed-clip coverage, and
 unnarrated coverage. A strict browser parser refuses stale identity, unsafe URLs,
 duplicate section coverage, malformed statistics, and oversized input. The
 packed-host Chrome proof exercises a real recording and persists the chosen
-voice and speed. ADR 0015 supersedes the earlier claim that playback should
-remain outside the engine application.
+voice and speed. When a clip declares timings, playback starts first and then
+requests the derived sidecar with a short bound. The strict parser binds exact
+bytes, section, audio version, voice, spoken-text length, monotonic word ranges,
+alignment quality, and interpolation limits. Existing server-rendered words are
+the only highlight anchors, so the manuscript retains one accessible text
+occurrence. The Chrome proof requires one post-play timing request, an active
+word, and unchanged manuscript text. ADR 0015 supersedes the earlier claim that
+playback should remain outside the engine application.
 
 Per-word timing data does not belong in the reader artifact. It remains in lazy
 narration sidecars bound to the narration catalog and exact Reader build.
@@ -284,8 +290,7 @@ sections, and 10,000 continuity redirects.
 The following are accepted scope, not release blockers waiting for another
 product decision:
 
-1. Add word timing sidecars, anchor interaction, and route-preserving playback
-   intent.
+1. Add route-preserving playback intent.
 2. Add atomic offline package planning and official service worker integration.
 3. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
 4. Generalize audio checkpoint, promotion, and manuscript publication guards.
@@ -317,7 +322,7 @@ these concerns. It does not own the values that make Coherence itself.
 4. Complete local progress, preferences, bookmarks, ranges, and reactive stores.
 5. Add official renderer controls without weakening server-rendered reading.
 6. Add cross-tab synchronization notifications over the stable server routes.
-7. Add narration timing interaction and author publication guards.
+7. Add narration author publication guards.
 8. Build offline dependency closure over the final route, Reader, and audio graph.
 9. Prove the Coherence Updates adapter and migration compatibility.
 10. Prove the same contracts with an unrelated second publication.

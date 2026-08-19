@@ -20,6 +20,9 @@ import type {
   Sha256Digest,
 } from "@genii-foundation/publisher-schema";
 import {
+  createReaderNarrationSectionTextProfile,
+} from "@genii-foundation/publisher-reader/narration";
+import {
   createElement,
   type ReactElement,
   type ReactNode,
@@ -196,10 +199,14 @@ function SectionContent({
       ? headingBlock.domId
       : null;
   const omittedBlockId = skipBlockId ?? headingBlock?.id;
+  const narrationProfile = createReaderNarrationSectionTextProfile(section);
   return (
     <section
       className="publisher-manuscript-section"
       data-publisher-section={section.id}
+      data-publisher-narration-body-words={narrationProfile.bodyWordCount}
+      data-publisher-narration-text-characters={narrationProfile.textCharacters}
+      data-publisher-narration-title-words={narrationProfile.titleWordCount}
       {...(ownedDomId === null ? {} : { id: ownedDomId })}
     >
       {headingLevel === undefined
@@ -243,6 +250,7 @@ function SectionContent({
                   section.id,
                   block,
                 )}
+                narrationWords
                 renderedPath={renderedPath}
               />,
             ],
