@@ -3,21 +3,33 @@
 The database half of reader synchronization: tables, row level security, bounds,
 retention, grants, and one function that takes a lock.
 
-## Why this is not published
+## Why this is still private
 
-A provider needs two server routes, an authentication callback and an account
-deletion endpoint, and how a host acquires them is an open decision recorded in
-ADR 0014 and tracked in issue #19. `init` deliberately does not know the
-publication, so the host contract cannot generate routes conditioned on whether a
-publication declares synchronization.
+The official host now owns stable authentication callback and account deletion
+routes. The server export supplies a provider for those routes using exact
+Supabase dependencies and server-only environment configuration.
 
-Publishing a provider whose handlers cannot be mounted would ship something nobody
-can use. So this package is private, carries no dependencies, and contains only the
-part that is already correct and already valuable: the schema.
+The package remains private until its browser synchronization client, legal
+bundle, packed-consumer proof, provenance evidence, and release lifecycle are
+complete. Route mounting is no longer the blocker.
 
-Promoting it is mechanical once the route question is answered. It then gains
-`@supabase/supabase-js` and `@supabase/ssr` as peer dependencies, the clients, the
-handlers, and the publishing ceremony every other package here carries.
+## Server configuration
+
+An author selects the provider in `publisher.config.ts`:
+
+```ts
+import { definePublisherNextHostConfig } from "@genii-foundation/publisher-next/server/sync";
+import { createPublisherSupabaseSyncProvider } from "@genii-foundation/publisher-sync-supabase/server";
+
+export default definePublisherNextHostConfig({
+  syncProvider: createPublisherSupabaseSyncProvider(),
+});
+```
+
+The server reads `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The service role
+key is used only after the route contract has accepted a same-origin deletion
+request and the anonymous server client has authenticated the current reader.
 
 ## What the migrations encode, and why each part matters
 

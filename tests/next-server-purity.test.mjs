@@ -136,14 +136,16 @@ test("publication rendering stays server-only outside the error boundary entry",
   }
 });
 
-test("the root, server, and client package entries preserve their boundary", async () => {
-  const [rootSource, serverSource, clientSource] =
+test("the root, server, synchronization, and client package entries preserve their boundary", async () => {
+  const [rootSource, serverSource, syncSource, clientSource] =
     await Promise.all([
       readFile(join(sourceRoot, "index.ts"), "utf8"),
       readFile(join(sourceRoot, "server", "index.ts"), "utf8"),
+      readFile(join(sourceRoot, "server", "sync.ts"), "utf8"),
       readFile(join(sourceRoot, "client", "index.ts"), "utf8"),
     ]);
   assert.doesNotMatch(rootSource, /\.\/server\//u);
   assert.match(serverSource, /import "server-only";/u);
+  assert.match(syncSource, /import "server-only";/u);
   assert.doesNotMatch(clientSource, /\.\/server\//u);
 });

@@ -44,6 +44,7 @@ export const PUBLISHER_NEXT_UPDATES_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES =
   Object.freeze({
     "next@16.2.12": Object.freeze({
+      nanoid: "3.3.18",
       postcss: "8.5.24",
       sharp: "0.35.3",
     }),

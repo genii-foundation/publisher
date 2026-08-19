@@ -646,15 +646,15 @@ export const SYNC_PARITY = Object.freeze([
     home: "renderer",
     status: "planned",
     plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "The stable callback route now exists and fails closed without provider detail. Session exchange and validated provider delegation remain to be implemented.",
+    why: "The stable callback now validates provider identity and exchanges a bounded code through the configured server provider. The default email-link, code-entry, session, consent, and sign-out interface remains to be implemented.",
   },
   {
     id: "sync.account_deletion",
     capability: "Deleting the authentication account itself",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "The database half and stable fail-closed route exist. Same-origin privileged deletion through a validated provider handler remains to be implemented.",
+    status: "upgraded",
+    why: "The renderer rejects cross-origin requests before provider execution, authenticates the current reader before privileged deletion, fixes every public response, and keeps the service-role key server only.",
+    evidence: { file: "packages/sync-supabase/server.mjs" },
   },
 ]);
 

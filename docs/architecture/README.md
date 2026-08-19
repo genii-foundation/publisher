@@ -20,5 +20,7 @@ These records define the accepted foundation of GENII Publisher.
 16. [ADR 0016: Declared Markdown section structure](./0016-declared-markdown-section-structure.md)
 17. [ADR 0017: Updates catalog and rendering boundary](./0017-updates-catalog-and-rendering-boundary.md)
 18. [ADR 0018: Dormant synchronization route surfaces](./0018-dormant-synchronization-routes.md)
+19. [ADR 0019: Synchronization provider delegation](./0019-synchronization-provider-delegation.md)
+20. [ADR 0020: Nano ID transitive security pin](./0020-nanoid-transitive-security-pin.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

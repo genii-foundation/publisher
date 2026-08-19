@@ -1262,12 +1262,14 @@ export async function runPackagedHostProof(
       "declaration-probe.ts",
       "export-probe.mjs",
       "server-import-probe.mjs",
+      "publisher.config.ts",
       `app/${basename(runtimeErrorRoot)}/page.tsx`,
       `app/${basename(globalErrorRoot)}/page.tsx`,
       `app/${basename(boundaryProofRoot)}/page.tsx`,
       "public/proof.png",
       hostTemplate.readerDataPath,
       hostTemplate.searchDataPath,
+      hostTemplate.syncDataPath,
     ];
     for (const path of proofOverriddenHostPaths) {
       assert.ok(
@@ -1286,6 +1288,42 @@ export async function runPackagedHostProof(
       writeFile(
         join(hostRoot, hostTemplate.searchDataPath),
         serializeReaderSearchIndex(createReaderSearchIndex(reader)),
+        "utf8",
+      ),
+      writeJson(
+        join(hostRoot, hostTemplate.syncDataPath),
+        {
+          $schema: "https://publisher.genii.foundation/schemas/sync-envelope.schema.json",
+          schemaVersion: "1.0",
+          publicationId: reader.publicationId,
+          engineVersion: reader.engineVersion,
+          buildId: reader.buildId,
+          provider: { package: "@example/packed-sync-provider" },
+          consent: "opt-in",
+          localFallback: true,
+          capabilities: ["account-deletion", "progress"],
+        },
+      ),
+      writeFile(
+        join(hostRoot, "publisher.config.ts"),
+        [
+          'import { definePublisherNextHostConfig } from "@genii-foundation/publisher-next/server/sync";',
+          "",
+          "export default definePublisherNextHostConfig({",
+          "  syncProvider: {",
+          '    kind: "genii.publisher.sync-provider",',
+          '    package: "@example/packed-sync-provider",',
+          '    capabilities: ["account-deletion", "progress"],',
+          "    async exchangeAuthCode({ code }) {",
+          '      return code === "packed-proof-code";',
+          "    },",
+          "    async deleteAccount() {",
+          '      return "deleted";',
+          "    },",
+          "  },",
+          "});",
+          "",
+        ].join("\n"),
         "utf8",
       ),
       writeFile(
@@ -1489,11 +1527,14 @@ export async function runPackagedHostProof(
         'const nextManifestPath = require.resolve("next/package.json");',
         "const nextRequire = createRequire(nextManifestPath);",
         "const postcssManifest = JSON.parse(await readFile(nextRequire.resolve(\"postcss/package.json\"), \"utf8\"));",
+        "const postcssRequire = createRequire(nextRequire.resolve(\"postcss/package.json\"));",
+        "const nanoidManifest = JSON.parse(await readFile(postcssRequire.resolve(\"nanoid/package.json\"), \"utf8\"));",
         'const sharp = nextRequire("sharp");',
         'assert.equal(postcssManifest.version, "8.5.24");',
+        'assert.equal(nanoidManifest.version, "3.3.18");',
         'assert.equal(sharp.versions.sharp, "0.35.3");',
         'assert.equal(typeof sharp.versions.vips, "string");',
-        "process.stdout.write(JSON.stringify({ postcssVersion: postcssManifest.version, sharpVersion: sharp.versions.sharp, vipsVersion: sharp.versions.vips }));",
+        "process.stdout.write(JSON.stringify({ nanoidVersion: nanoidManifest.version, postcssVersion: postcssManifest.version, sharpVersion: sharp.versions.sharp, vipsVersion: sharp.versions.vips }));",
         "",
       ].join("\n"),
       "utf8",
@@ -1825,9 +1866,9 @@ export async function runPackagedHostProof(
         await unknown.text(),
         /data-publisher-attribution="required"/u,
       );
-      const [dormantCallback, dormantDeletion] = await Promise.all([
+      const [configuredCallback, rejectedDeletion, configuredDeletion] = await Promise.all([
         fetch(
-          `${host.origin}/auth/callback?code=do-not-exchange&next=https%3A%2F%2Fevil.example`,
+          `${host.origin}/auth/callback?code=packed-proof-code&next=https%3A%2F%2Fevil.example`,
           { redirect: "manual" },
         ),
         fetch(`${host.origin}/api/account`, {
@@ -1835,11 +1876,18 @@ export async function runPackagedHostProof(
           headers: { origin: "https://evil.example" },
           redirect: "manual",
         }),
+        fetch(`${host.origin}/api/account`, {
+          method: "DELETE",
+          headers: { origin: host.origin },
+          redirect: "manual",
+        }),
       ]);
-      for (const response of [dormantCallback, dormantDeletion]) {
-        assert.equal(response.status, 404);
-        assert.deepEqual(await response.json(), { error: "Not found." });
-      }
+      assert.equal(configuredCallback.status, 302);
+      assert.equal(configuredCallback.headers.get("location"), `${host.origin}/home`);
+      assert.equal(rejectedDeletion.status, 403);
+      assert.deepEqual(await rejectedDeletion.json(), { error: "Invalid origin." });
+      assert.equal(configuredDeletion.status, 200);
+      assert.deepEqual(await configuredDeletion.json(), { ok: true });
       const [frameworkNotFound, frameworkServerError] =
         await Promise.all([
           fetch(`${host.origin}/404`, {
@@ -2001,6 +2049,7 @@ export async function runPackagedHostProof(
       imageContentType,
       nextVersion: nextManifest.peerDependencies.next,
       postcssVersion: dependencies.postcssVersion,
+      nanoidVersion: dependencies.nanoidVersion,
       redirectStatuses,
       renderedRoutes: Object.freeze(renderedRoutes),
       runtimeErrorStatus,

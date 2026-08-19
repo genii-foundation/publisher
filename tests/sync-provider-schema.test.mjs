@@ -405,32 +405,27 @@ test("reader data deletion removes every table a reader owns", () => {
 
 // --------------------------------------------- the package says what it is not
 
-test("the package is private, and says why", () => {
-  // Publishing a provider whose handlers cannot be mounted would ship something
-  // nobody can use. When the route decision lands, this test changes with it.
+test("the package remains private until its complete release gate is closed", () => {
   const manifest = JSON.parse(
     readFileSync(join(packageRoot, "package.json"), "utf8"),
   );
   assert.equal(manifest.private, true);
-  assert.deepEqual(
-    manifest.dependencies,
-    undefined,
-    "a schema-only package should carry no dependencies",
-  );
+  assert.deepEqual(manifest.dependencies, {
+    "@supabase/ssr": "0.12.0",
+    "@supabase/supabase-js": "2.110.0",
+  });
   const readme = readFileSync(join(packageRoot, "README.md"), "utf8");
-  assert.match(readme, /Why this is not published/u);
+  assert.match(readme, /Why this is still private/u);
 });
 
-test("the descriptor states what a host must still supply", () => {
-  // So that a host wiring this provider today does not discover the gap in
-  // production.
-  assert.equal(PUBLISHER_SYNC_PROVIDER.hostMustProvide.length, 2);
-  assert.match(
-    PUBLISHER_SYNC_PROVIDER.hostMustProvide.join(" "),
-    /authentication callback/u,
-  );
-  assert.match(
-    PUBLISHER_SYNC_PROVIDER.hostMustProvide.join(" "),
-    /account deletion/u,
-  );
+test("the descriptor names the complete server-only host integration", () => {
+  assert.deepEqual(PUBLISHER_SYNC_PROVIDER.hostIntegration, {
+    configPath: "publisher.config.ts",
+    serverExport: "@genii-foundation/publisher-sync-supabase/server",
+    environment: [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+    ],
+  });
 });

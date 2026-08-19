@@ -85,14 +85,14 @@ export const PUBLISHER_SYNC_PROVIDER = Object.freeze({
     pruneEngagementEvents: "prune_reader_engagement_events",
   }),
 
-  /**
-   * What a host must still supply, stated so nobody discovers it in production.
-   *
-   * Both determine public URLs, so they are the engine's to own, and how a host
-   * acquires them is undecided. Until then a host wires them itself.
-   */
-  hostMustProvide: Object.freeze([
-    "an authentication callback route",
-    "an account deletion route holding the privileged key",
-  ]),
+  /** Server-only host integration required to activate this provider. */
+  hostIntegration: Object.freeze({
+    configPath: "publisher.config.ts",
+    serverExport: "@genii-foundation/publisher-sync-supabase/server",
+    environment: Object.freeze([
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+    ]),
+  }),
 });

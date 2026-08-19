@@ -4,6 +4,9 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Advanced the host contract to 0.5.0 with optional author-owned provider configuration and a protected provider-neutral synchronization route entry.
+- Kept callback redirects, deletion origin checks, status mapping, and public error bodies under renderer authority while collapsing provider failures without detail.
+- Pinned Nano ID 3.3.18 in consuming hosts after the prior transitive version gained a high-severity denial-of-service advisory.
 - Advanced the host contract to 0.4.0 with dormant authentication callback and account deletion routes that return an opaque 404 until provider delegation is configured.
 - Advanced the host contract to 0.3.0 with a server-side Updates artifact and a sequential migration edge.
 - Rendered build-bound named Updates views, expanded bounded pagination into static routes, and kept metadata and navigation renderer owned.

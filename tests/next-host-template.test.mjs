@@ -85,7 +85,10 @@ test("the host contract declares exactly the author host file set", () => {
       "pages/_error.tsx",
       "proxy.ts",
       "publisher-application.js",
+      "publisher-config.d.ts",
+      "publisher-default-config.js",
       "publisher-error-identity.ts",
+      "publisher-sync-routes.js",
       "tsconfig.json",
     ],
   );
@@ -120,20 +123,36 @@ test("the host contract declares exactly the author host file set", () => {
       summary:
         "Add dormant fail-closed synchronization route surfaces to every official host.",
     },
+    {
+      from: "0.4.0",
+      to: "0.5.0",
+      summary:
+        "Bind synchronization routes to optional author-owned host configuration through a server-only provider contract.",
+      manualSteps: [
+        "Regenerate and review package-lock.json so the required Nano ID 3.3.18 override is installed.",
+      ],
+    },
   ]);
 });
 
-test("dormant synchronization routes fail closed without provider detail", () => {
+test("synchronization routes delegate through the checked server-only bridge", () => {
   const result = template();
   for (const path of [
     "app/auth/callback/route.ts",
     "app/api/account/route.ts",
   ]) {
     const contents = contentsOf(result, path);
-    assert.match(contents, /status: 404/u);
-    assert.match(contents, /Not found\./u);
-    assert.doesNotMatch(contents, /provider|supabase|credential|environment/ui);
+    assert.match(contents, /publisher-sync-routes\.js/u);
+    assert.doesNotMatch(contents, /supabase|credential|environment/ui);
   }
+  const bridge = contentsOf(result, "publisher-sync-routes.js");
+  assert.match(bridge, /genii-publisher:config/u);
+  assert.match(bridge, /publication-sync\.json/u);
+  assert.match(bridge, /createPublisherNextSyncRoutes/u);
+  const nextConfig = contentsOf(result, "next.config.mjs");
+  assert.match(nextConfig, /publisher\.config\.ts/u);
+  assert.match(nextConfig, /publisher-default-config\.js/u);
+  assert.match(nextConfig, /resolveAlias/u);
 });
 
 test("the file list is sorted, unique, and frozen", () => {

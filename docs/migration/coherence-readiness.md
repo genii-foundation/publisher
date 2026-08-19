@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 8 upgraded | 8 | Publisher implements a stronger checked contract. |
+| 9 upgraded | 9 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 34 planned | 34 | Accepted Publisher scope is not implemented yet. |
+| 33 planned | 33 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -162,9 +162,13 @@ payloads, atomic bookmark merge, absorbing tombstones, and complete reader-data
 deletion.
 
 The official host now owns stable authentication callback and account deletion
-paths. Both return the same opaque 404 until a provider is configured, so an
-unsynchronized publication exposes no live provider surface. Validated provider
-delegation, session handling, and privileged deletion remain planned.
+paths. Both return the same opaque 404 for an unsynchronized publication. An
+author can select a matching provider through server-only host configuration.
+The renderer owns safe callback redirects, rejects cross-origin deletion before
+provider execution, and maps provider results to fixed responses. The reference
+Supabase adapter authenticates the current reader before privileged deletion and
+keeps the service-role key server only. Default sign-in, consent, synchronization,
+sign-out, and deletion controls remain planned.
 
 ### Toolbar, Markdown, and accessibility
 
@@ -233,7 +237,7 @@ product decision:
 4. Add default settings, focus, progress, bookmark, and toolbar components.
 5. Add the default narration player and timing interaction.
 6. Add atomic offline package planning and official service worker integration.
-7. Add validated provider delegation to the dormant synchronization routes.
+7. Add the default browser synchronization and account controls.
 8. Generalize audio checkpoint, promotion, and manuscript publication guards.
 9. Implement multi-view Updates and multi-section build support.
 10. Adopt Coherence through a reviewed migration plan with dual-read or

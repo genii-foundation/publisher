@@ -35,6 +35,10 @@
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
     },
+    "./server/sync": {
+      "types": "./dist/server/sync.d.ts",
+      "import": "./dist/server/sync.js"
+    },
     "./client": {
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js"
@@ -79,6 +83,7 @@
   },
   "publisherHostOverrides": {
     "next@16.2.12": {
+      "nanoid": "3.3.18",
       "postcss": "8.5.24",
       "sharp": "0.35.3"
     }

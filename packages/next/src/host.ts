@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.4.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.5.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -162,9 +162,18 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.3.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.4.0",
       summary:
         "Add dormant fail-closed synchronization route surfaces to every official host.",
+    }),
+    Object.freeze({
+      from: "0.4.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Bind synchronization routes to optional author-owned host configuration through a server-only provider contract.",
+      manualSteps: Object.freeze([
+        "Regenerate and review package-lock.json so the required Nano ID 3.3.18 override is installed.",
+      ]),
     }),
   ]);
 
@@ -257,7 +266,15 @@ export function createPublisherNextHostTemplate(
         "if (!routePlan.valid) {",
         "  throw new Error(JSON.stringify(routePlan.diagnostics));",
         "}",
-        "export default createPublisherNextConfig(routePlan.value);",
+        'const authorConfigPath = join(process.cwd(), "publisher.config.ts");',
+        'const publisherConfigPath = existsSync(authorConfigPath) ? "./publisher.config.ts" : "./publisher-default-config.js";',
+        "export default createPublisherNextConfig(routePlan.value, {",
+        "  turbopack: {",
+        "    resolveAlias: {",
+        '      "genii-publisher:config": publisherConfigPath,',
+        "    },",
+        "  },",
+        "});",
       ),
     },
     {
@@ -332,6 +349,24 @@ export function createPublisherNextHostTemplate(
       ),
     },
     {
+      path: "publisher-config.d.ts",
+      contents: lines(
+        'declare module "genii-publisher:config" {',
+        '  import type { PublisherNextHostConfig } from "@genii-foundation/publisher-next/server/sync";',
+        "  const config: PublisherNextHostConfig;",
+        "  export default config;",
+        "}",
+      ),
+    },
+    {
+      path: "publisher-default-config.js",
+      contents: lines(
+        'import { definePublisherNextHostConfig } from "@genii-foundation/publisher-next/server/sync";',
+        "",
+        "export default definePublisherNextHostConfig({});",
+      ),
+    },
+    {
       path: "publisher-error-identity.ts",
       contents: lines(
         'import { createPublisherNextErrorIdentity } from "@genii-foundation/publisher-next/client";',
@@ -344,23 +379,38 @@ export function createPublisherNextHostTemplate(
       ),
     },
     {
+      path: "publisher-sync-routes.js",
+      contents: lines(
+        'import { existsSync, readFileSync } from "node:fs";',
+        'import { join } from "node:path";',
+        `import reader from "./${PUBLISHER_NEXT_READER_DATA_PATH}" with { type: "json" };`,
+        'import publisherConfig from "genii-publisher:config";',
+        'import { createPublisherNextSyncRoutes } from "@genii-foundation/publisher-next/server/sync";',
+        "",
+        `const syncPath = join(process.cwd(), "${PUBLISHER_NEXT_SYNC_DATA_PATH}");`,
+        'const sync = existsSync(syncPath) ? JSON.parse(readFileSync(syncPath, "utf8")) : undefined;',
+        'const homePath = reader.routes.active.find(({ target }) => target.kind === "home")?.path ?? "/";',
+        "export const syncRoutes = createPublisherNextSyncRoutes({",
+        "  sync,",
+        "  provider: publisherConfig.syncProvider,",
+        "  homePath,",
+        "});",
+      ),
+    },
+    {
       path: "app/api/account/route.ts",
       contents: lines(
-        'import { NextResponse } from "next/server";',
+        'import { syncRoutes } from "../../../publisher-sync-routes.js";',
         "",
-        "export function DELETE() {",
-        '  return NextResponse.json({ error: "Not found." }, { status: 404 });',
-        "}",
+        "export const DELETE = syncRoutes.accountDeletion;",
       ),
     },
     {
       path: "app/auth/callback/route.ts",
       contents: lines(
-        'import { NextResponse } from "next/server";',
+        'import { syncRoutes } from "../../../publisher-sync-routes.js";',
         "",
-        "export function GET() {",
-        '  return NextResponse.json({ error: "Not found." }, { status: 404 });',
-        "}",
+        "export const GET = syncRoutes.authCallback;",
       ),
     },
     {
