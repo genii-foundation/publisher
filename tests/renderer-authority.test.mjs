@@ -283,7 +283,7 @@ test("ignoring the artifact also clears the tracking action", (t) => {
   const { hostRoot } = authorHost(t);
   writeFileSync(
     join(hostRoot, ".gitignore"),
-    "node_modules/\n.publisher/\nalpha-reader.json\nalpha-updates.json\npublic/alpha-progress.json\npublic/alpha-search.json\n",
+    "node_modules/\n.publisher/\nalpha-reader.json\nalpha-public-identity.json\nalpha-updates.json\npublic/alpha-progress.json\npublic/alpha-search.json\n",
     "utf8",
   );
   git(hostRoot, ["add", "-A"]);

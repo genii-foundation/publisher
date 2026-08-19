@@ -72,6 +72,7 @@ for (const fixture of ["canonical-field-notes", "declared-night-dispatch"]) {
     ]);
     assert.equal(built.status, 0, built.stderr);
     assert.match(built.stdout, /Artifact\s+alpha-reader\.json/u);
+    assert.match(built.stdout, /Identity\s+alpha-public-identity\.json/u);
     assert.match(built.stdout, /Search\s+public\/alpha-search\.json/u);
     assert.match(built.stdout, /Digest\s+sha256:[a-f0-9]{64}/u);
     assert.match(built.stdout, /^Written\.$/mu);
@@ -81,6 +82,21 @@ for (const fixture of ["canonical-field-notes", "declared-night-dispatch"]) {
     const parsed = JSON.parse(readFileSync(artifact, "utf8"));
     assert.equal(typeof parsed.publicationId, "string");
     assert.ok(parsed.works.length > 0);
+    const publicIdentity = JSON.parse(
+      readFileSync(join(hostRoot, "alpha-public-identity.json"), "utf8"),
+    );
+    assert.equal(publicIdentity.publicationId, parsed.publicationId);
+    assert.equal(publicIdentity.buildId, parsed.buildId);
+    assert.deepEqual(publicIdentity.publication, parsed.publication);
+    assert.deepEqual(Object.keys(publicIdentity).sort(), [
+      "buildId",
+      "engineVersion",
+      "homePath",
+      "publication",
+      "publicationId",
+      "schemaVersion",
+    ]);
+    assert.equal(Object.hasOwn(publicIdentity, "works"), false);
     const search = JSON.parse(
       readFileSync(join(hostRoot, "public", "alpha-search.json"), "utf8"),
     );
@@ -108,6 +124,29 @@ test("a second build of unchanged sources reports it is already current", (t) =>
   assert.match(second.stdout, /Already current\. Nothing written\./u);
 });
 
+test("a renderer with no public identity surface keeps the projection optional", (t) => {
+  const hostRoot = host(t, {
+    omitPublicIdentityDataPath: true,
+    capabilities: {
+      routeKinds: ["collection", "home", "section", "updates", "work"],
+      dataArtifacts: ["audio", "progress", "search", "sync", "updates"],
+    },
+  });
+  const built = run(hostRoot, [
+    "build",
+    "--renderer",
+    rendererName,
+    "--publication",
+    publication("canonical-field-notes"),
+  ]);
+  assert.equal(built.status, 0, built.stderr);
+  assert.equal(built.stdout.includes("Identity"), false);
+  assert.equal(
+    existsSync(join(hostRoot, "alpha-public-identity.json")),
+    false,
+  );
+});
+
 test("build emits machine readable output on request", (t) => {
   const hostRoot = host(t);
   const built = run(hostRoot, [
@@ -126,6 +165,11 @@ test("build emits machine readable output on request", (t) => {
   assert.equal(typeof report.bytes, "number");
   assert.equal(report.search.outcome, "written");
   assert.equal(report.search.hostRelativePath, "public/alpha-search.json");
+  assert.equal(report["public-identity"].outcome, "written");
+  assert.equal(
+    report["public-identity"].hostRelativePath,
+    "alpha-public-identity.json",
+  );
 });
 
 test("the artifact a build writes is byte identical across hosts", (t) => {

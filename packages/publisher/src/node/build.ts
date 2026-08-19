@@ -33,6 +33,7 @@ If you wish to allow use of your version of this file only under the terms of th
 // root section rather than renaming it.
 
 import {
+  canonicalizeJson,
   compileMarkdownWork,
 } from "@genii-foundation/publisher-content";
 import type {
@@ -61,6 +62,7 @@ import type {
   AudioEnvelope,
   Diagnostic,
   ExtensionReference,
+  JSONValue,
   PublicationContentEnvelope,
   PublicationManifest,
   PublicationReaderEnvelope,
@@ -462,6 +464,26 @@ export interface BuiltPublicationReader {
     readonly text: string;
   };
   /**
+   * Client-safe publication identity for framework error surfaces.
+   *
+   * This is separate from the Reader envelope so a Client Component can carry
+   * the publication title, language, attribution, and home route without
+   * bundling manuscript blocks. Its build identity is the Reader build identity,
+   * so the two artifacts cannot claim different source snapshots.
+   */
+  readonly publicIdentity: {
+    readonly envelope: {
+      readonly schemaVersion: "1.0";
+      readonly publicationId: PublicationReaderEnvelope["publicationId"];
+      readonly engineVersion: PublicationReaderEnvelope["engineVersion"];
+      readonly buildId: PublicationReaderEnvelope["buildId"];
+      readonly homePath: string;
+      readonly publication: PublicationReaderEnvelope["publication"];
+    };
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
+  /**
    * Cross-checked narration and its artifact, when the publication declares a
    * catalog.
    *
@@ -547,6 +569,33 @@ export async function buildPublicationReader(
   const progress = Object.freeze({
     catalog: progressCatalog,
     text: serializeReaderProgressCatalog(progressCatalog),
+  });
+  const homeRoute = reader.value.routes.active.find(
+    ({ target }) => target.kind === "home",
+  );
+  if (homeRoute === undefined) {
+    return invalidResult([
+      buildDiagnostic(
+        "build.public_identity_home_missing",
+        "/routes/active",
+        "The Reader projection has no active home route for its public identity.",
+        {},
+      ),
+    ]);
+  }
+  const publicIdentityEnvelope = Object.freeze({
+    schemaVersion: "1.0" as const,
+    publicationId: reader.value.publicationId,
+    engineVersion: reader.value.engineVersion,
+    buildId: reader.value.buildId,
+    homePath: homeRoute.path,
+    publication: reader.value.publication,
+  });
+  const publicIdentity = Object.freeze({
+    envelope: publicIdentityEnvelope,
+    text: `${canonicalizeJson(
+      publicIdentityEnvelope as unknown as JSONValue,
+    )}\n`,
   });
 
   // Cross-checked against every section the publication compiled, not against
@@ -739,6 +788,7 @@ export async function buildPublicationReader(
       text,
       search,
       progress,
+      publicIdentity,
       ...(audio === undefined ? {} : { audio }),
       ...(sync === undefined ? {} : { sync }),
       ...(updates === undefined ? {} : { updates }),

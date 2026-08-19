@@ -46,6 +46,7 @@ export const CANONICAL_CONTINUITY_ROOT = "publication/continuity";
 export const CANONICAL_OUTPUT_ROOT = ".publisher";
 export const RESERVED_HOST_INTEGRATION_PATHS = Object.freeze([
   "publisher.config.ts",
+  "publisher.theme.mjs",
 ] as const);
 
 export const MAXIMUM_PROTOCOL_DIAGNOSTICS = 256;

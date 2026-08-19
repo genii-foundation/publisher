@@ -186,7 +186,7 @@ test("a renderer declaring search but no narration support is refused by name", 
       [rendererName]: {
         capabilities: {
           routeKinds: ["collection", "home", "section", "updates", "work"],
-          dataArtifacts: ["progress", "search"],
+          dataArtifacts: ["progress", "public-identity", "search"],
         },
       },
     },

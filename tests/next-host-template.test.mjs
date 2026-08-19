@@ -25,6 +25,7 @@ import {
   PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH,
   PUBLISHER_NEXT_READER_DATA_PATH,
   PUBLISHER_NEXT_PROGRESS_DATA_PATH,
+  PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH,
   PUBLISHER_NEXT_SEARCH_DATA_PATH,
   PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY,
   createPublisherNextHostTemplate,
@@ -45,9 +46,6 @@ const input = Object.freeze({
   }),
   devDependencies: Object.freeze({ typescript: "5.9.4" }),
   overrides: Object.freeze({ postcss: "8.5.24" }),
-  errorIdentity: Object.freeze({
-    publication: Object.freeze({ language: "en" }),
-  }),
 });
 
 function template(overrides = {}) {
@@ -96,8 +94,10 @@ test("the host contract declares exactly the author host file set", () => {
       "publisher-application.js",
       "publisher-config.d.ts",
       "publisher-default-config.js",
+      "publisher-default-theme.js",
       "publisher-error-identity.ts",
       "publisher-sync-routes.js",
+      "publisher-theme.d.ts",
       "tsconfig.json",
     ],
   );
@@ -113,6 +113,10 @@ test("the host contract declares exactly the author host file set", () => {
   );
   assert.equal(result.searchDataPath, PUBLISHER_NEXT_SEARCH_DATA_PATH);
   assert.equal(result.progressDataPath, PUBLISHER_NEXT_PROGRESS_DATA_PATH);
+  assert.equal(
+    result.publicIdentityDataPath,
+    PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH,
+  );
   assert.equal(result.offlineCatalogHref, PUBLISHER_NEXT_OFFLINE_CATALOG_HREF);
   assert.equal(PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH, "public/offline-sw.js");
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("offline"));
@@ -170,6 +174,15 @@ test("the host contract declares exactly the author host file set", () => {
       summary:
         "Add the build-bound offline catalog route and generic service worker to the official host contract.",
     },
+    {
+      from: "0.9.0",
+      to: "0.10.0",
+      summary:
+        "Connect an explicit author theme module and client-safe public identity artifact to every official host surface.",
+      manualSteps: [
+        "Add publisher.theme.mjs only when selecting a separately installed custom theme package.",
+      ],
+    },
   ]);
 });
 
@@ -213,6 +226,11 @@ test("synchronization routes delegate through the checked server-only bridge", (
   const nextConfig = contentsOf(result, "next.config.mjs");
   assert.match(nextConfig, /publisher\.config\.ts/u);
   assert.match(nextConfig, /publisher-default-config\.js/u);
+  assert.match(nextConfig, /publisher\.theme\.mjs/u);
+  assert.match(nextConfig, /publisher-default-theme\.js/u);
+  assert.match(nextConfig, /genii-publisher:theme/u);
+  assert.match(nextConfig, /publication-public-identity\.json/u);
+  assert.match(nextConfig, /does not match the exact Reader build/u);
   assert.match(nextConfig, /resolveAlias/u);
 });
 
@@ -297,11 +315,23 @@ test("declared inputs reach the files that need them", () => {
   assert.equal(manifest.private, true);
   assert.equal(manifest.type, "module");
 
-  const identity = contentsOf(
-    template(),
-    "publisher-error-identity.ts",
+  const existingManifest = '{"name":"existing-host","private":true,"custom":"kept"}\n';
+  assert.equal(
+    contentsOf(
+      template({ packageJsonText: existingManifest }),
+      "package.json",
+    ),
+    existingManifest,
   );
-  assert.ok(identity.includes('"language": "en"'));
+
+  const application = contentsOf(template(), "publisher-application.js");
+  assert.match(application, /genii-publisher:theme/u);
+  assert.match(application, /theme, updatesData/u);
+
+  const identity = contentsOf(template(), "publisher-error-identity.ts");
+  assert.match(identity, /publication-public-identity\.json/u);
+  assert.match(identity, /genii-publisher:theme/u);
+  assert.equal(identity.includes("manuscript"), false);
 
   const renamed = template({
     hostPackageName: "another-host",

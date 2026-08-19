@@ -118,6 +118,32 @@ function realHost(t, { publication = servableFixture } = {}) {
     "node_modules/\n.publisher/\n",
     "utf8",
   );
+  writeFileSync(
+    join(hostRoot, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "real-renderer-lifecycle-host",
+        private: true,
+        type: "module",
+        scripts: {
+          build: "next build",
+          start: "next start",
+        },
+        dependencies: {
+          [realRenderer]: "0.1.0-alpha.0",
+        },
+        devDependencies: {
+          typescript: "7.0.2",
+        },
+        overrides: {
+          postcss: "8.5.24",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
   cpSync(publication, hostRoot, { recursive: true });
   mkdirSync(join(hostRoot, "node_modules", "@genii-foundation"), {
     recursive: true,
@@ -199,7 +225,13 @@ test("the real renderer takes a publication from nothing to a current artifact",
     readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
   );
   assert.equal(state.renderer, realRenderer);
-  assert.equal(state.hostContractVersion, "0.9.0");
+  assert.equal(state.hostContractVersion, "0.10.0");
+  const hostManifest = JSON.parse(
+    readFileSync(join(hostRoot, "package.json"), "utf8"),
+  );
+  assert.equal(hostManifest.dependencies[realRenderer], "0.1.0-alpha.0");
+  assert.equal(hostManifest.devDependencies.typescript, "7.0.2");
+  assert.equal(hostManifest.overrides.postcss, "8.5.24");
 
   // Status now wants an artifact.
   const middle = run(hostRoot, ["status"]);
@@ -315,6 +347,7 @@ test("the real renderer serves a publication with materialized Updates", (t) => 
   const built = run(hostRoot, ["build"]);
   assert.equal(built.status, 0, built.stderr);
   assert.ok(existsSync(join(hostRoot, "publication-reader.json")));
+  assert.ok(existsSync(join(hostRoot, "publication-public-identity.json")));
   assert.ok(existsSync(join(hostRoot, "publication-updates.json")));
 });
 

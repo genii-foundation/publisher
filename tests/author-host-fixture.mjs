@@ -101,6 +101,8 @@ export function installRenderer(
     omitSearchDataPath = false,
     progressDataPath,
     omitProgressDataPath = false,
+    publicIdentityDataPath,
+    omitPublicIdentityDataPath = false,
     audioDataPath,
     omitAudioDataPath = false,
     syncDataPath,
@@ -112,7 +114,7 @@ export function installRenderer(
     omitMigrations = false,
     capabilities = {
       routeKinds: ["collection", "home", "section", "updates", "work"],
-      dataArtifacts: ["audio", "progress", "search", "sync", "updates"],
+      dataArtifacts: ["audio", "progress", "public-identity", "search", "sync", "updates"],
     },
     omitCapabilities = false,
   } = {},
@@ -125,6 +127,9 @@ export function installRenderer(
   const progressPath = omitProgressDataPath
     ? undefined
     : (progressDataPath ?? `public/${short}-progress.json`);
+  const publicIdentityPath = omitPublicIdentityDataPath
+    ? undefined
+    : (publicIdentityDataPath ?? `${short}-public-identity.json`);
   // A stub renderer claims support for narration by default, so it needs a place
   // to put it. Declaring the capability without a path is a renderer defect the
   // engine refuses, and omitAudioDataPath exists so that case stays testable.
@@ -187,6 +192,9 @@ export function installRenderer(
       ...(progressPath === undefined
         ? []
         : [`    progressDataPath: ${JSON.stringify(progressPath)},`]),
+      ...(publicIdentityPath === undefined
+        ? []
+        : [`    publicIdentityDataPath: ${JSON.stringify(publicIdentityPath)},`]),
       // Omitted entirely when the caller gives none, so a renderer with no place
       // for narration is expressible. Declaring it as undefined would be a
       // different claim from not declaring it at all.
@@ -213,6 +221,7 @@ export function installRenderer(
     artifactPath,
     searchDataPath: searchPath,
     progressDataPath: progressPath,
+    publicIdentityDataPath: publicIdentityPath,
     audioDataPath: audioPath,
     syncDataPath: syncPath,
     updatesDataPath: updatesPath,

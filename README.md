@@ -46,7 +46,7 @@ Migration and extraction decisions are recorded in the machine-validated [proven
 | `@genii-foundation/publisher-sync-supabase` | Optional Supabase synchronization adapter |
 | `@genii-foundation/publisher-updates` | Author-repository history and Updates generation |
 
-The implemented package boundaries are proven against two invented neutral fixtures. A separate canonical host with its own packaged theme or extension remains a release gate before code moves from an existing publication.
+The implemented package boundaries are proven against two invented neutral fixtures. The packed canonical host installs and executes an independent theme package across ordinary pages and framework error surfaces without carrying manuscript data into client error chunks. Extension invocation remains a 1.0 gate before code moves from an existing publication.
 
 ## Attribution and source
 

@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Added a versioned public identity projection bound to each exact Reader build and materialized it as a required renderer data artifact.
+- Preserved exact installed host package metadata while generating the renderer contract.
 - Added versioned, inspectable local preview candidate identity for exact worktree, branch, commit, state, and source bytes.
 - Added fail-closed capture and verification for unstable files, symbolic links, special paths, unresolved indexes, submodules, and concurrent Git changes.
 - Exposed read-only preview identity and verification commands with packed-package consumer proof.

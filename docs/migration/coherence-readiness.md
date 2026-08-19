@@ -353,6 +353,20 @@ submodules, path ambiguity, special files, unstable descriptor reads, and Git or
 directory changes observed during capture. Saved evidence is authenticated again
 before verification. ADR 0048 records the engine and host-preview boundary.
 
+### Cross-publication theme portability
+
+The canonical packed-host proof now creates, packs, installs, and selects an
+independent publication theme package through author-owned host configuration.
+That theme controls both ordinary Reader pages and every framework error
+surface. The host consumes a small Reader-build-bound public identity artifact
+for client error attribution, and the proof rejects manuscript text in those
+browser chunks. Author initialization also preserves the exact existing package
+manifest while adding managed host files. ADR 0049 records this boundary.
+
+This closes the theme and public-identity portion of the unrelated-publication
+gate. A full second-publication release rehearsal must still exercise the other
+override contracts before Coherence migration acceptance.
+
 ## Remaining migration gap
 
 The following are accepted scope, not release blockers waiting for another

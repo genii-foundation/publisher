@@ -19,6 +19,19 @@ A renderer installed into your repository, such as
 contract from your own installation rather than depending on a renderer itself,
 which is also why a third-party renderer works with no changes here.
 
+Install a custom theme package into the same repository when you want one. After
+initialization, select it through author-owned host code:
+
+```js
+// publisher.theme.mjs
+export { theme as default } from "@example/publisher-theme";
+```
+
+The engine never creates or rewrites this file. The generated host uses the same
+explicit adapter for ordinary pages and framework error surfaces. Package names
+in `publication.json` remain provenance data and are never treated as import
+instructions.
+
 Node 22.12.0 or newer, and npm 10.9.0.
 
 ## Your publication
@@ -253,6 +266,11 @@ different artifacts, so a preview build must not be deployed as the public one.
 Building twice over unchanged sources writes nothing and says so. The file's
 modification time stays put, so a watching build tool is not restarted by an
 identical write.
+
+The build also writes `publication-public-identity.json`. It contains the
+publication title, language, home route, attribution, and Reader build identity,
+but no manuscript blocks. Client framework errors read this small artifact
+instead of importing the Reader envelope into browser chunks.
 
 ### Deciding what happens to the artifact
 

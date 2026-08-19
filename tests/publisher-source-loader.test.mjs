@@ -812,76 +812,81 @@ test("does not discover, import, or traverse undeclared hostile repository entri
   );
 });
 
-test("never inspects publisher.config.ts when a manifest declares it as source", async (t) => {
-  for (const role of ["work-manifest", "manuscript"]) {
-    await t.test(role, async (t) => {
-      const publicationRoot = await copyFixture(
-        t,
-        "canonical-field-notes",
-      );
-      const configPath = join(
-        publicationRoot,
-        "publisher.config.ts",
-      );
-      const sentinel = "RESERVED_HOST_CONFIG_SENTINEL";
-      await writeFile(configPath, sentinel, "utf8");
-      if (role === "work-manifest") {
-        const publicationPath = join(
-          publicationRoot,
-          "publication.json",
+test("never inspects host integration code when a manifest declares it as source", async (t) => {
+  for (const reservedPath of [
+    "publisher.config.ts",
+    "publisher.theme.mjs",
+  ]) {
+    for (const role of ["work-manifest", "manuscript"]) {
+      await t.test(`${reservedPath} ${role}`, async (t) => {
+        const publicationRoot = await copyFixture(
+          t,
+          "canonical-field-notes",
         );
-        const publication = await readJson(publicationPath);
-        publication.works[0].manifest = "publisher.config.ts";
-        await writeJson(publicationPath, publication);
-      } else {
-        const workPath = join(
+        const configPath = join(
           publicationRoot,
-          "publication",
-          "works",
-          "rain-gauge",
-          "work.json",
+          reservedPath,
         );
-        const work = await readJson(workPath);
-        work.manuscript = {
-          path: "publisher.config.ts",
-          relativeTo: "repository",
-        };
-        await writeJson(workPath, work);
-      }
-
-      const configAccesses = [];
-      const observe = (operation, absolutePath) => {
-        if (absolutePath === configPath) {
-          configAccesses.push(operation);
+        const sentinel = "RESERVED_HOST_INTEGRATION_SENTINEL";
+        await writeFile(configPath, sentinel, "utf8");
+        if (role === "work-manifest") {
+          const publicationPath = join(
+            publicationRoot,
+            "publication.json",
+          );
+          const publication = await readJson(publicationPath);
+          publication.works[0].manifest = reservedPath;
+          await writeJson(publicationPath, publication);
+        } else {
+          const workPath = join(
+            publicationRoot,
+            "publication",
+            "works",
+            "rain-gauge",
+            "work.json",
+          );
+          const work = await readJson(workPath);
+          work.manuscript = {
+            path: reservedPath,
+            relativeTo: "repository",
+          };
+          await writeJson(workPath, work);
         }
-      };
-      const fileSystem = wrapNodeFileSystem({
-        lstat: async (absolutePath, next) => {
-          observe("lstat", absolutePath);
-          return next(absolutePath);
-        },
-        openReadOnlyNoFollow: async (absolutePath, next) => {
-          observe("open", absolutePath);
-          return next(absolutePath);
-        },
-        realpath: async (absolutePath, next) => {
-          observe("realpath", absolutePath);
-          return next(absolutePath);
-        },
-      });
-      const result =
-        await loadPublicationCompilationSourcesWithFileSystem(
-          loaderInput(publicationRoot),
-          fileSystem,
+
+        const configAccesses = [];
+        const observe = (operation, absolutePath) => {
+          if (absolutePath === configPath) {
+            configAccesses.push(operation);
+          }
+        };
+        const fileSystem = wrapNodeFileSystem({
+          lstat: async (absolutePath, next) => {
+            observe("lstat", absolutePath);
+            return next(absolutePath);
+          },
+          openReadOnlyNoFollow: async (absolutePath, next) => {
+            observe("open", absolutePath);
+            return next(absolutePath);
+          },
+          realpath: async (absolutePath, next) => {
+            observe("realpath", absolutePath);
+            return next(absolutePath);
+          },
+        });
+        const result =
+          await loadPublicationCompilationSourcesWithFileSystem(
+            loaderInput(publicationRoot),
+            fileSystem,
+          );
+        assertInvalid(result, "source.path_reserved");
+        assert.deepEqual(configAccesses, []);
+        assert.equal(
+          JSON.stringify(result.diagnostics).includes(sentinel),
+          false,
         );
-      assertInvalid(result, "source.path_reserved");
-      assert.deepEqual(configAccesses, []);
-      assert.equal(
-        JSON.stringify(result.diagnostics).includes(sentinel),
-        false,
-      );
-      await assertPrivateDiagnostics(result, publicationRoot);
-    });
+        await assertPrivateDiagnostics(result, publicationRoot);
+      });
+    }
   }
 });
 

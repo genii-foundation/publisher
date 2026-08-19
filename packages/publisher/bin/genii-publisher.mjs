@@ -64,6 +64,7 @@ import {
 import {
   AUDIO_DATA_ARTIFACT,
   PROGRESS_DATA_ARTIFACT,
+  PUBLIC_IDENTITY_DATA_ARTIFACT,
   SEARCH_DATA_ARTIFACT,
   UPDATES_DATA_ARTIFACT,
   assertHostCanCarryDataArtifact,
@@ -857,8 +858,27 @@ async function runBuild(options) {
     return 1;
   }
 
+  const capabilities = readHostCapabilities(module);
+  const carriesPublicIdentity =
+    capabilities?.dataArtifacts.includes(
+      PUBLIC_IDENTITY_DATA_ARTIFACT,
+    ) === true || template.publicIdentityDataPath !== undefined;
+
   // Every generated artifact beyond the reader artifact, in one list.
   const extraArtifacts = [
+    carriesPublicIdentity
+      ? {
+          id: PUBLIC_IDENTITY_DATA_ARTIFACT,
+          noun: "public identity",
+          label: "Identity",
+          declaredPath: template.publicIdentityDataPath,
+          text: built.value.publicIdentity.text,
+          detail: [
+            `Publication  ${built.value.publicIdentity.envelope.publicationId}`,
+            `Reader build ${built.value.publicIdentity.envelope.buildId}`,
+          ],
+        }
+      : null,
     {
       id: SEARCH_DATA_ARTIFACT,
       noun: "search index",
@@ -930,7 +950,6 @@ async function runBuild(options) {
   // Before anything is written. A publication declaring an artifact against a
   // renderer with nowhere to put it would otherwise have the file written to a
   // path of the engine's invention, which the host would never serve.
-  const capabilities = readHostCapabilities(module);
   for (const artifact of extraArtifacts) {
     const carriable = assertHostCanCarryDataArtifact({
       artifact: artifact.id,
@@ -1253,7 +1272,20 @@ async function runStatus(options) {
             );
           }
 
+          const capabilities = readHostCapabilities(rendererModule ?? {});
+          const carriesPublicIdentity =
+            capabilities?.dataArtifacts.includes(
+              PUBLIC_IDENTITY_DATA_ARTIFACT,
+            ) === true || template.publicIdentityDataPath !== undefined;
           const extraArtifacts = [
+            carriesPublicIdentity
+              ? {
+                  id: PUBLIC_IDENTITY_DATA_ARTIFACT,
+                  label: "Identity",
+                  declaredPath: template.publicIdentityDataPath,
+                  text: built.value.publicIdentity.text,
+                }
+              : null,
             {
               id: SEARCH_DATA_ARTIFACT,
               label: "Search",
@@ -1291,7 +1323,6 @@ async function runStatus(options) {
                   text: built.value.updates.text,
                 },
           ].filter(Boolean);
-          const capabilities = readHostCapabilities(rendererModule ?? {});
           for (const artifact of extraArtifacts) {
             const carriable = assertHostCanCarryDataArtifact({
               artifact: artifact.id,
@@ -1587,26 +1618,54 @@ function hostTemplateInput(hostRoot) {
   // Enough for the contract to produce a host. An existing host keeps its own
   // package name so initializing twice does not rename it.
   let hostPackageName = "publication-host";
+  let packageJsonText;
+  let dependencies = {};
+  let devDependencies = {};
+  let overrides = {};
   const manifestPath = join(hostRoot, "package.json");
   if (existsSync(manifestPath)) {
     try {
-      const name = JSON.parse(
-        readFileSync(manifestPath, "utf8"),
-      ).name;
+      packageJsonText = readFileSync(manifestPath, "utf8");
+      const manifest = JSON.parse(packageJsonText);
+      const name = manifest.name;
       if (typeof name === "string" && name.length > 0) {
         hostPackageName = name;
       }
-    } catch {
-      // A manifest that cannot be read is left to the renderer contract's own
-      // defaults rather than guessed at.
+      if (
+        manifest.dependencies !== null &&
+        typeof manifest.dependencies === "object" &&
+        !Array.isArray(manifest.dependencies)
+      ) {
+        dependencies = manifest.dependencies;
+      }
+      if (
+        manifest.devDependencies !== null &&
+        typeof manifest.devDependencies === "object" &&
+        !Array.isArray(manifest.devDependencies)
+      ) {
+        devDependencies = manifest.devDependencies;
+      }
+      if (
+        manifest.overrides !== null &&
+        typeof manifest.overrides === "object" &&
+        !Array.isArray(manifest.overrides)
+      ) {
+        overrides = manifest.overrides;
+      }
+    } catch (error) {
+      throw new CommandError(
+        `${manifestPath} is not usable JSON, so the renderer cannot preserve the installed host package.\n${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
   return {
     hostPackageName,
-    dependencies: {},
-    devDependencies: {},
-    overrides: {},
-    errorIdentity: {},
+    ...(packageJsonText === undefined ? {} : { packageJsonText }),
+    dependencies,
+    devDependencies,
+    overrides,
   };
 }
 

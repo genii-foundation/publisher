@@ -169,44 +169,26 @@ import { publisher } from "../publisher.mjs";
 export default publisher.NotFoundPage;
 ```
 
-Supply one public, manuscript-free identity for every framework error surface. It must contain only the publication identity, home route, attribution fields, and configured theme tokens needed to render the error page. It must not import `publisher.mjs`, the reader artifact, manuscript data, or the server entry.
+Supply one public, manuscript-free identity for every framework error surface. The generated host reads publication identity from `publication-public-identity.json` and configures the same explicit theme module as the server application. It never imports the Reader artifact, manuscript data, provider configuration, or the server entry into a client error boundary.
 
 ```ts
 // publisher-error-identity.ts
 import {
   createPublisherNextErrorIdentity,
 } from "@genii-foundation/publisher-next/client";
-import {
-  defaultPublisherNextTheme,
-} from "@genii-foundation/publisher-next/theme/default";
+import theme from "genii-publisher:theme";
+import publicIdentity from "./publication-public-identity.json" with { type: "json" };
 
-const theme = defaultPublisherNextTheme.configure({});
+const configuredTheme = theme.implementation.configure(theme.config);
 
-if (!theme.valid) {
-  throw new Error(JSON.stringify(theme.diagnostics));
+if (!configuredTheme.valid) {
+  throw new Error(JSON.stringify(configuredTheme.diagnostics));
 }
 
 const identity = createPublisherNextErrorIdentity({
-  homePath: "/",
-  publication: {
-    id: "example-publication",
-    title: "Example Publication",
-    description: "An example publication.",
-    language: "en",
-    canonicalUrl: "https://publication.example",
-    publisher: {
-      name: "Example Press",
-      url: "https://press.example"
-    },
-    attribution: {
-      placement: "footer",
-      copyright: "Copyright 2026 GENII Foundation",
-      text: "Published with GENII Publisher",
-      url: "https://publisher.genii.foundation",
-      sourceCodeUrl: "https://github.com/example/publication"
-    }
-  },
-  theme: theme.value
+  homePath: publicIdentity.homePath,
+  publication: publicIdentity.publication,
+  theme: configuredTheme.value
 });
 
 if (!identity.valid) {
@@ -216,7 +198,7 @@ if (!identity.valid) {
 export const publisherErrorIdentity = identity.value;
 ```
 
-Generate those public values from `publisher.errorIdentity`, which is derived from the validated reader and resolved theme. The client-safe factory rejects changed attribution, missing or unsafe source URLs, malformed home routes, and invalid theme tokens. Author tooling may serialize the already configured identity into this module, then pass the serialized data through the factory without shipping manuscript data or server configuration into the browser boundary.
+`genii-publisher build` derives the versioned public identity artifact from the validated Reader. Its build ID is the exact Reader build ID. The client-safe factory rejects changed attribution, missing or unsafe source URLs, malformed home routes, and invalid theme tokens. Build and status track this artifact separately, so a publication cannot update its Reader while quietly retaining an old error identity.
 
 Expose the client-safe App Router error boundaries:
 
@@ -549,6 +531,20 @@ export const theme: ResolvedPublisherNextTheme = {
 ```
 
 The host imports that package explicitly and passes `theme` to `createPublicationNextApplication`. Manifest package strings remain identity data, never import authority.
+
+The generated host provides the bundled theme by default. Select the separately
+installed package in author-owned host code:
+
+```js
+// publisher.theme.mjs
+export { theme as default } from "@example/publisher-theme";
+```
+
+The lifecycle never creates or rewrites this file. Next resolves it through the
+closed `genii-publisher:theme` host alias, and both the server application and
+client-safe error identity use the same adapter. A custom theme package must be
+browser safe because its configuration function also runs in client error
+chunks.
 
 ## Updates
 

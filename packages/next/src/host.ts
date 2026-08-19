@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.9.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.10.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -56,6 +56,10 @@ export const PUBLISHER_NEXT_SEARCH_DATA_PATH =
 /** Host-relative location of the lazy publication progress catalog. */
 export const PUBLISHER_NEXT_PROGRESS_DATA_PATH =
   "public/publication-reader-progress.json";
+
+/** Client-safe publication identity for framework error surfaces. */
+export const PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH =
+  "publication-public-identity.json";
 
 /** Public route serving the build-bound offline work package catalog. */
 export const PUBLISHER_NEXT_OFFLINE_CATALOG_HREF =
@@ -136,8 +140,22 @@ export interface PublisherNextHostCapabilities {
  */
 export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
   Object.freeze({
-    routeKinds: Object.freeze(["home", "work", "collection", "section", "updates"]),
-    dataArtifacts: Object.freeze(["audio", "offline", "progress", "search", "sync", "updates"]),
+    routeKinds: Object.freeze([
+      "home",
+      "work",
+      "collection",
+      "section",
+      "updates",
+    ]),
+    dataArtifacts: Object.freeze([
+      "audio",
+      "offline",
+      "progress",
+      "public-identity",
+      "search",
+      "sync",
+      "updates",
+    ]),
   });
 
 export interface PublisherNextHostMigration {
@@ -208,23 +226,38 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.8.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.9.0",
       summary:
         "Add the build-bound offline catalog route and generic service worker to the official host contract.",
+    }),
+    Object.freeze({
+      from: "0.9.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Connect an explicit author theme module and client-safe public identity artifact to every official host surface.",
+      manualSteps: Object.freeze([
+        "Add publisher.theme.mjs only when selecting a separately installed custom theme package.",
+      ]),
     }),
   ]);
 
 export interface PublisherNextHostTemplateInput {
   /** Package name for the generated host manifest. */
   readonly hostPackageName: string;
+  /**
+   * Exact existing host package manifest bytes.
+   *
+   * Present for an installed author host. The renderer carries those bytes
+   * through unchanged rather than replacing the manifest that made the renderer
+   * resolvable in the first place. Omit only when constructing a new proof host.
+   */
+  readonly packageJsonText?: string;
   /** Exact dependency specifiers, including the engine packages and the framework peers. */
   readonly dependencies: Readonly<Record<string, string>>;
   /** Exact development dependency specifiers. */
   readonly devDependencies: Readonly<Record<string, string>>;
   /** Package manager overrides the renderer requires of its host. */
   readonly overrides: unknown;
-  /** Error identity input, embedded into the host so it is reviewable in the repository. */
-  readonly errorIdentity: unknown;
 }
 
 export interface PublisherNextHostFile {
@@ -242,6 +275,8 @@ export interface PublisherNextHostTemplate {
   readonly searchDataPath: string;
   /** Where the required capability-sliced progress artifact belongs. */
   readonly progressDataPath: string;
+  /** Where the required client-safe public identity artifact belongs. */
+  readonly publicIdentityDataPath: string;
   /** Public href from which the renderer serves its offline package catalog. */
   readonly offlineCatalogHref: string;
   /**
@@ -404,24 +439,27 @@ export function createPublisherNextHostTemplate(
   const files: PublisherNextHostFile[] = [
     {
       path: "package.json",
-      contents: json({
-        name: input.hostPackageName,
-        version: "0.0.0",
-        private: true,
-        type: "module",
-        scripts: {
-          build: "next build",
-          start: "next start",
-        },
-        dependencies: input.dependencies,
-        overrides: input.overrides,
-        devDependencies: input.devDependencies,
-      }),
+      contents:
+        input.packageJsonText ??
+        json({
+          name: input.hostPackageName,
+          version: "0.0.0",
+          private: true,
+          type: "module",
+          scripts: {
+            build: "next build",
+            start: "next start",
+          },
+          dependencies: input.dependencies,
+          overrides: input.overrides,
+          devDependencies: input.devDependencies,
+        }),
     },
     {
       path: "next.config.mjs",
       contents: lines(
         `import reader from "./${PUBLISHER_NEXT_READER_DATA_PATH}" with { type: "json" };`,
+        `import publicIdentity from "./${PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH}" with { type: "json" };`,
         'import { existsSync, readFileSync } from "node:fs";',
         'import { join } from "node:path";',
         'import { createPublisherNextConfig, createPublisherNextRoutePlan } from "@genii-foundation/publisher-next/config";',
@@ -432,12 +470,28 @@ export function createPublisherNextHostTemplate(
         "if (!routePlan.valid) {",
         "  throw new Error(JSON.stringify(routePlan.diagnostics));",
         "}",
+        'const publicIdentityKeys = ["buildId", "engineVersion", "homePath", "publication", "publicationId", "schemaVersion"];',
+        "const homePath = reader.routes.active.find(({ target }) => target.kind === \"home\")?.path;",
+        "if (",
+        "  JSON.stringify(Object.keys(publicIdentity).sort()) !== JSON.stringify(publicIdentityKeys) ||",
+        '  publicIdentity.schemaVersion !== "1.0" ||',
+        "  publicIdentity.publicationId !== reader.publicationId ||",
+        "  publicIdentity.engineVersion !== reader.engineVersion ||",
+        "  publicIdentity.buildId !== reader.buildId ||",
+        "  publicIdentity.homePath !== homePath ||",
+        "  JSON.stringify(publicIdentity.publication) !== JSON.stringify(reader.publication)",
+        ") {",
+        '  throw new TypeError("publication-public-identity.json does not match the exact Reader build.");',
+        "}",
         'const authorConfigPath = join(process.cwd(), "publisher.config.ts");',
         'const publisherConfigPath = existsSync(authorConfigPath) ? "./publisher.config.ts" : "./publisher-default-config.js";',
+        'const authorThemePath = join(process.cwd(), "publisher.theme.mjs");',
+        'const publisherThemePath = existsSync(authorThemePath) ? "./publisher.theme.mjs" : "./publisher-default-theme.js";',
         "export default createPublisherNextConfig(routePlan.value, {",
         "  turbopack: {",
         "    resolveAlias: {",
         '      "genii-publisher:config": publisherConfigPath,',
+        '      "genii-publisher:theme": publisherThemePath,',
         "    },",
         "  },",
         "});",
@@ -502,6 +556,7 @@ export function createPublisherNextHostTemplate(
         'import { existsSync, readFileSync } from "node:fs";',
         'import { join } from "node:path";',
         `import reader from "./${PUBLISHER_NEXT_READER_DATA_PATH}" with { type: "json" };`,
+        'import theme from "genii-publisher:theme";',
         'import { createPublicationNextApplication } from "@genii-foundation/publisher-next/server";',
         "",
         `const updatesPath = join(process.cwd(), "${PUBLISHER_NEXT_UPDATES_DATA_PATH}");`,
@@ -510,7 +565,7 @@ export function createPublisherNextHostTemplate(
         'const syncData = existsSync(syncPath) ? JSON.parse(readFileSync(syncPath, "utf8")) : undefined;',
         `const audioPath = join(process.cwd(), "${PUBLISHER_NEXT_AUDIO_DATA_PATH}");`,
         'const audioData = existsSync(audioPath) ? JSON.parse(readFileSync(audioPath, "utf8")) : undefined;',
-        "const created = await createPublicationNextApplication({ reader, audioData, syncData, updatesData });",
+        "const created = await createPublicationNextApplication({ reader, audioData, syncData, theme, updatesData });",
         "if (!created.valid) {",
         "  throw new Error(JSON.stringify(created.diagnostics));",
         "}",
@@ -537,15 +592,48 @@ export function createPublisherNextHostTemplate(
       ),
     },
     {
+      path: "publisher-default-theme.js",
+      contents: lines(
+        'import { resolveDefaultPublisherNextTheme } from "@genii-foundation/publisher-next/theme/default";',
+        "",
+        "export default resolveDefaultPublisherNextTheme();",
+      ),
+    },
+    {
       path: "publisher-error-identity.ts",
       contents: lines(
         'import { createPublisherNextErrorIdentity } from "@genii-foundation/publisher-next/client";',
+        'import theme from "genii-publisher:theme";',
+        `import publicIdentity from "./${PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH}" with { type: "json" };`,
         "",
-        `const result = createPublisherNextErrorIdentity(${JSON.stringify(input.errorIdentity, null, 2)});`,
+        "let configuredTheme;",
+        "try {",
+        "  configuredTheme = theme.implementation.configure(theme.config);",
+        "} catch {",
+        '  throw new TypeError("The selected Publisher theme threw while configuring the error surface.");',
+        "}",
+        "if (!configuredTheme.valid) {",
+        "  throw new TypeError(JSON.stringify(configuredTheme.diagnostics));",
+        "}",
+        "const result = createPublisherNextErrorIdentity({",
+        "  homePath: publicIdentity.homePath,",
+        "  publication: publicIdentity.publication,",
+        "  theme: configuredTheme.value,",
+        "});",
         "if (!result.valid) {",
         "  throw new Error(JSON.stringify(result.diagnostics));",
         "}",
         "export const publisherErrorIdentity = result.value;",
+      ),
+    },
+    {
+      path: "publisher-theme.d.ts",
+      contents: lines(
+        'declare module "genii-publisher:theme" {',
+        '  import type { ResolvedPublisherNextTheme } from "@genii-foundation/publisher-next/theme";',
+        "  const theme: ResolvedPublisherNextTheme;",
+        "  export default theme;",
+        "}",
       ),
     },
     {
@@ -887,6 +975,7 @@ export function createPublisherNextHostTemplate(
     readerDataPath: PUBLISHER_NEXT_READER_DATA_PATH,
     searchDataPath: PUBLISHER_NEXT_SEARCH_DATA_PATH,
     progressDataPath: PUBLISHER_NEXT_PROGRESS_DATA_PATH,
+    publicIdentityDataPath: PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH,
     offlineCatalogHref: PUBLISHER_NEXT_OFFLINE_CATALOG_HREF,
     audioDataPath: PUBLISHER_NEXT_AUDIO_DATA_PATH,
     syncDataPath: PUBLISHER_NEXT_SYNC_DATA_PATH,

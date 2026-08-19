@@ -50,5 +50,6 @@ These records define the accepted foundation of GENII Publisher.
 46. [ADR 0046: Atomic offline publication packages](./0046-atomic-offline-publication-packages.md)
 47. [ADR 0047: Accessible manuscript extensions](./0047-accessible-manuscript-extensions.md)
 48. [ADR 0048: Exact local preview candidate identity](./0048-exact-local-preview-candidate-identity.md)
+49. [ADR 0049: Explicit host theme and public identity artifact](./0049-explicit-theme-and-public-identity.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

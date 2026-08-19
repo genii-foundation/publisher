@@ -3326,16 +3326,10 @@ export async function runPackagedHostProof(
     runNpm(["--version"], { label: "npm version check" }),
     workspaceManifest.engines.npm,
   );
-  const [rootApi, defaultThemeApi, hostApi] = await Promise.all([
+  const [rootApi, hostApi] = await Promise.all([
     import(
       new URL(
         `../dist/index.js?proof=${encodeURIComponent(nextManifest.version)}`,
-        import.meta.url,
-      )
-    ),
-    import(
-      new URL(
-        `../dist/theme/default.js?proof=${encodeURIComponent(nextManifest.version)}`,
         import.meta.url,
       )
     ),
@@ -3350,24 +3344,11 @@ export async function runPackagedHostProof(
     rootApi.PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES,
     nextManifest.publisherHostOverrides,
   );
-  const configuredTheme =
-    defaultThemeApi.defaultPublisherNextTheme.configure(
-      Object.freeze({}),
-    );
-  assert.equal(
-    configuredTheme.valid,
-    true,
-    JSON.stringify(configuredTheme.diagnostics),
-  );
   const homeRoute = reader.routes.active.find(
     ({ target }) => target.kind === "home",
   );
   assert.notEqual(homeRoute, undefined);
-  const errorIdentity = Object.freeze({
-    homePath: homeRoute.path,
-    publication: reader.publication,
-    theme: configuredTheme.value,
-  });
+  const portableThemeAccent = "#6B3F84";
 
   const temporaryRoot = await mkdtemp(
     join(tmpdir(), "genii-publisher-next-host-"),
@@ -3376,6 +3357,7 @@ export async function runPackagedHostProof(
   try {
     const packRoot = join(temporaryRoot, "pack");
     const hostRoot = join(temporaryRoot, "host");
+    const themeRoot = join(temporaryRoot, "portable-theme");
     const appRoot = join(hostRoot, "app");
     const pagesRoot = join(hostRoot, "pages");
     const routeRoot = join(appRoot, "[...segments]");
@@ -3394,12 +3376,71 @@ export async function runPackagedHostProof(
     const publicRoot = join(hostRoot, "public");
     await Promise.all([
       mkdir(packRoot),
+      mkdir(themeRoot),
       mkdir(routeRoot, { recursive: true }),
       mkdir(boundaryProofRoot, { recursive: true }),
       mkdir(runtimeErrorRoot, { recursive: true }),
       mkdir(globalErrorRoot, { recursive: true }),
       mkdir(publicRoot, { recursive: true }),
       mkdir(pagesRoot, { recursive: true }),
+    ]);
+
+    await Promise.all([
+      writeJson(join(themeRoot, "package.json"), {
+        name: "@example/packed-publication-theme",
+        version: "1.0.0",
+        type: "module",
+        exports: "./index.js",
+      }),
+      writeFile(
+        join(themeRoot, "index.js"),
+        [
+          "const tokens = Object.freeze({",
+          "  color: Object.freeze({",
+          '    canvas: "#F7F4ED",',
+          '    surface: "#FFFFFF",',
+          '    text: "#182326",',
+          '    mutedText: "#4C5A5E",',
+          `    accent: "${portableThemeAccent}",`,
+          '    focus: "#8A3500",',
+          '    border: "#C5CDCE",',
+          "  }),",
+          "  typography: Object.freeze({",
+          '    bodyFamily: "Charter, Cambria, serif",',
+          '    headingFamily: "Avenir Next, Segoe UI, sans-serif",',
+          '    monoFamily: "SFMono-Regular, Consolas, monospace",',
+          '    baseSize: "1.0625rem",',
+          "    lineHeight: 1.72,",
+          "  }),",
+          "  layout: Object.freeze({",
+          '    readingMeasure: "68ch",',
+          '    pageGutter: "1.25rem",',
+          '    sectionGap: "3rem",',
+          '    controlRadius: "0.375rem",',
+          "  }),",
+          "});",
+          "",
+          "export default Object.freeze({",
+          '  package: "@example/packed-publication-theme",',
+          '  version: "1.0.0",',
+          '  rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",',
+          "  config: Object.freeze({}),",
+          "  implementation: Object.freeze({",
+          '    kind: "genii.publisher.next-theme",',
+          '    apiVersion: "1.0",',
+          "    configure() {",
+          "      return Object.freeze({",
+          "        valid: true,",
+          "        diagnostics: Object.freeze([]),",
+          "        value: Object.freeze({ tokens }),",
+          "      });",
+          "    },",
+          "  }),",
+          "});",
+          "",
+        ].join("\n"),
+        "utf8",
+      ),
     ]);
 
     const schemaTarball = packPackage(
@@ -3415,6 +3456,7 @@ export async function runPackagedHostProof(
       packRoot,
     );
     const nextTarball = packPackage(packageRoot, packRoot);
+    const themeTarball = packPackage(themeRoot, packRoot);
     const localDependency = (tarball) =>
       `file:${packagePath(relative(hostRoot, tarball))}`;
 
@@ -3430,6 +3472,7 @@ export async function runPackagedHostProof(
         [contentManifest.name]: localDependency(contentTarball),
         [readerManifest.name]: localDependency(readerTarball),
         [nextManifest.name]: localDependency(nextTarball),
+        "@example/packed-publication-theme": localDependency(themeTarball),
         next: nextManifest.peerDependencies.next,
         react: nextManifest.peerDependencies.react,
         "react-dom":
@@ -3446,7 +3489,6 @@ export async function runPackagedHostProof(
       },
       overrides:
         rootApi.PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES,
-      errorIdentity,
     });
     assert.equal(
       hostTemplate.contractVersion,
@@ -3480,6 +3522,7 @@ export async function runPackagedHostProof(
       "export-probe.mjs",
       "server-import-probe.mjs",
       "publisher.config.ts",
+      "publisher.theme.mjs",
       `app/${basename(runtimeErrorRoot)}/page.tsx`,
       `app/${basename(globalErrorRoot)}/page.tsx`,
       `app/${basename(boundaryProofRoot)}/page.tsx`,
@@ -3489,6 +3532,7 @@ export async function runPackagedHostProof(
       hostTemplate.readerDataPath,
       hostTemplate.audioDataPath,
       hostTemplate.progressDataPath,
+      hostTemplate.publicIdentityDataPath,
       hostTemplate.searchDataPath,
       hostTemplate.syncDataPath,
     ];
@@ -3591,6 +3635,17 @@ export async function runPackagedHostProof(
         join(hostRoot, hostTemplate.readerDataPath),
         reader,
       ),
+      writeJson(
+        join(hostRoot, hostTemplate.publicIdentityDataPath),
+        {
+          schemaVersion: "1.0",
+          publicationId: reader.publicationId,
+          engineVersion: reader.engineVersion,
+          buildId: reader.buildId,
+          homePath: homeRoute.path,
+          publication: reader.publication,
+        },
+      ),
       writeFile(
         join(hostRoot, hostTemplate.progressDataPath),
         serializeReaderProgressCatalog(createReaderProgressCatalog(reader)),
@@ -3666,6 +3721,11 @@ export async function runPackagedHostProof(
           "});",
           "",
         ].join("\n"),
+        "utf8",
+      ),
+      writeFile(
+        join(hostRoot, "publisher.theme.mjs"),
+        'export { default } from "@example/packed-publication-theme";\n',
         "utf8",
       ),
       writeFile(
@@ -4036,6 +4096,15 @@ export async function runPackagedHostProof(
       frameworkServerErrorHtml,
       "Built framework 500 HTML",
     );
+    for (const [html, label] of [
+      [frameworkNotFoundHtml, "Built framework 404 HTML"],
+      [frameworkServerErrorHtml, "Built framework 500 HTML"],
+    ]) {
+      assert.ok(
+        html.includes(portableThemeAccent),
+        `${label} omitted the separately packaged theme accent.`,
+      );
+    }
     const clientChunkFiles = await listJavaScriptFiles(
       join(hostRoot, ".next", "static"),
     );
@@ -4119,6 +4188,10 @@ export async function runPackagedHostProof(
         )
       ).join("\n");
       const semanticHtml = withoutFocusMarkup(html);
+      assert.ok(
+        semanticHtml.includes(portableThemeAccent),
+        "Server HTML omitted the separately packaged theme accent.",
+      );
       for (const expected of [
         "Renderer Proof",
         "Café + Field Notes",
@@ -4548,6 +4621,7 @@ export async function runPackagedHostProof(
       renderedRoutes: Object.freeze(renderedRoutes),
       runtimeErrorStatus,
       sharpVersion: dependencies.sharpVersion,
+      themePackage: "@example/packed-publication-theme@1.0.0",
       vipsVersion: dependencies.vipsVersion,
     });
   } finally {

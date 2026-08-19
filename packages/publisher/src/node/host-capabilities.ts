@@ -58,6 +58,8 @@ export const AUDIO_DATA_ARTIFACT = "audio";
 export const SEARCH_DATA_ARTIFACT = "search";
 /** The data artifact identifier lazy publication progress is published under. */
 export const PROGRESS_DATA_ARTIFACT = "progress";
+/** The client-safe publication identity used by framework error surfaces. */
+export const PUBLIC_IDENTITY_DATA_ARTIFACT = "public-identity";
 /** The data artifact identifier Updates is published under. */
 export const UPDATES_DATA_ARTIFACT = "updates";
 

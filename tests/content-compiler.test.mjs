@@ -1839,49 +1839,53 @@ test("envelope validation rejects aggregate collection membership before relatio
   ]);
 });
 
-test("compiler rejects reserved host configuration in asset and extension source roles", async () => {
-  const reservedPath = "publisher.config.ts";
-  for (const role of ["asset", "extension"]) {
-    const input = await loadCompilationInput(
-      "canonical-field-notes",
-    );
-    const reservedSource = {
-      path: reservedPath,
-      role,
-      ...(role === "asset"
-        ? { entityId: "rain-gauge" }
-        : { entityId: "station-index" }),
-      mediaType: "application/json",
-      contents: "{}",
-      rawBytes: textBytes("{}"),
-    };
-    const result = compilePublicationContent({
-      ...input,
-      sources: [...input.sources, reservedSource],
-      ...(role === "extension"
-        ? {
-            payloads: [
-              {
-                id: "reserved-host-config",
-                extensionId: "station-index",
-                schema:
-                  "https://example.invalid/schemas/reserved.json",
-                sourcePaths: [reservedPath],
-                data: {},
-              },
-            ],
-          }
-        : {}),
-    });
-    assert.equal(result.valid, false, role);
-    assert.ok(
-      result.diagnostics.some(
-        ({ code, params }) =>
-          code === "content.source.path_reserved" &&
-          params.role === role,
-      ),
-      `${role}: ${validationMessage(result)}`,
-    );
+test("compiler rejects reserved host integration code in asset and extension source roles", async () => {
+  for (const reservedPath of [
+    "publisher.config.ts",
+    "publisher.theme.mjs",
+  ]) {
+    for (const role of ["asset", "extension"]) {
+      const input = await loadCompilationInput(
+        "canonical-field-notes",
+      );
+      const reservedSource = {
+        path: reservedPath,
+        role,
+        ...(role === "asset"
+          ? { entityId: "rain-gauge" }
+          : { entityId: "station-index" }),
+        mediaType: "application/json",
+        contents: "{}",
+        rawBytes: textBytes("{}"),
+      };
+      const result = compilePublicationContent({
+        ...input,
+        sources: [...input.sources, reservedSource],
+        ...(role === "extension"
+          ? {
+              payloads: [
+                {
+                  id: "reserved-host-config",
+                  extensionId: "station-index",
+                  schema:
+                    "https://example.invalid/schemas/reserved.json",
+                  sourcePaths: [reservedPath],
+                  data: {},
+                },
+              ],
+            }
+          : {}),
+      });
+      assert.equal(result.valid, false, role);
+      assert.ok(
+        result.diagnostics.some(
+          ({ code, params }) =>
+            code === "content.source.path_reserved" &&
+            params.role === role,
+        ),
+        `${role}: ${validationMessage(result)}`,
+      );
+    }
   }
 });
 

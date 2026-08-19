@@ -56,6 +56,10 @@ test("the packed renderer builds a thin host with server rendered prose", async 
   assert.equal(result.postcssVersion, "8.5.24");
   assert.equal(result.nanoidVersion, "3.3.18");
   assert.equal(result.sharpVersion, "0.35.3");
+  assert.equal(
+    result.themePackage,
+    "@example/packed-publication-theme@1.0.0",
+  );
   assert.equal(typeof result.vipsVersion, "string");
   assert.equal(result.auditVulnerabilities, 0);
   assert.equal(result.imageContentType, "image/webp");
