@@ -25,7 +25,7 @@ If you wish to allow use of your version of this file only under the terms of th
 // export works with no change here.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import {
   dirname,
   isAbsolute,
@@ -80,9 +80,15 @@ import {
   stagedArtifactPathFor,
   writeHostArtifact,
 } from "../dist/node/materialize.js";
+import {
+  capturePreviewCandidateIdentity,
+  parsePreviewCandidateIdentity,
+  verifyPreviewCandidateIdentity,
+} from "../dist/node/preview-candidate.js";
 
 const defaultRenderer = "@genii-foundation/publisher-next";
 const journalDirectoryName = join(".publisher", "transaction");
+const maximumPreviewIdentityFileBytes = 64 * 1024 * 1024;
 
 const usage = `genii-publisher <command>
 
@@ -96,6 +102,8 @@ Commands
   build           Compile the publication and write the reader artifact.
   status          Report what this host is and what needs doing.
   recover         Restore the baseline left by an interrupted apply.
+  preview identity  Print exact local worktree and candidate byte evidence.
+  preview verify  Compare saved candidate evidence with the current worktree.
 
 Options
   --host <dir>            Host root. Defaults to the working directory.
@@ -114,6 +122,7 @@ Options
   --audience <mode>       public or preview. Defaults to public.
   --check                 Report whether the artifact on disk is current and
                           exit nonzero if it is not. Writes nothing.
+  --identity <file>       Saved preview identity JSON required by preview verify.
   --json                  Emit machine readable output.
   --help                  Show this text.
   --version               Show the application package version.
@@ -137,6 +146,7 @@ function parseArguments(argv) {
     plan: null,
     publication: null,
     audience: "public",
+    identity: null,
     check: false,
     acknowledgeManualSteps: false,
     json: false,
@@ -149,6 +159,7 @@ function parseArguments(argv) {
     ["--plan", "plan"],
     ["--publication", "publication"],
     ["--audience", "audience"],
+    ["--identity", "identity"],
   ]);
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -1603,6 +1614,86 @@ function enginePackagesFor(template) {
   return { [template.renderer]: template.rendererVersion };
 }
 
+function describePreviewIdentity(identity) {
+  return [
+    `Worktree    ${identity.worktreeRoot}`,
+    `Branch      ${identity.branch ?? "detached HEAD"}`,
+    `Commit      ${identity.commit}`,
+    `State       ${identity.dirty ? "dirty" : "clean"}`,
+    `Candidate   ${identity.candidate.digest}`,
+    `Identity    ${identity.identityDigest}`,
+    `Files       ${identity.candidate.entryCount.toLocaleString("en-US")}`,
+    `Bytes       ${identity.candidate.byteCount.toLocaleString("en-US")}`,
+  ].join("\n");
+}
+
+async function runPreviewIdentity(options) {
+  const identity = await capturePreviewCandidateIdentity({
+    hostRoot: resolveHostRoot(options.host),
+  });
+  process.stdout.write(
+    options.json
+      ? `${JSON.stringify(identity, null, 2)}\n`
+      : `${describePreviewIdentity(identity)}\n`,
+  );
+  return 0;
+}
+
+function readPreviewIdentity(path) {
+  if (path === null) {
+    throw new CommandError(
+      "preview verify requires --identity <file> from preview identity --json.",
+    );
+  }
+  const absolute = resolve(path);
+  let parsed;
+  try {
+    const identityFile = statSync(absolute);
+    if (!identityFile.isFile()) {
+      throw new Error("the evidence path is not a regular file");
+    }
+    if (identityFile.size > maximumPreviewIdentityFileBytes) {
+      throw new Error(
+        `the evidence file exceeds ${maximumPreviewIdentityFileBytes.toLocaleString("en-US")} bytes`,
+      );
+    }
+    const identityText = readFileSync(absolute, "utf8");
+    if (Buffer.byteLength(identityText, "utf8") > maximumPreviewIdentityFileBytes) {
+      throw new Error("the evidence file grew beyond the preview identity limit while being read");
+    }
+    parsed = JSON.parse(identityText);
+  } catch (error) {
+    throw new CommandError(
+      `Could not read preview identity ${absolute}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  return parsePreviewCandidateIdentity(parsed);
+}
+
+async function runPreviewVerify(options) {
+  const verification = await verifyPreviewCandidateIdentity({
+    hostRoot: resolveHostRoot(options.host),
+    expected: readPreviewIdentity(options.identity),
+  });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(verification, null, 2)}\n`);
+  } else if (verification.matches) {
+    process.stdout.write(
+      `Preview identity matches.\n${describePreviewIdentity(verification.actual)}\n`,
+    );
+  } else {
+    process.stdout.write(
+      `Preview identity is stale.\n` +
+        `Changed     ${verification.mismatches.join(", ")}\n` +
+        `Expected    ${verification.expected.identityDigest}\n` +
+        `Actual      ${verification.actual.identityDigest}\n`,
+    );
+  }
+  return verification.matches ? 0 : 1;
+}
+
 async function main(argv) {
   const options = parseArguments(argv);
   if (options.help || options.command.length === 0) {
@@ -1634,6 +1725,10 @@ async function main(argv) {
       return await runStatus(options);
     case "recover":
       return runRecover(options);
+    case "preview identity":
+      return await runPreviewIdentity(options);
+    case "preview verify":
+      return await runPreviewVerify(options);
     default:
       throw new CommandError(
         `Unknown command ${JSON.stringify(command)}.\n\n${usage}`,

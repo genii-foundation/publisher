@@ -453,13 +453,18 @@ test("packed Publisher application installs offline and loads an unrelated publi
   type ResolvedPublicationSourceGraph,
 } from "@genii-foundation/publisher";
 import {
+  capturePreviewCandidateIdentity,
   compileLoadedPublicationContent,
   loadPublicationCompilationSources,
+  parsePreviewCandidateIdentity,
   PUBLISHER_SOURCE_LOADER_LIMITS,
+  verifyPreviewCandidateIdentity,
+  type CapturePreviewCandidateIdentityInput,
   type CompileLoadedPublicationContentInput,
   type LoadedPublicationCompilationSources,
   type LoadPublicationCompilationSourcesInput,
   type LoadPublicationCompilationSourcesResult,
+  type PreviewCandidateIdentity,
   type PublicationSourceLoaderLimits,
 } from "@genii-foundation/publisher/node";
 
@@ -468,6 +473,17 @@ const input: LoadPublicationCompilationSourcesInput = {
 };
 const pending: Promise<LoadPublicationCompilationSourcesResult> =
   loadPublicationCompilationSources(input);
+const previewPending: Promise<PreviewCandidateIdentity> =
+  capturePreviewCandidateIdentity(({
+    hostRoot: "/absolute/repository",
+  }) satisfies CapturePreviewCandidateIdentityInput);
+declare const preview: PreviewCandidateIdentity;
+const parsedPreview: PreviewCandidateIdentity =
+  parsePreviewCandidateIdentity(preview);
+const verifiedPreview = verifyPreviewCandidateIdentity({
+  hostRoot: "/absolute/repository",
+  expected: parsedPreview,
+});
 const version: string = PUBLISHER_VERSION;
 const limits: PublicationSourceLoaderLimits =
   PUBLISHER_SOURCE_LOADER_LIMITS;
@@ -500,7 +516,7 @@ async function useLoaded(): Promise<readonly Diagnostic[]> {
   });
   return validation.diagnostics;
 }
-void [version, limits, forged, compiled, useLoaded];
+void [version, limits, forged, compiled, previewPending, verifiedPreview, useLoaded];
 `,
         "utf8",
       ),
@@ -656,14 +672,19 @@ void loadPublicationCompilationSources;
     await writeFile(
       verifierPath,
       `import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { compileMarkdownWork } from "@genii-foundation/publisher-content";
 import { PUBLISHER_VERSION } from "@genii-foundation/publisher";
 import {
+  capturePreviewCandidateIdentity,
   compileLoadedPublicationContent,
   loadPublicationCompilationSources,
+  parsePreviewCandidateIdentity,
   PUBLISHER_SOURCE_LOADER_LIMITS,
+  verifyPreviewCandidateIdentity,
 } from "@genii-foundation/publisher/node";
 
 assert.equal(PUBLISHER_VERSION, "0.1.0-alpha.0");
@@ -732,6 +753,37 @@ assert.equal(
   "publisher.compile_input.invalid",
 );
 assert.equal(JSON.stringify(result).includes(publicationRoot), false);
+const previewRoot = join(import.meta.dirname, "preview-candidate");
+await mkdir(previewRoot);
+await writeFile(join(previewRoot, "candidate.txt"), "packed bytes\\n", "utf8");
+const git = (args) => execFileSync("git", args, {
+  cwd: previewRoot,
+  encoding: "utf8",
+  env: {
+    ...process.env,
+    GIT_AUTHOR_NAME: "Packed Preview",
+    GIT_AUTHOR_EMAIL: "preview@example.test",
+    GIT_COMMITTER_NAME: "Packed Preview",
+    GIT_COMMITTER_EMAIL: "preview@example.test",
+  },
+});
+git(["init", "--quiet", "--initial-branch=main"]);
+git(["add", "candidate.txt"]);
+git(["commit", "--quiet", "-m", "candidate"]);
+const previewIdentity = await capturePreviewCandidateIdentity({
+  hostRoot: previewRoot,
+});
+assert.equal(previewIdentity.branch, "main");
+assert.equal(previewIdentity.dirty, false);
+assert.deepEqual(
+  parsePreviewCandidateIdentity(JSON.parse(JSON.stringify(previewIdentity))),
+  previewIdentity,
+);
+const previewVerification = await verifyPreviewCandidateIdentity({
+  hostRoot: previewRoot,
+  expected: previewIdentity,
+});
+assert.equal(previewVerification.matches, true);
 `,
       "utf8",
     );

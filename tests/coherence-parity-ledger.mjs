@@ -457,8 +457,13 @@ export const READER_PARITY = Object.freeze([
     id: "reader.preview.candidate_identity",
     capability: "A local preview proving its exact worktree, branch, commit, and candidate bytes",
     home: "engine",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "Publisher replaces a digest over Git presentation with a versioned, inspectable byte inventory, no-follow symbolic-link evidence, repeated descriptor reads, concurrent Git checks, strict saved-evidence parsing, and explicit stale verification.",
+    evidence: {
+      decision: "docs/architecture/0048-exact-local-preview-candidate-identity.md",
+      export: "capturePreviewCandidateIdentity",
+      file: "tests/preview-candidate-identity.test.mjs",
+    },
     sourcePaths: ["scripts/dev/preview.mjs"],
   },
   {

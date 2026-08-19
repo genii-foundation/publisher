@@ -42,9 +42,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 41 upgraded | 41 | Publisher implements a stronger checked contract. |
+| 42 upgraded | 42 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 1 planned | 1 | Accepted Publisher scope is not implemented yet. |
+| 0 planned | 0 | No inventoried generic capability remains merely planned. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -343,13 +343,22 @@ census, but the generic engine contract now exists.
 The protocol ceilings remain sufficient for that adoption: 4,999 works, 50,000
 sections, and 10,000 continuity redirects.
 
-## Planned application gaps
+### Exact local preview candidate identity
+
+Publisher now captures a versioned, inspectable inventory for every present
+tracked or untracked, nonignored candidate path. Exact file bytes and raw
+symbolic-link targets are bound to the canonical worktree, branch or detached
+state, full commit, and dirty state. Capture rejects unresolved indexes,
+submodules, path ambiguity, special files, unstable descriptor reads, and Git or
+directory changes observed during capture. Saved evidence is authenticated again
+before verification. ADR 0048 records the engine and host-preview boundary.
+
+## Remaining migration gap
 
 The following are accepted scope, not release blockers waiting for another
 product decision:
 
-1. Add exact local preview candidate identity for branch, commit, worktree, and bytes.
-2. Adopt Coherence through a reviewed migration plan with dual-read or
+1. Adopt Coherence through a reviewed migration plan with dual-read or
    copy-and-verify state compatibility.
 
 ## Material that remains Coherence-owned
@@ -419,5 +428,5 @@ The migration is not accepted until all of these hold:
     package release, or production deployment.
 
 The machine-checked inventory lives in
-`tests/coherence-parity-ledger.mjs`. Planned capabilities remain failures of the
-release claim even when their temporary Coherence implementation still works.
+`tests/coherence-parity-ledger.mjs`. Any future planned capability remains a
+failure of the release claim even when a temporary Coherence implementation works.

@@ -462,6 +462,32 @@ A renderer that declares no capability set at all is refused rather than assumed
 capable. An absent declaration and a claim of full support are different claims,
 and only one of them is safe to guess at.
 
+## Prove a local preview candidate
+
+After your managed preview has completed any source-generating startup step,
+capture the exact Git candidate it is serving:
+
+```sh
+genii-publisher preview identity --json > .publisher/preview.json
+```
+
+The evidence names the canonical worktree, branch or detached state, full HEAD
+commit, dirty state, and every present tracked or untracked, nonignored source
+path with its byte digest. `.publisher/` is ignored by the canonical host. If you
+choose another evidence path, ignore it before capture. Saving evidence as an
+ordinary untracked source file changes the candidate and makes the record stale.
+
+Verify the handoff without writing anything:
+
+```sh
+genii-publisher preview verify --identity .publisher/preview.json
+```
+
+A stale verification exits nonzero and reports whether the worktree, branch,
+commit, dirty state, candidate bytes, or full identity changed. These commands do
+not start or stop the preview. The host preview manager remains responsible for
+the URL, process, and readiness check it binds to this candidate evidence.
+
 ## Command summary
 
 | Command | Writes | Needs a clean tree | Exit nonzero when |
@@ -476,6 +502,8 @@ and only one of them is safe to guess at.
 | `rollback plan` | no | no | a file changed since the apply |
 | `rollback apply` | yes | no | a file changed since the apply |
 | `recover` | restores a baseline | no | never |
+| `preview identity` | no | no | the candidate cannot be captured exactly |
+| `preview verify` | no | no | saved evidence is invalid or stale |
 
 Add `--json` to any of them for machine readable output. Stdout is always a JSON
 document, on success and on failure, and the exit code says which. There are two

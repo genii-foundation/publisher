@@ -49,5 +49,6 @@ These records define the accepted foundation of GENII Publisher.
 45. [ADR 0045: Route-preserving narration intent](./0045-route-preserving-narration-intent.md)
 46. [ADR 0046: Atomic offline publication packages](./0046-atomic-offline-publication-packages.md)
 47. [ADR 0047: Accessible manuscript extensions](./0047-accessible-manuscript-extensions.md)
+48. [ADR 0048: Exact local preview candidate identity](./0048-exact-local-preview-candidate-identity.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

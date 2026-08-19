@@ -2,6 +2,12 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. The GENII Publisher application package is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-19, GENII Foundation
+
+- Added versioned, inspectable local preview candidate identity for exact worktree, branch, commit, state, and source bytes.
+- Added fail-closed capture and verification for unstable files, symbolic links, special paths, unresolved indexes, submodules, and concurrent Git changes.
+- Exposed read-only preview identity and verification commands with packed-package consumer proof.
+
 ## 2026-08-18, GENII Foundation
 
 - Projected, materialized, checked, and reported the required progress catalog beside each Reader artifact.

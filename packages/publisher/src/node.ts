@@ -103,3 +103,20 @@ export type {
   LoadPublicationCompilationSourcesResult,
   PublicationSourceLoaderLimits,
 } from "./node/types.js";
+export {
+  PREVIEW_CANDIDATE_IDENTITY_VERSION,
+  PREVIEW_CANDIDATE_LIMITS,
+  PreviewCandidateIdentityError,
+  capturePreviewCandidateIdentity,
+  parsePreviewCandidateIdentity,
+  verifyPreviewCandidateIdentity,
+} from "./node/preview-candidate.js";
+export type {
+  CapturePreviewCandidateIdentityInput,
+  PreviewCandidateEntry,
+  PreviewCandidateEntryKind,
+  PreviewCandidateIdentity,
+  PreviewCandidateMismatch,
+  PreviewCandidateVerification,
+  VerifyPreviewCandidateIdentityInput,
+} from "./node/preview-candidate.js";
