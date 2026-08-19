@@ -27,7 +27,11 @@ import type {
   ReaderOfflineCatalog,
 } from "@genii-foundation/publisher-reader/offline";
 import type { Metadata, NextConfig } from "next";
-import type { ReactElement, ReactNode } from "react";
+import type {
+  ComponentType,
+  ReactElement,
+  ReactNode,
+} from "react";
 
 import type {
   PublisherNextErrorIdentity,
@@ -50,6 +54,8 @@ export const PUBLISHER_NEXT_EXTENSION_SLOTS = Object.freeze([
   "page.before-main",
   "page.after-main",
 ] as const);
+export const PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT =
+  "page.client" as const;
 export const PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES =
   Object.freeze({
     "next@16.2.12": Object.freeze({
@@ -90,13 +96,21 @@ export interface PublisherNextExtensionRenderInput {
   readonly serverData?: JSONValue;
 }
 
+export interface PublisherNextExtensionClientProps {
+  readonly mount:
+    typeof PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT;
+  readonly page: PublisherNextExtensionPageContext;
+  readonly clientData?: JSONValue;
+}
+
 export interface PublisherNextExtensionRenderer {
   readonly kind: "genii.publisher.next-extension";
   readonly apiVersion: typeof PUBLISHER_NEXT_EXTENSION_API_VERSION;
   readonly rendererCompatibility: string;
-  readonly renderSlot: (
+  readonly renderSlot?: (
     input: PublisherNextExtensionRenderInput,
   ) => ReactNode | Promise<ReactNode>;
+  readonly Client?: ComponentType<PublisherNextExtensionClientProps>;
 }
 
 export interface PublisherNextThemeTokens {

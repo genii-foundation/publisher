@@ -11,36 +11,52 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-export {
-  defaultPublisherNextTheme,
-  resolveDefaultPublisherNextTheme,
-} from "./theme/default.js";
-export {
-  validatePublisherNextThemeInstance,
-} from "./theme/validation.js";
-export {
-  PUBLISHER_NEXT_APPLICATION_ARTIFACT_KIND,
-  PUBLISHER_NEXT_APPLICATION_ARTIFACT_MEDIA_TYPE,
-  PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH,
-  PUBLISHER_NEXT_APPLICATION_SCHEMA_URL,
-  PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
-  PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT,
-  PUBLISHER_NEXT_EXTENSION_API_VERSION,
-  PUBLISHER_NEXT_EXTENSION_SLOTS,
-  PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES,
-  PUBLISHER_NEXT_THEME_API_VERSION,
-  PUBLISHER_NEXT_UPDATES_API_VERSION,
-  PUBLISHER_NEXT_VERSION,
-} from "./types.js";
-export type {
-  PublisherNextExtensionClientProps,
-  PublisherNextExtensionPageContext,
-  PublisherNextExtensionRenderer,
-  PublisherNextExtensionRenderInput,
-  PublisherNextExtensionSlot,
-  PublisherNextJsonObject,
-  PublisherNextTheme,
-  PublisherNextThemeInstance,
-  PublisherNextThemeTokens,
-  ResolvedPublisherNextTheme,
-} from "./types.js";
+"use client";
+
+import {
+  Component,
+  type ReactElement,
+  type ReactNode,
+} from "react";
+
+export interface PublisherNextExtensionClientBoundaryProps {
+  readonly children: ReactNode;
+  readonly extensionId: string;
+}
+
+interface PublisherNextExtensionClientBoundaryState {
+  readonly failed: boolean;
+}
+
+export class PublisherNextExtensionClientBoundary extends Component<
+  PublisherNextExtensionClientBoundaryProps,
+  PublisherNextExtensionClientBoundaryState
+> {
+  override state: PublisherNextExtensionClientBoundaryState = {
+    failed: false,
+  };
+
+  static getDerivedStateFromError(): PublisherNextExtensionClientBoundaryState {
+    return { failed: true };
+  }
+
+  override componentDidCatch(): void {
+    // The extension ID is already present on the engine-owned wrapper. Error
+    // values stay private because client extensions can throw arbitrary data.
+  }
+
+  override render(): ReactElement {
+    if (this.state.failed) {
+      return (
+        <p
+          data-publisher-extension-error={this.props.extensionId}
+          lang="en"
+          role="status"
+        >
+          Extension unavailable.
+        </p>
+      );
+    }
+    return <>{this.props.children}</>;
+  }
+}

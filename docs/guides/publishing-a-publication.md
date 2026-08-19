@@ -43,9 +43,10 @@ export default Object.freeze([stationIndex]);
 ```
 
 The registration order must match `publication.json`. A manifest package string
-never imports code. `content.project` emits a separate build-bound artifact, and
-the official Next renderer invokes only explicitly granted server slots. The
-engine never creates or rewrites `publisher.extensions.mjs`.
+never imports code. `content.project` emits a separate build-bound artifact. The
+official Next renderer invokes only explicitly granted server slots and client
+mounts. A client extension receives only its browser projection and narrow page
+identity. The engine never creates or rewrites `publisher.extensions.mjs`.
 
 Node 22.12.0 or newer, and npm 10.9.0.
 

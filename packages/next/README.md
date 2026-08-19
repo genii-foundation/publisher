@@ -548,10 +548,12 @@ chunks.
 
 ## Extensions
 
-The official renderer implements the `renderer.slot` grant through two fixed
-server slots, `page.before-main` and `page.after-main`. Both sit inside the
-engine-owned `main` element and before the required attribution footer. The
-not-found and framework error surfaces do not invoke extensions.
+The official renderer implements `renderer.slot` through two fixed server
+slots, `page.before-main` and `page.after-main`. It implements
+`renderer.client` through one fixed `page.client` mount after both server slots.
+All three sit inside the engine-owned `main` element and before the required
+attribution footer. The not-found and framework error surfaces do not invoke
+extensions.
 
 Install an extension package explicitly and register it in author-owned host
 code:
@@ -577,9 +579,35 @@ envelope, source evidence, another extension's data, provider configuration, or
 shell authority. The renderer wraps output in an engine-owned `aside` naming the
 extension and slot.
 
-`renderer.client`, `host.route`, and `host.handler` are not implemented. Browser
-extension data is rejected. Capability grants decide which documented interface
-Publisher invokes, but they do not sandbox explicitly imported JavaScript.
+A client adapter is an explicitly imported Client Component reference on the
+same renderer object:
+
+```js
+// client.js
+"use client";
+
+export function Client({ clientData, mount, page }) {
+  return <button type="button">{clientData.label}</button>;
+}
+```
+
+The engine mounts it only with a `renderer.client` grant. It receives
+`page.client`, the same narrow page context as server slots, and only its own
+build-projected `clientData`. It never receives `serverData`, manuscript blocks,
+the Reader envelope, another extension's data, provider configuration, or shell
+authority. An engine-owned wrapper names the extension and mount. An engine-owned
+client error boundary replaces a failed extension with a small unavailable
+message while preserving the manuscript and attribution.
+
+Browser projection data is public data. It may be serialized into server HTML
+and the React transport, but it is not compiled into the extension package.
+The packed proof requires the client module in browser chunks, keeps both
+projection sentinels out of those static chunks, hydrates a real interaction,
+and contains a deliberate client failure.
+
+`host.route` and `host.handler` are not implemented. Capability grants decide
+which documented interface Publisher invokes, but they do not sandbox explicitly
+imported JavaScript.
 
 ## Updates
 

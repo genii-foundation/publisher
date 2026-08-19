@@ -66,6 +66,9 @@ import {
   PublisherPageView,
 } from "../components/pages.js";
 import {
+  PublisherNextExtensionClientBoundary,
+} from "../client/extension-boundary.js";
+import {
   PublisherReaderNarrationProvider,
 } from "../client/reader-narration-provider.js";
 import {
@@ -104,6 +107,7 @@ import {
   PUBLISHER_NEXT_APPLICATION_SCHEMA_URL,
   PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
   PUBLISHER_NEXT_EXTENSION_API_VERSION,
+  PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT,
   PUBLISHER_NEXT_EXTENSION_SLOTS,
   PUBLISHER_NEXT_THEME_API_VERSION,
   PUBLISHER_NEXT_UPDATES_API_VERSION,
@@ -175,6 +179,7 @@ interface ResolvedExtensionEntry {
   readonly capabilities: readonly ExtensionCapability[];
   readonly projectionHash: Sha256Digest;
   readonly renderer: PublisherNextExtensionRenderer | null;
+  readonly clientData?: JSONValue;
   readonly serverData?: JSONValue;
 }
 
@@ -529,6 +534,7 @@ const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/u;
 const SUPPORTED_EXTENSION_CAPABILITIES = Object.freeze([
   "content.project",
   "renderer.slot",
+  "renderer.client",
 ] as const);
 
 function snapshotExtensionData(
@@ -733,11 +739,15 @@ function resolveExtensions(
         "extensionIdentity",
       );
     }
-    if (valueOf(entry, "clientData") !== undefined) {
+    const clientData = valueOf(entry, "clientData");
+    if (
+      clientData !== undefined &&
+      !entryCapabilities.includes("renderer.client")
+    ) {
       return failure(
-        "next.extension.client_unsupported",
+        "next.extension.client_data_ungranted",
         `${path}/clientData`,
-        "The official renderer does not invoke renderer.client extensions yet.",
+        "Browser data requires the renderer.client grant.",
         "extensionCapability",
       );
     }
@@ -746,14 +756,24 @@ function resolveExtensions(
     );
     const rendererValue = valueOf(registration, "renderer");
     let renderer: PublisherNextExtensionRenderer | null = null;
-    if (granted.includes("renderer.slot")) {
+    if (
+      granted.includes("renderer.slot") ||
+      granted.includes("renderer.client")
+    ) {
       const inspectedRenderer = inspectRecord(
         rendererValue,
-        ["kind", "apiVersion", "rendererCompatibility", "renderSlot"],
+        ["kind", "apiVersion", "rendererCompatibility"],
+        ["Client", "renderSlot"],
       );
       const rendererCompatibility = inspectedRenderer === null
         ? undefined
         : valueOf(inspectedRenderer, "rendererCompatibility");
+      const renderSlot = inspectedRenderer === null
+        ? undefined
+        : valueOf(inspectedRenderer, "renderSlot");
+      const Client = inspectedRenderer === null
+        ? undefined
+        : valueOf(inspectedRenderer, "Client");
       if (
         inspectedRenderer === null ||
         valueOf(inspectedRenderer, "kind") !==
@@ -765,12 +785,15 @@ function resolveExtensions(
         !satisfies(PUBLISHER_NEXT_VERSION, rendererCompatibility, {
           includePrerelease: true,
         }) ||
-        typeof valueOf(inspectedRenderer, "renderSlot") !== "function"
+        (granted.includes("renderer.slot") &&
+          typeof renderSlot !== "function") ||
+        (granted.includes("renderer.client") &&
+          typeof Client !== "function")
       ) {
         return failure(
           "next.extension.renderer_invalid",
           `/extensions/${index}/renderer`,
-          "A renderer.slot grant requires one compatible official Next renderer adapter.",
+          "Renderer grants require one compatible official Next adapter with every granted entry point.",
           "extensionRenderer",
         );
       }
@@ -778,10 +801,20 @@ function resolveExtensions(
         kind: "genii.publisher.next-extension" as const,
         apiVersion: PUBLISHER_NEXT_EXTENSION_API_VERSION,
         rendererCompatibility,
-        renderSlot: valueOf(
-          inspectedRenderer,
-          "renderSlot",
-        ) as PublisherNextExtensionRenderer["renderSlot"],
+        ...(granted.includes("renderer.slot")
+          ? {
+              renderSlot: renderSlot as NonNullable<
+                PublisherNextExtensionRenderer["renderSlot"]
+              >,
+            }
+          : {}),
+        ...(granted.includes("renderer.client")
+          ? {
+              Client: Client as NonNullable<
+                PublisherNextExtensionRenderer["Client"]
+              >,
+            }
+          : {}),
       });
     }
     entries.push(Object.freeze({
@@ -791,6 +824,9 @@ function resolveExtensions(
       capabilities: granted,
       projectionHash: hashCanonicalJson(entryValue as JSONValue),
       renderer,
+      ...(clientData === undefined
+        ? {}
+        : { clientData: clientData as JSONValue }),
       ...(valueOf(entry, "serverData") === undefined
         ? {}
         : { serverData: valueOf(entry, "serverData") as JSONValue }),
@@ -836,15 +872,16 @@ async function renderExtensionSlot(
   const context = extensionPageContext(page);
   const rendered: ReactElement[] = [];
   for (const extension of extensions?.entries ?? []) {
+    const renderSlot = extension.renderer?.renderSlot;
     if (
       !extension.capabilities.includes("renderer.slot") ||
-      extension.renderer === null
+      renderSlot === undefined
     ) {
       continue;
     }
     let body;
     try {
-      body = await extension.renderer.renderSlot(Object.freeze({
+      body = await renderSlot(Object.freeze({
         slot,
         page: context,
         ...(extension.serverData === undefined
@@ -864,6 +901,43 @@ async function renderExtensionSlot(
       >
         {body}
       </aside>,
+    );
+  }
+  return rendered;
+}
+
+function renderExtensionClients(
+  extensions: ResolvedExtensionsState | null,
+  page: PublisherNextPage,
+): ReactElement[] {
+  const context = extensionPageContext(page);
+  const rendered: ReactElement[] = [];
+  for (const extension of extensions?.entries ?? []) {
+    const Client = extension.renderer?.Client;
+    if (
+      !extension.capabilities.includes("renderer.client") ||
+      Client === undefined
+    ) {
+      continue;
+    }
+    rendered.push(
+      <div
+        data-publisher-client={PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT}
+        data-publisher-extension={extension.id}
+        key={`${PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT}:${extension.id}`}
+      >
+        <PublisherNextExtensionClientBoundary
+          extensionId={extension.id}
+        >
+          <Client
+            mount={PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT}
+            page={context}
+            {...(extension.clientData === undefined
+              ? {}
+              : { clientData: extension.clientData })}
+          />
+        </PublisherNextExtensionClientBoundary>
+      </div>,
     );
   }
   return rendered;
@@ -2226,9 +2300,14 @@ export async function createPublicationNextApplication(
         "page.after-main",
         page,
       );
+      const clientExtensions = renderExtensionClients(
+        extensions,
+        page,
+      );
       return PublisherPageView({
         afterMain,
         beforeMain,
+        clientExtensions,
         homePath: resolver.homePath,
         markdownForBlock,
         page,

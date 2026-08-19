@@ -44,6 +44,7 @@ export type {
   PublisherNextUpdatesInstance,
   PublisherNextUpdatesPage,
   PublisherNextUpdatesView,
+  PublisherNextExtensionClientProps,
   PublisherNextExtensionPageContext,
   PublisherNextExtensionRenderer,
   PublisherNextExtensionRenderInput,

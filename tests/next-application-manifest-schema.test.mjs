@@ -218,3 +218,29 @@ test("the application manifest schema rejects invalid adapter API and package fi
     assertInvalid(candidate);
   }
 });
+
+test("the application manifest schema records every implemented extension renderer grant", async () => {
+  const manifest = structuredClone(
+    await createRealApplicationManifest(),
+  );
+  manifest.extensions = {
+    schemaVersion: "1.0",
+    buildId: `sha256:${"1".repeat(64)}`,
+    entries: [{
+      id: "reader-tools",
+      package: "@example/reader-tools",
+      version: "1.0.0",
+      capabilities: [
+        "content.project",
+        "renderer.slot",
+        "renderer.client",
+      ],
+      projectionHash: `sha256:${"2".repeat(64)}`,
+      rendererApiVersion: "1.0",
+      rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+    }],
+  };
+  assertValid(manifest);
+  manifest.extensions.entries[0].capabilities.push("host.route");
+  assertInvalid(manifest);
+});

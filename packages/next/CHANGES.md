@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Added the fixed `page.client` extension mount with exact grants, isolated browser projection, narrow page context, and engine-owned error containment.
+- Extended the packed extension through a real Client Component, static chunk separation, hydrated interaction, and contained failure proof.
 - Advanced the host contract to 0.11.0 with explicit author extension registration and a required build-bound extension artifact.
 - Added two engine-owned server extension slots with exact grants, narrow immutable page context, deterministic identity, and safe failure handling.
 - Proved a separately packed extension through clean installation, frozen offline reinstallation, server rendering, and browser chunk exclusion of server-only data.

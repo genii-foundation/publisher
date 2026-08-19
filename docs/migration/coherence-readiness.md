@@ -407,10 +407,11 @@ these concerns. It does not own the values that make Coherence itself.
 
 The foundation portability evidence now includes two neutral publication shapes,
 an independently packed theme, and an independently packed extension. The clean
-host performs a frozen offline reinstall, renders both extension slots, and
-proves that extension server data is absent from browser chunks. This closes the
-generic override proof. It does not replace the separate exact Coherence
-candidate and preview acceptance gates below.
+host performs a frozen offline reinstall, renders both extension slots, hydrates
+an isolated extension client, contains its deliberate failure, and proves that
+server and client projection data are absent from static browser chunks. This
+closes the generic override proof. It does not replace the separate exact
+Coherence candidate and preview acceptance gates below.
 
 ## Coherence acceptance gates
 

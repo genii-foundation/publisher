@@ -12,6 +12,14 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 import assert from "node:assert/strict";
+import {
+  cpSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -19,6 +27,9 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import {
+  hashCanonicalJson,
+} from "../packages/content/dist/index.js";
 import {
   buildPublicationReader,
 } from "../packages/publisher/dist/node.js";
@@ -33,6 +44,8 @@ function extensionRegistration({
   packageName,
   capabilities,
   calls = [],
+  clientCalls = [],
+  clientMarker = "EXTENSION_CLIENT_DATA",
   serverMarker = "EXTENSION_SERVER_DATA",
   renderer = true,
   rendererCompatibility = ">=0.1.0-alpha.0 <0.2.0",
@@ -55,6 +68,14 @@ function extensionRegistration({
               publicationId: content.publicationId,
               config,
             },
+            ...(capabilities.includes("renderer.client")
+              ? {
+                  clientData: {
+                    marker: clientMarker,
+                    publicationId: content.publicationId,
+                  },
+                }
+              : {}),
           },
           diagnostics: [],
         };
@@ -66,6 +87,17 @@ function extensionRegistration({
             kind: "genii.publisher.next-extension",
             apiVersion: "1.0",
             rendererCompatibility,
+            Client(input) {
+              clientCalls.push(input);
+              return createElement(
+                "button",
+                {
+                  "data-extension-client": input.clientData?.marker,
+                  type: "button",
+                },
+                `${input.mount}:${input.page.path}`,
+              );
+            },
             renderSlot(input) {
               calls.push(input);
               return createElement(
@@ -78,6 +110,29 @@ function extensionRegistration({
         }
       : {}),
   };
+}
+
+function clientFixture(t) {
+  const root = mkdtempSync(join(tmpdir(), "publisher-client-extension-"));
+  t.after(() => rmSync(root, { force: true, recursive: true }));
+  const publicationRoot = join(root, "publication");
+  cpSync(
+    join(repositoryRoot, "fixtures", "canonical-field-notes"),
+    publicationRoot,
+    { recursive: true },
+  );
+  const manifestPath = join(publicationRoot, "publication.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.extensions[0].capabilities = [
+    "content.project",
+    "renderer.client",
+  ];
+  writeFileSync(
+    manifestPath,
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    "utf8",
+  );
+  return publicationRoot;
 }
 
 async function buildFixture(name, registration) {
@@ -192,6 +247,56 @@ test("work slot context carries identity but no manuscript body", async () => {
   assert.equal(JSON.stringify(input.page).includes("markdown"), false);
 });
 
+test("granted client code receives only its browser projection at one fixed mount", async (t) => {
+  const clientCalls = [];
+  const registration = extensionRegistration({
+    id: "station-index",
+    packageName: "@example/station-index-extension",
+    capabilities: ["content.project", "renderer.client"],
+    clientCalls,
+  });
+  const built = await buildPublicationReader({
+    publicationRoot: clientFixture(t),
+    audience: "public",
+    extensions: [registration],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const created = await createFromBuild(built.value, [registration]);
+  assert.ok(created.valid, JSON.stringify(created.diagnostics, null, 2));
+  const resolved = created.value.resolveRoute(undefined);
+  assert.equal(resolved.status, "resolved");
+  const html = renderToStaticMarkup(
+    await created.value.renderPage(resolved.page),
+  );
+  assert.match(
+    html,
+    /data-publisher-client="page\.client" data-publisher-extension="station-index"/u,
+  );
+  assert.match(
+    html,
+    /data-extension-client="EXTENSION_CLIENT_DATA"/u,
+  );
+  assert.doesNotMatch(html, /EXTENSION_SERVER_DATA/u);
+  assert.equal(clientCalls.length, 1);
+  const input = clientCalls[0];
+  assert.deepEqual(Object.keys(input).sort(), [
+    "clientData",
+    "mount",
+    "page",
+  ]);
+  assert.equal(input.mount, "page.client");
+  assert.equal(input.clientData.marker, "EXTENSION_CLIENT_DATA");
+  assert.equal(Object.hasOwn(input, "serverData"), false);
+  assert.equal(Object.hasOwn(input.page, "blocks"), false);
+  assert.equal(Object.hasOwn(input.page, "reader"), false);
+  assert.equal(
+    created.value.manifest.extensions.entries[0].capabilities.includes(
+      "renderer.client",
+    ),
+    true,
+  );
+});
+
 test("an ungranted renderer object never widens content.project authority", async () => {
   const calls = [];
   const registration = extensionRegistration({
@@ -234,6 +339,28 @@ test("artifact identity, registry identity, grants, and adapters fail closed", a
     }),
     "next.extension.data_hash_mismatch",
   );
+  const ungrantedClientData = structuredClone(
+    built.extensions.envelope,
+  );
+  ungrantedClientData.extensions[0].clientData = {
+    marker: "UNGRANTED",
+  };
+  ungrantedClientData.buildId = hashCanonicalJson({
+    schemaVersion: ungrantedClientData.schemaVersion,
+    publicationId: ungrantedClientData.publicationId,
+    engineVersion: ungrantedClientData.engineVersion,
+    readerBuildId: ungrantedClientData.readerBuildId,
+    extensions: ungrantedClientData.extensions,
+  });
+  assertDiagnostic(
+    await createPublicationNextApplication({
+      reader: built.reader,
+      extensionData: ungrantedClientData,
+      extensions: [registration],
+      updatesData: built.updates.envelope,
+    }),
+    "next.extension.client_data_ungranted",
+  );
   assertDiagnostic(
     await createFromBuild(built, []),
     "next.extension.registration_set_invalid",
@@ -253,6 +380,30 @@ test("artifact identity, registry identity, grants, and adapters fail closed", a
       capabilities: ["content.project", "renderer.slot"],
       rendererCompatibility: ">=9",
     })]),
+    "next.extension.renderer_invalid",
+  );
+});
+
+test("a client grant requires a compatible client component", async (t) => {
+  const registration = extensionRegistration({
+    id: "station-index",
+    packageName: "@example/station-index-extension",
+    capabilities: ["content.project", "renderer.client"],
+  });
+  const built = await buildPublicationReader({
+    publicationRoot: clientFixture(t),
+    audience: "public",
+    extensions: [registration],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  assertDiagnostic(
+    await createFromBuild(built.value, [{
+      ...registration,
+      renderer: {
+        ...registration.renderer,
+        Client: undefined,
+      },
+    }]),
     "next.extension.renderer_invalid",
   );
 });

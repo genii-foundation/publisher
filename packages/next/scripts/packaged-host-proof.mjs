@@ -643,6 +643,96 @@ async function assertHydratedErrorAttribution({
   }
 }
 
+async function assertHydratedExtensionClient({
+  browser,
+  clientDataSentinel,
+  clientRenderSentinel,
+  serverDataSentinel,
+  url,
+}) {
+  const page = await openDevToolsPage(browser);
+  const expression = (click) => [
+    "(() => {",
+    '  const root = document.querySelector(\'[data-publisher-client="page.client"][data-publisher-extension="packed-publication-extension"]\');',
+    '  const button = root?.querySelector("button");',
+    ...(click ? ["  button?.click();"] : []),
+    "  return {",
+    '    attribution: document.querySelectorAll(\'[data-publisher-attribution="required"]\').length,',
+    '    complete: document.readyState === "complete",',
+    '    failed: root?.querySelector(\'[data-publisher-extension-error="packed-publication-extension"]\')?.innerText ?? "",',
+    '    heading: document.querySelector("main h1")?.innerText ?? "",',
+    '    marker: button?.getAttribute("data-packed-extension-client") ?? null,',
+    '    text: button?.innerText ?? "",',
+    `    hasServerData: (root?.innerText ?? "").includes(${JSON.stringify(serverDataSentinel)}),`,
+    "  };",
+    "})()",
+  ].join("\n");
+  const evaluate = async (click = false) => {
+    const evaluated = await page.send("Runtime.evaluate", {
+      expression: expression(click),
+      returnByValue: true,
+    });
+    if (evaluated.exceptionDetails !== undefined) {
+      throw new Error(
+        `Extension client evaluation failed: ${JSON.stringify(evaluated.exceptionDetails)}`,
+      );
+    }
+    return evaluated.result?.value;
+  };
+  try {
+    const navigation = await page.send("Page.navigate", { url });
+    assert.equal(
+      navigation.errorText,
+      undefined,
+      `Extension client navigation failed: ${navigation.errorText}`,
+    );
+    let state;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      state = await evaluate();
+      if (
+        state?.complete === true &&
+        state.marker === clientDataSentinel &&
+        state.text.includes(clientRenderSentinel) &&
+        state.text.endsWith(":0")
+      ) {
+        break;
+      }
+      await wait(100);
+    }
+    assert.equal(state?.complete, true);
+    assert.equal(state?.marker, clientDataSentinel);
+    assert.equal(state?.hasServerData, false);
+    assert.ok(state?.text.includes(clientRenderSentinel));
+    assert.ok(state?.text.endsWith(":0"));
+    await evaluate(true);
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      state = await evaluate();
+      if (state?.text.endsWith(":1")) {
+        break;
+      }
+      await wait(50);
+    }
+    assert.ok(
+      state?.text.endsWith(":1"),
+      "The extension client did not hydrate its interaction.",
+    );
+    assert.equal(state.hasServerData, false);
+    await evaluate(true);
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      state = await evaluate();
+      if (state?.failed === "Extension unavailable.") {
+        break;
+      }
+      await wait(50);
+    }
+    assert.equal(state?.failed, "Extension unavailable.");
+    assert.ok(state?.heading.length > 0);
+    assert.ok(state?.attribution > 0);
+  } finally {
+    page.close();
+  }
+}
+
 function createCrossTabBookmarkProof(reader, sectionPath) {
   const route = reader.routes.active.find(
     ({ path, target }) =>
@@ -3354,6 +3444,10 @@ export async function runPackagedHostProof(
   const portableThemeAccent = "#6B3F84";
   const packedExtensionRenderSentinel =
     "PACKED_EXTENSION_SLOT_RENDERED";
+  const packedExtensionClientRenderSentinel =
+    "PACKED_EXTENSION_CLIENT_RENDERED";
+  const packedExtensionClientDataSentinel =
+    "PACKED_EXTENSION_CLIENT_DATA_ONLY";
   const packedExtensionServerSentinel =
     "PACKED_EXTENSION_SERVER_DATA_ONLY";
 
@@ -3457,17 +3551,25 @@ export async function runPackagedHostProof(
         name: "@example/packed-publication-extension",
         version: "1.0.0",
         type: "module",
-        exports: "./index.js",
+        exports: {
+          ".": "./index.js",
+          "./client": "./client.js",
+        },
+        peerDependencies: {
+          react: nextManifest.peerDependencies.react,
+        },
       }),
       writeFile(
         join(extensionRoot, "index.js"),
         [
+          'import { PackedExtensionClient } from "./client.js";',
+          "",
           "export default Object.freeze({",
           '  id: "packed-publication-extension",',
           '  package: "@example/packed-publication-extension",',
           '  version: "1.0.0",',
           '  engineCompatibility: ">=0.1.0-alpha.0 <2.0.0",',
-          '  capabilities: Object.freeze(["content.project", "renderer.slot"]),',
+          '  capabilities: Object.freeze(["content.project", "renderer.slot", "renderer.client"]),',
           "  implementation: Object.freeze({",
           '    kind: "genii.publisher.extension",',
           '    apiVersion: "1.0",',
@@ -3481,6 +3583,10 @@ export async function runPackagedHostProof(
           "            publicationId: content.publicationId,",
           "            config,",
           "          }),",
+          "          clientData: Object.freeze({",
+          `            marker: "${packedExtensionClientDataSentinel}",`,
+          "            publicationId: content.publicationId,",
+          "          }),",
           "        }),",
           "      });",
           "    },",
@@ -3489,11 +3595,38 @@ export async function runPackagedHostProof(
           '    kind: "genii.publisher.next-extension",',
           '    apiVersion: "1.0",',
           '    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",',
+          "    Client: PackedExtensionClient,",
           "    renderSlot({ slot, serverData }) {",
           `      return \`${packedExtensionRenderSentinel}:\${slot}:\${serverData.marker}\`;`,
           "    },",
           "  }),",
           "});",
+          "",
+        ].join("\n"),
+        "utf8",
+      ),
+      writeFile(
+        join(extensionRoot, "client.js"),
+        [
+          '"use client";',
+          "",
+          'import { createElement, useState } from "react";',
+          "",
+          "export function PackedExtensionClient({ clientData, mount, page }) {",
+          "  const [clicks, setClicks] = useState(0);",
+          "  if (clicks === 2) {",
+          '    throw new Error("EXPECTED_PACKED_EXTENSION_CLIENT_FAILURE");',
+          "  }",
+          "  return createElement(",
+          '    "button",',
+          "    {",
+          '      "data-packed-extension-client": clientData.marker,',
+          '      onClick: () => setClicks((value) => value + 1),',
+          '      type: "button",',
+          "    },",
+          `    \`${packedExtensionClientRenderSentinel}:\${mount}:\${page.path}:\${clientData.marker}:\${clicks}\`,`,
+          "  );",
+          "}",
           "",
         ].join("\n"),
         "utf8",
@@ -3698,12 +3831,17 @@ export async function runPackagedHostProof(
       capabilities: Object.freeze([
         "content.project",
         "renderer.slot",
+        "renderer.client",
       ]),
       config: Object.freeze({}),
       serverData: Object.freeze({
         marker: packedExtensionServerSentinel,
         publicationId: reader.publicationId,
         config: Object.freeze({}),
+      }),
+      clientData: Object.freeze({
+        marker: packedExtensionClientDataSentinel,
+        publicationId: reader.publicationId,
       }),
     });
     const extensionBasis = Object.freeze({
@@ -4229,11 +4367,16 @@ export async function runPackagedHostProof(
         `Browser error boundary chunks omitted ${errorBoundarySentinel}.`,
       );
     }
+    assert.ok(
+      clientChunks.includes(packedExtensionClientRenderSentinel),
+      "Browser chunks omitted the explicitly granted extension client.",
+    );
     for (const manuscriptSentinel of [
       "published-notes",
       "unlisted-notes",
       "First *safe* line",
       "unsafe link",
+      packedExtensionClientDataSentinel,
       packedExtensionServerSentinel,
     ]) {
       assert.equal(
@@ -4249,6 +4392,7 @@ export async function runPackagedHostProof(
     let frameworkErrorStatuses;
     let runtimeErrorStatus;
     let imageContentType;
+    let extensionClientHydrationVerified = false;
     let manuscriptExtensionsVerified = false;
     let readerToolsHydrationVerified = false;
     let offlineReaderVerified = false;
@@ -4308,6 +4452,8 @@ export async function runPackagedHostProof(
         "https://publisher.genii.foundation",
         "https://github.com/genii-foundation/publisher",
         packedExtensionRenderSentinel,
+        packedExtensionClientRenderSentinel,
+        packedExtensionClientDataSentinel,
         packedExtensionServerSentinel,
       ]) {
         assert.ok(
@@ -4326,6 +4472,14 @@ export async function runPackagedHostProof(
           ({ target }) => target.kind === "section",
         )?.path;
         assert.equal(typeof sectionPath, "string");
+        await assertHydratedExtensionClient({
+          browser,
+          clientDataSentinel: packedExtensionClientDataSentinel,
+          clientRenderSentinel: packedExtensionClientRenderSentinel,
+          serverDataSentinel: packedExtensionServerSentinel,
+          url: `${host.origin}${homeRoute.path}`,
+        });
+        extensionClientHydrationVerified = true;
         await assertHydratedReaderTools({
           bookmarkProof: createCrossTabBookmarkProof(reader, sectionPath),
           browser,
@@ -4705,6 +4859,7 @@ export async function runPackagedHostProof(
       auditVulnerabilities:
         audit.metadata.vulnerabilities.total,
       browserHydrationVerified: browser !== undefined,
+      extensionClientHydrationVerified,
       manuscriptExtensionsVerified,
       offlineReaderVerified,
       readerToolsHydrationVerified,
