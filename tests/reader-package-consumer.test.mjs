@@ -866,6 +866,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         type ReaderProgressState,
       } from "@genii-foundation/publisher-reader/progress";
       import {
+        createReaderProgressOverview,
+        type ReaderProgressOverview,
+      } from "@genii-foundation/publisher-reader/progress-overview";
+      import {
         validateReaderPassageRange,
         type ReaderPassageRange,
       } from "@genii-foundation/publisher-reader/passage-range";
@@ -913,6 +917,8 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       const rangeValidation = validateReaderPassageRange(range);
       const bookmarks: ReaderBookmarksState =
         createEmptyReaderBookmarksState("portable-reader");
+      const overview: ReaderProgressOverview =
+        createReaderProgressOverview(progress, bookmarks, []);
       const sync: ReaderSyncCoordinatorState =
         createReaderSyncCoordinatorState("portable-reader");
       declare const searchIndex: ReaderSearchIndex;
@@ -931,6 +937,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         progress,
         rangeValidation,
         bookmarks,
+        overview,
         sync,
         searchIndex,
         terms,
@@ -1108,6 +1115,9 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         createEmptyReaderProgressState,
       } from "@genii-foundation/publisher-reader/progress";
       import {
+        createReaderProgressOverview,
+      } from "@genii-foundation/publisher-reader/progress-overview";
+      import {
         validateReaderPassageRange,
       } from "@genii-foundation/publisher-reader/passage-range";
       import {
@@ -1204,6 +1214,14 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       assert.equal(
         createEmptyReaderBookmarksState("portable-reader").publicationId,
         "portable-reader",
+      );
+      assert.equal(
+        createReaderProgressOverview(
+          createEmptyReaderProgressState("portable-reader"),
+          createEmptyReaderBookmarksState("portable-reader"),
+          [],
+        ).aggregate.percent,
+        0,
       );
       assert.equal(
         createReaderSyncCoordinatorState("portable-reader").phase,

@@ -75,7 +75,10 @@ snapshots. The renderer now separates one session opening from scroll samples,
 conservatively accumulates visible active reading time, derives returns, shows
 the current section status and metrics, and supports explicit completion of the
 current revision. Publication heatmaps, recent sections, and recommendations
-remain planned.
+remain planned. The framework neutral Reader now derives their shared weighted
+summary, ordered section states, updated-first recommendations, recent reads,
+and continuity-aware bookmark presence from one immutable model, so the future
+renderer surfaces cannot disagree about state.
 
 ### Durable passage bookmarks
 

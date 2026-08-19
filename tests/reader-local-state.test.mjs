@@ -81,7 +81,7 @@ function context(now, sections) {
   return { publicationId, now, sections };
 }
 
-test("package manifest exposes both browser-safe state entry points", async () => {
+test("package manifest exposes the browser-safe state entry points", async () => {
   const manifest = JSON.parse(
     await readFile(
       new URL("../packages/reader/package.json", import.meta.url),
@@ -95,6 +95,10 @@ test("package manifest exposes both browser-safe state entry points", async () =
   assert.deepEqual(manifest.exports["./progress"], {
     types: "./dist/progress.d.ts",
     import: "./dist/progress.js",
+  });
+  assert.deepEqual(manifest.exports["./progress-overview"], {
+    types: "./dist/progress-overview.d.ts",
+    import: "./dist/progress-overview.js",
   });
 });
 
@@ -493,7 +497,7 @@ test("aggregate percent uses current word counts and exposes canonical statuses"
 test("browser state modules do not reference ambient browser or server authority", async () => {
   const source = (
     await Promise.all(
-      ["preferences.js", "progress.js", "sync.js"].map((name) =>
+      ["preferences.js", "progress.js", "progress-overview.js", "sync.js"].map((name) =>
         readFile(
           new URL(`../packages/reader/dist/${name}`, import.meta.url),
           "utf8",

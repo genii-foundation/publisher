@@ -80,8 +80,13 @@ export interface ReaderProgressContext {
   /** Epoch milliseconds supplied by the caller. */
   readonly now: number;
   /** Current reader sections used to fold reviewed continuity aliases. */
-  readonly sections?: readonly ReaderSection[];
+  readonly sections?: readonly ReaderProgressSection[];
 }
+
+export type ReaderProgressSection = Pick<
+  ReaderSection,
+  "id" | "continuity" | "contentHash" | "wordCount"
+>;
 
 export interface ReaderProgressEvent {
   /** Epoch milliseconds supplied by the caller. */
@@ -580,7 +585,7 @@ function emptyState(publicationId: string): ReaderProgressState {
 }
 
 function continuityAliasMap(
-  sections: readonly ReaderSection[] | undefined,
+  sections: readonly ReaderProgressSection[] | undefined,
 ): ReadonlyMap<string, string> {
   const aliases = new Map<string, string>();
   const orderedSections = [...(sections ?? [])].sort((left, right) =>
@@ -700,7 +705,7 @@ export function createEmptyReaderProgressState(
 }
 
 export function createReaderSectionProgressIdentity(
-  section: ReaderSection,
+  section: ReaderProgressSection,
 ): ReaderSectionProgressIdentity {
   const continuityId = section.continuity.id;
   const groups = section.continuity.progressGroups
@@ -837,7 +842,7 @@ function mergeProgressEntries(
 
 export function recordReaderSectionProgress(
   state: ReaderProgressState,
-  section: ReaderSection,
+  section: ReaderProgressSection,
   event: ReaderProgressEvent,
 ): ReaderProgressState {
   requirePublicationId(state.publicationId);
@@ -968,7 +973,7 @@ export function recordReaderSectionProgress(
 
 export function resolveReaderSectionProgress(
   state: ReaderProgressState,
-  section: ReaderSection,
+  section: ReaderProgressSection,
 ): ResolvedReaderSectionProgress {
   const identity = createReaderSectionProgressIdentity(section);
   const groupedEntries = identity.groups.map((group) =>
@@ -1037,7 +1042,7 @@ export function resolveReaderSectionProgress(
 
 export function calculateReaderAggregateProgress(
   state: ReaderProgressState,
-  sections: readonly ReaderSection[],
+  sections: readonly ReaderProgressSection[],
 ): ReaderAggregateProgress {
   let totalWordCount = 0;
   let completedWords = 0;
