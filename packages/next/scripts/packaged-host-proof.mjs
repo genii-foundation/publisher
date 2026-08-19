@@ -49,6 +49,9 @@ import {
   deflateSync,
 } from "node:zlib";
 import {
+  createReaderBookmarksStorageKey,
+} from "../../reader/dist/bookmarks.js";
+import {
   createReaderSearchIndex,
   serializeReaderSearchIndex,
 } from "../../reader/dist/search.js";
@@ -645,6 +648,7 @@ function createCrossTabBookmarkProof(reader, sectionPath) {
   const now = Date.now();
   return Object.freeze({
     quote,
+    storageKey: createReaderBookmarksStorageKey(reader.publicationId),
     state: {
       schemaVersion: 1,
       publicationId: reader.publicationId,
@@ -970,11 +974,11 @@ async function assertHydratedReaderTools({
       {
         message: "Reading data synced.",
         progressEntries: 1,
-        bookmarksSchemaVersion: 1,
+        bookmarksSchemaVersion: null,
         consentGranted: true,
         acknowledgedEvents: 1,
       },
-      "The default Reader did not complete and acknowledge its local-first synchronization transfer.",
+      "The default Reader did not complete and acknowledge its sparse local-first synchronization transfer.",
     );
     const peerPage = await openDevToolsPage(browser);
     try {
@@ -1011,9 +1015,7 @@ async function assertHydratedReaderTools({
       const peerWrite = await peerPage.send("Runtime.evaluate", {
         expression: [
           "(() => {",
-          '  const key = Object.keys(localStorage).find((candidate) => candidate.includes("reader.bookmarks"));',
-          "  if (key === undefined) return false;",
-          `  localStorage.setItem(key, JSON.stringify(${JSON.stringify(bookmarkProof.state)}));`,
+          `  localStorage.setItem(${JSON.stringify(bookmarkProof.storageKey)}, JSON.stringify(${JSON.stringify(bookmarkProof.state)}));`,
           "  return true;",
           "})()",
         ].join("\n"),
