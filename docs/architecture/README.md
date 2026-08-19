@@ -26,5 +26,6 @@ These records define the accepted foundation of GENII Publisher.
 22. [ADR 0022: Publication-scoped synchronization storage](./0022-publication-scoped-synchronization.md)
 23. [ADR 0023: Provider-neutral Reader data transfer](./0023-provider-neutral-reader-data-transfer.md)
 24. [ADR 0024: Local-first synchronization coordinator](./0024-local-first-synchronization-coordinator.md)
+25. [ADR 0025: Default Reader synchronization integration](./0025-default-reader-synchronization-integration.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

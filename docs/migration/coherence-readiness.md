@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 11 upgraded | 11 | Publisher implements a stronger checked contract. |
+| 12 upgraded | 12 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 31 planned | 31 | Accepted Publisher scope is not implemented yet. |
+| 30 planned | 30 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -172,9 +172,13 @@ data. The reference Supabase adapter keeps the service-role key server only.
 The provider-neutral server route and reference adapter now transfer remote
 progress, bookmarks, engagement, and consent without exposing a provider SDK or
 accepting reader or publication identity from the browser. The local-first
-browser coordinator, including reconciliation, retry, and in-flight edits,
-now exists as a framework-neutral Reader state machine. Default Reader wiring
-and live browser evidence remain planned.
+browser coordinator now connects the default Reader to the provider-neutral
+route. It debounces local revisions, pauses offline, retries with a bound,
+reconciles the latest local state after each request, refuses schema-ahead
+capabilities independently, and acknowledges engagement events by exact
+identity. The packed-host Chrome proof completes code sign-in and verifies
+progress, bookmarks, consent, and engagement acknowledgement through the real
+Reader interface.
 The reference provider now scopes every stored row, bookmark lock, event
 identity, and retention query by both publication and authenticated reader.
 Existing unscoped rows are preserved under a reserved legacy marker for explicit
@@ -247,7 +251,7 @@ product decision:
 4. Add default settings, focus, progress, bookmark, and toolbar components.
 5. Add the default narration player and timing interaction.
 6. Add atomic offline package planning and official service worker integration.
-7. Add the default browser synchronization and account controls.
+7. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
 8. Generalize audio checkpoint, promotion, and manuscript publication guards.
 9. Implement multi-view Updates and multi-section build support.
 10. Adopt Coherence through a reviewed migration plan with dual-read or
@@ -277,7 +281,7 @@ these concerns. It does not own the values that make Coherence itself.
 3. Project capability-sliced client artifacts.
 4. Complete local progress, preferences, bookmarks, ranges, and reactive stores.
 5. Add official renderer controls without weakening server-rendered reading.
-6. Add provider-neutral synchronization and the two stable server routes.
+6. Add cross-tab synchronization notifications over the stable server routes.
 7. Add default narration playback and author publication guards.
 8. Build offline dependency closure over the final route, Reader, and audio graph.
 9. Prove the Coherence Updates adapter and migration compatibility.

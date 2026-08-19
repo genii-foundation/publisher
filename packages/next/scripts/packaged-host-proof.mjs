@@ -880,6 +880,48 @@ async function assertHydratedReaderTools({
       await wait(100);
     }
     assert.equal(signedIn, true, "The default sync controls did not complete code sign-in.");
+    let synchronizedState;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          "  const read = (fragment) => {",
+          "    const key = Object.keys(localStorage).find((candidate) => candidate.includes(fragment));",
+          "    return key === undefined ? null : JSON.parse(localStorage.getItem(key));",
+          "  };",
+          '  const progress = read("reader.progress");',
+          '  const bookmarks = read("reader.bookmarks");',
+          '  const consent = read("reader.sync-consent");',
+          '  const engagement = read("reader.engagement");',
+          "  return {",
+          '    message: document.querySelector(".publisher-reader-sync [role=status]")?.textContent ?? "",',
+          "    progressEntries: progress === null ? 0 : Object.keys(progress.entries ?? {}).length,",
+          "    bookmarksSchemaVersion: bookmarks?.schemaVersion ?? null,",
+          "    consentGranted: consent?.granted === true,",
+          "    acknowledgedEvents: engagement?.events?.filter((event) => Number.isSafeInteger(event.syncedAt)).length ?? 0,",
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      synchronizedState = evaluated.result?.value;
+      if (
+        synchronizedState?.message === "Reading data synced." &&
+        synchronizedState.acknowledgedEvents > 0
+      ) break;
+      await wait(100);
+    }
+    assert.deepEqual(
+      synchronizedState,
+      {
+        message: "Reading data synced.",
+        progressEntries: 1,
+        bookmarksSchemaVersion: 1,
+        consentGranted: true,
+        acknowledgedEvents: 1,
+      },
+      "The default Reader did not complete and acknowledge its local-first synchronization transfer.",
+    );
   } finally {
     page.close();
   }
@@ -1427,7 +1469,7 @@ export async function runPackagedHostProof(
           provider: { package: "@example/packed-sync-provider" },
           consent: "opt-in",
           localFallback: true,
-          capabilities: ["account-deletion", "progress"],
+          capabilities: ["account-deletion", "bookmarks", "engagement", "progress"],
         },
       ),
       writeFile(
@@ -1439,7 +1481,7 @@ export async function runPackagedHostProof(
           "  syncProvider: {",
           '    kind: "genii.publisher.sync-provider",',
           '    package: "@example/packed-sync-provider",',
-          '    capabilities: ["account-deletion", "progress"],',
+          '    capabilities: ["account-deletion", "bookmarks", "engagement", "progress"],',
           "    async exchangeAuthCode({ code }) {",
           '      return code === "packed-proof-code";',
           "    },",
@@ -1467,10 +1509,10 @@ export async function runPackagedHostProof(
           "      return {",
           "        state: {",
           "          progress: transfer.progress ?? null,",
-          "          bookmarks: null,",
+          "          bookmarks: transfer.bookmarks ?? null,",
           "          consent: transfer.consent ?? null,",
           "        },",
-          "        uploadedEventIds: [],",
+          "        uploadedEventIds: transfer.events?.map((event) => event.clientEventId) ?? [],",
           "      };",
           "    },",
           "  },",

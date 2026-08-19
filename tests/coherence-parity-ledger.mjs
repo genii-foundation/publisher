@@ -527,9 +527,13 @@ export const SYNC_PARITY = Object.freeze([
     id: "sync.client.coordination",
     capability: "Provider-neutral debounce, reconnect, reconciliation, and edits during an in-flight sync",
     home: "engine",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "The envelope and database exist, but the engine has no local-first client coordinator between them.",
+    status: "upgraded",
+    why: "The framework-neutral coordinator owns debounce, offline recovery, bounded retry, schema-ahead refusal, and latest-local reconciliation. The default Reader connects it to the provider-neutral route behind copy-bound consent and keeps storage, time, connectivity, and randomness in the browser adapter.",
+    evidence: {
+      coordinator: "packages/reader/src/sync.ts",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
   },
   {
     id: "sync.publication_isolation",

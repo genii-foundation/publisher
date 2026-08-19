@@ -39,4 +39,4 @@ authority.
 
 The default Reader still needs to connect this coordinator to `/api/sync`. That
 integration is a separate checkpoint and remains required before client
-coordination parity is complete.
+coordination parity is complete. ADR 0025 records completion of that integration.

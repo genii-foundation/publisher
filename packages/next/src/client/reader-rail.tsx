@@ -14,9 +14,13 @@ If you wish to allow use of your version of this file only under the terms of th
 "use client";
 
 import {
+  READER_BOOKMARKS_SCHEMA_VERSION,
+  createEmptyReaderBookmarksState,
   createReaderBookmarksStorageKey,
   listLiveReaderBookmarks,
   parseReaderBookmarksState,
+  serializeReaderBookmarksState,
+  type ReaderBookmarksState,
 } from "@genii-foundation/publisher-reader/bookmarks";
 import {
   createDefaultReaderPreferences,
@@ -32,6 +36,7 @@ import {
   type ReaderPreferencesUpdate,
 } from "@genii-foundation/publisher-reader/preferences";
 import {
+  READER_PROGRESS_SCHEMA_VERSION,
   createEmptyReaderProgressState,
   createReaderProgressStorageKey,
   parseReaderProgressState,
@@ -40,6 +45,32 @@ import {
   serializeReaderProgressState,
   type ReaderProgressState,
 } from "@genii-foundation/publisher-reader/progress";
+import {
+  acknowledgeReaderEngagementEvents,
+  addReaderEngagementEvent,
+  beginReaderSyncAttempt,
+  completeReaderSyncAttempt,
+  createEmptyReaderEngagementState,
+  createReaderEngagementStorageKey,
+  createReaderSyncConsent,
+  createReaderSyncConsentStorageKey,
+  createReaderSyncCoordinatorState,
+  grantReaderSyncConsent,
+  noteReaderSyncChange,
+  parseReaderEngagementState,
+  parseReaderSyncConsent,
+  readerEngagementEventsForTransfer,
+  reconcileReaderSyncState,
+  revokeReaderSyncConsent,
+  serializeReaderEngagementState,
+  serializeReaderSyncConsent,
+  setReaderSyncOnline,
+  type ReaderEngagementState,
+  type ReaderSyncConsent,
+  type ReaderSyncCoordinatorState,
+  type ReaderSyncRemoteDocument,
+  type ReaderSyncRemoteState,
+} from "@genii-foundation/publisher-reader/sync";
 import {
   parseReaderSearchIndex,
   searchReaderIndex,
@@ -81,6 +112,7 @@ type ReaderPanel = "outline" | "search" | "bookmarks" | "settings" | "sync";
 type ReaderSyncState = "idle" | "loading" | "signed-out" | "signed-in" | "unavailable";
 
 const SYNC_CONSENT_COPY_VERSION = "1.0";
+const SYNC_PUMP_INTERVAL_MS = 200;
 
 const DEFAULT_FONT_POLICY = Object.freeze({
   defaultFontFamilyId: "serif",
@@ -133,19 +165,73 @@ function panelLabel(panel: ReaderPanel): string {
   }
 }
 
-function syncConsentKey(publicationId: string): string {
-  return `genii.publisher.sync-consent.v1:${encodeURIComponent(publicationId)}`;
+interface ReaderSyncReadResponse extends ReaderSyncRemoteState {
+  readonly consent: unknown;
 }
 
-function writeSyncConsent(publicationId: string, granted: boolean): void {
-  const now = new Date().toISOString();
-  safeLocalWrite(syncConsentKey(publicationId), JSON.stringify({
-    schemaVersion: 1,
-    publicationId,
-    copyVersion: SYNC_CONSENT_COPY_VERSION,
-    granted,
-    ...(granted ? { grantedAt: now } : { revokedAt: now }),
-  }));
+interface ReaderSyncTransferResponse {
+  readonly state: ReaderSyncReadResponse;
+  readonly uploadedEventIds: readonly string[];
+}
+
+function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseRemoteDocument(value: unknown): ReaderSyncRemoteDocument | null {
+  if (value === null) return null;
+  if (
+    !isPlainRecord(value) ||
+    !Number.isSafeInteger(value.schemaVersion) ||
+    (value.schemaVersion as number) < 1
+  ) {
+    throw new TypeError("The synchronization response contains an invalid document.");
+  }
+  return Object.freeze({
+    value: value.value,
+    schemaVersion: value.schemaVersion as number,
+  });
+}
+
+function parseSyncReadResponse(value: unknown): ReaderSyncReadResponse {
+  if (!isPlainRecord(value)) {
+    throw new TypeError("The synchronization response is invalid.");
+  }
+  return Object.freeze({
+    progress: parseRemoteDocument(value.progress),
+    bookmarks: parseRemoteDocument(value.bookmarks),
+    consent: value.consent,
+  });
+}
+
+function parseSyncTransferResponse(value: unknown): ReaderSyncTransferResponse {
+  if (
+    !isPlainRecord(value) ||
+    !Array.isArray(value.uploadedEventIds) ||
+    value.uploadedEventIds.length > 256
+  ) {
+    throw new TypeError("The synchronization transfer response is invalid.");
+  }
+  const uploadedEventIds = value.uploadedEventIds;
+  if (uploadedEventIds.some((candidate) =>
+    typeof candidate !== "string" ||
+    candidate.length < 1 ||
+    candidate.length > 128)) {
+    throw new TypeError("The synchronization acknowledgements are invalid.");
+  }
+  return Object.freeze({
+    state: parseSyncReadResponse(value.state),
+    uploadedEventIds: Object.freeze([...uploadedEventIds]) as readonly string[],
+  });
+}
+
+function createClientEventId(now: number): string {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const entropy = new Uint32Array(4);
+  crypto.getRandomValues(entropy);
+  return `event-${now.toString(36)}-${[...entropy]
+    .map((value) => value.toString(36))
+    .join("-")}`;
 }
 
 export function PublisherReaderRail({
@@ -164,7 +250,8 @@ export function PublisherReaderRail({
     createDefaultReaderPreferences(DEFAULT_FONT_POLICY));
   const [progress, setProgress] = useState<ReaderProgressState>(() =>
     createEmptyReaderProgressState(publicationId));
-  const [bookmarks, setBookmarks] = useState<ReturnType<typeof listLiveReaderBookmarks>>([]);
+  const [bookmarkState, setBookmarkState] = useState<ReaderBookmarksState>(() =>
+    createEmptyReaderBookmarksState(publicationId));
   const [query, setQuery] = useState("");
   const [searchIndex, setSearchIndex] = useState<ReaderSearchIndex | null>(null);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
@@ -176,6 +263,22 @@ export function PublisherReaderRail({
   const [consentPending, setConsentPending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
+  const progressRef = useRef<ReaderProgressState>(progress);
+  const bookmarksRef = useRef<ReaderBookmarksState>(bookmarkState);
+  const consentRef = useRef<ReaderSyncConsent>(
+    createReaderSyncConsent(publicationId, SYNC_CONSENT_COPY_VERSION),
+  );
+  const engagementRef = useRef<ReaderEngagementState>(
+    createEmptyReaderEngagementState(publicationId),
+  );
+  const coordinatorRef = useRef<ReaderSyncCoordinatorState>(
+    createReaderSyncCoordinatorState(publicationId),
+  );
+  const syncExecutingRef = useRef(false);
+  const syncAbortRef = useRef<AbortController | null>(null);
+  const signedInRef = useRef(false);
+  const noteSyncChangeRef = useRef<(now: number) => void>(() => undefined);
+  const recordedSectionRef = useRef<string | null>(null);
 
   const preferencesKey = useMemo(
     () => createReaderPreferencesStorageKey(publicationId),
@@ -189,6 +292,39 @@ export function PublisherReaderRail({
     () => createReaderBookmarksStorageKey(publicationId),
     [publicationId],
   );
+  const consentKey = useMemo(
+    () => createReaderSyncConsentStorageKey(publicationId),
+    [publicationId],
+  );
+  const engagementKey = useMemo(
+    () => createReaderEngagementStorageKey(publicationId),
+    [publicationId],
+  );
+  const canSyncProgress = sync?.capabilities.includes("progress") === true;
+  const canSyncBookmarks = sync?.capabilities.includes("bookmarks") === true;
+  const canSyncEngagement = sync?.capabilities.includes("engagement") === true;
+  const bookmarks = useMemo(
+    () => listLiveReaderBookmarks(bookmarkState),
+    [bookmarkState],
+  );
+
+  progressRef.current = progress;
+  bookmarksRef.current = bookmarkState;
+  noteSyncChangeRef.current = (now: number): void => {
+    if (!signedInRef.current || !consentRef.current.granted) return;
+    coordinatorRef.current = noteReaderSyncChange(coordinatorRef.current, now);
+  };
+
+  useEffect(() => {
+    signedInRef.current = false;
+    syncAbortRef.current?.abort();
+    coordinatorRef.current = createReaderSyncCoordinatorState(
+      publicationId,
+      navigator.onLine,
+    );
+    recordedSectionRef.current = null;
+    setSyncState("idle");
+  }, [publicationId]);
 
   useEffect(() => {
     const loaded = parseReaderPreferences(
@@ -198,17 +334,246 @@ export function PublisherReaderRail({
     setPreferences(loaded);
     applyPreferences(loaded);
     const now = Date.now();
-    setProgress(parseReaderProgressState(safeLocalRead(progressKey), {
+    const loadedProgress = parseReaderProgressState(safeLocalRead(progressKey), {
       publicationId,
       now,
       ...(currentSection === undefined ? {} : { sections: [currentSection] }),
-    }));
-    const bookmarkState = parseReaderBookmarksState(
+    });
+    progressRef.current = loadedProgress;
+    setProgress(loadedProgress);
+    const loadedBookmarks = parseReaderBookmarksState(
       safeLocalRead(bookmarksKey),
       { publicationId, now },
     );
-    setBookmarks(listLiveReaderBookmarks(bookmarkState));
-  }, [bookmarksKey, currentSection, preferencesKey, progressKey, publicationId]);
+    bookmarksRef.current = loadedBookmarks;
+    setBookmarkState(loadedBookmarks);
+    consentRef.current = parseReaderSyncConsent(
+      safeLocalRead(consentKey),
+      publicationId,
+      SYNC_CONSENT_COPY_VERSION,
+    );
+    let engagement = parseReaderEngagementState(
+      safeLocalRead(engagementKey),
+      publicationId,
+    );
+    if (
+      currentSection !== undefined &&
+      recordedSectionRef.current !== currentSection.id
+    ) {
+      engagement = addReaderEngagementEvent(engagement, {
+        clientEventId: createClientEventId(now),
+        eventType: "section_opened",
+        eventAt: now,
+        sectionId: currentSection.id,
+        contentHash: currentSection.contentHash,
+        route: `${window.location.pathname}${window.location.search}`.slice(0, 512),
+      });
+      recordedSectionRef.current = currentSection.id;
+      safeLocalWrite(
+        engagementKey,
+        serializeReaderEngagementState(engagement),
+      );
+    }
+    engagementRef.current = engagement;
+  }, [
+    bookmarksKey,
+    consentKey,
+    currentSection,
+    engagementKey,
+    preferencesKey,
+    progressKey,
+    publicationId,
+  ]);
+
+  useEffect(() => {
+    const updateOnlineState = (): void => {
+      coordinatorRef.current = setReaderSyncOnline(
+        coordinatorRef.current,
+        navigator.onLine,
+        Date.now(),
+      );
+    };
+    updateOnlineState();
+    window.addEventListener("online", updateOnlineState);
+    window.addEventListener("offline", updateOnlineState);
+    return () => {
+      window.removeEventListener("online", updateOnlineState);
+      window.removeEventListener("offline", updateOnlineState);
+    };
+  }, [publicationId]);
+
+  useEffect(() => {
+    if (sync === null) return;
+    let active = true;
+
+    const progressContext = (now: number) => ({
+      publicationId,
+      now,
+      ...(currentSection === undefined ? {} : { sections: [currentSection] }),
+    });
+    const applyRemoteState = (
+      remote: ReaderSyncRemoteState,
+      now: number,
+    ) => {
+      const reconciled = reconcileReaderSyncState(
+        progressRef.current,
+        bookmarksRef.current,
+        remote,
+        { publicationId, now },
+      );
+      progressRef.current = reconciled.progress;
+      bookmarksRef.current = reconciled.bookmarks;
+      safeLocalWrite(
+        progressKey,
+        serializeReaderProgressState(reconciled.progress, progressContext(now)),
+      );
+      safeLocalWrite(
+        bookmarksKey,
+        serializeReaderBookmarksState(reconciled.bookmarks, { publicationId, now }),
+      );
+      if (active) {
+        setProgress(reconciled.progress);
+        setBookmarkState(reconciled.bookmarks);
+      }
+      return reconciled;
+    };
+    const finishAttempt = (
+      revision: number,
+      succeeded: boolean,
+      now: number,
+    ): void => {
+      if (coordinatorRef.current.inFlightRevision !== revision) return;
+      coordinatorRef.current = completeReaderSyncAttempt(
+        coordinatorRef.current,
+        revision,
+        succeeded,
+        now,
+      );
+    };
+    const pump = async (): Promise<void> => {
+      if (
+        !active ||
+        syncExecutingRef.current ||
+        !signedInRef.current ||
+        !consentRef.current.granted
+      ) return;
+      const attempt = beginReaderSyncAttempt(coordinatorRef.current, Date.now());
+      if (attempt === null) return;
+      coordinatorRef.current = attempt.state;
+      syncExecutingRef.current = true;
+      const abort = new AbortController();
+      syncAbortRef.current = abort;
+      try {
+        const readResponse = await fetch("/api/sync", {
+          credentials: "same-origin",
+          signal: abort.signal,
+        });
+        if (!readResponse.ok) throw new Error("Synchronization read failed.");
+        const readState = parseSyncReadResponse(await readResponse.json());
+        const first = applyRemoteState(readState, Date.now());
+        const consent = consentRef.current;
+        const events = canSyncEngagement
+          ? readerEngagementEventsForTransfer(engagementRef.current)
+          : [];
+        const transfer: Record<string, unknown> = {
+          consent: {
+            version: consent.schemaVersion,
+            copyVersion: consent.copyVersion,
+            granted: consent.granted,
+            grantedAt: consent.grantedAt,
+            revokedAt: consent.revokedAt,
+          },
+          ...(canSyncProgress && first.transferProgress !== null ? {
+            progress: {
+              value: first.transferProgress,
+              schemaVersion: READER_PROGRESS_SCHEMA_VERSION,
+            },
+          } : {}),
+          ...(canSyncBookmarks && first.transferBookmarks !== null ? {
+            bookmarks: {
+              value: first.transferBookmarks,
+              schemaVersion: READER_BOOKMARKS_SCHEMA_VERSION,
+            },
+          } : {}),
+          ...(events.length === 0 ? {} : { events }),
+        };
+        const transferResponse = await fetch("/api/sync", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(transfer),
+          signal: abort.signal,
+        });
+        if (!transferResponse.ok) throw new Error("Synchronization transfer failed.");
+        const transferred = parseSyncTransferResponse(await transferResponse.json());
+        const second = applyRemoteState(transferred.state, Date.now());
+        const sentEventIds = new Set(events.map((event) => event.clientEventId));
+        const acknowledgedEventIds = transferred.uploadedEventIds.filter((id) =>
+          sentEventIds.has(id));
+        if (canSyncEngagement && acknowledgedEventIds.length > 0) {
+          const acknowledged = acknowledgeReaderEngagementEvents(
+            engagementRef.current,
+            acknowledgedEventIds,
+            Date.now(),
+          );
+          engagementRef.current = acknowledged;
+          safeLocalWrite(
+            engagementKey,
+            serializeReaderEngagementState(acknowledged),
+          );
+        }
+        finishAttempt(attempt.revision, true, Date.now());
+        if (
+          (canSyncProgress && second.transferProgress !== null) ||
+          (canSyncBookmarks && second.transferBookmarks !== null) ||
+          (canSyncEngagement &&
+            readerEngagementEventsForTransfer(engagementRef.current).length > 0)
+        ) {
+          noteSyncChangeRef.current(Date.now());
+        }
+        if (active && signedInRef.current) {
+          setSyncMessage(
+            first.progressStatus === "schema-ahead" ||
+            first.bookmarksStatus === "schema-ahead" ||
+            second.progressStatus === "schema-ahead" ||
+            second.bookmarksStatus === "schema-ahead"
+              ? "Newer synchronized data was left untouched. Local reading remains available."
+              : "Reading data synced.",
+          );
+        }
+      } catch (error) {
+        finishAttempt(attempt.revision, false, Date.now());
+        if (
+          active &&
+          signedInRef.current &&
+          !(error instanceof DOMException && error.name === "AbortError")
+        ) {
+          setSyncMessage("Sync paused. Local reading is safe and will retry.");
+        }
+      } finally {
+        if (syncAbortRef.current === abort) syncAbortRef.current = null;
+        syncExecutingRef.current = false;
+      }
+    };
+
+    const timer = window.setInterval(() => void pump(), SYNC_PUMP_INTERVAL_MS);
+    void pump();
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      syncAbortRef.current?.abort();
+    };
+  }, [
+    bookmarksKey,
+    canSyncBookmarks,
+    canSyncEngagement,
+    canSyncProgress,
+    currentSection,
+    engagementKey,
+    progressKey,
+    publicationId,
+    sync,
+  ]);
 
   useEffect(() => {
     if (currentSection === undefined) return;
@@ -238,11 +603,18 @@ export function PublisherReaderRail({
         } catch {
           return current;
         }
-        safeLocalWrite(progressKey, serializeReaderProgressState(next, {
+        const context = {
           publicationId,
           now,
           sections: [currentSection],
-        }));
+        };
+        const serialized = serializeReaderProgressState(next, context);
+        if (serialized === serializeReaderProgressState(current, context)) {
+          return current;
+        }
+        progressRef.current = next;
+        safeLocalWrite(progressKey, serialized);
+        noteSyncChangeRef.current(now);
         return next;
       });
     };
@@ -282,7 +654,11 @@ export function PublisherReaderRail({
   }, [openPanel, publicationId, readerBuildId, searchPath]);
 
   useEffect(() => {
-    if (sync === null || openPanel !== "sync" || syncState !== "idle") return;
+    if (
+      sync === null ||
+      syncState !== "idle" ||
+      (openPanel !== "sync" && !consentRef.current.granted)
+    ) return;
     setSyncState("loading");
     void fetch("/api/session", { credentials: "same-origin" })
       .then(async (response) => {
@@ -291,18 +667,23 @@ export function PublisherReaderRail({
       })
       .then((session) => {
         if (session.authenticated === true) {
+          signedInRef.current = true;
           setSyncEmail(typeof session.email === "string" ? session.email : "");
           setSyncState("signed-in");
+          noteSyncChangeRef.current(Date.now());
         } else if (session.authenticated === false) {
+          signedInRef.current = false;
           setSyncState("signed-out");
         } else {
+          signedInRef.current = false;
           setSyncState("unavailable");
         }
       })
       .catch(() => {
+        signedInRef.current = false;
         setSyncState("unavailable");
       });
-  }, [openPanel, sync]);
+  }, [openPanel, sync, syncState]);
 
   useEffect(() => {
     const close = (event: KeyboardEvent): void => {
@@ -356,7 +737,9 @@ export function PublisherReaderRail({
     if (email.length === 0 || syncBusy) return;
     setSyncBusy(true);
     setSyncMessage("");
-    writeSyncConsent(publicationId, true);
+    const consent = grantReaderSyncConsent(consentRef.current, Date.now());
+    consentRef.current = consent;
+    safeLocalWrite(consentKey, serializeReaderSyncConsent(consent));
     try {
       const response = await fetch("/api/auth/start", {
         method: "POST",
@@ -398,8 +781,10 @@ export function PublisherReaderRail({
       setSyncEmail(typeof session.email === "string" ? session.email : pendingEmail);
       setPendingEmail("");
       setSyncCode("");
+      signedInRef.current = true;
       setSyncState("signed-in");
       setSyncMessage("Signed in. Local reading remains available if sync is interrupted.");
+      noteSyncChangeRef.current(Date.now());
     } catch {
       setSyncMessage("Code sign in failed. Request a fresh email and try again.");
     } finally {
@@ -409,6 +794,8 @@ export function PublisherReaderRail({
 
   const signOut = async (): Promise<void> => {
     if (syncBusy) return;
+    signedInRef.current = false;
+    syncAbortRef.current?.abort();
     setSyncBusy(true);
     setSyncMessage("");
     try {
@@ -420,6 +807,7 @@ export function PublisherReaderRail({
       setSyncState("signed-out");
       setSyncMessage("Signed out. Local progress and bookmarks are still saved.");
     } catch {
+      signedInRef.current = true;
       setSyncMessage("Sign out failed. Try again.");
     } finally {
       setSyncBusy(false);
@@ -428,6 +816,8 @@ export function PublisherReaderRail({
 
   const deleteAccount = async (): Promise<void> => {
     if (syncBusy || !deletePending) return;
+    signedInRef.current = false;
+    syncAbortRef.current?.abort();
     setSyncBusy(true);
     setSyncMessage("");
     try {
@@ -436,12 +826,15 @@ export function PublisherReaderRail({
         credentials: "same-origin",
       });
       if (!response.ok) throw new Error("Account deletion failed.");
-      writeSyncConsent(publicationId, false);
+      const consent = revokeReaderSyncConsent(consentRef.current, Date.now());
+      consentRef.current = consent;
+      safeLocalWrite(consentKey, serializeReaderSyncConsent(consent));
       setDeletePending(false);
       setSyncState("signed-out");
       setSyncEmail("");
       setSyncMessage("Account deleted. Local progress and bookmarks remain in this browser.");
     } catch {
+      signedInRef.current = true;
       setSyncMessage("Account deletion failed. Try again.");
     } finally {
       setSyncBusy(false);

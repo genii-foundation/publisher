@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Connected the framework-neutral local-first coordinator to the default Reader account flow with offline recovery, bounded retry, latest-local reconciliation, engagement acknowledgement, and schema-ahead refusal.
+- Extended the clean packed-host Chrome proof through consent, code sign-in, and an acknowledged progress, bookmarks, consent, and engagement transfer.
 - Advanced the host contract to 0.7.0 with provider-neutral publication-scoped Reader state transfer routes.
 - Advanced the host contract to 0.6.0 with provider-neutral email authentication and session routes.
 - Added the default opt-in account panel with email link and code entry, session status, sign-out, and confirmed account deletion while retaining local reading data.

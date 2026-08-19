@@ -16,7 +16,7 @@ The renderer owns:
 - canonical trailing-slash redirects
 - deterministic application-manifest identity
 
-A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. This first renderer release does not execute extensions, ship client state, play audio, synchronize data, or claim static-export support.
+A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state and optional provider-neutral synchronization. It does not execute extensions, play audio, or claim static-export support.
 
 ## Supported toolchain
 
@@ -633,7 +633,11 @@ response, and provider failures collapse to one opaque unavailable result.
 When synchronization is declared, the default Reader adds an account panel. It
 records explicit versioned consent before requesting an email link, accepts a
 one-time code, reads the session, signs out, and requires separate confirmation
-for account deletion. Local progress and bookmarks remain available throughout.
+for account deletion. After sign-in, it debounces local revisions, pauses while
+offline, retries bounded failures, reconciles progress and bookmark tombstones,
+and acknowledges bounded engagement batches through `/api/sync`. A newer remote
+schema freezes only its affected capability. Local progress and bookmarks remain
+available throughout.
 
 ```ts
 import { definePublisherNextHostConfig } from "@genii-foundation/publisher-next/server/sync";
