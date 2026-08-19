@@ -54,8 +54,8 @@ If you wish to allow use of your version of this file only under the terms of th
 
 export const COHERENCE_PARITY_SOURCE = Object.freeze({
   repository: "https://github.com/genii-foundation/coherence-thesis",
-  ref: "7e50161cecc0ce6039c36e4738d8c9fc90710e62",
-  observedThrough: "2026-08-18",
+  ref: "423a21202ff32c5f879ca9f10e0607c1579b97a4",
+  observedThrough: "2026-08-19",
 });
 
 export const READER_PARITY = Object.freeze([
@@ -609,9 +609,17 @@ export const AUDIO_PARITY = Object.freeze([
     id: "audio.promotion.selected_unit",
     capability: "Dry-run selective promotion that preserves every unselected publication unit and narrator",
     home: "engine",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "Selective promotion exists only in Coherence tooling and is still expressed in terms of its nine volumes.",
+    status: "upgraded",
+    why: "The pure planner validates one immutable checkpoint, requires the caller's exact base catalog hash and exact selected-unit coverage, preserves every unselected clip and narrator, validates the candidate, and returns both catalog hashes without storage or write authority.",
+    evidence: {
+      decision: "docs/architecture/0042-exact-base-audio-promotion-planning.md",
+      implementation: "packages/content/src/audio-promotion.ts",
+      tests: "tests/audio-promotion.test.mjs",
+    },
+    sourcePaths: [
+      "scripts/audio/promote-audio-sections.ts",
+      "scripts/audio/promote-audio-volume.ts",
+    ],
   },
   {
     id: "audio.publication.guard",

@@ -25,6 +25,9 @@ export {
   validateAudioCheckpoint,
 } from "./audio-checkpoint.js";
 export {
+  planAudioCheckpointPromotion,
+} from "./audio-promotion.js";
+export {
   hashCanonicalJson,
   sha256,
 } from "./hashing.js";
@@ -39,6 +42,10 @@ export {
   CONTENT_COMPILER_VERSION,
   DEFAULT_WORDS_PER_MINUTE,
 } from "./types.js";
+export type {
+  AudioPromotionPlan,
+  AudioPromotionPlanInput,
+} from "./audio-promotion.js";
 export type {
   CompilationSourceInput,
   CompilationSourceRange,

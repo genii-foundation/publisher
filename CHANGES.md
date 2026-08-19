@@ -7,6 +7,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Added a build-bound browser narration projection and a lazy persistent default player with voice memory, rate, seek, queue, duration, and real packed-host playback proof.
 - Added strict lazy narration timing sidecars and existing-text word highlighting without delaying playback or duplicating manuscript text.
 - Added a vendor-neutral immutable narration checkpoint schema and semantic evidence validator for author promotion and publication guards.
+- Added exact-base selective narration promotion planning that preserves unselected clips and narrators.
 
 ## 2026-08-18, GENII Foundation
 

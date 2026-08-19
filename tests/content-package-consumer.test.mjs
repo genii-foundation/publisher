@@ -980,10 +980,13 @@ test("packed content freezes its runtime and proves production and development c
       import {
         compilePublicationContent,
         createPublicationContentArtifact,
+        planAudioCheckpointPromotion,
         serializePublicationContentEnvelope,
         validateAudioCheckpoint,
         validatePublicationContentEnvelope,
         type AudioCheckpoint,
+        type AudioPromotionPlan,
+        type AudioPromotionPlanInput,
         type CompilePublicationContentInput,
         type ResolvedExtensionInput,
         type SectionReaderLocationInput,
@@ -997,6 +1000,7 @@ test("packed content freezes its runtime and proves production and development c
       declare const input: CompilePublicationContentInput;
       declare const envelope: PublicationContentEnvelope;
       declare const checkpoint: AudioCheckpoint;
+      declare const promotionInput: AudioPromotionPlanInput;
       const readerLocation: SectionReaderLocationInput = { kind: "work" };
       const capability: ExtensionCapability = "content.project";
       const extension: ResolvedExtensionInput = {
@@ -1011,12 +1015,15 @@ test("packed content freezes its runtime and proves production and development c
         validatePublicationContentEnvelope(envelope);
       const validatedCheckpoint: ValidationResult<AudioCheckpoint> =
         validateAudioCheckpoint(checkpoint);
+      const promotion: ValidationResult<AudioPromotionPlan> =
+        planAudioCheckpointPromotion(promotionInput);
       const serialized: string = serializePublicationContentEnvelope(envelope);
       const artifact = createPublicationContentArtifact(envelope);
       void [
         compiled,
         validated,
         validatedCheckpoint,
+        promotion,
         serialized,
         artifact,
         readerLocation,

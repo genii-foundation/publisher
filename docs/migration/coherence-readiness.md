@@ -6,12 +6,13 @@ database change, package publication, or deployment.
 
 ## Authorities
 
-The Coherence inventory is pinned to commit
-`7e50161cecc0ce6039c36e4738d8c9fc90710e62`, dated 2026-08-18. The audit covers
+The original complete Coherence inventory was pinned to commit
+`7e50161cecc0ce6039c36e4738d8c9fc90710e62`, dated 2026-08-18. That audit covers
 39 first-parent commits from 2026-07-28 through that ref. It also considers five
 direct Reader precursor changes from 2026-07-27 because those changes created the
 state, bookmark, audio, and synchronization substrate modified during the audit
-window.
+window. Focused narration parity evidence was refreshed read only through
+`423a21202ff32c5f879ca9f10e0607c1579b97a4`, dated 2026-08-19.
 
 The Publisher implementation baseline is the Updates integration candidate at
 `74cba43090b287fcb3295e85ebfc0edcb357a024`, stacked on the named Updates route
@@ -41,9 +42,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 31 upgraded | 31 | Publisher implements a stronger checked contract. |
+| 32 upgraded | 32 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 11 planned | 11 | Accepted Publisher scope is not implemented yet. |
+| 10 planned | 10 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -205,6 +206,13 @@ and timing objects, aggregate statistics, and canonical ordered-unit fingerprint
 Validation is detached and immutable. It never contacts storage or performs
 promotion. ADR 0041 records the boundary.
 
+Publisher now also owns exact-base selective promotion planning. One pure dry run
+requires exact checkpoint coverage, narrator identity, one current clip per
+selected section, a canonical public HTTPS object base, and the caller's exact
+base catalog hash. It replaces only the selected clips, preserves every other
+clip and narrator, validates the candidate, and returns both catalog hashes. It
+does not contact storage or write the live catalog. ADR 0042 records the boundary.
+
 ### Synchronization
 
 The current Publisher candidate carries the closed synchronization capability
@@ -300,7 +308,7 @@ product decision:
 1. Add route-preserving playback intent.
 2. Add atomic offline package planning and official service worker integration.
 3. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
-4. Generalize audio promotion and manuscript publication guards.
+4. Add exact-base promotion application and manuscript publication guards.
 5. Adopt Coherence through a reviewed migration plan with dual-read or
     copy-and-verify state compatibility.
 
