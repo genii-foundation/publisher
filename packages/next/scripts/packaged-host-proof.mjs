@@ -2701,7 +2701,10 @@ async function assertOfflineReaderTools({
         returnByValue: true,
       });
       installed = evaluated.result?.value;
-      if (installed?.installed === true) break;
+      if (
+        installed?.installed === true &&
+        installed.label === "Available offline"
+      ) break;
       if ((installed?.alert ?? "").length > 0) break;
       await wait(50);
     }
