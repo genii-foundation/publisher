@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Added canonical same-section passage selection, viewport-clamped save controls, atomic local capture, and bookmark engagement events.
+- Extended the clean packed-host Chrome proof through real DOM selection geometry and persisted portable block offsets.
 - Completed the bounded default settings interface with publication-policy font choice and added reactive saved passages to publication search.
 - Extended the clean packed-host Chrome proof through persisted appearance changes and bookmark-aware search.
 - Added server-rendered work and section breadcrumbs plus matching current-path and active-outline context in the hydrated contents panel.

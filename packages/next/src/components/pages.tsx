@@ -635,6 +635,7 @@ interface PublisherPageShellProps {
     readonly buildId: Sha256Digest;
     readonly breadcrumbs: readonly PublisherReaderOutlineEntry[];
     readonly currentSection?: ReaderSection;
+    readonly currentWorkId?: string;
     readonly outline: readonly PublisherReaderOutlineEntry[];
     readonly sync: SyncEnvelope | null;
   };
@@ -671,7 +672,10 @@ function PublisherPageShell({
         <PublisherReaderRail
           {...(reader.currentSection === undefined
             ? {}
-            : { currentSection: reader.currentSection })}
+            : {
+                currentSection: reader.currentSection,
+                currentWorkId: reader.currentWorkId,
+              })}
           outline={reader.outline}
           breadcrumbs={reader.breadcrumbs}
           publicationId={publication.id}
@@ -712,7 +716,7 @@ export async function PublisherPageView({
       reader={{
         buildId: readerBuildId,
         ...(page.kind === "section"
-          ? { currentSection: page.section }
+          ? { currentSection: page.section, currentWorkId: page.work.id }
           : {}),
         outline: readerOutline(page),
         breadcrumbs: readerBreadcrumbs(page),

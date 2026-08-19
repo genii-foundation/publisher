@@ -1430,6 +1430,82 @@ async function assertHydratedReaderTools({
         await wait(50);
       }
       assert.deepEqual(deletionState, { live: 0, tombstones: 2, empty: true });
+      const selectedPassage = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const block = document.querySelector(".publisher-manuscript [data-publisher-block]");',
+          "  if (!(block instanceof HTMLElement)) return null;",
+          '  block.scrollIntoView({ block: "center" });',
+          "  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);",
+          "  let node = walker.nextNode();",
+          "  while (node !== null && !/\\S{4}/u.test(node.textContent ?? \"\")) node = walker.nextNode();",
+          "  if (!(node instanceof Text)) return null;",
+          '  const match = /\\S{4,}/u.exec(node.textContent ?? "");',
+          "  if (match === null || match.index === undefined) return null;",
+          "  const range = document.createRange();",
+          "  range.setStart(node, match.index);",
+          "  range.setEnd(node, match.index + Math.min(match[0].length, 12));",
+          "  const selection = window.getSelection();",
+          "  selection?.removeAllRanges();",
+          "  selection?.addRange(range);",
+          '  document.dispatchEvent(new Event("selectionchange"));',
+          "  return { blockId: block.dataset.publisherBlock, quote: range.toString() };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.ok(selectedPassage.result?.value?.quote.length >= 4);
+      let selectionAction;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const button = document.querySelector(".publisher-reader-selection-action");',
+            "  const rect = button?.getBoundingClientRect();",
+            "  return {",
+            "    visible: button !== null && rect !== undefined && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,",
+            '    text: button?.textContent ?? "",',
+            "  };",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        selectionAction = evaluated.result?.value;
+        if (selectionAction?.text === "Save passage") break;
+        await wait(50);
+      }
+      assert.deepEqual(selectionAction, { visible: true, text: "Save passage" });
+      await page.send("Runtime.evaluate", {
+        expression:
+          'document.querySelector(".publisher-reader-selection-action")?.click()',
+      });
+      let capturedSelection;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            `  const state = JSON.parse(localStorage.getItem(${JSON.stringify(bookmarkProof.storageKey)}));`,
+            "  const live = Object.values(state.bookmarks ?? {}).filter((bookmark) => bookmark.deletedAt === undefined);",
+            "  return {",
+            "    count: live.length,",
+            "    quote: live[0]?.quote ?? \"\",",
+            "    startBlockId: live[0]?.range?.start?.blockId ?? \"\",",
+            '    status: document.querySelector(".publisher-reader-selection-status")?.textContent ?? "",',
+            "  };",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        capturedSelection = evaluated.result?.value;
+        if (capturedSelection?.count === 1) break;
+        await wait(50);
+      }
+      assert.deepEqual(capturedSelection, {
+        count: 1,
+        quote: selectedPassage.result.value.quote,
+        startBlockId: selectedPassage.result.value.blockId,
+        status: "Saved passage.",
+      });
     } finally {
       peerPage.close();
     }

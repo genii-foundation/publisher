@@ -231,6 +231,35 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   transform: translateY(-50%);
 }
 
+.publisher-reader-selection-action {
+  position: absolute;
+  z-index: 30;
+  max-width: calc(100vw - 2rem);
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--publisher-color-accent);
+  border-radius: var(--publisher-control-radius);
+  background: var(--publisher-color-accent);
+  color: var(--publisher-color-surface);
+  font: 700 0.78rem/1.2 var(--publisher-font-mono);
+  cursor: pointer;
+  transform: translateX(-50%);
+  box-shadow: 0 0.6rem 1.5rem color-mix(in srgb, var(--publisher-color-text) 18%, transparent);
+}
+
+.publisher-reader-selection-status {
+  position: fixed;
+  z-index: 31;
+  inset: auto 1rem 1rem auto;
+  max-width: min(22rem, calc(100vw - 2rem));
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--publisher-color-border);
+  border-radius: var(--publisher-control-radius);
+  background: var(--publisher-color-surface);
+  color: var(--publisher-color-text);
+  font: 0.8rem/1.35 var(--publisher-font-mono);
+  box-shadow: 0 0.8rem 2rem color-mix(in srgb, var(--publisher-color-text) 18%, transparent);
+}
+
 .publisher-reader-panel > header {
   display: flex;
   align-items: baseline;

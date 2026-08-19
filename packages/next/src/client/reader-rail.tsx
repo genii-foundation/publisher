@@ -15,6 +15,7 @@ If you wish to allow use of your version of this file only under the terms of th
 
 import {
   READER_BOOKMARKS_SCHEMA_VERSION,
+  addReaderBookmark,
   createEmptyReaderBookmarksState,
   createReaderBookmarksExportFileName,
   createReaderBookmarksStorageKey,
@@ -95,10 +96,15 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   createPublisherReaderStore,
   usePublisherReaderStore,
 } from "./reader-store.js";
+import {
+  readPublisherReaderSelection,
+  type PublisherReaderSelection,
+} from "./reader-selection.js";
 
 export interface PublisherReaderOutlineEntry {
   readonly id: string;
@@ -115,6 +121,7 @@ export interface PublisherReaderRailProps {
   readonly searchPath: string;
   readonly outline: readonly PublisherReaderOutlineEntry[];
   readonly currentSection?: ReaderSection;
+  readonly currentWorkId?: string;
   readonly sync: SyncEnvelope | null;
 }
 
@@ -274,6 +281,7 @@ export function PublisherReaderRail({
   searchPath,
   outline,
   currentSection,
+  currentWorkId,
   sync,
 }: PublisherReaderRailProps): ReactElement {
   const panelId = useId();
@@ -339,6 +347,8 @@ export function PublisherReaderRail({
   const [query, setQuery] = useState("");
   const [bookmarkQuery, setBookmarkQuery] = useState("");
   const [bookmarkDeletePending, setBookmarkDeletePending] = useState<ReaderBookmarkDeletion | null>(null);
+  const [readerSelection, setReaderSelection] = useState<PublisherReaderSelection | null>(null);
+  const [selectionMessage, setSelectionMessage] = useState("");
   const [searchIndex, setSearchIndex] = useState<ReaderSearchIndex | null>(null);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [syncState, setSyncState] = useState<ReaderSyncState>("idle");
@@ -862,6 +872,74 @@ export function PublisherReaderRail({
     }
   }, [bookmarkDeletePending]);
 
+  useEffect(() => {
+    if (currentSection === undefined || currentWorkId === undefined) {
+      setReaderSelection(null);
+      return;
+    }
+    let timer = 0;
+    let pointerDown = false;
+    const clearTimer = (): void => {
+      if (timer !== 0) window.clearTimeout(timer);
+      timer = 0;
+    };
+    const read = (): void => {
+      clearTimer();
+      if (pointerDown) return;
+      const captured = readPublisherReaderSelection(
+        window.getSelection(),
+        currentWorkId,
+        currentSection,
+        window.location.pathname,
+      );
+      if (captured !== null) setSelectionMessage("");
+      setReaderSelection(captured);
+    };
+    const schedule = (delay: number): void => {
+      clearTimer();
+      timer = window.setTimeout(read, delay);
+    };
+    const insideAction = (event: Event): boolean =>
+      event.target instanceof Element &&
+      event.target.closest(".publisher-reader-selection-action") !== null;
+    const onPointerDown = (event: Event): void => {
+      if (insideAction(event)) return;
+      pointerDown = true;
+      setReaderSelection(null);
+    };
+    const onPointerUp = (event: Event): void => {
+      if (insideAction(event)) return;
+      pointerDown = false;
+      schedule(0);
+    };
+    const onSelectionChange = (): void => {
+      const selection = window.getSelection();
+      if (selection === null || selection.isCollapsed) {
+        clearTimer();
+        setReaderSelection(null);
+      } else {
+        schedule(200);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setReaderSelection(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointerup", onPointerUp);
+    document.addEventListener("keyup", read);
+    document.addEventListener("selectionchange", onSelectionChange);
+    document.addEventListener("keydown", onKeyDown);
+    schedule(0);
+    return () => {
+      clearTimer();
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerup", onPointerUp);
+      document.removeEventListener("keyup", read);
+      document.removeEventListener("selectionchange", onSelectionChange);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [currentSection, currentWorkId]);
+
   const currentProgress = currentSection === undefined
     ? null
     : resolveReaderSectionProgress(progress, currentSection);
@@ -918,6 +996,52 @@ export function PublisherReaderRail({
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  const saveReaderSelection = (): void => {
+    const captured = readerSelection;
+    if (captured === null || currentSection === undefined) return;
+    const now = Date.now();
+    let saved = false;
+    bookmarksStore.update((current) => {
+      try {
+        const next = addReaderBookmark(
+          current,
+          {
+            id: createClientEventId(now),
+            ...captured.input,
+          },
+          { publicationId, now },
+        );
+        saved = next !== current;
+        return next;
+      } catch {
+        return current;
+      }
+    });
+    if (!saved) {
+      setSelectionMessage("This passage could not be saved. Remove an older bookmark and try again.");
+      return;
+    }
+    const event = addReaderEngagementEvent(engagementRef.current, {
+      clientEventId: createClientEventId(now + 1),
+      eventType: "bookmark_added",
+      eventAt: now,
+      sectionId: currentSection.id,
+      contentHash: currentSection.contentHash,
+      route: `${window.location.pathname}${window.location.search}`.slice(0, 512),
+      payload: {
+        startBlockId: captured.input.range.start.blockId,
+        startOffset: captured.input.range.start.offset,
+        endBlockId: captured.input.range.end.blockId,
+        endOffset: captured.input.range.end.offset,
+      },
+    });
+    engagementRef.current = event;
+    safeLocalWrite(engagementKey, serializeReaderEngagementState(event));
+    setReaderSelection(null);
+    setSelectionMessage("Saved passage.");
+    window.getSelection()?.removeAllRanges();
   };
 
   const cancelBookmarkDeletion = (): void => {
@@ -1067,7 +1191,12 @@ export function PublisherReaderRail({
     }
   };
 
+  const portalTarget = typeof document === "undefined"
+    ? null
+    : document.querySelector<HTMLElement>(".publisher-root");
+
   return (
+    <>
     <aside className="publisher-reader-rail" aria-label="Reader tools">
       <div className="publisher-reader-rail-progress" aria-label={
         currentProgress === null
@@ -1307,5 +1436,27 @@ export function PublisherReaderRail({
         </section>
       )}
     </aside>
+    {readerSelection === null || portalTarget === null ? null : createPortal(
+      <button
+        className="publisher-reader-selection-action"
+        style={{
+          top: readerSelection.top,
+          left: readerSelection.left,
+        }}
+        type="button"
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={saveReaderSelection}
+      >
+        Save passage
+      </button>,
+      portalTarget,
+    )}
+    {selectionMessage.length === 0 || portalTarget === null ? null : createPortal(
+      <div className="publisher-reader-selection-status" role="status" aria-live="polite">
+        {selectionMessage}
+      </div>,
+      portalTarget,
+    )}
+    </>
   );
 }
