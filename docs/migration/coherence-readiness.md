@@ -378,9 +378,10 @@ for client error attribution, and the proof rejects manuscript text in those
 browser chunks. Author initialization also preserves the exact existing package
 manifest while adding managed host files. ADR 0049 records this boundary.
 
-This closes the theme and public-identity portion of the unrelated-publication
-gate. A full second-publication release rehearsal must still exercise the other
-override contracts before Coherence migration acceptance.
+This closes the unrelated-publication gate. The full release rehearsal now uses
+the exact five package candidates in a clean canonical publication, repeats the
+installation from a frozen offline lockfile, and exercises separately packed theme
+and extension overrides without accepting provenance or publishing anything.
 
 ## Remaining migration gap
 
@@ -389,6 +390,12 @@ product decision:
 
 1. Adopt Coherence through a reviewed migration plan with dual-read or
    copy-and-verify state compatibility.
+
+The executable, reversible sequence is recorded in
+[`coherence-adoption-plan.md`](coherence-adoption-plan.md). It is pinned to exact
+Publisher and Coherence commits, names the remaining host dependency and local
+state compatibility preconditions, preserves the current Coherence workbench and
+provider state, and stops before merge or production deployment.
 
 ## Material that remains Coherence-owned
 

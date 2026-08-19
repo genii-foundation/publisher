@@ -347,3 +347,39 @@ test("the readiness audit quotes the ledger's real totals", () => {
     );
   }
 });
+
+test("the Coherence adoption plan pins authority and rollback boundaries", () => {
+  const plan = readFileSync(
+    join(repositoryRoot, "docs", "migration", "coherence-adoption-plan.md"),
+    "utf8",
+  );
+  assert.match(
+    plan,
+    /Publisher implementation baseline: `dae8cb5e5a634205d9e6f5ab127f578a73d3eec7`/u,
+  );
+  assert.match(
+    plan,
+    /Coherence acceptance baseline: `74438453f03a1a3f9fa1f9dcf14206fc6d38a6ab`/u,
+  );
+  assert.match(
+    plan,
+    /No second Coherence Vercel\s+project may be created\./u,
+  );
+  assert.match(plan, /No database migration is part of this adoption plan\./u);
+  assert.match(
+    plan,
+    /The final migration cannot merge under this plan without fresh explicit approval\./u,
+  );
+  assert.match(
+    plan,
+    /@genii-foundation\/publisher-sync-supabase` is currently private at version\s+`0\.0\.0`/u,
+  );
+  assert.doesNotMatch(plan, /\.\.\/(?:publisher|coherence-thesis)/u);
+  for (let gate = 1; gate <= 14; gate += 1) {
+    assert.match(
+      plan,
+      new RegExp(`^${gate}\\. `, "mu"),
+      `the adoption plan is missing acceptance gate ${gate}`,
+    );
+  }
+});
