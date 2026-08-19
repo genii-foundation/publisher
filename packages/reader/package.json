@@ -51,6 +51,10 @@
       "types": "./dist/progress-overview.d.ts",
       "import": "./dist/progress-overview.js"
     },
+    "./progress-catalog": {
+      "types": "./dist/progress-catalog.d.ts",
+      "import": "./dist/progress-catalog.js"
+    },
     "./passage-range": {
       "types": "./dist/passage-range.d.ts",
       "import": "./dist/passage-range.js"

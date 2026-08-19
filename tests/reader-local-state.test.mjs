@@ -100,6 +100,10 @@ test("package manifest exposes the browser-safe state entry points", async () =>
     types: "./dist/progress-overview.d.ts",
     import: "./dist/progress-overview.js",
   });
+  assert.deepEqual(manifest.exports["./progress-catalog"], {
+    types: "./dist/progress-catalog.d.ts",
+    import: "./dist/progress-catalog.js",
+  });
 });
 
 test("preferences are publication scoped, bounded, deterministic, and immutable", () => {
@@ -497,7 +501,7 @@ test("aggregate percent uses current word counts and exposes canonical statuses"
 test("browser state modules do not reference ambient browser or server authority", async () => {
   const source = (
     await Promise.all(
-      ["preferences.js", "progress.js", "progress-overview.js", "sync.js"].map((name) =>
+      ["preferences.js", "progress.js", "progress-catalog.js", "progress-overview.js", "sync.js"].map((name) =>
         readFile(
           new URL(`../packages/reader/dist/${name}`, import.meta.url),
           "utf8",

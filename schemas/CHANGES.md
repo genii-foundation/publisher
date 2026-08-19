@@ -15,6 +15,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Added a virtualized Reader bookmark collection that keeps all 1,000 supported saved passages searchable and operable with bounded browser layout work.
 - Added server rendered focus markup that preserves one exact manuscript text occurrence, semantic emphasis, selection ranges, bookmark offsets, and assistive text.
 - Added one browser safe progress overview for weighted completion, section states, recent reading, recommendations, and continuity aware bookmark presence.
+- Added a lazy Reader-build-bound progress catalog plus publication map, recommendations, recent reading, and reactive saved-passage indicators in the default Reader.
 
 ## 2026-08-13, GENII Foundation
 

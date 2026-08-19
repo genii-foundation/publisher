@@ -47,9 +47,16 @@ import {
   createReaderSearchIndex,
   serializeReaderSearchIndex,
 } from "@genii-foundation/publisher-reader/search";
+import {
+  createReaderProgressCatalog,
+  serializeReaderProgressCatalog,
+} from "@genii-foundation/publisher-reader/progress-catalog";
 import type {
   ReaderSearchIndex,
 } from "@genii-foundation/publisher-reader/search";
+import type {
+  ReaderProgressCatalog,
+} from "@genii-foundation/publisher-reader/progress-catalog";
 import type {
   AudioEnvelope,
   Diagnostic,
@@ -448,6 +455,12 @@ export interface BuiltPublicationReader {
     /** Canonical JSON text, exactly as it would be written. */
     readonly text: string;
   };
+  /** Lightweight section identity and routing data for progress surfaces. */
+  readonly progress: {
+    readonly catalog: ReaderProgressCatalog;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
   /**
    * Cross-checked narration and its artifact, when the publication declares a
    * catalog.
@@ -529,6 +542,11 @@ export async function buildPublicationReader(
   const search = Object.freeze({
     index: searchIndex,
     text: serializeReaderSearchIndex(searchIndex),
+  });
+  const progressCatalog = createReaderProgressCatalog(reader.value);
+  const progress = Object.freeze({
+    catalog: progressCatalog,
+    text: serializeReaderProgressCatalog(progressCatalog),
   });
 
   // Cross-checked against every section the publication compiled, not against
@@ -720,6 +738,7 @@ export async function buildPublicationReader(
       reader: reader.value,
       text,
       search,
+      progress,
       ...(audio === undefined ? {} : { audio }),
       ...(sync === undefined ? {} : { sync }),
       ...(updates === undefined ? {} : { updates }),

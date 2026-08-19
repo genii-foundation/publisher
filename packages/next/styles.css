@@ -512,6 +512,70 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   text-align: end;
 }
 
+.publisher-reader-progress-overview {
+  display: grid;
+  gap: 0.75rem;
+  padding-block-end: 1rem;
+  border-block-end: 1px solid var(--publisher-color-border);
+}
+
+.publisher-reader-progress-overview h3,
+.publisher-reader-progress-overview h4,
+.publisher-reader-progress-overview p {
+  margin: 0;
+}
+
+.publisher-reader-progress-summary strong {
+  font-size: 1.35em;
+}
+
+.publisher-reader-progress-map,
+.publisher-reader-progress-list ol {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.publisher-reader-progress-map {
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+}
+
+.publisher-reader-progress-map li,
+.publisher-reader-progress-list li {
+  min-width: 0;
+}
+
+.publisher-reader-progress-map a,
+.publisher-reader-progress-list a {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem;
+  border: 1px solid var(--publisher-color-border);
+  border-radius: var(--publisher-control-radius);
+  color: inherit;
+  text-decoration: none;
+}
+
+.publisher-reader-progress-map li[data-status="read"] a {
+  border-inline-start: 0.35rem solid var(--publisher-color-accent);
+}
+
+.publisher-reader-progress-map li[data-status="updated"] a {
+  border-inline-start: 0.35rem solid currentColor;
+}
+
+.publisher-reader-progress-map small,
+.publisher-reader-progress-list small {
+  color: var(--publisher-color-muted-text);
+}
+
+.publisher-reader-progress-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
 .publisher-reader-panel .publisher-reader-primary-action {
   justify-self: start;
   padding: 0.65rem 0.85rem;

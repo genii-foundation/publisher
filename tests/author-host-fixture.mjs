@@ -99,6 +99,8 @@ export function installRenderer(
     readerDataPath,
     searchDataPath,
     omitSearchDataPath = false,
+    progressDataPath,
+    omitProgressDataPath = false,
     audioDataPath,
     omitAudioDataPath = false,
     syncDataPath,
@@ -110,7 +112,7 @@ export function installRenderer(
     omitMigrations = false,
     capabilities = {
       routeKinds: ["collection", "home", "section", "updates", "work"],
-      dataArtifacts: ["audio", "search", "sync", "updates"],
+      dataArtifacts: ["audio", "progress", "search", "sync", "updates"],
     },
     omitCapabilities = false,
   } = {},
@@ -120,6 +122,9 @@ export function installRenderer(
   const searchPath = omitSearchDataPath
     ? undefined
     : (searchDataPath ?? `public/${short}-search.json`);
+  const progressPath = omitProgressDataPath
+    ? undefined
+    : (progressDataPath ?? `public/${short}-progress.json`);
   // A stub renderer claims support for narration by default, so it needs a place
   // to put it. Declaring the capability without a path is a renderer defect the
   // engine refuses, and omitAudioDataPath exists so that case stays testable.
@@ -179,6 +184,9 @@ export function installRenderer(
       ...(searchPath === undefined
         ? []
         : [`    searchDataPath: ${JSON.stringify(searchPath)},`]),
+      ...(progressPath === undefined
+        ? []
+        : [`    progressDataPath: ${JSON.stringify(progressPath)},`]),
       // Omitted entirely when the caller gives none, so a renderer with no place
       // for narration is expressible. Declaring it as undefined would be a
       // different claim from not declaring it at all.
@@ -204,6 +212,7 @@ export function installRenderer(
   return {
     artifactPath,
     searchDataPath: searchPath,
+    progressDataPath: progressPath,
     audioDataPath: audioPath,
     syncDataPath: syncPath,
     updatesDataPath: updatesPath,

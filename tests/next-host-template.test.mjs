@@ -22,6 +22,7 @@ import {
   PUBLISHER_NEXT_HOST_MIGRATIONS,
   PUBLISHER_NEXT_HOST_RENDERER,
   PUBLISHER_NEXT_READER_DATA_PATH,
+  PUBLISHER_NEXT_PROGRESS_DATA_PATH,
   PUBLISHER_NEXT_SEARCH_DATA_PATH,
   PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY,
   createPublisherNextHostTemplate,
@@ -107,7 +108,9 @@ test("the host contract declares exactly the author host file set", () => {
     PUBLISHER_NEXT_READER_DATA_PATH,
   );
   assert.equal(result.searchDataPath, PUBLISHER_NEXT_SEARCH_DATA_PATH);
+  assert.equal(result.progressDataPath, PUBLISHER_NEXT_PROGRESS_DATA_PATH);
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("search"));
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("progress"));
   assert.deepEqual(PUBLISHER_NEXT_HOST_MIGRATIONS, [
     {
       from: "0.1.0",
@@ -147,6 +150,12 @@ test("the host contract declares exactly the author host file set", () => {
       to: "0.7.0",
       summary:
         "Add provider-neutral publication-scoped Reader data transfer routes.",
+    },
+    {
+      from: "0.7.0",
+      to: "0.8.0",
+      summary:
+        "Add the required lazy progress catalog destination to the official host contract.",
     },
   ]);
 });

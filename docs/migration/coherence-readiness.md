@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 22 upgraded | 22 | Publisher implements a stronger checked contract. |
+| 25 upgraded | 25 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 20 planned | 20 | Accepted Publisher scope is not implemented yet. |
+| 17 planned | 17 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -74,11 +74,12 @@ same-tab notification, native cross-tab convergence, and stable server
 snapshots. The renderer now separates one session opening from scroll samples,
 conservatively accumulates visible active reading time, derives returns, shows
 the current section status and metrics, and supports explicit completion of the
-current revision. Publication heatmaps, recent sections, and recommendations
-remain planned. The framework neutral Reader now derives their shared weighted
+current revision. The framework neutral Reader now derives the shared weighted
 summary, ordered section states, updated-first recommendations, recent reads,
-and continuity-aware bookmark presence from one immutable model, so the future
-renderer surfaces cannot disagree about state.
+and continuity-aware bookmark presence from one immutable model. The default
+Progress interface loads a small identity-bound catalog only when opened, then
+renders the publication summary, section map, recommendations, recent reading,
+and reactive saved-passage indicators inside the supported mobile viewport.
 
 ### Durable passage bookmarks
 
@@ -106,8 +107,9 @@ note without invalidating the selected range. Exact and uniquely relocated
 ranges now receive reactive margin markers outside the manuscript DOM, including
 deterministic first measurement in background tabs. The complete 1,000-item
 collection now remains searchable and operable while a contained fixed-row
-viewport bounds mounted DOM and layout work. Secondary Reader surfaces remain
-planned.
+viewport bounds mounted DOM and layout work. Saved-passage presence now reaches
+progress, current-section margin markers, and search from the same reactive
+private document.
 
 ### Preferences and focus
 
@@ -142,10 +144,12 @@ Reader rail fetches that artifact only when search opens and supplies loading,
 failure, no-result, and bounded result states. It queries the latest private
 bookmark document separately and renders saved-passage matches before public
 manuscript results without placing private state in the generated artifact.
-Separate outline and breadcrumb artifacts remain planned. The default section
-page now renders work and section ancestry without JavaScript from validated
-parent identities and canonical destinations. The hydrated contents panel shows
-the same current path and marks its active outline entry.
+Search and publication progress are separate bounded artifacts fetched only
+when their interfaces open. Current-page outline and breadcrumbs remain small
+server-supplied renderer context rather than a second client download. The
+default section page renders work and section ancestry without JavaScript from
+validated parent identities and canonical destinations. The hydrated contents
+panel shows the same current path and marks its active outline entry.
 
 ### Complete offline packages
 
@@ -273,14 +277,11 @@ sections, and 10,000 continuity redirects.
 The following are accepted scope, not release blockers waiting for another
 product decision:
 
-1. Add publication heatmaps, recent sections, and next-section recommendations.
-2. Project the remaining capability-sliced client artifacts.
-3. Add the default narration player and timing interaction.
-4. Add atomic offline package planning and official service worker integration.
-5. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
-6. Generalize audio checkpoint, promotion, and manuscript publication guards.
-7. Implement multi-view Updates and multi-section build support.
-8. Adopt Coherence through a reviewed migration plan with dual-read or
+1. Add the default narration player and timing interaction.
+2. Add atomic offline package planning and official service worker integration.
+3. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
+4. Generalize audio checkpoint, promotion, and manuscript publication guards.
+5. Adopt Coherence through a reviewed migration plan with dual-read or
     copy-and-verify state compatibility.
 
 ## Material that remains Coherence-owned

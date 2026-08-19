@@ -870,6 +870,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         type ReaderProgressOverview,
       } from "@genii-foundation/publisher-reader/progress-overview";
       import {
+        createReaderProgressCatalog,
+        type ReaderProgressCatalog,
+      } from "@genii-foundation/publisher-reader/progress-catalog";
+      import {
         validateReaderPassageRange,
         type ReaderPassageRange,
       } from "@genii-foundation/publisher-reader/passage-range";
@@ -919,6 +923,8 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         createEmptyReaderBookmarksState("portable-reader");
       const overview: ReaderProgressOverview =
         createReaderProgressOverview(progress, bookmarks, []);
+      const progressCatalog: ReaderProgressCatalog =
+        createReaderProgressCatalog(envelope);
       const sync: ReaderSyncCoordinatorState =
         createReaderSyncCoordinatorState("portable-reader");
       declare const searchIndex: ReaderSearchIndex;
@@ -938,6 +944,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         rangeValidation,
         bookmarks,
         overview,
+        progressCatalog,
         sync,
         searchIndex,
         terms,
@@ -1118,6 +1125,11 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         createReaderProgressOverview,
       } from "@genii-foundation/publisher-reader/progress-overview";
       import {
+        createReaderProgressCatalog,
+        parseReaderProgressCatalog,
+        serializeReaderProgressCatalog,
+      } from "@genii-foundation/publisher-reader/progress-catalog";
+      import {
         validateReaderPassageRange,
       } from "@genii-foundation/publisher-reader/passage-range";
       import {
@@ -1221,6 +1233,14 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
           createEmptyReaderBookmarksState("portable-reader"),
           [],
         ).aggregate.percent,
+        0,
+      );
+      const progressCatalog = createReaderProgressCatalog(envelope);
+      assert.equal(
+        parseReaderProgressCatalog(
+          serializeReaderProgressCatalog(progressCatalog),
+          { publicationId: "portable-reader", readerBuildId: digest },
+        )?.entries.length,
         0,
       );
       assert.equal(

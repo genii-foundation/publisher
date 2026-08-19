@@ -56,6 +56,7 @@ export {
 } from "./node/compile.js";
 export {
   AUDIO_DATA_ARTIFACT,
+  PROGRESS_DATA_ARTIFACT,
   SEARCH_DATA_ARTIFACT,
   UPDATES_DATA_ARTIFACT,
   assertHostCanCarryDataArtifact,

@@ -63,6 +63,7 @@ import {
 } from "../dist/node/protected-roots.js";
 import {
   AUDIO_DATA_ARTIFACT,
+  PROGRESS_DATA_ARTIFACT,
   SEARCH_DATA_ARTIFACT,
   UPDATES_DATA_ARTIFACT,
   assertHostCanCarryDataArtifact,
@@ -858,6 +859,17 @@ async function runBuild(options) {
         `Reader build ${built.value.search.index.readerBuildId}`,
       ],
     },
+    {
+      id: PROGRESS_DATA_ARTIFACT,
+      noun: "progress catalog",
+      label: "Progress",
+      declaredPath: template.progressDataPath,
+      text: built.value.progress.text,
+      detail: [
+        `Sections     ${built.value.progress.catalog.entries.length.toLocaleString("en-US")}`,
+        `Reader build ${built.value.progress.catalog.readerBuildId}`,
+      ],
+    },
     built.value.audio === undefined
       ? null
       : {
@@ -1236,6 +1248,12 @@ async function runStatus(options) {
               label: "Search",
               declaredPath: template.searchDataPath,
               text: built.value.search.text,
+            },
+            {
+              id: PROGRESS_DATA_ARTIFACT,
+              label: "Progress",
+              declaredPath: template.progressDataPath,
+              text: built.value.progress.text,
             },
             built.value.audio === undefined
               ? null

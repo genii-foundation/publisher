@@ -82,6 +82,13 @@ import {
   searchReaderIndex,
   type ReaderSearchIndex,
 } from "@genii-foundation/publisher-reader/search";
+import {
+  parseReaderProgressCatalog,
+  type ReaderProgressCatalog,
+} from "@genii-foundation/publisher-reader/progress-catalog";
+import {
+  createReaderProgressOverview,
+} from "@genii-foundation/publisher-reader/progress-overview";
 import type {
   ReaderSection,
   Sha256Digest,
@@ -121,6 +128,7 @@ export interface PublisherReaderRailProps {
   readonly publicationId: string;
   readonly publicationTitle: string;
   readonly readerBuildId: Sha256Digest;
+  readonly progressPath: string;
   readonly searchPath: string;
   readonly outline: readonly PublisherReaderOutlineEntry[];
   readonly currentSection?: ReaderSection;
@@ -281,6 +289,7 @@ export function PublisherReaderRail({
   publicationId,
   publicationTitle,
   readerBuildId,
+  progressPath,
   searchPath,
   outline,
   currentSection,
@@ -357,6 +366,8 @@ export function PublisherReaderRail({
   const [selectionMessage, setSelectionMessage] = useState("");
   const [searchIndex, setSearchIndex] = useState<ReaderSearchIndex | null>(null);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const [progressCatalog, setProgressCatalog] = useState<ReaderProgressCatalog | null>(null);
+  const [progressCatalogState, setProgressCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [syncState, setSyncState] = useState<ReaderSyncState>("idle");
   const [syncEmail, setSyncEmail] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
@@ -798,6 +809,28 @@ export function PublisherReaderRail({
   }, [currentSection, progressStore, publicationId]);
 
   useEffect(() => {
+    if (openPanel !== "progress" || progressCatalogState !== "idle") return;
+    setProgressCatalogState("loading");
+    void fetch(progressPath, { credentials: "same-origin" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Progress artifact request failed.");
+        return response.text();
+      })
+      .then((serialized) => {
+        const parsed = parseReaderProgressCatalog(serialized, {
+          publicationId,
+          readerBuildId,
+        });
+        if (parsed === null) throw new Error("Progress artifact identity mismatch.");
+        setProgressCatalog(parsed);
+        setProgressCatalogState("ready");
+      })
+      .catch(() => {
+        setProgressCatalogState("failed");
+      });
+  }, [openPanel, progressCatalogState, progressPath, publicationId, readerBuildId]);
+
+  useEffect(() => {
     if (openPanel !== "search" || searchState !== "idle") return;
     setSearchState("loading");
     void fetch(searchPath, { credentials: "same-origin" })
@@ -963,6 +996,16 @@ export function PublisherReaderRail({
   const currentProgress = currentSection === undefined
     ? null
     : resolveReaderSectionProgress(progress, currentSection);
+  const progressOverview = useMemo(
+    () => progressCatalog === null
+      ? null
+      : createReaderProgressOverview(
+          progress,
+          bookmarkState,
+          progressCatalog.entries,
+        ),
+    [bookmarkState, progress, progressCatalog],
+  );
   const normalizedQuery = query.trim();
   const results = searchIndex === null || normalizedQuery.length < 2
     ? []
@@ -1305,7 +1348,54 @@ export function PublisherReaderRail({
               <p>Open a section to view reading progress.</p>
             ) : (
               <div className="publisher-reader-progress-panel">
-                <h3>{currentSection.title}</h3>
+                {progressCatalogState === "loading" ? <p role="status">Loading publication progress…</p> : null}
+                {progressCatalogState === "failed" ? <p role="alert">Publication progress could not load. Current section progress remains available.</p> : null}
+                {progressOverview === null ? null : (
+                  <section className="publisher-reader-progress-overview" aria-labelledby={`${panelId}-publication-progress`}>
+                    <h3 id={`${panelId}-publication-progress`}>Publication</h3>
+                    <p className="publisher-reader-progress-summary">
+                      <strong>{progressOverview.aggregate.percent}%</strong> complete across {new Intl.NumberFormat().format(progressOverview.aggregate.sectionCount)} sections
+                    </p>
+                    <p>{new Intl.NumberFormat().format(progressOverview.bookmarkedSectionCount)} section{progressOverview.bookmarkedSectionCount === 1 ? "" : "s"} with saved passages</p>
+                    <ol className="publisher-reader-progress-map" aria-label="Section progress">
+                      {progressOverview.sections.map((section) => (
+                        <li key={`${section.workId}:${section.sectionId}`} data-status={section.status}>
+                          <a href={section.href} aria-current={currentSection.id === section.sectionId ? "page" : undefined}>
+                            <span>{section.title}</span>
+                            <small>{progressStatusLabel(section.status)}, {section.percent}%{section.bookmarked ? ", saved passage" : ""}</small>
+                          </a>
+                        </li>
+                      ))}
+                    </ol>
+                    {progressOverview.recommendations.length === 0 ? null : (
+                      <div className="publisher-reader-progress-list">
+                        <h4>Continue reading</h4>
+                        <ol>
+                          {progressOverview.recommendations.map((item) => (
+                            <li key={item.sectionId}>
+                              <a href={item.href}>{item.title}</a>
+                              <small>{item.reason === "updated" ? "Updated since you read it" : "Continue here"}{item.bookmarked ? ", saved passage" : ""}</small>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                    {progressOverview.recentlyRead.length === 0 ? null : (
+                      <div className="publisher-reader-progress-list">
+                        <h4>Recently read</h4>
+                        <ol>
+                          {progressOverview.recentlyRead.map((item) => (
+                            <li key={item.sectionId}>
+                              <a href={item.href}>{item.title}</a>
+                              {item.bookmarked ? <small>Saved passage</small> : null}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </section>
+                )}
+                <h3>Current section: {currentSection.title}</h3>
                 <dl>
                   <div><dt>Status</dt><dd>{progressStatusLabel(currentProgress.status)}</dd></div>
                   <div><dt>Complete</dt><dd>{currentProgress.progress?.percent ?? 0}%</dd></div>

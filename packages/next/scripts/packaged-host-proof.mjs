@@ -55,6 +55,10 @@ import {
   createReaderSearchIndex,
   serializeReaderSearchIndex,
 } from "../../reader/dist/search.js";
+import {
+  createReaderProgressCatalog,
+  serializeReaderProgressCatalog,
+} from "../../reader/dist/progress-catalog.js";
 
 const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const repositoryRoot = fileURLToPath(
@@ -745,6 +749,16 @@ async function assertHydratedReaderTools({
       { complete: true, controls: 6, inViewport: true },
       "The hydrated Reader rail was not reachable inside the mobile viewport.",
     );
+    const progressRequestsBeforeOpen = await page.send("Runtime.evaluate", {
+      expression:
+        'performance.getEntriesByType("resource").filter((entry) => entry.name.includes("publication-reader-progress.json")).length',
+      returnByValue: true,
+    });
+    assert.equal(
+      progressRequestsBeforeOpen.result?.value,
+      0,
+      "The progress catalog loaded before its interface opened.",
+    );
 
     const focusMarkup = await page.send("Runtime.evaluate", {
       expression: [
@@ -921,6 +935,10 @@ async function assertHydratedReaderTools({
           "  const entry = state === null ? null : Object.values(state.entries ?? {})[0] ?? null;",
           "  return {",
           '    heading: document.querySelector(".publisher-reader-progress-panel h3")?.textContent ?? "",',
+          '    aggregate: document.querySelector(".publisher-reader-progress-summary")?.textContent ?? "",',
+          '    mapCount: document.querySelectorAll(".publisher-reader-progress-map li").length,',
+          '    requestCount: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("publication-reader-progress.json")).length,',
+          '    panelInViewport: (() => { const rect = document.querySelector(".publisher-reader-panel")?.getBoundingClientRect(); return rect !== undefined && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight; })(),',
           "    openCount: entry?.openCount ?? 0,",
           "    readingTimeMs: entry?.readingTimeMs ?? 0,",
           "    status: values.Status ?? \"\",",
@@ -931,12 +949,16 @@ async function assertHydratedReaderTools({
         returnByValue: true,
       });
       renderedProgress = evaluated.result?.value;
-      if (renderedProgress?.readingTimeMs > 0) break;
+      if (renderedProgress?.readingTimeMs > 0 && renderedProgress.mapCount > 0) break;
       await wait(100);
     }
     assert.equal(renderedProgress?.openCount, 1);
     assert.equal(renderedProgress?.visits, "1");
     assert.ok(renderedProgress?.heading.length > 0);
+    assert.match(renderedProgress?.aggregate ?? "", /% complete across/u);
+    assert.ok(renderedProgress?.mapCount > 0);
+    assert.equal(renderedProgress?.requestCount, 1);
+    assert.equal(renderedProgress?.panelInViewport, true);
     assert.ok(renderedProgress?.status.length > 0);
     assert.ok(
       renderedProgress?.readingTimeMs > 0,
@@ -1328,6 +1350,39 @@ async function assertHydratedReaderTools({
         bookmarkSearchQuote,
         bookmarkProof.quote,
         "The publication search did not include the reactive saved-passage state.",
+      );
+      const openedBookmarkProgress = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+          '    .find((candidate) => candidate.textContent?.includes("Progress"));',
+          "  button?.click();",
+          "  return button !== undefined;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(openedBookmarkProgress.result?.value, true);
+      let bookmarkProgressReady = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const summary = document.querySelector(".publisher-reader-progress-overview")?.textContent ?? "";',
+            '  const saved = document.querySelector(".publisher-reader-progress-map small")?.textContent ?? "";',
+            '  return summary.includes("1 section with saved passages") && saved.includes("saved passage");',
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        bookmarkProgressReady = evaluated.result?.value === true;
+        if (bookmarkProgressReady) break;
+        await wait(50);
+      }
+      assert.equal(
+        bookmarkProgressReady,
+        true,
+        "The progress surface did not react to bookmark state written by its peer tab.",
       );
       await page.send("Runtime.evaluate", {
         expression: [
@@ -2462,6 +2517,7 @@ export async function runPackagedHostProof(
       `app/${basename(boundaryProofRoot)}/page.tsx`,
       "public/proof.png",
       hostTemplate.readerDataPath,
+      hostTemplate.progressDataPath,
       hostTemplate.searchDataPath,
       hostTemplate.syncDataPath,
     ];
@@ -2478,6 +2534,11 @@ export async function runPackagedHostProof(
       writeJson(
         join(hostRoot, hostTemplate.readerDataPath),
         reader,
+      ),
+      writeFile(
+        join(hostRoot, hostTemplate.progressDataPath),
+        serializeReaderProgressCatalog(createReaderProgressCatalog(reader)),
+        "utf8",
       ),
       writeFile(
         join(hostRoot, hostTemplate.searchDataPath),

@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.7.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.8.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -52,6 +52,10 @@ export const PUBLISHER_NEXT_READER_DATA_PATH =
 /** Host-relative location of the lazy client search artifact. */
 export const PUBLISHER_NEXT_SEARCH_DATA_PATH =
   "public/publication-reader-search.json";
+
+/** Host-relative location of the lazy publication progress catalog. */
+export const PUBLISHER_NEXT_PROGRESS_DATA_PATH =
+  "public/publication-reader-progress.json";
 
 /**
  * Host-relative location of the narration envelope.
@@ -125,7 +129,7 @@ export interface PublisherNextHostCapabilities {
 export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
   Object.freeze({
     routeKinds: Object.freeze(["home", "work", "collection", "section", "updates"]),
-    dataArtifacts: Object.freeze(["audio", "search", "sync", "updates"]),
+    dataArtifacts: Object.freeze(["audio", "progress", "search", "sync", "updates"]),
   });
 
 export interface PublisherNextHostMigration {
@@ -184,9 +188,15 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.6.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.7.0",
       summary:
         "Add provider-neutral publication-scoped Reader data transfer routes.",
+    }),
+    Object.freeze({
+      from: "0.7.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Add the required lazy progress catalog destination to the official host contract.",
     }),
   ]);
 
@@ -216,6 +226,8 @@ export interface PublisherNextHostTemplate {
   readonly readerDataPath: string;
   /** Where the required capability-sliced search artifact belongs. */
   readonly searchDataPath: string;
+  /** Where the required capability-sliced progress artifact belongs. */
+  readonly progressDataPath: string;
   /**
    * Where the narration envelope belongs, when this renderer can serve one.
    *
@@ -645,6 +657,7 @@ export function createPublisherNextHostTemplate(
     rendererVersion: PUBLISHER_NEXT_VERSION,
     readerDataPath: PUBLISHER_NEXT_READER_DATA_PATH,
     searchDataPath: PUBLISHER_NEXT_SEARCH_DATA_PATH,
+    progressDataPath: PUBLISHER_NEXT_PROGRESS_DATA_PATH,
     audioDataPath: PUBLISHER_NEXT_AUDIO_DATA_PATH,
     syncDataPath: PUBLISHER_NEXT_SYNC_DATA_PATH,
     updatesDataPath: PUBLISHER_NEXT_UPDATES_DATA_PATH,

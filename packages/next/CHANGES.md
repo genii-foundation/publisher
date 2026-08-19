@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Advanced the host contract to 0.8.0 with a required lazy progress catalog destination.
+- Added publication progress maps, updated-first recommendations, recent reading, and reactive saved-passage indicators to the mobile-contained Reader panel.
 - Added a contained fixed-row virtual bookmark list that preserves complete thousand-item query, export, deletion, and synchronization semantics.
 - Extended the clean packed-host Chrome proof through a reactive 1,000-bookmark peer document, bounded mounted rows, mobile containment, and accessible final-item identity.
 - Added exact and uniquely relocated bookmark margin markers without modifying or painting the manuscript text subtree.

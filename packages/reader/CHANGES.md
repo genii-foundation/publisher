@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Added a bounded Reader-build-bound progress catalog that excludes manuscript text and feeds the pure progress overview.
 - Added a versioned readable bookmark export with inert reader text, live-only canonical ordering, validated destinations, and stable publication filenames.
 - Added a framework-neutral local-first synchronization coordinator with debounce, reconnect, bounded retry, schema-ahead refusal, and in-flight edit reconciliation.
 - Preserved stable Updates view identities and pagination authority through Reader projection and runtime validation.
