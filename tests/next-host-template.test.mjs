@@ -21,6 +21,8 @@ import {
   PUBLISHER_NEXT_HOST_CAPABILITIES,
   PUBLISHER_NEXT_HOST_MIGRATIONS,
   PUBLISHER_NEXT_HOST_RENDERER,
+  PUBLISHER_NEXT_OFFLINE_CATALOG_HREF,
+  PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH,
   PUBLISHER_NEXT_READER_DATA_PATH,
   PUBLISHER_NEXT_PROGRESS_DATA_PATH,
   PUBLISHER_NEXT_SEARCH_DATA_PATH,
@@ -80,6 +82,7 @@ test("the host contract declares exactly the author host file set", () => {
       "app/layout.tsx",
       "app/not-found.tsx",
       "app/page.tsx",
+      "app/publication-reader-offline.json/route.ts",
       "next-env.d.ts",
       "next.config.mjs",
       "package.json",
@@ -89,6 +92,7 @@ test("the host contract declares exactly the author host file set", () => {
       "pages/_document.tsx",
       "pages/_error.tsx",
       "proxy.ts",
+      "public/offline-sw.js",
       "publisher-application.js",
       "publisher-config.d.ts",
       "publisher-default-config.js",
@@ -109,6 +113,9 @@ test("the host contract declares exactly the author host file set", () => {
   );
   assert.equal(result.searchDataPath, PUBLISHER_NEXT_SEARCH_DATA_PATH);
   assert.equal(result.progressDataPath, PUBLISHER_NEXT_PROGRESS_DATA_PATH);
+  assert.equal(result.offlineCatalogHref, PUBLISHER_NEXT_OFFLINE_CATALOG_HREF);
+  assert.equal(PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH, "public/offline-sw.js");
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("offline"));
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("search"));
   assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("progress"));
   assert.deepEqual(PUBLISHER_NEXT_HOST_MIGRATIONS, [
@@ -157,7 +164,32 @@ test("the host contract declares exactly the author host file set", () => {
       summary:
         "Add the required lazy progress catalog destination to the official host contract.",
     },
+    {
+      from: "0.8.0",
+      to: "0.9.0",
+      summary:
+        "Add the build-bound offline catalog route and generic service worker to the official host contract.",
+    },
   ]);
+});
+
+test("offline host files expose only generic cache and catalog contracts", () => {
+  const result = template();
+  const route = contentsOf(result, "app/publication-reader-offline.json/route.ts");
+  assert.match(route, /createReaderOfflineCatalog/u);
+  assert.match(route, /rendererBuildId/u);
+  assert.doesNotMatch(route, /publisher-application|next\/link|next\/navigation/u);
+  assert.match(route, /reader-offline\+json/u);
+  const worker = contentsOf(result, PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH);
+  assert.match(worker, /networkFirst/u);
+  assert.match(worker, /searchParams\.has\("_rsc"\)/u);
+  assert.match(worker, /headers\.get\("rsc"\)/u);
+  assert.match(worker, /next-router-state-tree/u);
+  assert.match(worker, /response\.status !== 206/u);
+  assert.match(worker, /request\.headers\.has\("range"\)/u);
+  assert.match(worker, /matchActivePackage/u);
+  assert.match(worker, /genii-publisher-offline-metadata-v1/u);
+  assert.doesNotMatch(worker, /coherence|manuscripts|audio-clips/ui);
 });
 
 test("synchronization routes delegate through the checked server-only bridge", () => {

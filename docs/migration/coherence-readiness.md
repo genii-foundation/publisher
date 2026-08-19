@@ -42,9 +42,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 35 upgraded | 35 | Publisher implements a stronger checked contract. |
+| 39 upgraded | 39 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 7 planned | 7 | Accepted Publisher scope is not implemented yet. |
+| 3 planned | 3 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -161,9 +161,18 @@ immutable package is staged and verified before activation. The previous complet
 package remains active if replacement fails. Offline navigation uses full
 documents because framework flight responses are not part of the package.
 
-Publisher has no equivalent package planner, browser adapter, or service worker
-yet. This is accepted engine and renderer scope. Cache names, package grouping,
-labels, and publication policy remain author configuration.
+Publisher now projects one strict immutable package per work. Each package binds
+the Reader, renderer, work content, and optional narration catalog, then closes
+over canonical and historical documents, shared Reader artifacts, assets, all
+matching voice clips, timing sidecars, and discovered Next.js dependencies. The
+browser stages and verifies every resource before switching one active metadata
+pointer. A failed replacement leaves the previous complete cache active. The
+generic worker is installed only after an explicit download, leaves framework
+and private traffic alone, and falls back from the network to active packages
+and then its runtime cache. Offline links use full document navigation. Public
+search is scoped to installed works, local bookmarks remain available, and
+cached clips play through temporary revoked blob URLs. The clean packed-host
+Chrome proof exercises the complete disconnected path.
 
 ### Narration
 
@@ -302,6 +311,17 @@ adoption, not recovery of the foundation.
 
 ## Recently closed gap
 
+### Atomic offline packages
+
+The framework-neutral Reader now emits a bounded per-work package catalog that
+is complete with or without narration. The official renderer supplies visible
+download and update state, dynamic dependency discovery, staged verification,
+atomic activation, retained failure recovery, and a generic network-first
+service worker. The browser proof installs a work, cuts transport, performs a
+cold document load, restricts search to that work, retains bookmarks, plays
+cached audio, applies cached timings, and follows a link through a fresh offline
+document. ADR 0046 records the boundary.
+
 ### Updates integration
 
 Publisher now accepts author-owned plain Updates catalogs, validates stable named
@@ -326,12 +346,10 @@ sections, and 10,000 continuity redirects.
 The following are accepted scope, not release blockers waiting for another
 product decision:
 
-1. Add route-preserving playback intent.
-2. Add atomic offline package planning and official service worker integration.
-3. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
-4. Add exact-base promotion application.
-5. Adopt Coherence through a reviewed migration plan with dual-read or
-    copy-and-verify state compatibility.
+1. Complete accessible manuscript table regions and heading extension slots.
+2. Add exact local preview candidate identity for branch, commit, worktree, and bytes.
+3. Adopt Coherence through a reviewed migration plan with dual-read or
+   copy-and-verify state compatibility.
 
 ## Material that remains Coherence-owned
 

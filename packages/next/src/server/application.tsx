@@ -20,6 +20,14 @@ import {
   validatePublicationReaderEnvelope,
 } from "@genii-foundation/publisher-reader";
 import {
+  createReaderOfflineCatalog,
+  serializeReaderOfflineCatalog,
+} from "@genii-foundation/publisher-reader/offline";
+import {
+  parseReaderNarrationEnvelope,
+  type ReaderNarrationEnvelope,
+} from "@genii-foundation/publisher-reader/narration";
+import {
   applyReaderLinksToMarkdown,
   type ReaderBlockMarkdownLink,
 } from "@genii-foundation/publisher-reader/markdown";
@@ -32,9 +40,11 @@ import type {
   ReaderCollection,
   ReaderSection,
   ReaderWork,
+  Sha256Digest,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
 import {
+  validateAudioEnvelopeShape,
   validateSyncEnvelopeShape,
   validateUpdatesEnvelopeShape,
 } from "@genii-foundation/publisher-schema";
@@ -57,6 +67,9 @@ import {
 import {
   PublisherReaderNarrationProvider,
 } from "../client/reader-narration-provider.js";
+import {
+  PublisherReaderOfflineProvider,
+} from "../client/reader-offline-provider.js";
 import type {
   PublisherNextMarkdownForBlock,
 } from "../components/pages.js";
@@ -1527,7 +1540,7 @@ export async function createPublicationNextApplication(
     const inspectedOptions = inspectRecord(
       options,
       ["reader"],
-      ["syncData", "theme", "updates", "updatesData"],
+      ["audioData", "syncData", "theme", "updates", "updatesData"],
     );
     if (inspectedOptions === null) {
       return failure(
@@ -1544,6 +1557,37 @@ export async function createPublicationNextApplication(
       return readerResult;
     }
     const reader = readerResult.value;
+    const suppliedAudioData = valueOf(inspectedOptions, "audioData");
+    let narration: ReaderNarrationEnvelope | null = null;
+    let narrationCatalogHash: Sha256Digest | null = null;
+    if (suppliedAudioData !== undefined) {
+      const audioResult = validateAudioEnvelopeShape(suppliedAudioData);
+      if (!audioResult.valid) return audioResult;
+      if (
+        audioResult.value.publicationId !== reader.publicationId ||
+        audioResult.value.buildId !== reader.buildId
+      ) {
+        return failure(
+          "next.audio.identity_mismatch",
+          "/audioData",
+          "The narration artifact does not belong to this Reader build.",
+          "identity",
+        );
+      }
+      narration = parseReaderNarrationEnvelope(JSON.stringify(audioResult.value), {
+        publicationId: reader.publicationId,
+        readerBuildId: reader.buildId,
+      });
+      if (narration === null) {
+        return failure(
+          "next.audio.projection_invalid",
+          "/audioData",
+          "The narration artifact cannot be projected into the browser Reader contract.",
+          "format",
+        );
+      }
+      narrationCatalogHash = audioResult.value.source.catalogSha256 as Sha256Digest;
+    }
     const suppliedSyncData = valueOf(inspectedOptions, "syncData");
     let sync: SyncEnvelope | null = null;
     if (suppliedSyncData !== undefined) {
@@ -1709,6 +1753,36 @@ export async function createPublicationNextApplication(
       sync,
       continuity,
     );
+    const offlineCatalog = createReaderOfflineCatalog({
+      reader,
+      rendererBuildId: artifact.manifest.buildId,
+      catalogHref: `/publication-reader-offline.json?rendererBuildId=${encodeURIComponent(artifact.manifest.buildId)}`,
+      sharedResources: Object.freeze([
+        Object.freeze({
+          href: "/publication-reader-search.json",
+          kind: "data" as const,
+        }),
+        Object.freeze({
+          href: "/publication-reader-progress.json",
+          kind: "data" as const,
+        }),
+        ...(narration === null
+          ? []
+          : [Object.freeze({
+              href: "/publication-audio.json",
+              kind: "data" as const,
+            })]),
+      ]),
+      ...(narration === null || narrationCatalogHash === null
+        ? {}
+        : {
+            narration: {
+              catalogHash: narrationCatalogHash,
+              envelope: narration,
+            },
+          }),
+    });
+    const offlineCatalogText = serializeReaderOfflineCatalog(offlineCatalog);
 
     const renderPage = async (
       page: PublisherNextPage,
@@ -1799,6 +1873,8 @@ export async function createPublicationNextApplication(
       reader,
       manifest: artifact.manifest,
       artifact,
+      offlineCatalog,
+      offlineCatalogText,
       theme: themeResult.value.instance,
       errorIdentity: errorIdentityResult.value,
       slashPolicy: routePlan.slashPolicy,
@@ -1819,15 +1895,22 @@ export async function createPublicationNextApplication(
         return (
           <html lang={reader.publication.language}>
             <body>
-              <PublisherReaderNarrationProvider
-                audioPath="/publication-audio.json"
-                progressPath="/publication-reader-progress.json"
+              <PublisherReaderOfflineProvider
+                catalogPath={offlineCatalog.catalogHref}
                 publicationId={reader.publicationId}
                 readerBuildId={reader.buildId}
-                themeStyle={publisherNextThemeStyle(themeResult.value.instance)}
+                rendererBuildId={artifact.manifest.buildId}
               >
-                {children}
-              </PublisherReaderNarrationProvider>
+                <PublisherReaderNarrationProvider
+                  audioPath="/publication-audio.json"
+                  progressPath="/publication-reader-progress.json"
+                  publicationId={reader.publicationId}
+                  readerBuildId={reader.buildId}
+                  themeStyle={publisherNextThemeStyle(themeResult.value.instance)}
+                >
+                  {children}
+                </PublisherReaderNarrationProvider>
+              </PublisherReaderOfflineProvider>
             </body>
           </html>
         );

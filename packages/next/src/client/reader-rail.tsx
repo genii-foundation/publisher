@@ -104,6 +104,7 @@ import { createPortal } from "react-dom";
 import { PublisherReaderBookmarkList } from "./reader-bookmark-list.js";
 import { PublisherReaderBookmarkMarkers } from "./reader-bookmark-markers.js";
 import { usePublisherReaderNarration } from "./reader-narration-provider.js";
+import { usePublisherReaderOffline } from "./reader-offline-provider.js";
 import {
   createPublisherReaderStore,
   usePublisherReaderStore,
@@ -134,7 +135,7 @@ export interface PublisherReaderRailProps {
   readonly sync: SyncEnvelope | null;
 }
 
-type ReaderPanel = "outline" | "progress" | "search" | "bookmarks" | "settings" | "sync";
+type ReaderPanel = "outline" | "progress" | "search" | "offline" | "bookmarks" | "settings" | "sync";
 type ReaderSyncState = "idle" | "loading" | "signed-out" | "signed-in" | "unavailable";
 type ReaderBookmarkDeletion =
   | { readonly kind: "all" }
@@ -192,6 +193,7 @@ function panelLabel(panel: ReaderPanel): string {
     case "outline": return "Contents";
     case "progress": return "Reading progress";
     case "search": return "Search";
+    case "offline": return "Offline reading";
     case "bookmarks": return "Bookmarks";
     case "settings": return "Reading settings";
     case "sync": return "Sync and account";
@@ -211,6 +213,20 @@ function formatReadingTime(readingTimeMs: number): string {
   const minutes = Math.floor(readingTimeMs / 60_000);
   if (minutes < 1) return "Less than a minute";
   return `${new Intl.NumberFormat().format(minutes)} minute${minutes === 1 ? "" : "s"}`;
+}
+
+function formatOfflineByteSize(byteSize: number): string {
+  if (byteSize < 1_024) return `${new Intl.NumberFormat().format(byteSize)} B`;
+  const units = ["KB", "MB", "GB", "TB"] as const;
+  let value = byteSize / 1_024;
+  let unitIndex = 0;
+  while (value >= 1_024 && unitIndex < units.length - 1) {
+    value /= 1_024;
+    unitIndex += 1;
+  }
+  return `${new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: value < 10 ? 1 : 0,
+  }).format(value)} ${units[unitIndex]}`;
 }
 
 interface ReaderSyncReadResponse extends ReaderSyncRemoteState {
@@ -295,6 +311,7 @@ export function PublisherReaderRail({
 }: PublisherReaderRailProps): ReactElement {
   const panelId = useId();
   const narration = usePublisherReaderNarration();
+  const offline = usePublisherReaderOffline();
   const { progressCatalog, progressCatalogState } = narration;
   const syncEmailRef = useRef<HTMLInputElement>(null);
   const consentContinueRef = useRef<HTMLButtonElement>(null);
@@ -814,6 +831,10 @@ export function PublisherReaderRail({
   }, [narration.ensureProgressCatalog, openPanel]);
 
   useEffect(() => {
+    if (openPanel === "offline") offline.ensureCatalog();
+  }, [offline.ensureCatalog, openPanel]);
+
+  useEffect(() => {
     if (openPanel !== "search" || searchState !== "idle") return;
     setSearchState("loading");
     void fetch(searchPath, { credentials: "same-origin" })
@@ -990,9 +1011,13 @@ export function PublisherReaderRail({
     [bookmarkState, progress, progressCatalog],
   );
   const normalizedQuery = query.trim();
-  const results = searchIndex === null || normalizedQuery.length < 2
+  const allSearchResults = searchIndex === null || normalizedQuery.length < 2
     ? []
     : searchReaderIndex(searchIndex, query, { limit: 12, snippetCodeUnits: 180 });
+  const results = offline.online
+    ? allSearchResults
+    : allSearchResults.filter((result) =>
+        offline.installedWorkIds.has(result.entry.workId));
   const bookmarkSearchResults = normalizedQuery.length < 2 || normalizedQuery.length > 280
     ? []
     : queryReaderBookmarks(bookmarkState, { text: normalizedQuery }).slice(0, 12);
@@ -1291,6 +1316,9 @@ export function PublisherReaderRail({
         <button aria-controls={panelId} aria-expanded={openPanel === "search"} onClick={() => toggle("search")} type="button">
           <RailIcon><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></RailIcon><span>Search</span>
         </button>
+        <button aria-controls={panelId} aria-expanded={openPanel === "offline"} onClick={() => toggle("offline")} type="button">
+          <RailIcon><path d="M7 17a4 4 0 0 1 0-8 5 5 0 0 1 9.6 1.4A3.5 3.5 0 1 1 17.5 17Z" /><path d="M12 10v7M9.5 14.5 12 17l2.5-2.5" /></RailIcon><span>Offline</span>
+        </button>
         <button aria-controls={panelId} aria-expanded={openPanel === "bookmarks"} onClick={() => toggle("bookmarks")} type="button">
           <RailIcon><path d="M7 4h10v16l-5-3-5 3Z" /></RailIcon><span>Bookmarks</span>
         </button>
@@ -1405,11 +1433,12 @@ export function PublisherReaderRail({
 
           {openPanel === "search" ? (
             <div className="publisher-reader-search">
-              <label htmlFor={`${panelId}-query`}>Search this publication</label>
-              <input id={`${panelId}-query`} maxLength={280} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Title, phrase, saved passage, or note" type="search" value={query} />
+              <label htmlFor={`${panelId}-query`}>{offline.online ? "Search this publication" : "Search downloaded works"}</label>
+              <input id={`${panelId}-query`} maxLength={280} onChange={(event) => setQuery(event.currentTarget.value)} placeholder={offline.online ? "Title, phrase, saved passage, or note" : "Downloaded title, phrase, saved passage, or note"} type="search" value={query} />
               {searchState === "loading" ? <p role="status">Loading search index…</p> : null}
               {searchState === "failed" ? <p role="alert">Search could not load. Reload the page and try again.</p> : null}
-              {searchState === "ready" && normalizedQuery.length >= 2 && results.length === 0 && bookmarkSearchResults.length === 0 ? <p>No matching passages.</p> : null}
+              {!offline.online && offline.installedState === "loading" ? <p role="status">Checking downloaded works…</p> : null}
+              {searchState === "ready" && offline.installedState === "ready" && normalizedQuery.length >= 2 && results.length === 0 && bookmarkSearchResults.length === 0 ? <p>No matching passages.</p> : null}
               {bookmarkSearchResults.length === 0 ? null : (
                 <div className="publisher-reader-search-bookmarks">
                   <h3>Saved passages</h3>
@@ -1434,6 +1463,63 @@ export function PublisherReaderRail({
                   </li>
                 ))}
               </ol>
+            </div>
+          ) : null}
+
+          {openPanel === "offline" ? (
+            <div className="publisher-reader-offline">
+              <p>Download a complete work before you lose your connection. Existing downloads stay active until a replacement has been fully verified.</p>
+              {!offline.supported ? <p role="alert">This browser does not support offline downloads.</p> : null}
+              {offline.catalogState === "loading" ? <p role="status">Loading offline packages…</p> : null}
+              {offline.catalogState === "failed" ? <p role="alert">Offline packages could not load. Existing downloads are unchanged.</p> : null}
+              {offline.catalogState === "ready" && offline.catalog?.packages.length === 0 ? <p>No works are available for download.</p> : null}
+              {offline.catalog === null ? null : (
+                <ol className="publisher-reader-offline-packages">
+                  {offline.catalog.packages.map((item) => {
+                    const status = offline.statuses.get(item.workId);
+                    const packageProgress = offline.progress.get(item.workId);
+                    const error = offline.errors.get(item.workId);
+                    const installed = status?.complete === true;
+                    const updating = status?.updateAvailable === true;
+                    const busy = packageProgress !== undefined;
+                    const buttonLabel = busy
+                      ? "Downloading"
+                      : installed && updating
+                        ? "Update offline copy"
+                        : installed
+                          ? "Available offline"
+                          : "Download";
+                    return (
+                      <li key={item.workId} data-installed={installed ? "true" : "false"} data-work-id={item.workId}>
+                        <div>
+                          <h3>{item.title}</h3>
+                          <p>
+                            {new Intl.NumberFormat().format(item.sectionCount)} section{item.sectionCount === 1 ? "" : "s"}, {new Intl.NumberFormat().format(item.resourceCount)} files
+                            {item.declaredByteSize > 0 ? `, ${formatOfflineByteSize(item.declaredByteSize)} declared` : ""}
+                          </p>
+                          {item.audioClipCount > 0 ? <p>{new Intl.NumberFormat().format(item.audioClipCount)} recording{item.audioClipCount === 1 ? "" : "s"} included</p> : <p>Text only</p>}
+                          {item.unknownByteSizeCount > 0 ? <p><small>The final download also includes {new Intl.NumberFormat().format(item.unknownByteSizeCount)} file{item.unknownByteSizeCount === 1 ? "" : "s"} without a declared size.</small></p> : null}
+                        </div>
+                        {packageProgress === undefined ? null : (
+                          <div className="publisher-reader-offline-progress" role="status">
+                            <progress max={Math.max(1, packageProgress.totalCount)} value={packageProgress.cachedCount} />
+                            <span>{new Intl.NumberFormat().format(packageProgress.cachedCount)} of {new Intl.NumberFormat().format(packageProgress.totalCount)} files</span>
+                          </div>
+                        )}
+                        <button
+                          className={installed && !updating ? "publisher-reader-secondary-action" : "publisher-reader-primary-action"}
+                          disabled={!offline.supported || busy || (installed && !updating)}
+                          onClick={() => void offline.install(item.workId)}
+                          type="button"
+                        >
+                          {buttonLabel}
+                        </button>
+                        {error === undefined ? null : <p role="alert">{error} The previous complete copy, if any, is still available.</p>}
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
             </div>
           ) : null}
 

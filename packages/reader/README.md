@@ -8,7 +8,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 
 The serialized reader envelope contains renderable publication structure, Markdown blocks, public addresses, link locations, assets, routes, statistics, and the complete fixed Publisher attribution. It omits repository paths, source provenance, extension declarations, capability grants, configuration, payloads, provider state, credentials, progress, bookmarks, preferences, analytics, audio state, and sync state.
 
-Projection and full validation are build-time Node.js operations. Browser code should import the `runtime`, `preferences`, `progress`, `progress-catalog`, `progress-overview`, `passage-range`, `bookmarks`, `sync`, `search`, or `narration` subpath. These subpaths contain no filesystem, network, environment, process, DOM, storage, clock, or randomness access.
+Projection and full validation are build-time Node.js operations. Browser code should import the `runtime`, `preferences`, `progress`, `progress-catalog`, `progress-overview`, `passage-range`, `bookmarks`, `sync`, `search`, `narration`, or `offline` subpath. These subpaths contain no filesystem, network, environment, process, DOM, storage, clock, or randomness access.
 
 The runtime never chooses a primary collection, rewrites routes, trims trailing slashes, or infers a canonical reader address from object order. Callers supply collection context explicitly when a work belongs to more than one collection.
 
@@ -101,6 +101,14 @@ publication-bound section navigation intent. A renderer must match its section
 and destination against the exact build-bound progress catalog before consuming
 it. The subpath does not fetch, store, inspect the DOM, dispatch events, navigate,
 or play media.
+
+The `offline` subpath projects one immutable package plan per work. Each plan is
+bound to the exact Reader build, renderer build, work content, and optional
+narration catalog. It closes over canonical and historical route documents,
+relevant collections, shared capability data, work and publication assets, all
+matching voice clips, and timing sidecars. Its strict browser parser verifies
+identity, counts, byte totals, unique resources, and closed shapes. The subpath
+does not fetch, cache, activate, delete, navigate, or register a service worker.
 
 All mutation, parsing, sanitization, and merge calls that can interpret time require an explicit `now` value in epoch milliseconds. The module never reads the clock. Parsing clamps future timestamps to that value. A local event older than the state's latest accepted update is refused instead of rewinding newer evidence. Parsing also rejects a publication mismatch or newer schema, bounds input bytes and entry counts, and stores entries in a frozen null-prototype record. Aggregate percentage is weighted by each supplied section's current `wordCount`.
 

@@ -44,6 +44,8 @@ import {
   PUBLISHER_READER_NARRATION_NAVIGATION_EVENT,
   requestPublisherReaderNarrationNavigation,
 } from "./reader-narration-navigation.js";
+import { matchPublisherReaderOfflineResponse } from "./reader-offline-cache.js";
+import { usePublisherReaderOffline } from "./reader-offline-provider.js";
 
 const PublisherLink = NextLink as unknown as ComponentType<
   AnchorHTMLAttributes<HTMLAnchorElement> & { readonly href: string }
@@ -68,6 +70,11 @@ interface NarrationTimingState {
   readonly document: ReaderNarrationTimingDocument;
   readonly sectionId: string;
   readonly titleWordCount: number;
+}
+
+interface OfflineAudioSource {
+  readonly href: string;
+  readonly objectUrl: string;
 }
 
 const TIMING_FETCH_TIMEOUT_MILLISECONDS = 1_500;
@@ -131,6 +138,8 @@ export function PublisherReaderNarration({
   onOpen,
 }: PublisherReaderNarrationProps): ReactElement {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const offline = usePublisherReaderOffline();
+  const offlineAudioObjectUrlRef = useRef<string | null>(null);
   const pendingPlayRef = useRef(false);
   const timingCacheRef = useRef(new Map<string, ReaderNarrationTimingDocument>());
   const timingControllerRef = useRef<AbortController | null>(null);
@@ -150,6 +159,8 @@ export function PublisherReaderNarration({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [timingState, setTimingState] = useState<NarrationTimingState | null>(null);
+  const [offlineAudioSource, setOfflineAudioSource] =
+    useState<OfflineAudioSource | null>(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -205,6 +216,42 @@ export function PublisherReaderNarration({
   }, [preferences.playbackRate]);
 
   const selectedClip = selectedVoice?.clips[selectedClipIndex] ?? null;
+  const selectedAudioSource = selectedClip === null
+    ? undefined
+    : offline.online
+      ? selectedClip.href
+      : offlineAudioSource?.href === selectedClip.href
+        ? offlineAudioSource.objectUrl
+        : undefined;
+
+  useEffect(() => {
+    if (offlineAudioObjectUrlRef.current !== null) {
+      URL.revokeObjectURL(offlineAudioObjectUrlRef.current);
+      offlineAudioObjectUrlRef.current = null;
+    }
+    setOfflineAudioSource(null);
+    if (
+      selectedClip === null ||
+      offline.online
+    ) return;
+    let active = true;
+    void matchPublisherReaderOfflineResponse(selectedClip.href)
+      .then((response) => response?.blob())
+      .then((blob) => {
+        if (!active || blob === undefined) return;
+        const objectUrl = URL.createObjectURL(blob);
+        offlineAudioObjectUrlRef.current = objectUrl;
+        setOfflineAudioSource({ href: selectedClip.href, objectUrl });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+      if (offlineAudioObjectUrlRef.current !== null) {
+        URL.revokeObjectURL(offlineAudioObjectUrlRef.current);
+        offlineAudioObjectUrlRef.current = null;
+      }
+    };
+  }, [offline.online, selectedClip?.href]);
 
   useEffect(() => {
     const navigateAndPlay = (event: Event): void => {
@@ -274,7 +321,11 @@ export function PublisherReaderNarration({
     setDuration(selectedClip?.durationSeconds ?? 0);
     setPlaying(false);
     const audio = audioRef.current;
-    if (audio === null || selectedClip === null) return;
+    if (
+      audio === null ||
+      selectedClip === null ||
+      selectedAudioSource === undefined
+    ) return;
     audio.load();
     if (pendingPlayRef.current) {
       pendingPlayRef.current = false;
@@ -282,11 +333,15 @@ export function PublisherReaderNarration({
         setMessage("Playback is ready. Press play to continue.");
       });
     }
-  }, [selectedClip?.audioVersionId, selectedClip?.href]);
+  }, [selectedAudioSource, selectedClip?.audioVersionId, selectedClip?.href]);
 
   useEffect(() => () => {
     timingSequenceRef.current += 1;
     timingControllerRef.current?.abort();
+    if (offlineAudioObjectUrlRef.current !== null) {
+      URL.revokeObjectURL(offlineAudioObjectUrlRef.current);
+      offlineAudioObjectUrlRef.current = null;
+    }
     clearActiveWord();
   }, []);
 
@@ -347,6 +402,11 @@ export function PublisherReaderNarration({
     const audio = audioRef.current;
     if (audio === null || selectedClip === null) return;
     setMessage("");
+    if (selectedAudioSource === undefined) {
+      pendingPlayRef.current = true;
+      setMessage("Preparing the saved recording.");
+      return;
+    }
     if (audio.paused) {
       void audio.play().catch(() => setMessage("Playback could not start. Try again."));
     } else {
@@ -400,11 +460,21 @@ export function PublisherReaderNarration({
       () => controller.abort(),
       TIMING_FETCH_TIMEOUT_MILLISECONDS,
     );
-    void fetch(href, {
-      credentials: "same-origin",
-      signal: controller.signal,
-    })
-      .then((response) => response.ok ? response.text() : null)
+    void (async (): Promise<string | null> => {
+      const cached = offline.online
+        ? undefined
+        : await matchPublisherReaderOfflineResponse(href);
+      if (cached !== undefined) return cached.text();
+      try {
+        const response = await fetch(href, {
+          credentials: "same-origin",
+          signal: controller.signal,
+        });
+        if (response.ok) return response.text();
+      } catch {}
+      const fallback = await matchPublisherReaderOfflineResponse(href);
+      return fallback === undefined ? null : fallback.text();
+    })()
       .then((serialized) => serialized === null
         ? null
         : parseReaderNarrationTimingDocument(serialized, {
@@ -467,7 +537,7 @@ export function PublisherReaderNarration({
     <>
       <audio
         ref={audioRef}
-        src={selectedClip?.href}
+        src={selectedAudioSource}
         preload="metadata"
         onDurationChange={(event) => {
           const next = event.currentTarget.duration;

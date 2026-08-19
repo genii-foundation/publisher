@@ -4,6 +4,11 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Advanced the host contract to 0.9.0 with a pure build-bound offline catalog route and a generic service worker.
+- Added explicit work downloads with staged verification, atomic activation, retained complete versions after failure, dependency discovery, and visible update progress.
+- Restricted disconnected public search to installed works while retaining local bookmarks and full document navigation.
+- Added verified offline narration and timing lookup, including temporary blob playback for cached same-origin and external clips.
+- Extended the packed-host Chrome proof through install, activation, transport cutoff, cold reading, search scope, bookmarks, narration, timings, and fresh document navigation.
 - Added a lazy persistent default narration player with play, pause, seek, bounded speed, remembered voice selection, ordered queue movement, and exact duration coverage.
 - Extended the packed-host Chrome proof through a real generated recording, lazy narration loading, mobile containment, playback, queue movement, and persisted voice and speed choices.
 - Added lazy timing-sidecar validation and transient word highlighting over the existing server-rendered manuscript text.

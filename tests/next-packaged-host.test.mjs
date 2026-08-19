@@ -44,6 +44,10 @@ test("the packed renderer builds a thin host with server rendered prose", async 
     result.readerToolsHydrationVerified,
     browserExecutable !== undefined,
   );
+  assert.equal(
+    result.offlineReaderVerified,
+    browserExecutable !== undefined,
+  );
   assert.equal(result.nextVersion, "16.2.12");
   assert.equal(result.postcssVersion, "8.5.24");
   assert.equal(result.nanoidVersion, "3.3.18");

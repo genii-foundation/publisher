@@ -307,6 +307,7 @@ async function startBrowser(browserExecutable, temporaryRoot) {
   const profileRoot = join(temporaryRoot, "chrome-profile");
   await mkdir(profileRoot);
   const args = [
+    "--autoplay-policy=no-user-gesture-required",
     "--disable-background-networking",
     "--disable-component-update",
     "--disable-default-apps",
@@ -740,7 +741,7 @@ async function assertHydratedReaderTools({
       ready = evaluated.result?.value;
       if (
         ready?.complete === true &&
-        ready.controls === 7 &&
+        ready.controls === 8 &&
         ready.inViewport === true
       ) {
         break;
@@ -749,7 +750,7 @@ async function assertHydratedReaderTools({
     }
     assert.deepEqual(
       ready,
-      { complete: true, controls: 7, inViewport: true },
+      { complete: true, controls: 8, inViewport: true },
       "The hydrated Reader rail was not reachable inside the mobile viewport.",
     );
     const progressRequestsBeforeOpen = await page.send("Runtime.evaluate", {
@@ -1638,7 +1639,7 @@ async function assertHydratedReaderTools({
         });
         peerReady =
           evaluated.result?.value?.complete === true &&
-          evaluated.result.value.controls === 7;
+          evaluated.result.value.controls === 8;
         if (peerReady) break;
         await wait(100);
       }
@@ -2376,6 +2377,451 @@ async function assertHydratedReaderTools({
     } finally {
       peerPage.close();
     }
+  } finally {
+    page.close();
+  }
+}
+
+async function assertOfflineReaderTools({
+  browser,
+  destinationUrl,
+  excludedSearchText,
+  includedSearchText,
+  initialUrl,
+  workId,
+}) {
+  const page = await openDevToolsPage(browser);
+  try {
+    await page.send("Network.enable");
+    const navigation = await page.send("Page.navigate", {
+      url: initialUrl,
+    });
+    assert.equal(
+      navigation.errorText,
+      undefined,
+      `Offline package setup navigation failed: ${navigation.errorText}`,
+    );
+    let ready = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+          '    .find((candidate) => candidate.textContent?.includes("Offline"));',
+          '  return document.readyState === "complete" && button !== undefined;',
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      ready = evaluated.result?.value === true;
+      if (ready) break;
+      await wait(50);
+    }
+    assert.equal(ready, true, "The offline Reader control did not hydrate.");
+
+    const opened = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+        '    .find((candidate) => candidate.textContent?.includes("Offline"));',
+        "  button?.click();",
+        "  return button !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(opened.result?.value, true);
+
+    let packageReady = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          `  const item = document.querySelector('[data-work-id=${JSON.stringify(workId)}]');`,
+          '  const button = item?.querySelector("button");',
+          "  return item !== null && button !== null && !button.disabled;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      packageReady = evaluated.result?.value === true;
+      if (packageReady) break;
+      await wait(50);
+    }
+    assert.equal(packageReady, true, `Offline package ${workId} did not load.`);
+
+    const started = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        `  const item = document.querySelector('[data-work-id=${JSON.stringify(workId)}]');`,
+        '  const button = item?.querySelector("button");',
+        "  button?.click();",
+        "  return button !== null;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(started.result?.value, true);
+
+    let installed;
+    for (let attempt = 0; attempt < 500; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          `  const item = document.querySelector('[data-work-id=${JSON.stringify(workId)}]');`,
+          "  return {",
+          '    alert: item?.querySelector("[role=alert]")?.textContent ?? "",',
+          '    installed: item?.getAttribute("data-installed") === "true",',
+          '    label: item?.querySelector("button")?.textContent?.trim() ?? "",',
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      installed = evaluated.result?.value;
+      if (installed?.installed === true) break;
+      if ((installed?.alert ?? "").length > 0) break;
+      await wait(50);
+    }
+    assert.deepEqual(installed, {
+      alert: "",
+      installed: true,
+      label: "Available offline",
+    });
+
+    const workerReady = await page.send("Runtime.evaluate", {
+      expression: "navigator.serviceWorker.ready.then(() => true)",
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    assert.equal(workerReady.result?.value, true, "The installed offline worker never became ready.");
+    await page.send("Page.reload", { ignoreCache: false });
+    let controlled = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          'document.readyState === "complete" && navigator.serviceWorker.controller !== null',
+        returnByValue: true,
+      });
+      controlled = evaluated.result?.value === true;
+      if (controlled) break;
+      await wait(50);
+    }
+    assert.equal(controlled, true, "The offline service worker did not control the Reader.");
+
+    await page.send("Page.addScriptToEvaluateOnNewDocument", {
+      source: [
+        'Object.defineProperty(Navigator.prototype, "onLine", {',
+        "  configurable: true,",
+        "  get: () => false,",
+        "});",
+      ].join("\n"),
+    });
+    await page.send("Network.emulateNetworkConditions", {
+      offline: true,
+      latency: 0,
+      downloadThroughput: 0,
+      uploadThroughput: 0,
+      connectionType: "none",
+    });
+    await page.send("Network.overrideNetworkState", {
+      offline: true,
+      latency: 0,
+      downloadThroughput: 0,
+      uploadThroughput: 0,
+      connectionType: "none",
+    });
+    const offlineNavigation = await page.send("Page.navigate", {
+      url: destinationUrl,
+    });
+    assert.equal(
+      offlineNavigation.errorText,
+      undefined,
+      `Cold offline navigation failed: ${offlineNavigation.errorText}`,
+    );
+    let offlineDocument;
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => ({",
+          '  complete: document.readyState === "complete",',
+          '  controlled: navigator.serviceWorker.controller !== null,',
+          "  offline: navigator.onLine === false,",
+          '  prose: document.querySelector(".publisher-manuscript")?.textContent?.trim().length ?? 0,',
+          "}))()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      offlineDocument = evaluated.result?.value;
+      if (
+        offlineDocument?.complete === true &&
+        offlineDocument.controlled === true &&
+        offlineDocument.offline === true &&
+        offlineDocument.prose > 0
+      ) break;
+      await wait(50);
+    }
+    assert.ok(
+      offlineDocument?.complete === true &&
+      offlineDocument.controlled === true &&
+      offlineDocument.offline === true &&
+      offlineDocument.prose > 0,
+      `Cold offline document state: ${JSON.stringify(offlineDocument)}`,
+    );
+
+    const search = async (value) => {
+      await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+          '    .find((candidate) => candidate.textContent?.includes("Search"));',
+          '  if (document.querySelector(".publisher-reader-search") === null) button?.click();',
+          "  return button !== undefined;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      let inputReady = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression:
+            'document.querySelector(".publisher-reader-search input[type=search]") instanceof HTMLInputElement',
+          returnByValue: true,
+        });
+        inputReady = evaluated.result?.value === true;
+        if (inputReady) break;
+        await wait(25);
+      }
+      assert.equal(inputReady, true, "Offline search panel did not open.");
+      const changed = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const input = document.querySelector(".publisher-reader-search input[type=search]");',
+          "  if (!(input instanceof HTMLInputElement)) return false;",
+          '  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;',
+          `  setter?.call(input, ${JSON.stringify(value)});`,
+          '  input.dispatchEvent(new Event("input", { bubbles: true }));',
+          "  return true;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(changed.result?.value, true, "Offline search input was unavailable.");
+      let state;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => ({",
+            '  alert: document.querySelector(".publisher-reader-search [role=alert]")?.textContent ?? "",',
+            '  label: document.querySelector(".publisher-reader-search label")?.textContent ?? "",',
+            '  loading: document.querySelector(".publisher-reader-search [role=status]") !== null,',
+            '  results: document.querySelectorAll(".publisher-reader-search-results li").length,',
+            "}))()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        state = evaluated.result?.value;
+        if (state?.loading === false) break;
+        await wait(50);
+      }
+      return state;
+    };
+    const included = await search(includedSearchText);
+    assert.equal(included?.alert, "");
+    assert.equal(included?.label, "Search downloaded works");
+    assert.ok(included?.results > 0, JSON.stringify(included));
+    const excluded = await search(excludedSearchText);
+    assert.equal(excluded?.alert, "");
+    assert.equal(excluded?.label, "Search downloaded works");
+    assert.equal(excluded?.results, 0);
+
+    const openedNarration = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+        '    .find((candidate) => candidate.textContent?.includes("Listen"));',
+        "  button?.click();",
+        "  return button !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(openedNarration.result?.value, true, "Offline Listen control was unavailable.");
+    let narrationReady = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          'document.querySelector(".publisher-reader-narration-now strong")?.textContent?.trim().length > 0',
+        returnByValue: true,
+      });
+      narrationReady = evaluated.result?.value === true;
+      if (narrationReady) break;
+      await wait(50);
+    }
+    assert.equal(narrationReady, true, "Saved narration did not load offline.");
+    const selectedTimedVoice = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const select = document.querySelector(".publisher-reader-narration select");',
+        "  if (!(select instanceof HTMLSelectElement)) return false;",
+        '  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;',
+        '  setter?.call(select, "calm");',
+        '  select.dispatchEvent(new Event("change", { bubbles: true }));',
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(selectedTimedVoice.result?.value, true);
+    let timedVoiceReady = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const key = Object.keys(localStorage).find((candidate) => candidate.endsWith(".narration"));',
+          "  const saved = key === undefined ? null : JSON.parse(localStorage.getItem(key));",
+          '  return document.querySelector(".publisher-reader-narration select")?.value === "calm" &&',
+          '    saved?.selectedVoiceId === "calm";',
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      timedVoiceReady = evaluated.result?.value === true;
+      if (timedVoiceReady) break;
+      await wait(25);
+    }
+    assert.equal(timedVoiceReady, true, "The timed narration voice was not selected.");
+    let cachedAudioReady = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+          "  return audio instanceof HTMLAudioElement &&",
+          '    audio.currentSrc.startsWith("blob:") &&',
+          "    audio.readyState >= HTMLMediaElement.HAVE_METADATA;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      cachedAudioReady = evaluated.result?.value === true;
+      if (cachedAudioReady) break;
+      await wait(25);
+    }
+    assert.equal(cachedAudioReady, true, "The saved recording bytes were not media-ready.");
+    const requestedOfflinePlayback = await page.send("Runtime.evaluate", {
+      expression: [
+        "(async () => {",
+        '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+        "  if (!(audio instanceof HTMLAudioElement)) return false;",
+        "  try {",
+        "    await audio.play();",
+        "    return true;",
+        "  } catch {",
+        "    return false;",
+        "  }",
+        "})()",
+      ].join("\n"),
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    assert.equal(requestedOfflinePlayback.result?.value, true);
+    let playbackStarted = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          '(() => { const audio = document.querySelector(".publisher-reader-audio-host > audio"); return audio instanceof HTMLAudioElement && !audio.paused && audio.currentTime > 0; })()',
+        returnByValue: true,
+      });
+      playbackStarted = evaluated.result?.value === true;
+      if (playbackStarted) break;
+      await wait(50);
+    }
+    assert.equal(playbackStarted, true, "Saved narration did not play offline.");
+    await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+        "  if (!(audio instanceof HTMLAudioElement)) return false;",
+        "  audio.currentTime = 4;",
+        '  audio.dispatchEvent(new Event("timeupdate"));',
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    let timingVisible = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          'document.querySelector(".publisher-narration-word-current") !== null',
+        returnByValue: true,
+      });
+      timingVisible = evaluated.result?.value === true;
+      if (timingVisible) break;
+      await wait(25);
+    }
+    assert.equal(timingVisible, true, "Saved narration timings did not load offline.");
+
+    const bookmarksOpened = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+        '    .find((candidate) => candidate.textContent?.includes("Bookmarks"));',
+        "  button?.click();",
+        "  return button !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(bookmarksOpened.result?.value, true, "Offline bookmarks did not open.");
+    let bookmarksReady = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          'document.querySelector("[aria-label=Bookmarks]") !== null',
+        returnByValue: true,
+      });
+      bookmarksReady = evaluated.result?.value === true;
+      if (bookmarksReady) break;
+      await wait(25);
+    }
+    assert.equal(bookmarksReady, true, "Offline bookmarks panel did not render.");
+
+    const destination = new URL(destinationUrl);
+    const fullNavigation = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        `  const target = ${JSON.stringify(destination.origin + "/home")};`,
+        '  const link = Array.from(document.querySelectorAll("a[href]"))',
+        "    .find((candidate) => candidate.href === target);",
+        "  if (!(link instanceof HTMLAnchorElement)) return false;",
+        "  globalThis.__publisherOfflineDocumentMarker = true;",
+        "  link.click();",
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(fullNavigation.result?.value, true, "The cached home link was unavailable.");
+    let reloaded = false;
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() =>",
+          '  location.pathname === "/home" &&',
+          "  globalThis.__publisherOfflineDocumentMarker !== true &&",
+          '  document.readyState === "complete" &&',
+          "  navigator.onLine === false",
+          ")()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      reloaded = evaluated.result?.value === true;
+      if (reloaded) break;
+      await wait(50);
+    }
+    assert.equal(reloaded, true, "Offline link navigation did not load a fresh document.");
   } finally {
     page.close();
   }
@@ -3507,6 +3953,7 @@ export async function runPackagedHostProof(
     let runtimeErrorStatus;
     let imageContentType;
     let readerToolsHydrationVerified = false;
+    let offlineReaderVerified = false;
     try {
       host = await startHost(hostRoot, proofEnvironment);
     } catch (error) {
@@ -3581,6 +4028,33 @@ export async function runPackagedHostProof(
           url: `${host.origin}${sectionPath}`,
         });
         readerToolsHydrationVerified = true;
+        const timedRoute = reader.routes.active.find(
+          ({ target }) =>
+            target.kind === "section" &&
+            target.sectionId === timedSection.id,
+        );
+        assert.notEqual(timedRoute, undefined);
+        assert.equal(timedRoute.target.kind, "section");
+        const setupRoute = reader.routes.active.find(
+          ({ path, target }) =>
+            path !== timedRoute.path &&
+            target.kind === "section" &&
+            target.workId === timedRoute.target.workId,
+        ) ?? reader.routes.active.find(
+          ({ target }) =>
+            target.kind === "work" &&
+            target.workId === timedRoute.target.workId,
+        );
+        assert.notEqual(setupRoute, undefined);
+        await assertOfflineReaderTools({
+          browser,
+          destinationUrl: `${host.origin}${timedRoute.path}`,
+          excludedSearchText: "Quiet Draft",
+          includedSearchText: "safe",
+          initialUrl: `${host.origin}${setupRoute.path}`,
+          workId: timedRoute.target.workId,
+        });
+        offlineReaderVerified = true;
       }
 
       const internal = await fetch(
@@ -3916,6 +4390,7 @@ export async function runPackagedHostProof(
       auditVulnerabilities:
         audit.metadata.vulnerabilities.total,
       browserHydrationVerified: browser !== undefined,
+      offlineReaderVerified,
       readerToolsHydrationVerified,
       globalErrorStatus,
       frameworkErrorStatuses,

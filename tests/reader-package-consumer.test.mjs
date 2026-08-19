@@ -898,6 +898,12 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         type ReaderNarrationPreferences,
         type ReaderNarrationSectionTextProfile,
       } from "@genii-foundation/publisher-reader/narration";
+      import {
+        createReaderOfflineCatalog,
+        parseReaderOfflineCatalog,
+        serializeReaderOfflineCatalog,
+        type ReaderOfflineCatalog,
+      } from "@genii-foundation/publisher-reader/offline";
 
       declare const input: unknown;
       declare const envelope: PublicationReaderEnvelope;
@@ -950,6 +956,18 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       });
       declare const narrationText: ReaderNarrationSectionTextProfile;
       void createReaderNarrationSectionTextProfile;
+      const offlineCatalog: ReaderOfflineCatalog = createReaderOfflineCatalog({
+        reader: envelope,
+        rendererBuildId: envelope.buildId,
+        catalogHref: "/publication-reader-offline.json",
+        sharedResources: [],
+      });
+      const parsedOfflineCatalog: ReaderOfflineCatalog | null =
+        parseReaderOfflineCatalog(serializeReaderOfflineCatalog(offlineCatalog), {
+          publicationId: envelope.publicationId,
+          readerBuildId: envelope.buildId,
+          rendererBuildId: envelope.buildId,
+        });
       void [
         READER_PROJECTOR_VERSION,
         projected,
@@ -972,6 +990,8 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         narration,
         navigation,
         narrationText,
+        offlineCatalog,
+        parsedOfflineCatalog,
       ];
     `;
     await Promise.all([
@@ -1034,6 +1054,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       "sync",
       "search",
       "narration",
+      "offline",
     ];
     const browserClosures = new Map();
     for (const subpath of browserSubpaths) {
@@ -1170,6 +1191,11 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         createReaderNarrationPreferences,
         readerNarrationTimingHref,
       } from "@genii-foundation/publisher-reader/narration";
+      import {
+        createReaderOfflineCatalog,
+        parseReaderOfflineCatalog,
+        serializeReaderOfflineCatalog,
+      } from "@genii-foundation/publisher-reader/offline";
 
       const digest = "sha256:" + "0".repeat(64);
       const envelope = {
@@ -1285,6 +1311,23 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         href: "/audio/portable.mp3",
         timingsByteSize: 123,
       }), "/audio/portable.timings.json");
+      const offlineCatalog = createReaderOfflineCatalog({
+        reader: envelope,
+        rendererBuildId: digest,
+        catalogHref: "/publication-reader-offline.json",
+        sharedResources: [],
+      });
+      assert.equal(
+        parseReaderOfflineCatalog(
+          serializeReaderOfflineCatalog(offlineCatalog),
+          {
+            publicationId: "portable-reader",
+            readerBuildId: digest,
+            rendererBuildId: digest,
+          },
+        )?.packages.length,
+        0,
+      );
       console.log("browser-runtime-ok");
     `;
     const proofOutput = run(

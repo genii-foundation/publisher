@@ -982,6 +982,7 @@ test("application identity is deterministic, immutable, and content bound", asyn
   assert.equal(Object.isFrozen(first.manifest.source), true);
   assert.equal(Object.isFrozen(first.manifest.theme), true);
   assert.equal(Object.isFrozen(first.artifact), true);
+  assert.equal(Object.isFrozen(first.offlineCatalog), true);
   assert.equal(Object.isFrozen(first.reader), true);
   assert.equal(
     first.manifest.source.readerBuildId,
@@ -1005,6 +1006,18 @@ test("application identity is deterministic, immutable, and content bound", asyn
     first.manifest,
   );
   assert.equal(first.artifact.hash, sha256(first.artifact.text));
+  assert.deepEqual(
+    JSON.parse(first.offlineCatalogText),
+    first.offlineCatalog,
+  );
+  assert.equal(
+    first.offlineCatalog.rendererBuildId,
+    first.manifest.buildId,
+  );
+  assert.equal(
+    first.offlineCatalog.catalogHref,
+    `/publication-reader-offline.json?rendererBuildId=${encodeURIComponent(first.manifest.buildId)}`,
+  );
   assert.equal(
     first.artifact.relativePath,
     "renderers/next/application.json",

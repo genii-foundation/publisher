@@ -41,7 +41,20 @@ voice and lazy build-bound progress catalog. A root-layout provider owns the
 media element and open panel while each routed rail controls that persistent
 state. Playback therefore survives current-section and cross-route Next.js
 navigation. Ordinary link behavior wins when the player cannot consume the
-request. Offline audio packages remain a separate planned capability.
+request.
+
+The Offline panel downloads one complete immutable package per work. Each
+package includes its publication documents, lazy Reader data, assets, discovered
+Next.js dependencies, and every declared narration clip and timing sidecar. The
+browser stages and verifies a replacement before switching one active metadata
+record, so failure leaves the previous complete version usable. A work without
+narration remains a complete text package. The service worker is registered only
+after an explicit download. It leaves API, authentication, and framework flight
+requests alone, uses network-first document and asset delivery, and falls back
+to the active package before the runtime cache. Disconnected links request full
+documents. Public search is limited to installed works, local bookmarks remain
+available, and cached audio uses temporary revoked blob URLs for reliable media
+playback. See [ADR 0046](../../docs/architecture/0046-atomic-offline-publication-packages.md).
 
 ## Supported toolchain
 

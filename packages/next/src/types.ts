@@ -23,6 +23,9 @@ import type {
   SyncEnvelope,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
+import type {
+  ReaderOfflineCatalog,
+} from "@genii-foundation/publisher-reader/offline";
 import type { Metadata, NextConfig } from "next";
 import type { ReactElement, ReactNode } from "react";
 
@@ -285,6 +288,8 @@ export interface PublicationNextApplication {
   readonly reader: PublicationReaderEnvelope;
   readonly manifest: PublisherNextApplicationManifest;
   readonly artifact: PublisherNextApplicationArtifact;
+  readonly offlineCatalog: ReaderOfflineCatalog;
+  readonly offlineCatalogText: string;
   readonly theme: PublisherNextThemeInstance;
   readonly errorIdentity: PublisherNextErrorIdentity;
   readonly slashPolicy:
@@ -323,6 +328,7 @@ export interface PublicationNextApplication {
 
 export interface CreatePublicationNextApplicationOptions {
   readonly reader: unknown;
+  readonly audioData?: unknown;
   readonly syncData?: unknown;
   readonly theme?: ResolvedPublisherNextTheme;
   readonly updates?: ResolvedPublisherNextUpdates;

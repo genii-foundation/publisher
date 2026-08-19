@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.8.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.9.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -56,6 +56,14 @@ export const PUBLISHER_NEXT_SEARCH_DATA_PATH =
 /** Host-relative location of the lazy publication progress catalog. */
 export const PUBLISHER_NEXT_PROGRESS_DATA_PATH =
   "public/publication-reader-progress.json";
+
+/** Public route serving the build-bound offline work package catalog. */
+export const PUBLISHER_NEXT_OFFLINE_CATALOG_HREF =
+  "/publication-reader-offline.json";
+
+/** Host-relative location of the generic offline service worker. */
+export const PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH =
+  "public/offline-sw.js";
 
 /**
  * Host-relative location of the narration envelope.
@@ -129,7 +137,7 @@ export interface PublisherNextHostCapabilities {
 export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
   Object.freeze({
     routeKinds: Object.freeze(["home", "work", "collection", "section", "updates"]),
-    dataArtifacts: Object.freeze(["audio", "progress", "search", "sync", "updates"]),
+    dataArtifacts: Object.freeze(["audio", "offline", "progress", "search", "sync", "updates"]),
   });
 
 export interface PublisherNextHostMigration {
@@ -194,9 +202,15 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.7.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.8.0",
       summary:
         "Add the required lazy progress catalog destination to the official host contract.",
+    }),
+    Object.freeze({
+      from: "0.8.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Add the build-bound offline catalog route and generic service worker to the official host contract.",
     }),
   ]);
 
@@ -228,6 +242,8 @@ export interface PublisherNextHostTemplate {
   readonly searchDataPath: string;
   /** Where the required capability-sliced progress artifact belongs. */
   readonly progressDataPath: string;
+  /** Public href from which the renderer serves its offline package catalog. */
+  readonly offlineCatalogHref: string;
   /**
    * Where the narration envelope belongs, when this renderer can serve one.
    *
@@ -248,6 +264,131 @@ function lines(...values: readonly string[]): string {
 
 function json(value: unknown): string {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+function publicHref(path: string): string {
+  return `/${path.slice(path.lastIndexOf("/") + 1)}`;
+}
+
+function offlineServiceWorkerSource(): string {
+  return lines(
+    'const RUNTIME_CACHE_NAME = "genii-publisher-offline-runtime-v1";',
+    'const RUNTIME_CACHE_PREFIX = "genii-publisher-offline-runtime-v";',
+    'const METADATA_CACHE_NAME = "genii-publisher-offline-metadata-v1";',
+    'const PACKAGE_CACHE_PREFIX = "genii-publisher-offline-package-v1-";',
+    'const PACKAGE_RECORD_PREFIX = "https://publisher.invalid/__offline-package__/";',
+    "",
+    "function shouldHandle(request) {",
+    '  if (request.method !== "GET") return false;',
+    "  const url = new URL(request.url);",
+    "  if (url.origin !== self.location.origin) return false;",
+    '  if (request.headers.get("rsc") === "1" || url.searchParams.has("_rsc")) return false;',
+    '  if (request.headers.has("next-router-prefetch") || request.headers.has("next-router-state-tree")) return false;',
+    '  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) return false;',
+    '  if (url.pathname === "/offline-sw.js") return false;',
+    "  return true;",
+    "}",
+    "",
+    "function isRecord(value) {",
+    "  return Boolean(",
+    "    value &&",
+    '    typeof value === "object" &&',
+    "    value.schemaVersion === 1 &&",
+    '    typeof value.publicationId === "string" &&',
+    '    typeof value.workId === "string" &&',
+    '    typeof value.cacheName === "string" &&',
+    "    value.cacheName.startsWith(PACKAGE_CACHE_PREFIX) &&",
+    "    Array.isArray(value.resourceHrefs) &&",
+    '    value.resourceHrefs.every((href) => typeof href === "string") &&',
+    '    typeof value.savedAt === "string"',
+    "  );",
+    "}",
+    "",
+    "async function activeRecords() {",
+    "  try {",
+    "    const metadata = await caches.open(METADATA_CACHE_NAME);",
+    "    const keys = await metadata.keys();",
+    "    const records = await Promise.all(",
+    "      keys",
+    "        .filter((request) => request.url.startsWith(PACKAGE_RECORD_PREFIX))",
+    "        .map(async (request) => {",
+    "          try {",
+    "            const response = await metadata.match(request);",
+    "            const value = response ? await response.json() : null;",
+    "            return isRecord(value) ? value : null;",
+    "          } catch {",
+    "            return null;",
+    "          }",
+    "        }),",
+    "    );",
+    "    return records",
+    "      .filter(Boolean)",
+    "      .sort((left, right) => right.savedAt.localeCompare(left.savedAt));",
+    "  } catch {",
+    "    return [];",
+    "  }",
+    "}",
+    "",
+    "async function matchActivePackage(request) {",
+    "  for (const record of await activeRecords()) {",
+    "    try {",
+    "      const response = await (await caches.open(record.cacheName)).match(request);",
+    "      if (response) return response;",
+    "    } catch {}",
+    "  }",
+    "  return undefined;",
+    "}",
+    "",
+    "async function portableResponse(response) {",
+    "  if (!response.redirected) return response.clone();",
+    "  const finalUrl = new URL(response.url);",
+    "  if (finalUrl.origin !== self.location.origin) return null;",
+    "  return new Response(await response.clone().arrayBuffer(), {",
+    "    status: response.status,",
+    "    statusText: response.statusText,",
+    "    headers: response.headers,",
+    "  });",
+    "}",
+    "",
+    "async function networkFirst(request) {",
+    "  const runtime = await caches.open(RUNTIME_CACHE_NAME);",
+    "  try {",
+    "    const response = await fetch(request);",
+    '    if (response.ok && response.status !== 206 && !request.headers.has("range")) {',
+    "      const portable = await portableResponse(response);",
+    "      if (portable) await runtime.put(request, portable).catch(() => undefined);",
+    "    }",
+    "    return response;",
+    "  } catch (error) {",
+    "    const packaged = await matchActivePackage(request);",
+    "    if (packaged) return packaged;",
+    "    const opportunistic = await runtime.match(request);",
+    "    if (opportunistic) return opportunistic;",
+    "    throw error;",
+    "  }",
+    "}",
+    "",
+    'self.addEventListener("install", (event) => {',
+    "  event.waitUntil(self.skipWaiting());",
+    "});",
+    "",
+    'self.addEventListener("activate", (event) => {',
+    "  event.waitUntil((async () => {",
+    "    const names = await caches.keys();",
+    "    await Promise.all(names.map((name) =>",
+    "      name.startsWith(RUNTIME_CACHE_PREFIX) && name !== RUNTIME_CACHE_NAME",
+    "        ? caches.delete(name)",
+    "        : Promise.resolve(false)",
+    "    ));",
+    "    await self.clients.claim();",
+    "  })());",
+    "});",
+    "",
+    'self.addEventListener("fetch", (event) => {',
+    "  if (!shouldHandle(event.request)) return;",
+    "  event.respondWith(networkFirst(event.request));",
+    "});",
+  );
 }
 
 /**
@@ -367,7 +508,9 @@ export function createPublisherNextHostTemplate(
         'const updatesData = existsSync(updatesPath) ? JSON.parse(readFileSync(updatesPath, "utf8")) : undefined;',
         `const syncPath = join(process.cwd(), "${PUBLISHER_NEXT_SYNC_DATA_PATH}");`,
         'const syncData = existsSync(syncPath) ? JSON.parse(readFileSync(syncPath, "utf8")) : undefined;',
-        "const created = await createPublicationNextApplication({ reader, syncData, updatesData });",
+        `const audioPath = join(process.cwd(), "${PUBLISHER_NEXT_AUDIO_DATA_PATH}");`,
+        'const audioData = existsSync(audioPath) ? JSON.parse(readFileSync(audioPath, "utf8")) : undefined;',
+        "const created = await createPublicationNextApplication({ reader, audioData, syncData, updatesData });",
         "if (!created.valid) {",
         "  throw new Error(JSON.stringify(created.diagnostics));",
         "}",
@@ -423,6 +566,92 @@ export function createPublisherNextHostTemplate(
         "  homePath,",
         "});",
       ),
+    },
+    {
+      path: "app/publication-reader-offline.json/route.ts",
+      contents: lines(
+        'import { existsSync, readFileSync } from "node:fs";',
+        'import { join } from "node:path";',
+        `import reader from "../../${PUBLISHER_NEXT_READER_DATA_PATH}" with { type: "json" };`,
+        'import type { PublicationReaderEnvelope, Sha256Digest } from "@genii-foundation/publisher-schema/reader";',
+        'import type { ReaderOfflineResourceInput } from "@genii-foundation/publisher-reader/offline";',
+        'import { createReaderOfflineCatalog, parseReaderOfflineCatalog, serializeReaderOfflineCatalog } from "@genii-foundation/publisher-reader/offline";',
+        'import { parseReaderNarrationEnvelope } from "@genii-foundation/publisher-reader/narration";',
+        "",
+        'export const dynamic = "force-dynamic";',
+        "",
+        "export function GET(request: Request) {",
+        "  try {",
+        "    const url = new URL(request.url);",
+        '    const rendererBuildId = url.searchParams.get("rendererBuildId");',
+        "    if (",
+        "      url.searchParams.size !== 1 ||",
+        '      rendererBuildId === null ||',
+        '      !/^sha256:[0-9a-f]{64}$/u.test(rendererBuildId)',
+        "    ) {",
+        '      return new Response("Invalid renderer identity.\\n", { status: 400 });',
+        "    }",
+        "    const acceptedRendererBuildId = rendererBuildId as Sha256Digest;",
+        "    const acceptedReader = reader as unknown as PublicationReaderEnvelope;",
+        `    const audioPath = join(process.cwd(), "${PUBLISHER_NEXT_AUDIO_DATA_PATH}");`,
+        '    const audioData = existsSync(audioPath) ? JSON.parse(readFileSync(audioPath, "utf8")) : undefined;',
+        "    const narration = audioData === undefined",
+        "      ? null",
+        "      : parseReaderNarrationEnvelope(JSON.stringify(audioData), {",
+        "          publicationId: acceptedReader.publicationId,",
+        "          readerBuildId: acceptedReader.buildId,",
+        "        });",
+        "    const narrationCatalogHash = audioData?.source?.catalogSha256;",
+        "    if (",
+        "      audioData !== undefined &&",
+        "      (narration === null ||",
+        '        typeof narrationCatalogHash !== "string" ||',
+        '        !/^sha256:[0-9a-f]{64}$/u.test(narrationCatalogHash))',
+        "    ) {",
+        '      return new Response("Invalid narration artifact.\\n", { status: 500 });',
+        "    }",
+        "    const acceptedNarrationCatalogHash = narrationCatalogHash as Sha256Digest;",
+        '    const catalogHref = `${url.pathname}?rendererBuildId=${encodeURIComponent(acceptedRendererBuildId)}`;',
+        "    const sharedResources: ReaderOfflineResourceInput[] = [",
+        `      { href: "${publicHref(PUBLISHER_NEXT_SEARCH_DATA_PATH)}", kind: "data" },`,
+        `      { href: "${publicHref(PUBLISHER_NEXT_PROGRESS_DATA_PATH)}", kind: "data" },`,
+        `      ...(narration === null ? [] : [{ href: "${publicHref(PUBLISHER_NEXT_AUDIO_DATA_PATH)}", kind: "data" as const }]),`,
+        "    ];",
+        "    const catalog = createReaderOfflineCatalog({",
+        "      reader: acceptedReader,",
+        "      rendererBuildId: acceptedRendererBuildId,",
+        "      catalogHref,",
+        "      sharedResources,",
+        "      ...(narration === null ? {} : {",
+        "        narration: {",
+        "          catalogHash: acceptedNarrationCatalogHash,",
+        "          envelope: narration,",
+        "        },",
+        "      }),",
+        "    });",
+        "    const text = serializeReaderOfflineCatalog(catalog);",
+        "    if (parseReaderOfflineCatalog(text, {",
+        "      publicationId: acceptedReader.publicationId,",
+        "      readerBuildId: acceptedReader.buildId,",
+        "      rendererBuildId: acceptedRendererBuildId,",
+        "    }) === null) {",
+        '      return new Response("Invalid offline catalog.\\n", { status: 500 });',
+        "    }",
+        "    return new Response(text, {",
+        "    headers: {",
+        '      "cache-control": "public, max-age=0, must-revalidate",',
+        '      "content-type": "application/vnd.genii.publisher.reader-offline+json; charset=utf-8",',
+        "    },",
+        "  });",
+        "  } catch {",
+        '    return new Response("Offline catalog creation failed.\\n", { status: 500 });',
+        "  }",
+        "}",
+      ),
+    },
+    {
+      path: PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH,
+      contents: offlineServiceWorkerSource(),
     },
     {
       path: "app/api/auth/start/route.ts",
@@ -658,6 +887,7 @@ export function createPublisherNextHostTemplate(
     readerDataPath: PUBLISHER_NEXT_READER_DATA_PATH,
     searchDataPath: PUBLISHER_NEXT_SEARCH_DATA_PATH,
     progressDataPath: PUBLISHER_NEXT_PROGRESS_DATA_PATH,
+    offlineCatalogHref: PUBLISHER_NEXT_OFFLINE_CATALOG_HREF,
     audioDataPath: PUBLISHER_NEXT_AUDIO_DATA_PATH,
     syncDataPath: PUBLISHER_NEXT_SYNC_DATA_PATH,
     updatesDataPath: PUBLISHER_NEXT_UPDATES_DATA_PATH,

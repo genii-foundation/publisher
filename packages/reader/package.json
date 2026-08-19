@@ -74,6 +74,10 @@
     "./narration": {
       "types": "./dist/narration.d.ts",
       "import": "./dist/narration.js"
+    },
+    "./offline": {
+      "types": "./dist/offline.d.ts",
+      "import": "./dist/offline.js"
     }
   },
   "scripts": {
