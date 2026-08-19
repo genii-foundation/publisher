@@ -344,13 +344,15 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 .publisher-reader-sync form,
 .publisher-reader-sync-account,
 .publisher-reader-sync-consent,
-.publisher-reader-sync-delete {
+.publisher-reader-sync-delete,
+.publisher-reader-bookmark-delete {
   display: grid;
   gap: 0.7rem;
 }
 
 .publisher-reader-sync-consent,
-.publisher-reader-sync-delete {
+.publisher-reader-sync-delete,
+.publisher-reader-bookmark-delete {
   padding: 0.9rem;
   border: 1px solid var(--publisher-color-border);
   border-radius: var(--publisher-control-radius);
@@ -358,11 +360,14 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 
 .publisher-reader-sync-consent h3,
 .publisher-reader-sync-consent p,
+.publisher-reader-bookmark-delete h3,
+.publisher-reader-bookmark-delete p,
 .publisher-reader-sync-account p {
   margin: 0;
 }
 
-.publisher-reader-sync-consent > div {
+.publisher-reader-sync-consent > div,
+.publisher-reader-bookmark-delete > div {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;

@@ -646,6 +646,22 @@ function createCrossTabBookmarkProof(reader, sectionPath) {
     offset,
   });
   const now = Date.now();
+  const bookmark = (id, note) => ({
+    id,
+    createdAt: now,
+    updatedAt: now,
+    workId: work.id,
+    sectionContinuityId: section.continuity.id,
+    href: sectionPath,
+    quote,
+    prefix: "",
+    suffix: "",
+    note,
+    range: {
+      start: point(0),
+      end: point(quote.length),
+    },
+  });
   return Object.freeze({
     quote,
     storageKey: createReaderBookmarksStorageKey(reader.publicationId),
@@ -653,22 +669,14 @@ function createCrossTabBookmarkProof(reader, sectionPath) {
       schemaVersion: 1,
       publicationId: reader.publicationId,
       bookmarks: {
-        "cross-tab-proof": {
-          id: "cross-tab-proof",
-          createdAt: now,
-          updatedAt: now,
-          workId: work.id,
-          sectionContinuityId: section.continuity.id,
-          href: sectionPath,
-          quote,
-          prefix: "",
-          suffix: "",
-          note: "Cross-tab bookmark note.",
-          range: {
-            start: point(0),
-            end: point(quote.length),
-          },
-        },
+        "cross-tab-proof": bookmark(
+          "cross-tab-proof",
+          "Cross-tab bookmark note.",
+        ),
+        "cross-tab-proof-second": bookmark(
+          "cross-tab-proof-second",
+          "Second cross-tab bookmark note.",
+        ),
       },
     },
   });
@@ -1160,6 +1168,110 @@ async function assertHydratedReaderTools({
       assert.ok(exportedText.includes(bookmarkProof.quote));
       assert.match(exportedText, /Cross-tab bookmark note\./u);
       assert.ok(exportedText.includes(bookmarkProof.state.bookmarks["cross-tab-proof"].href));
+      const requestSingleRemoval = async () => page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const button = document.querySelector(".publisher-reader-bookmarks li button");',
+          "  button?.click();",
+          "  return button !== null;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal((await requestSingleRemoval()).result?.value, true);
+      const singleConfirmation = await page.send("Runtime.evaluate", {
+        expression: [
+          "({",
+          '  dialog: document.querySelector(".publisher-reader-bookmark-delete")?.textContent ?? "",',
+          '  focused: document.activeElement?.textContent ?? "",',
+          "})",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.match(singleConfirmation.result?.value?.dialog ?? "", /Remove this saved passage\?/u);
+      assert.equal(singleConfirmation.result?.value?.focused, "Remove");
+      const cancelled = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const button = Array.from(document.querySelectorAll(".publisher-reader-bookmark-delete button"))',
+          '    .find((candidate) => candidate.textContent === "Cancel");',
+          "  button?.click();",
+          '  return document.querySelectorAll(".publisher-reader-bookmarks li").length;',
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(cancelled.result?.value, 2);
+      assert.equal((await requestSingleRemoval()).result?.value, true);
+      await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const button = Array.from(document.querySelectorAll(".publisher-reader-bookmark-delete button"))',
+          '    .find((candidate) => candidate.textContent === "Remove");',
+          "  button?.click();",
+          "})()",
+        ].join("\n"),
+      });
+      let remainingBookmarks = 2;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression:
+            'document.querySelectorAll(".publisher-reader-bookmarks li").length',
+          returnByValue: true,
+        });
+        remainingBookmarks = evaluated.result?.value ?? 2;
+        if (remainingBookmarks === 1) break;
+        await wait(50);
+      }
+      assert.equal(remainingBookmarks, 1);
+      const requestedBulkRemoval = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const button = Array.from(document.querySelectorAll(".publisher-reader-bookmark-tools button"))',
+          '    .find((candidate) => candidate.textContent?.includes("Remove all saved passages"));',
+          "  button?.click();",
+          "  return button !== undefined;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(requestedBulkRemoval.result?.value, true);
+      const bulkConfirmation = await page.send("Runtime.evaluate", {
+        expression:
+          'document.querySelector(".publisher-reader-bookmark-delete")?.textContent ?? ""',
+        returnByValue: true,
+      });
+      assert.match(bulkConfirmation.result?.value ?? "", /Remove all saved passages\?/u);
+      await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const button = Array.from(document.querySelectorAll(".publisher-reader-bookmark-delete button"))',
+          '    .find((candidate) => candidate.textContent === "Remove");',
+          "  button?.click();",
+          "})()",
+        ].join("\n"),
+      });
+      let deletionState;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            `  const state = JSON.parse(localStorage.getItem(${JSON.stringify(bookmarkProof.storageKey)}));`,
+            "  const entries = Object.values(state.bookmarks ?? {});",
+            "  return {",
+            "    live: entries.filter((bookmark) => bookmark.deletedAt === undefined).length,",
+            "    tombstones: entries.filter((bookmark) => Number.isSafeInteger(bookmark.deletedAt)).length,",
+            '    empty: document.querySelector(".publisher-reader-panel")?.textContent?.includes("No saved passages yet") === true,',
+            "  };",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        deletionState = evaluated.result?.value;
+        if (deletionState?.live === 0 && deletionState.tombstones === 2) break;
+        await wait(50);
+      }
+      assert.deepEqual(deletionState, { live: 0, tombstones: 2, empty: true });
     } finally {
       peerPage.close();
     }

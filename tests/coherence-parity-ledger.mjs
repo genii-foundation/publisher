@@ -232,8 +232,13 @@ export const READER_PARITY = Object.freeze([
     id: "reader.bookmarks.safe_deletion",
     capability: "Accessible single and bulk bookmark deletion confirmation",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "Single and bulk removal use labeled modal confirmation, deliberate focus movement and return, Escape cancellation, one atomic reactive update, and the engine's absorbing synchronization tombstones.",
+    evidence: {
+      decision: "docs/architecture/0029-confirmed-bookmark-deletion.md",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
     sourcePaths: ["src/components/ToolbarBookmarksIsland.tsx"],
   },
   {

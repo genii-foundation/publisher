@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-18, GENII Foundation
 
+- Added accessible confirmed single and bulk bookmark removal over the existing absorbing tombstone contract.
+- Extended the clean packed-host Chrome proof through cancellation, focus handling, one removal, bulk removal, and persisted tombstones.
 - Added saved-passage search, honest empty results, and local plain-text export to the default bookmark panel.
 - Extended the clean packed-host Chrome proof through bookmark query and inspection of the generated export Blob.
 - Added one-opening Reader sessions, conservative visible active reading time, return tracking, and a default current-section progress panel.

@@ -22,6 +22,7 @@ import {
   listLiveReaderBookmarks,
   parseReaderBookmarksState,
   queryReaderBookmarks,
+  removeReaderBookmark,
   serializeReaderBookmarksState,
   type ReaderBookmarksState,
 } from "@genii-foundation/publisher-reader/bookmarks";
@@ -118,6 +119,9 @@ export interface PublisherReaderRailProps {
 
 type ReaderPanel = "outline" | "progress" | "search" | "bookmarks" | "settings" | "sync";
 type ReaderSyncState = "idle" | "loading" | "signed-out" | "signed-in" | "unavailable";
+type ReaderBookmarkDeletion =
+  | { readonly kind: "all" }
+  | { readonly kind: "one"; readonly id: string };
 
 const SYNC_CONSENT_COPY_VERSION = "1.0";
 const SYNC_PUMP_INTERVAL_MS = 200;
@@ -273,6 +277,9 @@ export function PublisherReaderRail({
   const panelId = useId();
   const syncEmailRef = useRef<HTMLInputElement>(null);
   const consentContinueRef = useRef<HTMLButtonElement>(null);
+  const bookmarkQueryRef = useRef<HTMLInputElement>(null);
+  const bookmarkDeleteConfirmRef = useRef<HTMLButtonElement>(null);
+  const bookmarkDeleteTriggerRef = useRef<HTMLButtonElement | null>(null);
   const preferencesKey = useMemo(
     () => createReaderPreferencesStorageKey(publicationId),
     [publicationId],
@@ -329,6 +336,7 @@ export function PublisherReaderRail({
     createDefaultReaderPreferences(DEFAULT_FONT_POLICY));
   const [query, setQuery] = useState("");
   const [bookmarkQuery, setBookmarkQuery] = useState("");
+  const [bookmarkDeletePending, setBookmarkDeletePending] = useState<ReaderBookmarkDeletion | null>(null);
   const [searchIndex, setSearchIndex] = useState<ReaderSearchIndex | null>(null);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [syncState, setSyncState] = useState<ReaderSyncState>("idle");
@@ -828,7 +836,10 @@ export function PublisherReaderRail({
   useEffect(() => {
     const close = (event: KeyboardEvent): void => {
       if (event.key !== "Escape") return;
-      if (consentPending) {
+      if (bookmarkDeletePending !== null) {
+        setBookmarkDeletePending(null);
+        bookmarkDeleteTriggerRef.current?.focus();
+      } else if (consentPending) {
         setConsentPending(false);
         syncEmailRef.current?.focus();
       } else {
@@ -837,11 +848,17 @@ export function PublisherReaderRail({
     };
     document.addEventListener("keydown", close);
     return () => document.removeEventListener("keydown", close);
-  }, [consentPending]);
+  }, [bookmarkDeletePending, consentPending]);
 
   useEffect(() => {
     if (consentPending) consentContinueRef.current?.focus();
   }, [consentPending]);
+
+  useEffect(() => {
+    if (bookmarkDeletePending !== null) {
+      bookmarkDeleteConfirmRef.current?.focus();
+    }
+  }, [bookmarkDeletePending]);
 
   const currentProgress = currentSection === undefined
     ? null
@@ -895,6 +912,32 @@ export function PublisherReaderRail({
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  const cancelBookmarkDeletion = (): void => {
+    setBookmarkDeletePending(null);
+    bookmarkDeleteTriggerRef.current?.focus();
+  };
+
+  const confirmBookmarkDeletion = (): void => {
+    const pending = bookmarkDeletePending;
+    if (pending === null) return;
+    const now = Date.now();
+    bookmarksStore.update((current) => {
+      if (pending.kind === "one") {
+        return removeReaderBookmark(current, pending.id, { publicationId, now });
+      }
+      return allBookmarks.reduce(
+        (next, bookmark) => removeReaderBookmark(
+          next,
+          bookmark.id,
+          { publicationId, now },
+        ),
+        current,
+      );
+    });
+    setBookmarkDeletePending(null);
+    bookmarkQueryRef.current?.focus();
   };
 
   const toggle = (panel: ReaderPanel): void => {
@@ -1117,8 +1160,9 @@ export function PublisherReaderRail({
               <div className="publisher-reader-bookmark-panel">
                 <div className="publisher-reader-bookmark-tools">
                   <label htmlFor={`${panelId}-bookmark-query`}>Search saved passages</label>
-                  <input id={`${panelId}-bookmark-query`} maxLength={280} onChange={(event) => setBookmarkQuery(event.currentTarget.value)} type="search" value={bookmarkQuery} />
+                  <input ref={bookmarkQueryRef} id={`${panelId}-bookmark-query`} maxLength={280} onChange={(event) => setBookmarkQuery(event.currentTarget.value)} type="search" value={bookmarkQuery} />
                   <button className="publisher-reader-secondary-action" onClick={downloadBookmarks} type="button">Export saved passages</button>
+                  <button className="publisher-reader-secondary-action" onClick={(event) => { bookmarkDeleteTriggerRef.current = event.currentTarget; setBookmarkDeletePending({ kind: "all" }); }} type="button">Remove all saved passages</button>
                 </div>
                 {bookmarks.length === 0 ? <p>No saved passages match this search.</p> : (
                   <ol className="publisher-reader-bookmarks">
@@ -1126,9 +1170,20 @@ export function PublisherReaderRail({
                       <li key={bookmark.id}>
                         <a href={bookmark.href}><q>{bookmark.quote}</q></a>
                         {bookmark.note === undefined ? null : <p>{bookmark.note}</p>}
+                        <button className="publisher-reader-secondary-action" aria-label={`Remove saved passage: ${bookmark.quote.slice(0, 80)}`} onClick={(event) => { bookmarkDeleteTriggerRef.current = event.currentTarget; setBookmarkDeletePending({ kind: "one", id: bookmark.id }); }} type="button">Remove</button>
                       </li>
                     ))}
                   </ol>
+                )}
+                {bookmarkDeletePending === null ? null : (
+                  <section className="publisher-reader-bookmark-delete" role="dialog" aria-modal="true" aria-label="Confirm saved passage removal">
+                    <h3>{bookmarkDeletePending.kind === "all" ? "Remove all saved passages?" : "Remove this saved passage?"}</h3>
+                    <p>{bookmarkDeletePending.kind === "all" ? `This removes ${new Intl.NumberFormat().format(allBookmarks.length)} saved passage${allBookmarks.length === 1 ? "" : "s"} from this browser and any connected synchronization account.` : "This removes the selected passage from this browser and any connected synchronization account."}</p>
+                    <div>
+                      <button type="button" onClick={cancelBookmarkDeletion}>Cancel</button>
+                      <button ref={bookmarkDeleteConfirmRef} className="publisher-reader-primary-action" type="button" onClick={confirmBookmarkDeletion}>Remove</button>
+                    </div>
+                  </section>
                 )}
               </div>
             )
