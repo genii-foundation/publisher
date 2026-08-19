@@ -703,6 +703,7 @@ test("packed content freezes its runtime and proves production and development c
       import {
         compileMarkdownWork,
         compilePublicationContent,
+        createSpokenInputIdentity,
         createPublicationContentArtifact,
         serializePublicationContentEnvelope,
         validateAudioCheckpoint,
@@ -721,6 +722,16 @@ test("packed content freezes its runtime and proves production and development c
       }
 
       assert.equal(typeof validateAudioCheckpoint, "function");
+      const spokenIdentity = value(createSpokenInputIdentity({
+        sectionId: "sample-work-root",
+        title: " A Neutral Sample ",
+        spokenBody: "The packed   compiler reads this small publication.",
+      }));
+      assert.equal(
+        spokenIdentity.spokenText,
+        "A Neutral Sample\\n\\nThe packed compiler reads this small publication.",
+      );
+      assert.match(spokenIdentity.spokenTextSha256, /^sha256:[a-f0-9]{64}$/);
 
       const publication = value(validatePublicationShape({
         "$schema": "https://publisher.genii.foundation/schemas/publication.schema.json",
@@ -979,6 +990,7 @@ test("packed content freezes its runtime and proves production and development c
     const typeConsumer = `
       import {
         compilePublicationContent,
+        createSpokenInputIdentity,
         createPublicationContentArtifact,
         planAudioCheckpointPromotion,
         serializePublicationContentEnvelope,
@@ -993,6 +1005,8 @@ test("packed content freezes its runtime and proves production and development c
         type CompilePublicationContentInput,
         type ResolvedExtensionInput,
         type SectionReaderLocationInput,
+        type SpokenInputIdentity,
+        type SpokenInputIdentityInput,
       } from "@genii-foundation/publisher-content";
       import type {
         ExtensionCapability,
@@ -1005,6 +1019,7 @@ test("packed content freezes its runtime and proves production and development c
       declare const checkpoint: AudioCheckpoint;
       declare const promotionInput: AudioPromotionPlanInput;
       declare const publicationGuardInput: AudioPublicationGuardInput;
+      declare const spokenInput: SpokenInputIdentityInput;
       const readerLocation: SectionReaderLocationInput = { kind: "work" };
       const capability: ExtensionCapability = "content.project";
       const extension: ResolvedExtensionInput = {
@@ -1023,6 +1038,8 @@ test("packed content freezes its runtime and proves production and development c
         planAudioCheckpointPromotion(promotionInput);
       const publicationGuard: ValidationResult<AudioPublicationGuardReport> =
         validateAudioPublicationGuard(publicationGuardInput);
+      const spokenIdentity: ValidationResult<SpokenInputIdentity> =
+        createSpokenInputIdentity(spokenInput);
       const serialized: string = serializePublicationContentEnvelope(envelope);
       const artifact = createPublicationContentArtifact(envelope);
       void [
@@ -1031,6 +1048,7 @@ test("packed content freezes its runtime and proves production and development c
         validatedCheckpoint,
         promotion,
         publicationGuard,
+        spokenIdentity,
         serialized,
         artifact,
         readerLocation,

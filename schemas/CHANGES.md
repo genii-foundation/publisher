@@ -9,6 +9,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Added a vendor-neutral immutable narration checkpoint schema and semantic evidence validator for author promotion and publication guards.
 - Added exact-base selective narration promotion planning that preserves unselected clips and narrators.
 - Added a narration publication guard that requires exact reviewed evidence for every changed spoken unit and public narrator.
+- Added deterministic spoken-input identity shared by narration generation, timing, and publication evidence.
 
 ## 2026-08-18, GENII Foundation
 

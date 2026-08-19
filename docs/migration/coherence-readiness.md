@@ -42,9 +42,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 33 upgraded | 33 | Publisher implements a stronger checked contract. |
+| 34 upgraded | 34 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 9 planned | 9 | Accepted Publisher scope is not implemented yet. |
+| 8 planned | 8 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -220,6 +220,12 @@ object base. It checks every current narrator, refuses narrator removal, and
 requires the published URL, format, audio bytes, timing bytes, and duration to
 match immutable evidence exactly. Git comparison and checkpoint discovery remain
 author workflow responsibilities. ADR 0043 records the boundary.
+
+The engine now derives a separate full spoken-text identity from the trimmed
+title and normalized presentation-free body. It returns the exact canonical text
+used by generation, timing, and the renderer profile, while legacy
+`audioVersionId` values remain opaque. Presentation parsing remains adapter owned.
+ADR 0044 records the boundary.
 
 ### Synchronization
 

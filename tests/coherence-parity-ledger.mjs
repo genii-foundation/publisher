@@ -450,9 +450,19 @@ export const AUDIO_PARITY = Object.freeze([
     id: "audio.identity.spoken_input",
     capability: "Narration identity derived from spoken title and normalized spoken body",
     home: "engine",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    why: "The current catalog treats audioVersionId as opaque, so the engine cannot yet prove that a formatting-only edit is harmless or a spoken-text edit needs new narration.",
+    status: "upgraded",
+    why: "The engine derives full SHA-256 identity from the exact renderer-compatible spoken text while keeping provider audioVersionId values opaque. It rejects unsafe Unicode and exposes canonical text for author generation evidence.",
+    evidence: {
+      decision: "docs/architecture/0044-spoken-input-identity.md",
+      implementation: "packages/content/src/spoken-input.ts",
+      tests: "tests/spoken-input.test.mjs",
+    },
+    sourcePaths: [
+      "scripts/manuscripts/shared.ts",
+      "scripts/manuscripts/io.ts",
+      "src/lib/audio-text.ts",
+      "scripts/audio/verify-manuscript-audio.ts",
+    ],
   },
   {
     id: "audio.catalog.contract",

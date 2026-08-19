@@ -31,6 +31,9 @@ export {
   validateAudioPublicationGuard,
 } from "./audio-publication.js";
 export {
+  createSpokenInputIdentity,
+} from "./spoken-input.js";
+export {
   hashCanonicalJson,
   sha256,
 } from "./hashing.js";
@@ -55,6 +58,10 @@ export type {
   AudioPublicationGuardReport,
   ChangedSpokenUnit,
 } from "./audio-publication.js";
+export type {
+  SpokenInputIdentity,
+  SpokenInputIdentityInput,
+} from "./spoken-input.js";
 export type {
   CompilationSourceInput,
   CompilationSourceRange,
