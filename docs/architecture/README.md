@@ -55,5 +55,6 @@ These records define the accepted foundation of GENII Publisher.
 51. [ADR 0051: Isolated client extension mount](./0051-isolated-client-extension-mount.md)
 52. [ADR 0052: Declarative extension page routes](./0052-declarative-extension-page-routes.md)
 53. [ADR 0053: Reader transport and bookmark geometry](./0053-reader-transport-and-bookmark-geometry.md)
+54. [ADR 0054: Closed extension request handlers](./0054-closed-extension-request-handlers.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

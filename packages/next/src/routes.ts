@@ -195,7 +195,7 @@ function extensionRoutesFor(
     const entry = exactJsonObject(
       value,
       ["id", "package", "version", "capabilities", "config"],
-      ["serverData", "clientData", "routes"],
+      ["serverData", "clientData", "routes", "handlers"],
     );
     if (
       entry === null ||

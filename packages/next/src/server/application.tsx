@@ -48,6 +48,9 @@ import {
   validateSyncEnvelopeShape,
   validateUpdatesEnvelopeShape,
 } from "@genii-foundation/publisher-schema";
+import {
+  inspectCanonicalRoutePath,
+} from "@genii-foundation/publisher-schema/routes";
 import type { SyncEnvelope } from "@genii-foundation/publisher-schema";
 import type { Metadata, NextConfig } from "next";
 import { notFound } from "next/navigation.js";
@@ -109,6 +112,8 @@ import {
   PUBLISHER_NEXT_EXTENSION_API_VERSION,
   PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT,
   PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION,
+  PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES,
+  PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS,
   PUBLISHER_NEXT_EXTENSION_SLOTS,
   PUBLISHER_NEXT_THEME_API_VERSION,
   PUBLISHER_NEXT_UPDATES_API_VERSION,
@@ -120,6 +125,8 @@ import type {
   PublisherNextApplicationArtifact,
   PublisherNextApplicationManifest,
   PublisherNextExtensionPageContext,
+  PublisherNextExtensionHandlerDescriptor,
+  PublisherNextExtensionHandlerMethod,
   PublisherNextExtensionHost,
   PublisherNextExtensionRenderer,
   PublisherNextExtensionSlot,
@@ -182,6 +189,7 @@ interface ResolvedExtensionEntry {
   readonly projectionHash: Sha256Digest;
   readonly renderer: PublisherNextExtensionRenderer | null;
   readonly host: PublisherNextExtensionHost | null;
+  readonly handlers: readonly PublisherNextExtensionHandlerDescriptor[];
   readonly clientData?: JSONValue;
   readonly serverData?: JSONValue;
 }
@@ -539,7 +547,90 @@ const SUPPORTED_EXTENSION_CAPABILITIES = Object.freeze([
   "renderer.slot",
   "renderer.client",
   "host.route",
+  "host.handler",
 ] as const);
+
+function extensionHandlers(
+  value: unknown,
+  extensionId: string,
+  path: string,
+  ownedPaths: Set<string>,
+): ValidationResult<readonly PublisherNextExtensionHandlerDescriptor[]> {
+  const handlers = inspectArray(value, 1_000);
+  if (handlers === null) {
+    return failure(
+      "next.extension.handlers_invalid",
+      path,
+      "Extension handlers must be one bounded descriptor array.",
+      "type",
+    );
+  }
+  const result: PublisherNextExtensionHandlerDescriptor[] = [];
+  const ids = new Set<string>();
+  const paths = new Set<string>();
+  const namespace = `/api/extensions/${extensionId}`;
+  for (let index = 0; index < handlers.length; index += 1) {
+    const handlerPath = `${path}/${index}`;
+    const handler = inspectRecord(
+      handlers[index],
+      ["id", "path", "methods"],
+      ["data"],
+    );
+    const id = handler === null ? undefined : valueOf(handler, "id");
+    const publicPath = handler === null
+      ? undefined
+      : valueOf(handler, "path");
+    const methods = handler === null
+      ? null
+      : inspectArray(
+          valueOf(handler, "methods"),
+          PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS.length,
+        );
+    if (
+      handler === null ||
+      typeof id !== "string" ||
+      id.length > 128 ||
+      !EXTENSION_ID.test(id) ||
+      ids.has(id) ||
+      typeof publicPath !== "string" ||
+      !inspectCanonicalRoutePath(publicPath).valid ||
+      (publicPath !== namespace && !publicPath.startsWith(`${namespace}/`)) ||
+      publicPath.endsWith("/") ||
+      methods === null ||
+      methods.length === 0 ||
+      methods.some(
+        (method, methodIndex) =>
+          typeof method !== "string" ||
+          !PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS.includes(
+            method as PublisherNextExtensionHandlerMethod,
+          ) ||
+          methods.indexOf(method) !== methodIndex,
+      ) ||
+      paths.has(publicPath) ||
+      ownedPaths.has(publicPath)
+    ) {
+      return failure(
+        "next.extension.handler_invalid",
+        handlerPath,
+        "Extension handlers require a unique ID, an owned API path, and a nonempty unique method list.",
+        "handler",
+      );
+    }
+    ids.add(id);
+    paths.add(publicPath);
+    ownedPaths.add(publicPath);
+    const data = valueOf(handler, "data");
+    result.push(Object.freeze({
+      id,
+      path: publicPath,
+      methods: Object.freeze(
+        [...methods] as PublisherNextExtensionHandlerMethod[],
+      ),
+      ...(data === undefined ? {} : { data: data as JSONValue }),
+    }));
+  }
+  return success(Object.freeze(result));
+}
 
 function snapshotExtensionData(
   value: unknown,
@@ -665,13 +756,42 @@ function resolveExtensions(
     );
   }
   const entries: ResolvedExtensionEntry[] = [];
+  const extensionIds = new Set<string>();
+  const ownedHandlerPaths = new Set<string>([
+    ...reader.routes.active.map(({ path }) => path),
+    ...reader.routes.redirects.map(({ from }) => from),
+  ]);
+  for (const entryValue of dataEntries) {
+    if (
+      entryValue === null ||
+      typeof entryValue !== "object" ||
+      Array.isArray(entryValue)
+    ) {
+      continue;
+    }
+    const routes = (entryValue as Readonly<Record<string, unknown>>).routes;
+    if (!Array.isArray(routes)) continue;
+    for (const route of routes) {
+      const routePath = route !== null && typeof route === "object"
+        ? (route as Readonly<Record<string, unknown>>).path
+        : undefined;
+      if (
+        route !== null &&
+        typeof route === "object" &&
+        !Array.isArray(route) &&
+        typeof routePath === "string"
+      ) {
+        ownedHandlerPaths.add(routePath);
+      }
+    }
+  }
   for (let index = 0; index < dataEntries.length; index += 1) {
     const path = `/extensionData/extensions/${index}`;
     const entryValue = dataEntries[index];
     const entry = inspectRecord(
       entryValue,
       ["id", "package", "version", "capabilities", "config"],
-      ["serverData", "clientData", "routes"],
+      ["serverData", "clientData", "routes", "handlers"],
     );
     const registration = inspectRecord(
       registrations[index],
@@ -710,7 +830,9 @@ function resolveExtensions(
     );
     if (
       typeof id !== "string" ||
+      id.length > 128 ||
       !EXTENSION_ID.test(id) ||
+      extensionIds.has(id) ||
       typeof packageName !== "string" ||
       !PACKAGE_NAME.test(packageName) ||
       typeof version !== "string" ||
@@ -743,8 +865,10 @@ function resolveExtensions(
         "extensionIdentity",
       );
     }
+    extensionIds.add(id);
     const clientData = valueOf(entry, "clientData");
     const routeData = valueOf(entry, "routes");
+    const handlerData = valueOf(entry, "handlers");
     if (
       clientData !== undefined &&
       !entryCapabilities.includes("renderer.client")
@@ -755,6 +879,30 @@ function resolveExtensions(
         "Browser data requires the renderer.client grant.",
         "extensionCapability",
       );
+    }
+    if (
+      (entryCapabilities.includes("host.handler") &&
+        !Array.isArray(handlerData)) ||
+      (!entryCapabilities.includes("host.handler") &&
+        handlerData !== undefined)
+    ) {
+      return failure(
+        "next.extension.handler_data_ungranted",
+        `${path}/handlers`,
+        "Declarative handler data requires the host.handler grant, and every host.handler grant requires handler data.",
+        "extensionCapability",
+      );
+    }
+    const handlersResult = entryCapabilities.includes("host.handler")
+      ? extensionHandlers(
+          handlerData,
+          id,
+          `${path}/handlers`,
+          ownedHandlerPaths,
+        )
+      : success(Object.freeze([]));
+    if (!handlersResult.valid) {
+      return handlersResult;
     }
     if (
       (entryCapabilities.includes("host.route") &&
@@ -837,15 +985,14 @@ function resolveExtensions(
     }
     const hostValue = valueOf(registration, "host");
     let host: PublisherNextExtensionHost | null = null;
-    if (granted.includes("host.route")) {
+    if (
+      granted.includes("host.route") ||
+      granted.includes("host.handler")
+    ) {
       const inspectedHost = inspectRecord(
         hostValue,
-        [
-          "kind",
-          "apiVersion",
-          "rendererCompatibility",
-          "renderRoute",
-        ],
+        ["kind", "apiVersion", "rendererCompatibility"],
+        ["renderRoute", "handleRequest"],
       );
       const hostCompatibility = inspectedHost === null
         ? undefined
@@ -853,6 +1000,9 @@ function resolveExtensions(
       const renderRoute = inspectedHost === null
         ? undefined
         : valueOf(inspectedHost, "renderRoute");
+      const handleRequest = inspectedHost === null
+        ? undefined
+        : valueOf(inspectedHost, "handleRequest");
       if (
         inspectedHost === null ||
         valueOf(inspectedHost, "kind") !==
@@ -864,12 +1014,15 @@ function resolveExtensions(
         !satisfies(PUBLISHER_NEXT_VERSION, hostCompatibility, {
           includePrerelease: true,
         }) ||
-        typeof renderRoute !== "function"
+        (granted.includes("host.route") &&
+          typeof renderRoute !== "function") ||
+        (granted.includes("host.handler") &&
+          typeof handleRequest !== "function")
       ) {
         return failure(
           "next.extension.host_invalid",
           `/extensions/${index}/host`,
-          "The host.route grant requires one compatible official Next host adapter.",
+          "Host grants require one compatible official Next host adapter with every granted entry point.",
           "extensionHost",
         );
       }
@@ -877,7 +1030,20 @@ function resolveExtensions(
         kind: "genii.publisher.next-host-extension" as const,
         apiVersion: PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION,
         rendererCompatibility: hostCompatibility,
-        renderRoute: renderRoute as PublisherNextExtensionHost["renderRoute"],
+        ...(granted.includes("host.route")
+          ? {
+              renderRoute: renderRoute as NonNullable<
+                PublisherNextExtensionHost["renderRoute"]
+              >,
+            }
+          : {}),
+        ...(granted.includes("host.handler")
+          ? {
+              handleRequest: handleRequest as NonNullable<
+                PublisherNextExtensionHost["handleRequest"]
+              >,
+            }
+          : {}),
       });
     }
     entries.push(Object.freeze({
@@ -888,6 +1054,7 @@ function resolveExtensions(
       projectionHash: hashCanonicalJson(entryValue as JSONValue),
       renderer,
       host,
+      handlers: handlersResult.value,
       ...(clientData === undefined
         ? {}
         : { clientData: clientData as JSONValue }),
@@ -901,6 +1068,153 @@ function resolveExtensions(
     buildId: buildId as Sha256Digest,
     entries: Object.freeze(entries),
   }));
+}
+
+const EXTENSION_HANDLER_FORBIDDEN_RESPONSE_HEADER_PREFIXES =
+  Object.freeze([
+    "x-middleware-",
+    "x-nextjs-",
+  ] as const);
+
+function extensionHandlerErrorResponse(
+  status: number,
+  message: string,
+  headers?: HeadersInit,
+): Response {
+  return new Response(`${message}\n`, {
+    status,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      ...Object.fromEntries(new Headers(headers)),
+    },
+  });
+}
+
+async function boundedExtensionHandlerRequest(
+  request: Request,
+): Promise<Request | Response> {
+  const contentLength = request.headers.get("content-length");
+  if (
+    contentLength !== null &&
+    /^\d+$/u.test(contentLength) &&
+    Number(contentLength) >
+      PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES
+  ) {
+    return extensionHandlerErrorResponse(
+      413,
+      "Extension request body is too large.",
+    );
+  }
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  if (
+    request.body !== null &&
+    request.method !== "GET" &&
+    request.method !== "HEAD"
+  ) {
+    const reader = request.body.getReader();
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      totalBytes += chunk.value.byteLength;
+      if (
+        totalBytes >
+          PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES
+      ) {
+        await reader.cancel().catch(() => undefined);
+        return extensionHandlerErrorResponse(
+          413,
+          "Extension request body is too large.",
+        );
+      }
+      chunks.push(chunk.value);
+    }
+  }
+  const body = totalBytes === 0
+    ? undefined
+    : (() => {
+        const snapshot = new Uint8Array(totalBytes);
+        let offset = 0;
+        for (const chunk of chunks) {
+          snapshot.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        return snapshot;
+      })();
+  const init: RequestInit & { duplex?: "half" } = {
+    method: request.method,
+    headers: new Headers(request.headers),
+    redirect: "manual",
+    ...(body === undefined ? {} : { body, duplex: "half" as const }),
+  };
+  return new Request(request.url, init);
+}
+
+function createExtensionRequestHandler(
+  extensions: ResolvedExtensionsState | null,
+): (request: Request) => Promise<Response | undefined> {
+  const handlers = new Map<string, {
+    readonly extension: ResolvedExtensionEntry;
+    readonly handler: PublisherNextExtensionHandlerDescriptor;
+  }>();
+  for (const extension of extensions?.entries ?? []) {
+    for (const handler of extension.handlers) {
+      handlers.set(handler.path, Object.freeze({ extension, handler }));
+    }
+  }
+  return async (request: Request): Promise<Response | undefined> => {
+    let pathname: string;
+    try {
+      pathname = new URL(request.url).pathname;
+    } catch {
+      return undefined;
+    }
+    const target = handlers.get(pathname);
+    if (target === undefined) return undefined;
+    if (
+      !target.handler.methods.includes(
+        request.method as PublisherNextExtensionHandlerMethod,
+      )
+    ) {
+      return extensionHandlerErrorResponse(
+        405,
+        "Method not allowed.",
+        { allow: target.handler.methods.join(", ") },
+      );
+    }
+    try {
+      const detached = await boundedExtensionHandlerRequest(request);
+      if (detached instanceof Response) return detached;
+      const response = await target.extension.host?.handleRequest?.(
+        Object.freeze({
+          handler: target.handler,
+          request: detached,
+          ...(target.extension.serverData === undefined
+            ? {}
+            : { serverData: target.extension.serverData }),
+        }),
+      );
+      if (!(response instanceof Response)) {
+        throw new TypeError("invalid extension handler response");
+      }
+      for (const [name] of response.headers) {
+        if (
+          EXTENSION_HANDLER_FORBIDDEN_RESPONSE_HEADER_PREFIXES.some(
+            (prefix) => name.startsWith(prefix),
+          )
+        ) {
+          throw new TypeError("forbidden extension handler response header");
+        }
+      }
+      return response;
+    } catch {
+      return extensionHandlerErrorResponse(
+        500,
+        "Extension request failed.",
+      );
+    }
+  };
 }
 
 function extensionPageContext(
@@ -2344,6 +2658,9 @@ export async function createPublicationNextApplication(
       reader,
       routePlan,
     );
+    const extensionRequestHandler = createExtensionRequestHandler(
+      extensions,
+    );
     const artifact = createApplicationArtifact(
       reader,
       themeResult.value,
@@ -2545,7 +2862,9 @@ export async function createPublicationNextApplication(
         ),
       generateRootMetadata: () => generateMetadata(rootProps),
       generateMetadata,
-      handleRequest: continuity.handleRequest,
+      handleRequest: async (request: Request) =>
+        continuity.handleRequest(request) ??
+        extensionRequestHandler(request),
       createNextConfig: (baseConfig?: NextConfig) =>
         createPublisherNextConfig(routePlan, baseConfig),
     });

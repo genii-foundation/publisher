@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.13.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.14.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -262,9 +262,15 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.12.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.13.0",
       summary:
         "Add build-time declarative extension pages to the official route plan.",
+    }),
+    Object.freeze({
+      from: "0.13.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Await closed extension request handlers in the official Proxy boundary.",
     }),
   ]);
 
@@ -579,8 +585,8 @@ export function createPublisherNextHostTemplate(
         'import { NextResponse, type NextRequest } from "next/server";',
         'import { application } from "./publisher-application.js";',
         "",
-        "export function proxy(request: NextRequest) {",
-        "  return application.handleRequest(request) ?? NextResponse.next();",
+        "export async function proxy(request: NextRequest) {",
+        "  return (await application.handleRequest(request)) ?? NextResponse.next();",
         "}",
       ),
     },

@@ -16,7 +16,7 @@ The renderer owns:
 - canonical trailing-slash redirects
 - deterministic application-manifest identity
 
-A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state, lazy default narration playback, optional provider-neutral synchronization, and two engine-owned server extension slots. It does not execute client extensions, extension routes, extension handlers, or claim static-export support.
+A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state, lazy default narration playback, optional provider-neutral synchronization, two engine-owned server extension slots, one isolated client extension mount, declarative extension pages, and closed extension request handlers. It does not claim static export support.
 
 Progress and complete bookmark documents share one publication-scoped reactive
 store. Its atomic updater always sees the latest in-memory snapshot. Same-tab
@@ -374,8 +374,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { publisher } from "./publisher.mjs";
 
-export function proxy(request: NextRequest) {
-  return publisher.handleRequest(request) ?? NextResponse.next();
+export async function proxy(request: NextRequest) {
+  return (await publisher.handleRequest(request)) ?? NextResponse.next();
 }
 ```
 
@@ -642,9 +642,56 @@ slash continuity, heading, shell, error surfaces, slots, client mount, and
 required attribution. Route data is server data and is not sent to client
 extension props.
 
-`host.handler` remains unimplemented. Capability grants decide which documented
-interface Publisher invokes, but they do not sandbox explicitly imported
-JavaScript.
+With a `host.handler` grant, the build implementation projects exact request
+descriptors inside `/api/extensions/<extension-id>`:
+
+```js
+implementation: {
+  kind: "genii.publisher.extension",
+  apiVersion: "1.0",
+  handlers() {
+    return {
+      valid: true,
+      diagnostics: [],
+      value: [{
+        id: "callback",
+        path: "/api/extensions/station-index/callback",
+        methods: ["POST"],
+        data: { operation: "refresh" },
+      }],
+    };
+  },
+}
+```
+
+The compatible official host adapter supplies `handleRequest`:
+
+```js
+host: {
+  kind: "genii.publisher.next-host-extension",
+  apiVersion: "1.0",
+  rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+  async handleRequest({ handler, request, serverData }) {
+    const payload = await request.json();
+    return Response.json({
+      operation: handler.data.operation,
+      publicationId: serverData.publicationId,
+      received: payload,
+    });
+  },
+}
+```
+
+Publisher matches the pathname exactly, enforces the declared methods, and
+reads at most 1,048,576 request body bytes before invoking the adapter. The
+adapter receives a detached standard Request, its immutable descriptor, and
+only its own optional server projection. It must return a standard Response.
+Thrown values, invalid responses, and framework control headers become a generic
+`500` without exposing the private failure. Unmatched paths fall through to the
+host.
+
+Capability grants decide which documented interface Publisher invokes, but
+they do not sandbox explicitly imported JavaScript.
 
 ## Updates
 

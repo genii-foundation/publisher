@@ -27,6 +27,8 @@ export {
   PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT,
   PUBLISHER_NEXT_EXTENSION_API_VERSION,
   PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION,
+  PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES,
+  PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS,
   PUBLISHER_NEXT_EXTENSION_SLOTS,
   PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES,
   PUBLISHER_NEXT_THEME_API_VERSION,
@@ -36,6 +38,9 @@ export {
 export type {
   PublisherNextExtensionClientProps,
   PublisherNextExtensionHost,
+  PublisherNextExtensionHandlerDescriptor,
+  PublisherNextExtensionHandlerInput,
+  PublisherNextExtensionHandlerMethod,
   PublisherNextExtensionPageContext,
   PublisherNextExtensionRenderer,
   PublisherNextExtensionRoutePage,

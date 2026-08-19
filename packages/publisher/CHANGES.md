@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Added build-time extension handler projection with independent grants, owned canonical API paths, closed methods, collision refusal, and frozen build-bound data.
 - Added build-time declarative extension route projection with independent grants, narrow frozen input, canonical validation, collision refusal, and build-bound output.
 - Added explicit author extension registration with exact semantic identity and compatible capability support.
 - Invoked granted content projectors over frozen validated inputs and emitted canonical Reader-build-bound extension artifacts.

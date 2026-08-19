@@ -53,8 +53,13 @@ function extensionRegistration({
   hostCalls = [],
   hostCompatibility = ">=0.1.0-alpha.0 <0.2.0",
   hostRender,
+  handlerCalls = [],
+  handlerPath,
+  handlerMethods = ["POST"],
+  handlerResponse,
   routePath = "/field-station",
 }) {
+  const resolvedHandlerPath = handlerPath ?? `/api/extensions/${id}/echo`;
   return {
     id,
     package: packageName,
@@ -102,6 +107,22 @@ function extensionRegistration({
             },
           }
         : {}),
+      ...(capabilities.includes("host.handler")
+        ? {
+            handlers() {
+              return {
+                valid: true,
+                value: [{
+                  id: "echo",
+                  path: resolvedHandlerPath,
+                  methods: handlerMethods,
+                  data: { marker: "EXTENSION_HANDLER_DATA" },
+                }],
+                diagnostics: [],
+              };
+            },
+          }
+        : {}),
     },
     ...(renderer
       ? {
@@ -131,23 +152,47 @@ function extensionRegistration({
           },
         }
       : {}),
-    ...(host && capabilities.includes("host.route")
+    ...(host && (
+      capabilities.includes("host.route") ||
+      capabilities.includes("host.handler")
+    )
       ? {
           host: {
             kind: "genii.publisher.next-host-extension",
             apiVersion: "1.0",
             rendererCompatibility: hostCompatibility,
-            renderRoute(input) {
-              hostCalls.push(input);
-              if (hostRender !== undefined) {
-                return hostRender(input);
-              }
-              return createElement(
-                "p",
-                { "data-extension-route-body": input.page.routeId },
-                `${input.page.data.marker}:${input.serverData.marker}`,
-              );
-            },
+            ...(capabilities.includes("host.route")
+              ? {
+                  renderRoute(input) {
+                    hostCalls.push(input);
+                    if (hostRender !== undefined) {
+                      return hostRender(input);
+                    }
+                    return createElement(
+                      "p",
+                      { "data-extension-route-body": input.page.routeId },
+                      `${input.page.data.marker}:${input.serverData.marker}`,
+                    );
+                  },
+                }
+              : {}),
+            ...(capabilities.includes("host.handler")
+              ? {
+                  async handleRequest(input) {
+                    handlerCalls.push(input);
+                    if (handlerResponse !== undefined) {
+                      return handlerResponse(input);
+                    }
+                    return new Response(JSON.stringify({
+                      body: await input.request.text(),
+                      handler: input.handler.data.marker,
+                      server: input.serverData.marker,
+                    }), {
+                      headers: { "content-type": "application/json" },
+                    });
+                  },
+                }
+              : {}),
           },
         }
       : {}),
@@ -427,7 +472,7 @@ test("host.route adds a static attributed page through a narrow compatible adapt
       ({ segments }) => segments?.join("/") === "field-station",
     ),
   );
-  const slash = created.value.handleRequest(
+  const slash = await created.value.handleRequest(
     new Request("https://example.test/field-station/"),
   );
   assert.equal(slash?.status, 308);
@@ -478,6 +523,150 @@ test("host route failures identify public ownership without leaking the thrown v
       assert.doesNotMatch(error.message, /PRIVATE_HOST_ROUTE_SECRET/u);
       return true;
     },
+  );
+});
+
+test("host.handler dispatches exact bounded requests through a narrow adapter", async (t) => {
+  const handlerCalls = [];
+  let mode = "ok";
+  const capabilities = ["content.project", "host.handler"];
+  const registration = extensionRegistration({
+    id: "station-index",
+    packageName: "@example/station-index-extension",
+    capabilities,
+    handlerCalls,
+    async handlerResponse(input) {
+      if (mode === "throw") {
+        throw new Error("PRIVATE_HANDLER_SECRET");
+      }
+      if (mode === "invalid") return undefined;
+      if (mode === "framework-header") {
+        return new Response("unsafe", {
+          headers: { "x-middleware-rewrite": "/private" },
+        });
+      }
+      return new Response(JSON.stringify({
+        body: await input.request.text(),
+        data: input.handler.data.marker,
+        server: input.serverData.marker,
+      }), {
+        headers: { "content-type": "application/json" },
+      });
+    },
+  });
+  const built = await buildPublicationReader({
+    publicationRoot: routeFixture(t, capabilities),
+    audience: "public",
+    extensions: [registration],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const created = await createFromBuild(built.value, [registration]);
+  assert.ok(created.valid, JSON.stringify(created.diagnostics, null, 2));
+
+  const original = new Request(
+    "https://example.test/api/extensions/station-index/echo?trace=private",
+    {
+      method: "POST",
+      headers: { "content-type": "text/plain", "x-probe": "handler" },
+      body: "hello",
+    },
+  );
+  const response = await created.value.handleRequest(original);
+  assert.equal(response?.status, 200);
+  assert.deepEqual(await response.json(), {
+    body: "hello",
+    data: "EXTENSION_HANDLER_DATA",
+    server: "EXTENSION_SERVER_DATA",
+  });
+  assert.equal(handlerCalls.length, 1);
+  const input = handlerCalls[0];
+  assert.ok(Object.isFrozen(input));
+  assert.ok(Object.isFrozen(input.handler));
+  assert.deepEqual(Object.keys(input).sort(), [
+    "handler",
+    "request",
+    "serverData",
+  ]);
+  assert.notEqual(input.request, original);
+  assert.equal(input.request.url, original.url);
+  assert.equal(input.request.headers.get("x-probe"), "handler");
+  assert.equal(Object.hasOwn(input, "environment"), false);
+  assert.equal(Object.hasOwn(input, "response"), false);
+
+  const methodRejected = await created.value.handleRequest(
+    new Request("https://example.test/api/extensions/station-index/echo"),
+  );
+  assert.equal(methodRejected?.status, 405);
+  assert.equal(methodRejected?.headers.get("allow"), "POST");
+  assert.equal(handlerCalls.length, 1);
+  assert.equal(
+    await created.value.handleRequest(
+      new Request("https://example.test/api/extensions/station-index/missing"),
+    ),
+    undefined,
+  );
+
+  const oversized = await created.value.handleRequest(new Request(
+    "https://example.test/api/extensions/station-index/echo",
+    {
+      method: "POST",
+      body: new Uint8Array(1_048_577),
+    },
+  ));
+  assert.equal(oversized?.status, 413);
+  assert.equal(handlerCalls.length, 1);
+
+  for (const failureMode of ["throw", "invalid", "framework-header"]) {
+    mode = failureMode;
+    const failed = await created.value.handleRequest(new Request(
+      "https://example.test/api/extensions/station-index/echo",
+      { method: "POST", body: "fail" },
+    ));
+    assert.equal(failed?.status, 500);
+    const text = await failed.text();
+    assert.equal(text, "Extension request failed.\n");
+    assert.doesNotMatch(text, /PRIVATE_HANDLER_SECRET|unsafe|private/u);
+    assert.equal(failed.headers.has("x-middleware-rewrite"), false);
+  }
+});
+
+test("host.handler requires its compatible adapter and owned path", async (t) => {
+  const capabilities = ["content.project", "host.handler"];
+  const registration = extensionRegistration({
+    id: "station-index",
+    packageName: "@example/station-index-extension",
+    capabilities,
+  });
+  const built = await buildPublicationReader({
+    publicationRoot: routeFixture(t, capabilities),
+    audience: "public",
+    extensions: [registration],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  assertDiagnostic(
+    await createFromBuild(built.value, [{ ...registration, host: undefined }]),
+    "next.extension.host_invalid",
+  );
+
+  const collided = structuredClone(built.value.extensions.envelope);
+  collided.extensions[0].handlers[0].path = collided.extensions[0].routes?.[0]?.path ?? "/";
+  collided.buildId = hashCanonicalJson({
+    schemaVersion: collided.schemaVersion,
+    publicationId: collided.publicationId,
+    engineVersion: collided.engineVersion,
+    readerBuildId: collided.readerBuildId,
+    extensions: collided.extensions,
+  });
+  assertDiagnostic(
+    await createPublicationNextApplication({
+      reader: built.value.reader,
+      extensionData: collided,
+      extensions: [registration],
+      ...(built.value.updates === undefined
+        ? {}
+        : { updatesData: built.value.updates.envelope }),
+    }),
+    "next.extension.handler_invalid",
   );
 });
 

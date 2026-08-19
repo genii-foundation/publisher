@@ -69,6 +69,7 @@ export {
 export {
   PUBLISHER_EXTENSION_API_VERSION,
   PUBLISHER_EXTENSION_DATA_SCHEMA_VERSION,
+  PUBLISHER_EXTENSION_HANDLER_METHODS,
   projectPublisherExtensions,
   resolvePublisherExtensions,
 } from "./node/extensions.js";
@@ -76,6 +77,9 @@ export type {
   PublisherExtensionDataEntry,
   PublisherExtensionDataEnvelope,
   PublisherExtensionImplementation,
+  PublisherExtensionHandlerMethod,
+  PublisherExtensionHandlerProjectInput,
+  PublisherExtensionHandlerProjection,
   PublisherExtensionProjectInput,
   PublisherExtensionProjection,
   PublisherExtensionRouteProjectInput,

@@ -48,6 +48,7 @@ test("the packed renderer builds a thin host with server rendered prose", async 
     result.extensionClientHydrationVerified,
     browserExecutable !== undefined,
   );
+  assert.equal(result.extensionHandlerVerified, true);
   assert.equal(
     result.manuscriptExtensionsVerified,
     browserExecutable !== undefined,

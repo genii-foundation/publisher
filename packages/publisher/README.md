@@ -33,7 +33,12 @@ Reader-build-bound extension artifact. A separate `host.route` grant invokes
 the extension's build-time route projector with public publication identity,
 its own config and payloads, and its own optional server projection. Publisher
 validates canonical paths and collisions before recording those descriptors in
-the same artifact. `publisher.extensions.mjs` is never
+the same artifact. A separate `host.handler` grant invokes a build-time handler
+projector over the same narrow input. Every exact handler path must remain in
+`/api/extensions/<extension-id>`, every method comes from the closed HTTP method
+list, and optional handler data is canonical server data. The official renderer
+validates and dispatches those descriptors through its own host adapter.
+`publisher.extensions.mjs` is never
 created, rewritten, or treated as publication source by lifecycle commands.
 
 ## Source snapshot boundary

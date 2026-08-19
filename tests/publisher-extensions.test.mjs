@@ -106,6 +106,38 @@ async function routeProjectionInput({
   };
 }
 
+async function handlerProjectionInput({
+  capabilities = ["host.handler"],
+  implementation,
+} = {}) {
+  const built = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+    extensions: [registration()],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const content = structuredClone(built.value.content);
+  content.extensions[0].capabilities = capabilities;
+  return {
+    content,
+    reader: built.value.reader,
+    registrations: [registration({
+      capabilities: ["content.project", "host.handler"],
+      implementation: implementation ?? {
+        kind: "genii.publisher.extension",
+        apiVersion: "1.0",
+        handlers() {
+          return {
+            valid: true,
+            value: [],
+            diagnostics: [],
+          };
+        },
+      },
+    })],
+  };
+}
+
 test("a declaration is never treated as an executable extension registration", async () => {
   const result = await buildPublicationReader({
     publicationRoot,
@@ -223,6 +255,25 @@ test("registration shape, compatibility, grants, and projectors are closed", () 
       })],
     ),
     "publisher.extension.route_projector_missing",
+  );
+  assertDiagnostic(
+    resolvePublisherExtensions(
+      {
+        extensions: [{
+          id: "station-index",
+          package: "@example/station-index-extension",
+          capabilities: ["host.handler"],
+        }],
+      },
+      [registration({
+        capabilities: ["host.handler"],
+        implementation: {
+          kind: "genii.publisher.extension",
+          apiVersion: "1.0",
+        },
+      })],
+    ),
+    "publisher.extension.handler_projector_missing",
   );
 });
 
@@ -443,4 +494,136 @@ test("an ungranted route projector stays inert", async () => {
   assert.ok(result.valid, JSON.stringify(result.diagnostics, null, 2));
   assert.equal(invoked, false);
   assert.equal(result.value.envelope.extensions[0].routes, undefined);
+});
+
+test("host.handler receives narrow frozen input and emits detached build-bound handlers", async () => {
+  let received;
+  const source = { nested: { count: 1 } };
+  const input = await handlerProjectionInput({
+    implementation: {
+      kind: "genii.publisher.extension",
+      apiVersion: "1.0",
+      handlers(value) {
+        received = value;
+        return {
+          valid: true,
+          value: [{
+            id: "echo",
+            path: "/api/extensions/station-index/echo",
+            methods: ["POST", "PUT"],
+            data: source,
+          }],
+          diagnostics: [],
+        };
+      },
+    },
+  });
+  const result = await projectPublisherExtensions(input);
+  assert.ok(result.valid, JSON.stringify(result.diagnostics, null, 2));
+  assert.deepEqual(Object.keys(received).sort(), [
+    "config",
+    "payloads",
+    "publication",
+  ]);
+  assert.ok(Object.isFrozen(received));
+  assert.ok(Object.isFrozen(received.config));
+  assert.ok(Object.isFrozen(received.payloads));
+  const handler = result.value.envelope.extensions[0].handlers[0];
+  assert.deepEqual(handler, {
+    id: "echo",
+    path: "/api/extensions/station-index/echo",
+    methods: ["POST", "PUT"],
+    data: { nested: { count: 1 } },
+  });
+  assert.ok(Object.isFrozen(handler));
+  assert.ok(Object.isFrozen(handler.methods));
+  assert.ok(Object.isFrozen(handler.data));
+  source.nested.count = 2;
+  assert.equal(handler.data.nested.count, 1);
+});
+
+test("host.handler identity, collisions, data, and projectors fail closed", async () => {
+  const cases = [
+    {
+      handler: {
+        id: "wrong-owner",
+        path: "/api/extensions/another-extension/echo",
+        methods: ["POST"],
+      },
+      code: "publisher.extension.handler_identity_invalid",
+    },
+    {
+      handler: {
+        id: "trailing",
+        path: "/api/extensions/station-index/trailing/",
+        methods: ["POST"],
+      },
+      code: "publisher.extension.handler_identity_invalid",
+    },
+    {
+      handler: {
+        id: "methods",
+        path: "/api/extensions/station-index/methods",
+        methods: ["POST", "POST"],
+      },
+      code: "publisher.extension.handler_identity_invalid",
+    },
+    {
+      handler: {
+        id: "bad-data",
+        path: "/api/extensions/station-index/bad-data",
+        methods: ["POST"],
+        data: { value: Number.NaN },
+      },
+      code: "publisher.extension.projection_json_invalid",
+    },
+  ];
+  for (const item of cases) {
+    const input = await handlerProjectionInput({
+      implementation: {
+        kind: "genii.publisher.extension",
+        apiVersion: "1.0",
+        handlers() {
+          return { valid: true, value: [item.handler], diagnostics: [] };
+        },
+      },
+    });
+    assertDiagnostic(await projectPublisherExtensions(input), item.code);
+  }
+
+  const thrown = await handlerProjectionInput({
+    implementation: {
+      kind: "genii.publisher.extension",
+      apiVersion: "1.0",
+      handlers() {
+        throw new Error("PRIVATE_HANDLER_PROJECTOR_SECRET");
+      },
+    },
+  });
+  assertDiagnostic(
+    await projectPublisherExtensions(thrown),
+    "publisher.extension.handler_projector_threw",
+  );
+});
+
+test("an ungranted handler projector stays inert", async () => {
+  let invoked = false;
+  const input = await handlerProjectionInput({
+    capabilities: ["content.project"],
+    implementation: {
+      kind: "genii.publisher.extension",
+      apiVersion: "1.0",
+      project() {
+        return { valid: true, value: {}, diagnostics: [] };
+      },
+      handlers() {
+        invoked = true;
+        return { valid: true, value: [], diagnostics: [] };
+      },
+    },
+  });
+  const result = await projectPublisherExtensions(input);
+  assert.ok(result.valid, JSON.stringify(result.diagnostics, null, 2));
+  assert.equal(invoked, false);
+  assert.equal(result.value.envelope.extensions[0].handlers, undefined);
 });

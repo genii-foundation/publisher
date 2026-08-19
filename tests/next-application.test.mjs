@@ -1050,7 +1050,7 @@ test("application identity is deterministic, immutable, and content bound", asyn
 
 test("request continuity preserves exact paths and query boundaries", async () => {
   const application = await createApplication();
-  const internal = application.handleRequest(
+  const internal = await application.handleRequest(
     new Request(
       "https://reader.example/legacy/(cafe)+story?edition=morning&view=wide",
     ),
@@ -1062,7 +1062,7 @@ test("request continuity preserves exact paths and query boundaries", async () =
     "https://reader.example/works/caf%C3%A9+notes?edition=morning&view=wide",
   );
 
-  const external = application.handleRequest(
+  const external = await application.handleRequest(
     new Request(
       "https://reader.example/depart?private=do-not-leak",
     ),
@@ -1074,7 +1074,7 @@ test("request continuity preserves exact paths and query boundaries", async () =
     "https://continuity.example/new-home?source=archive",
   );
 
-  const slash = application.handleRequest(
+  const slash = await application.handleRequest(
     new Request(
       "https://reader.example/works/caf%C3%A9+notes/?from=alias",
     ),
@@ -1087,7 +1087,7 @@ test("request continuity preserves exact paths and query boundaries", async () =
   );
 
   assert.equal(
-    application.handleRequest(
+    await application.handleRequest(
       new Request(
         "https://reader.example/legacy/%28cafe%29%2Bstory",
       ),
@@ -1099,7 +1099,7 @@ test("request continuity preserves exact paths and query boundaries", async () =
     "/works/caf%c3%a9+notes",
     "/works/%63af%C3%A9+notes",
   ]) {
-    const rejected = application.handleRequest(
+    const rejected = await application.handleRequest(
       new Request(`https://reader.example${alias}`),
     );
     assert.ok(rejected instanceof Response);
@@ -1110,12 +1110,12 @@ test("request continuity preserves exact paths and query boundaries", async () =
     );
   }
   assert.equal(
-    application.handleRequest(
+    await application.handleRequest(
       new Request("https://reader.example/unknown"),
     ),
     undefined,
   );
-  assert.equal(application.handleRequest({}), undefined);
+  assert.equal(await application.handleRequest({}), undefined);
 });
 
 test("invalid and hostile application inputs return diagnostics", async () => {

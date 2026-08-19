@@ -51,6 +51,17 @@ export const PUBLISHER_NEXT_THEME_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_UPDATES_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES =
+  1_048_576;
+export const PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS = Object.freeze([
+  "DELETE",
+  "GET",
+  "HEAD",
+  "OPTIONS",
+  "PATCH",
+  "POST",
+  "PUT",
+] as const);
 export const PUBLISHER_NEXT_EXTENSION_SLOTS = Object.freeze([
   "page.before-main",
   "page.after-main",
@@ -72,6 +83,9 @@ export type PublisherNextJsonObject = Readonly<
 
 export type PublisherNextExtensionSlot =
   typeof PUBLISHER_NEXT_EXTENSION_SLOTS[number];
+
+export type PublisherNextExtensionHandlerMethod =
+  typeof PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS[number];
 
 export interface PublisherNextExtensionPageContext {
   readonly kind: PublisherNextPage["kind"];
@@ -123,13 +137,29 @@ export interface PublisherNextExtensionHost {
   readonly apiVersion:
     typeof PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION;
   readonly rendererCompatibility: string;
-  readonly renderRoute: (
+  readonly renderRoute?: (
     input: PublisherNextExtensionRouteRenderInput,
   ) => ReactNode | Promise<ReactNode>;
+  readonly handleRequest?: (
+    input: PublisherNextExtensionHandlerInput,
+  ) => Response | Promise<Response>;
 }
 
 export interface PublisherNextExtensionRouteRenderInput {
   readonly page: PublisherNextExtensionRoutePage;
+  readonly serverData?: JSONValue;
+}
+
+export interface PublisherNextExtensionHandlerDescriptor {
+  readonly id: string;
+  readonly path: string;
+  readonly methods: readonly PublisherNextExtensionHandlerMethod[];
+  readonly data?: JSONValue;
+}
+
+export interface PublisherNextExtensionHandlerInput {
+  readonly handler: PublisherNextExtensionHandlerDescriptor;
+  readonly request: Request;
   readonly serverData?: JSONValue;
 }
 
@@ -423,7 +453,7 @@ export interface PublicationNextApplication {
   ) => Promise<Metadata>;
   readonly handleRequest: (
     request: Request,
-  ) => Response | undefined;
+  ) => Promise<Response | undefined>;
   readonly createNextConfig: (
     baseConfig?: NextConfig,
   ) => NextConfig;

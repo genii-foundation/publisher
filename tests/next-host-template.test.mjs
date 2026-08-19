@@ -210,7 +210,20 @@ test("the host contract declares exactly the author host file set", () => {
       summary:
         "Add build-time declarative extension pages to the official route plan.",
     },
+    {
+      from: "0.13.0",
+      to: "0.14.0",
+      summary:
+        "Await closed extension request handlers in the official Proxy boundary.",
+    },
   ]);
+});
+
+test("the Proxy awaits closed request dispatch before falling through", () => {
+  const proxy = contentsOf(template(), "proxy.ts");
+  assert.match(proxy, /export async function proxy\(request: NextRequest\)/u);
+  assert.match(proxy, /await application\.handleRequest\(request\)/u);
+  assert.match(proxy, /\?\? NextResponse\.next\(\)/u);
 });
 
 test("the App Router layout declares the mobile viewport", () => {

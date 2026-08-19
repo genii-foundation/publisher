@@ -4,6 +4,9 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Advanced the host contract to 0.14.0 with awaited exact extension request dispatch through generated Proxy.
+- Added namespaced extension handlers with method enforcement, one-megabyte detached request bodies, validated responses, framework-header refusal, and generic failure containment.
+- Extended the independently packed extension with a real POST handler and unsupported-method proof while keeping handler data out of browser chunks.
 - Added 15-second audiobook jumps and playback-attempt isolation while preserving one media element across clips and routes.
 - Excluded transient Reader controls from canonical passage offsets and bookmark marker geometry.
 - Advanced the host contract to 0.13.0 with declarative extension pages in the exact build-time route plan.

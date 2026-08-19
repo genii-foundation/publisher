@@ -54,6 +54,18 @@ import {
 
 export const PUBLISHER_EXTENSION_API_VERSION = "1.0";
 export const PUBLISHER_EXTENSION_DATA_SCHEMA_VERSION = "1.0";
+export const PUBLISHER_EXTENSION_HANDLER_METHODS = Object.freeze([
+  "DELETE",
+  "GET",
+  "HEAD",
+  "OPTIONS",
+  "PATCH",
+  "POST",
+  "PUT",
+] as const);
+
+export type PublisherExtensionHandlerMethod =
+  typeof PUBLISHER_EXTENSION_HANDLER_METHODS[number];
 
 export interface PublisherExtensionProjectInput {
   readonly content: PublicationContentEnvelope;
@@ -81,6 +93,16 @@ export interface PublisherExtensionRouteProjection {
   readonly data?: JSONValue;
 }
 
+export type PublisherExtensionHandlerProjectInput =
+  PublisherExtensionRouteProjectInput;
+
+export interface PublisherExtensionHandlerProjection {
+  readonly id: string;
+  readonly path: string;
+  readonly methods: readonly PublisherExtensionHandlerMethod[];
+  readonly data?: JSONValue;
+}
+
 export interface PublisherExtensionImplementation {
   readonly kind: "genii.publisher.extension";
   readonly apiVersion: typeof PUBLISHER_EXTENSION_API_VERSION;
@@ -94,6 +116,11 @@ export interface PublisherExtensionImplementation {
   ) =>
     | ValidationResult<readonly PublisherExtensionRouteProjection[]>
     | Promise<ValidationResult<readonly PublisherExtensionRouteProjection[]>>;
+  readonly handlers?: (
+    input: PublisherExtensionHandlerProjectInput,
+  ) =>
+    | ValidationResult<readonly PublisherExtensionHandlerProjection[]>
+    | Promise<ValidationResult<readonly PublisherExtensionHandlerProjection[]>>;
 }
 
 export interface PublisherExtensionRegistration {
@@ -121,6 +148,7 @@ export interface PublisherExtensionDataEntry {
   readonly serverData?: JSONValue;
   readonly clientData?: JSONValue;
   readonly routes?: readonly PublisherExtensionRouteProjection[];
+  readonly handlers?: readonly PublisherExtensionHandlerProjection[];
 }
 
 export interface PublisherExtensionDataEnvelope {
@@ -325,6 +353,133 @@ function freezeJson(value: JSONValue): JSONValue {
 
 const EXTENSION_ROUTE_ID =
   /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u;
+const MAXIMUM_EXTENSION_HANDLERS = 1_000;
+
+function isExtensionHandlerMethod(
+  value: unknown,
+): value is PublisherExtensionHandlerMethod {
+  return typeof value === "string" &&
+    PUBLISHER_EXTENSION_HANDLER_METHODS.includes(
+      value as PublisherExtensionHandlerMethod,
+    );
+}
+
+function snapshotExtensionHandlers(
+  value: unknown,
+  path: string,
+  extensionId: string,
+  diagnostics: Diagnostic[],
+  ownedPaths: Map<string, string>,
+  remainingHandlerCount: number,
+): readonly PublisherExtensionHandlerProjection[] {
+  const inspected = inspectArray(value, remainingHandlerCount);
+  if (inspected === null) {
+    diagnostics.push(
+      diagnostic(
+        "publisher.extension.handlers_invalid",
+        path,
+        "Extension handlers must be a bounded array of declarative request descriptors.",
+        "type",
+        { maximum: remainingHandlerCount },
+      ),
+    );
+    return Object.freeze([]);
+  }
+  const handlers: PublisherExtensionHandlerProjection[] = [];
+  const localIds = new Set<string>();
+  const namespace = `/api/extensions/${extensionId}`;
+  inspected.forEach((candidate, index) => {
+    const handlerPath = `${path}/${index}`;
+    const record = inspectRecord(
+      candidate,
+      ["id", "path", "methods"],
+      ["data"],
+    );
+    if (record === null) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.handler_invalid",
+          handlerPath,
+          "Extension handler descriptors use the closed id, path, methods, and data shape.",
+          "properties",
+        ),
+      );
+      return;
+    }
+    const id = record.id;
+    const publicPath = record.path;
+    const methods = inspectArray(
+      record.methods,
+      PUBLISHER_EXTENSION_HANDLER_METHODS.length,
+    );
+    const inspectedPath = inspectCanonicalRoutePath(publicPath);
+    if (
+      typeof id !== "string" ||
+      id.length > 128 ||
+      !EXTENSION_ROUTE_ID.test(id) ||
+      typeof publicPath !== "string" ||
+      !inspectedPath.valid ||
+      (publicPath !== namespace && !publicPath.startsWith(`${namespace}/`)) ||
+      publicPath.endsWith("/") ||
+      methods === null ||
+      methods.length === 0 ||
+      methods.some(
+        (method, methodIndex) =>
+          !isExtensionHandlerMethod(method) ||
+          methods.indexOf(method) !== methodIndex,
+      )
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.handler_identity_invalid",
+          handlerPath,
+          "Extension handlers require a stable ID, an owned canonical API path, and a nonempty unique method list.",
+          "handler",
+        ),
+      );
+      return;
+    }
+    if (localIds.has(id)) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.handler_id_duplicate",
+          `${handlerPath}/id`,
+          `Extension handler ID "${id}" appears more than once.`,
+          "uniqueItems",
+          { id },
+        ),
+      );
+      return;
+    }
+    const existingOwner = ownedPaths.get(publicPath);
+    if (existingOwner !== undefined) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.handler_path_collision",
+          `${handlerPath}/path`,
+          `Extension handler path "${publicPath}" is already owned by ${existingOwner}.`,
+          "unique",
+          { path: publicPath, existingOwner },
+        ),
+      );
+      return;
+    }
+    const data = record.data === undefined
+      ? undefined
+      : snapshotJson(record.data, `${handlerPath}/data`, diagnostics);
+    localIds.add(id);
+    ownedPaths.set(publicPath, `extension handler "${id}"`);
+    handlers.push(Object.freeze({
+      id,
+      path: publicPath,
+      methods: Object.freeze(
+        [...methods] as PublisherExtensionHandlerMethod[],
+      ),
+      ...(data === undefined ? {} : { data: freezeJson(data) }),
+    }));
+  });
+  return Object.freeze(handlers);
+}
 
 function snapshotExtensionRoutes(
   value: unknown,
@@ -497,7 +652,7 @@ export function resolvePublisherExtensions(
     const implementationRecord = inspectRecord(
       record.implementation,
       ["kind", "apiVersion"],
-      ["project", "routes"],
+      ["project", "routes", "handlers"],
     );
     if (
       typeof id !== "string" ||
@@ -517,7 +672,9 @@ export function resolvePublisherExtensions(
       (implementationRecord.project !== undefined &&
         typeof implementationRecord.project !== "function") ||
       (implementationRecord.routes !== undefined &&
-        typeof implementationRecord.routes !== "function")
+        typeof implementationRecord.routes !== "function") ||
+      (implementationRecord.handlers !== undefined &&
+        typeof implementationRecord.handlers !== "function")
     ) {
       diagnostics.push(
         diagnostic(
@@ -555,6 +712,19 @@ export function resolvePublisherExtensions(
         ),
       );
     }
+    if (
+      capabilities.includes("host.handler") &&
+      typeof implementationRecord.handlers !== "function"
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "publisher.extension.handler_projector_missing",
+          `${path}/implementation/handlers`,
+          "An extension supporting host.handler must supply its handler projector.",
+          "required",
+        ),
+      );
+    }
     if (byId.has(id)) {
       diagnostics.push(
         diagnostic(
@@ -588,6 +758,13 @@ export function resolvePublisherExtensions(
           : {
               routes: implementationRecord.routes as NonNullable<
                 PublisherExtensionImplementation["routes"]
+              >,
+            }),
+        ...(implementationRecord.handlers === undefined
+          ? {}
+          : {
+              handlers: implementationRecord.handlers as NonNullable<
+                PublisherExtensionImplementation["handlers"]
               >,
             }),
       }) as PublisherExtensionImplementation,
@@ -675,6 +852,7 @@ export async function projectPublisherExtensions(input: {
     ownedRoutePaths.set(redirect.from, "a publication redirect");
   }
   let projectedRouteCount = 0;
+  let projectedHandlerCount = 0;
   for (const [index, compiled] of input.content.extensions.entries()) {
     const registration = input.registrations[index];
     if (
@@ -854,6 +1032,60 @@ export async function projectPublisherExtensions(input: {
       );
       projectedRouteCount += routes.length;
     }
+    let handlers: readonly PublisherExtensionHandlerProjection[] | undefined;
+    if (compiled.capabilities.includes("host.handler")) {
+      let result: unknown;
+      try {
+        result = await registration.implementation.handlers?.(
+          Object.freeze({
+            publication: input.reader.publication,
+            config,
+            payloads,
+            ...(projection.serverData === undefined
+              ? {}
+              : { serverData: projection.serverData }),
+          }),
+        );
+      } catch {
+        diagnostics.push(
+          diagnostic(
+            "publisher.extension.handler_projector_threw",
+            `/extensions/${index}/handlers`,
+            `Extension "${compiled.id}" threw while projecting handlers.`,
+            "extensionHandlerProjector",
+          ),
+        );
+        continue;
+      }
+      const resultRecord = inspectRecord(
+        result,
+        ["valid", "value", "diagnostics"],
+      );
+      if (
+        resultRecord === null ||
+        resultRecord.valid !== true ||
+        !Array.isArray(resultRecord.diagnostics)
+      ) {
+        diagnostics.push(
+          diagnostic(
+            "publisher.extension.handler_projector_invalid",
+            `/extensions/${index}/handlers`,
+            `Extension "${compiled.id}" did not return a valid handler projection result.`,
+            "extensionHandlerProjector",
+          ),
+        );
+        continue;
+      }
+      handlers = snapshotExtensionHandlers(
+        resultRecord.value,
+        `/extensions/${index}/handlers`,
+        compiled.id,
+        diagnostics,
+        ownedRoutePaths,
+        Math.max(0, MAXIMUM_EXTENSION_HANDLERS - projectedHandlerCount),
+      );
+      projectedHandlerCount += handlers.length;
+    }
     entries.push(Object.freeze({
       id: compiled.id,
       package: compiled.package,
@@ -862,6 +1094,7 @@ export async function projectPublisherExtensions(input: {
       config,
       ...projection,
       ...(routes === undefined ? {} : { routes }),
+      ...(handlers === undefined ? {} : { handlers }),
     }));
   }
   if (diagnostics.length > 0) {

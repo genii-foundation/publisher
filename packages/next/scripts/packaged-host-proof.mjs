@@ -3597,6 +3597,10 @@ export async function runPackagedHostProof(
   const packedExtensionRouteRenderSentinel =
     "PACKED_EXTENSION_ROUTE_RENDERED";
   const packedExtensionRoutePath = "/extension-field-station";
+  const packedExtensionHandlerDataSentinel =
+    "PACKED_EXTENSION_HANDLER_DATA_ONLY";
+  const packedExtensionHandlerPath =
+    "/api/extensions/packed-publication-extension/echo";
 
   const temporaryRoot = await mkdtemp(
     join(tmpdir(), "genii-publisher-next-host-"),
@@ -3716,7 +3720,7 @@ export async function runPackagedHostProof(
           '  package: "@example/packed-publication-extension",',
           '  version: "1.0.0",',
           '  engineCompatibility: ">=0.1.0-alpha.0 <2.0.0",',
-          '  capabilities: Object.freeze(["content.project", "renderer.slot", "renderer.client", "host.route"]),',
+          '  capabilities: Object.freeze(["content.project", "renderer.slot", "renderer.client", "host.route", "host.handler"]),',
           "  implementation: Object.freeze({",
           '    kind: "genii.publisher.extension",',
           '    apiVersion: "1.0",',
@@ -3750,6 +3754,18 @@ export async function runPackagedHostProof(
           "        })]),",
           "      });",
           "    },",
+          "    handlers() {",
+          "      return Object.freeze({",
+          "        valid: true,",
+          "        diagnostics: Object.freeze([]),",
+          "        value: Object.freeze([Object.freeze({",
+          '          id: "echo",',
+          `          path: "${packedExtensionHandlerPath}",`,
+          '          methods: Object.freeze(["POST"]),',
+          `          data: Object.freeze({ marker: "${packedExtensionHandlerDataSentinel}" }),`,
+          "        })]),",
+          "      });",
+          "    },",
           "  }),",
           "  renderer: Object.freeze({",
           '    kind: "genii.publisher.next-extension",',
@@ -3766,6 +3782,13 @@ export async function runPackagedHostProof(
           '    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",',
           "    renderRoute({ page, serverData }) {",
           `      return \`${packedExtensionRouteRenderSentinel}:\${page.data.marker}:\${serverData.marker}\`;`,
+          "    },",
+          "    async handleRequest({ handler, request, serverData }) {",
+          "      return Response.json(Object.freeze({",
+          "        body: await request.text(),",
+          "        handler: handler.data.marker,",
+          "        server: serverData.marker,",
+          "      }));",
           "    },",
           "  }),",
           "});",
@@ -4001,6 +4024,7 @@ export async function runPackagedHostProof(
         "renderer.slot",
         "renderer.client",
         "host.route",
+        "host.handler",
       ]),
       config: Object.freeze({}),
       serverData: Object.freeze({
@@ -4020,6 +4044,16 @@ export async function runPackagedHostProof(
           description: "A route supplied by the packed extension proof.",
           data: Object.freeze({
             marker: packedExtensionRouteDataSentinel,
+          }),
+        }),
+      ]),
+      handlers: Object.freeze([
+        Object.freeze({
+          id: "echo",
+          path: packedExtensionHandlerPath,
+          methods: Object.freeze(["POST"]),
+          data: Object.freeze({
+            marker: packedExtensionHandlerDataSentinel,
           }),
         }),
       ]),
@@ -4565,6 +4599,7 @@ export async function runPackagedHostProof(
       packedExtensionClientDataSentinel,
       packedExtensionServerSentinel,
       packedExtensionRouteDataSentinel,
+      packedExtensionHandlerDataSentinel,
     ]) {
       assert.equal(
         clientChunks.includes(manuscriptSentinel),
@@ -4580,6 +4615,7 @@ export async function runPackagedHostProof(
     let runtimeErrorStatus;
     let imageContentType;
     let extensionClientHydrationVerified = false;
+    let extensionHandlerVerified = false;
     let manuscriptExtensionsVerified = false;
     let readerToolsHydrationVerified = false;
     let offlineReaderVerified = false;
@@ -4619,6 +4655,27 @@ export async function runPackagedHostProof(
         [],
         `Packed host route failures:\n${failedRoutes.join("\n")}`,
       );
+      const handled = await fetch(
+        `${host.origin}${packedExtensionHandlerPath}?proof=packed`,
+        {
+          method: "POST",
+          body: "packed-handler-body",
+          redirect: "manual",
+        },
+      );
+      assert.equal(handled.status, 200);
+      assert.deepEqual(await handled.json(), {
+        body: "packed-handler-body",
+        handler: packedExtensionHandlerDataSentinel,
+        server: packedExtensionServerSentinel,
+      });
+      const rejectedHandlerMethod = await fetch(
+        `${host.origin}${packedExtensionHandlerPath}`,
+        { redirect: "manual" },
+      );
+      assert.equal(rejectedHandlerMethod.status, 405);
+      assert.equal(rejectedHandlerMethod.headers.get("allow"), "POST");
+      extensionHandlerVerified = true;
       const html = (
         await Promise.all(
           renderedResponses.map((response) => response.text()),
@@ -5051,6 +5108,7 @@ export async function runPackagedHostProof(
         audit.metadata.vulnerabilities.total,
       browserHydrationVerified: browser !== undefined,
       extensionClientHydrationVerified,
+      extensionHandlerVerified,
       manuscriptExtensionsVerified,
       offlineReaderVerified,
       readerToolsHydrationVerified,
