@@ -711,7 +711,7 @@ async function assertHydratedReaderTools({
       ready = evaluated.result?.value;
       if (
         ready?.complete === true &&
-        ready.controls === 5 &&
+        ready.controls === 6 &&
         ready.inViewport === true
       ) {
         break;
@@ -720,7 +720,7 @@ async function assertHydratedReaderTools({
     }
     assert.deepEqual(
       ready,
-      { complete: true, controls: 5, inViewport: true },
+      { complete: true, controls: 6, inViewport: true },
       "The hydrated Reader rail was not reachable inside the mobile viewport.",
     );
 
@@ -811,6 +811,57 @@ async function assertHydratedReaderTools({
     assert.ok(
       resultCount > 0,
       "The hydrated Reader search returned no result for a known section title.",
+    );
+
+    const openedProgress = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const buttons = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"));',
+        '  const progress = buttons.find((button) => button.textContent?.includes("Progress"));',
+        "  progress?.click();",
+        '  window.dispatchEvent(new Event("scroll"));',
+        '  window.dispatchEvent(new Event("scroll"));',
+        "  return progress !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(openedProgress.result?.value, true);
+    let renderedProgress;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const rows = Array.from(document.querySelectorAll(".publisher-reader-progress-panel dl div"));',
+          "  const values = Object.fromEntries(rows.map((row) => [",
+          '    row.querySelector("dt")?.textContent ?? "",',
+          '    row.querySelector("dd")?.textContent ?? "",',
+          "  ]));",
+          '  const key = Object.keys(localStorage).find((candidate) => candidate.includes("reader.progress"));',
+          "  const state = key === undefined ? null : JSON.parse(localStorage.getItem(key));",
+          "  const entry = state === null ? null : Object.values(state.entries ?? {})[0] ?? null;",
+          "  return {",
+          '    heading: document.querySelector(".publisher-reader-progress-panel h3")?.textContent ?? "",',
+          "    openCount: entry?.openCount ?? 0,",
+          "    readingTimeMs: entry?.readingTimeMs ?? 0,",
+          "    status: values.Status ?? \"\",",
+          "    visits: values.Visits ?? \"\",",
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      renderedProgress = evaluated.result?.value;
+      if (renderedProgress?.readingTimeMs > 0) break;
+      await wait(100);
+    }
+    assert.equal(renderedProgress?.openCount, 1);
+    assert.equal(renderedProgress?.visits, "1");
+    assert.ok(renderedProgress?.heading.length > 0);
+    assert.ok(renderedProgress?.status.length > 0);
+    assert.ok(
+      renderedProgress?.readingTimeMs > 0,
+      "The default Reader did not accumulate visible active reading time.",
     );
 
     const openedSync = await page.send("Runtime.evaluate", {
@@ -1007,7 +1058,7 @@ async function assertHydratedReaderTools({
         });
         peerReady =
           evaluated.result?.value?.complete === true &&
-          evaluated.result.value.controls === 5;
+          evaluated.result.value.controls === 6;
         if (peerReady) break;
         await wait(100);
       }

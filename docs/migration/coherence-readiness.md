@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 13 upgraded | 13 | Publisher implements a stronger checked contract. |
+| 14 upgraded | 14 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 29 planned | 29 | Accepted Publisher scope is not implemented yet. |
+| 28 planned | 28 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -71,8 +71,11 @@ first official Reader rail. It records opening, scrolling, and automatic
 completion locally and shows the current section percentage. Progress and full
 bookmark documents now share one reactive renderer store with atomic updates,
 same-tab notification, native cross-tab convergence, and stable server
-snapshots. Reading-time accumulation, section status surfaces, and
-recommendations remain planned.
+snapshots. The renderer now separates one session opening from scroll samples,
+conservatively accumulates visible active reading time, derives returns, shows
+the current section status and metrics, and supports explicit completion of the
+current revision. Publication heatmaps, recent sections, and recommendations
+remain planned.
 
 ### Durable passage bookmarks
 
@@ -247,7 +250,7 @@ sections, and 10,000 continuity redirects.
 The following are accepted scope, not release blockers waiting for another
 product decision:
 
-1. Add reading-time accumulation, return tracking, and the remaining progress surfaces.
+1. Add publication heatmaps, recent sections, and next-section recommendations.
 2. Add bookmark export and the default bookmark query interface.
 3. Project capability-sliced client artifacts and a default search interface.
 4. Add default settings, focus, progress, bookmark, and toolbar components.

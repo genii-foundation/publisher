@@ -28,5 +28,6 @@ These records define the accepted foundation of GENII Publisher.
 24. [ADR 0024: Local-first synchronization coordinator](./0024-local-first-synchronization-coordinator.md)
 25. [ADR 0025: Default Reader synchronization integration](./0025-default-reader-synchronization-integration.md)
 26. [ADR 0026: Reactive private Reader store](./0026-reactive-private-reader-store.md)
+27. [ADR 0027: Default Reader progress session](./0027-default-reader-progress-session.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

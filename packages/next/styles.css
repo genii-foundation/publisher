@@ -260,10 +260,49 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 }
 
 .publisher-reader-search,
+.publisher-reader-progress-panel,
 .publisher-reader-settings,
 .publisher-reader-sync {
   display: grid;
   gap: 0.9rem;
+}
+
+.publisher-reader-progress-panel h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.publisher-reader-progress-panel dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.publisher-reader-progress-panel dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 0.55rem;
+  border-bottom: 1px solid var(--publisher-color-border);
+}
+
+.publisher-reader-progress-panel dt {
+  color: var(--publisher-color-muted-text);
+}
+
+.publisher-reader-progress-panel dd {
+  margin: 0;
+  text-align: end;
+}
+
+.publisher-reader-panel .publisher-reader-primary-action {
+  justify-self: start;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--publisher-color-accent);
+  border-radius: var(--publisher-control-radius);
+  background: var(--publisher-color-accent);
+  color: var(--publisher-color-surface);
+  font-weight: 700;
 }
 
 .publisher-reader-search label,
@@ -508,7 +547,7 @@ html[data-publisher-reader-motion="reduced"] *::after {
   }
 
   .publisher-reader-rail-actions {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(3.5rem, 1fr));
     border-inline: 0;
     border-bottom: 0;
     border-radius: 0;

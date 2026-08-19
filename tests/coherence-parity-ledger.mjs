@@ -159,8 +159,13 @@ export const READER_PARITY = Object.freeze([
     id: "reader.progress.default_interface",
     capability: "Default progress controls, section states, and unified percentage display",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "The official Reader separates one opening from scroll samples, conservatively accumulates visible active reading time, exposes canonical section status, progress, visits, and returns, and supports explicit completion of the current revision through one reactive local document.",
+    evidence: {
+      decision: "docs/architecture/0027-default-reader-progress-session.md",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
     sourcePaths: ["src/components/ToolbarProgressIsland.tsx", "src/components/SectionCardGrid.tsx"],
   },
   {

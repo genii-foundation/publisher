@@ -112,11 +112,14 @@ export interface PublisherReaderRailProps {
   readonly sync: SyncEnvelope | null;
 }
 
-type ReaderPanel = "outline" | "search" | "bookmarks" | "settings" | "sync";
+type ReaderPanel = "outline" | "progress" | "search" | "bookmarks" | "settings" | "sync";
 type ReaderSyncState = "idle" | "loading" | "signed-out" | "signed-in" | "unavailable";
 
 const SYNC_CONSENT_COPY_VERSION = "1.0";
 const SYNC_PUMP_INTERVAL_MS = 200;
+const READING_TIME_SAMPLE_INTERVAL_MS = 5_000;
+const READING_TIME_IDLE_THRESHOLD_MS = 45_000;
+const MAXIMUM_READING_TIME_SAMPLE_MS = 10_000;
 
 const DEFAULT_FONT_POLICY = Object.freeze({
   defaultFontFamilyId: "serif",
@@ -162,11 +165,27 @@ function RailIcon({ children }: { readonly children: ReactNode }): ReactElement 
 function panelLabel(panel: ReaderPanel): string {
   switch (panel) {
     case "outline": return "Contents";
+    case "progress": return "Reading progress";
     case "search": return "Search";
     case "bookmarks": return "Bookmarks";
     case "settings": return "Reading settings";
     case "sync": return "Sync and account";
   }
+}
+
+function progressStatusLabel(status: ReturnType<typeof resolveReaderSectionProgress>["status"]): string {
+  switch (status) {
+    case "unread": return "Not started";
+    case "partial": return "In progress";
+    case "read": return "Read";
+    case "updated": return "Updated since you read it";
+  }
+}
+
+function formatReadingTime(readingTimeMs: number): string {
+  const minutes = Math.floor(readingTimeMs / 60_000);
+  if (minutes < 1) return "Less than a minute";
+  return `${new Intl.NumberFormat().format(minutes)} minute${minutes === 1 ? "" : "s"}`;
 }
 
 interface ReaderSyncReadResponse extends ReaderSyncRemoteState {
@@ -330,6 +349,7 @@ export function PublisherReaderRail({
   const signedInRef = useRef(false);
   const noteSyncChangeRef = useRef<(now: number) => void>(() => undefined);
   const recordedSectionRef = useRef<string | null>(null);
+  const openedProgressSectionRef = useRef<string | null>(null);
   const canSyncProgress = sync?.capabilities.includes("progress") === true;
   const canSyncBookmarks = sync?.capabilities.includes("bookmarks") === true;
   const canSyncEngagement = sync?.capabilities.includes("engagement") === true;
@@ -368,6 +388,7 @@ export function PublisherReaderRail({
       navigator.onLine,
     );
     recordedSectionRef.current = null;
+    openedProgressSectionRef.current = null;
     setSyncState("idle");
   }, [publicationId]);
 
@@ -591,6 +612,103 @@ export function PublisherReaderRail({
 
   useEffect(() => {
     if (currentSection === undefined) return;
+    const openingIdentity = `${currentSection.id}:${currentSection.contentHash}`;
+    if (openedProgressSectionRef.current === openingIdentity) return;
+    openedProgressSectionRef.current = openingIdentity;
+    const now = Date.now();
+    progressStore.update((current) => {
+      try {
+        return recordReaderSectionProgress(current, currentSection, {
+          now,
+          opened: true,
+          navigationSource: "direct",
+        });
+      } catch {
+        return current;
+      }
+    });
+  }, [currentSection, progressStore]);
+
+  useEffect(() => {
+    if (currentSection === undefined) return;
+    let lastSampleAt = Date.now();
+    let lastActivityAt = lastSampleAt;
+    let wasVisible = document.visibilityState === "visible";
+    let uncommittedActiveMs = 0;
+
+    const sample = (now: number): void => {
+      if (wasVisible && now >= lastSampleAt) {
+        const activeUntil = Math.min(
+          now,
+          lastActivityAt + READING_TIME_IDLE_THRESHOLD_MS,
+        );
+        const activeMs = Math.max(0, activeUntil - lastSampleAt);
+        uncommittedActiveMs += Math.min(
+          activeMs,
+          MAXIMUM_READING_TIME_SAMPLE_MS,
+        );
+      }
+      lastSampleAt = now;
+      wasVisible = document.visibilityState === "visible";
+    };
+    const commit = (now: number): void => {
+      const activeMs = Math.floor(uncommittedActiveMs);
+      if (activeMs < 1) return;
+      uncommittedActiveMs -= activeMs;
+      progressStore.update((current) => {
+        const existing = resolveReaderSectionProgress(
+          current,
+          currentSection,
+        ).progress;
+        try {
+          return recordReaderSectionProgress(current, currentSection, {
+            now,
+            readingTimeMs: (existing?.readingTimeMs ?? 0) + activeMs,
+          });
+        } catch {
+          return current;
+        }
+      });
+    };
+    const sampleAndCommit = (): void => {
+      const now = Date.now();
+      sample(now);
+      commit(now);
+    };
+    const markActivity = (): void => {
+      const now = Date.now();
+      sample(now);
+      lastActivityAt = now;
+    };
+    const noteVisibility = (): void => {
+      const now = Date.now();
+      sample(now);
+      if (document.visibilityState === "visible") lastActivityAt = now;
+      commit(now);
+    };
+
+    window.addEventListener("scroll", markActivity, { passive: true });
+    window.addEventListener("pointerdown", markActivity, { passive: true });
+    window.addEventListener("keydown", markActivity);
+    window.addEventListener("focus", markActivity);
+    document.addEventListener("visibilitychange", noteVisibility);
+    const interval = window.setInterval(
+      sampleAndCommit,
+      READING_TIME_SAMPLE_INTERVAL_MS,
+    );
+    return () => {
+      sampleAndCommit();
+      window.clearInterval(interval);
+      window.removeEventListener("scroll", markActivity);
+      window.removeEventListener("pointerdown", markActivity);
+      window.removeEventListener("keydown", markActivity);
+      window.removeEventListener("focus", markActivity);
+      document.removeEventListener("visibilitychange", noteVisibility);
+    };
+  }, [currentSection, progressStore]);
+
+  useEffect(() => {
+    if (currentSection === undefined) return;
     let frame = 0;
     const record = (): void => {
       frame = 0;
@@ -608,8 +726,6 @@ export function PublisherReaderRail({
         try {
           next = recordReaderSectionProgress(current, currentSection, {
             now,
-            opened: true,
-            navigationSource: "direct",
             percent,
             scrollPercent: percent,
             ...(percent >= 95 ? { read: "automatic" as const } : {}),
@@ -730,6 +846,22 @@ export function PublisherReaderRail({
       preferencesKey,
       serializeReaderPreferences(next, DEFAULT_FONT_POLICY),
     );
+  };
+
+  const markCurrentSectionRead = (): void => {
+    if (currentSection === undefined) return;
+    const now = Date.now();
+    progressStore.update((current) => {
+      try {
+        return recordReaderSectionProgress(current, currentSection, {
+          now,
+          percent: 100,
+          read: "manual",
+        });
+      } catch {
+        return current;
+      }
+    });
   };
 
   const toggle = (panel: ReaderPanel): void => {
@@ -866,6 +998,9 @@ export function PublisherReaderRail({
         <button aria-controls={panelId} aria-expanded={openPanel === "outline"} onClick={() => toggle("outline")} type="button">
           <RailIcon><path d="M5 6h14M5 12h14M5 18h14" /></RailIcon><span>Contents</span>
         </button>
+        <button aria-controls={panelId} aria-expanded={openPanel === "progress"} onClick={() => toggle("progress")} type="button">
+          <RailIcon><path d="M12 3a9 9 0 1 1-9 9" /><path d="M12 7v5l3 2" /></RailIcon><span>Progress</span>
+        </button>
         <button aria-controls={panelId} aria-expanded={openPanel === "search"} onClick={() => toggle("search")} type="button">
           <RailIcon><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></RailIcon><span>Search</span>
         </button>
@@ -898,6 +1033,26 @@ export function PublisherReaderRail({
                   </li>
                 ))}
               </ol>
+            )
+          ) : null}
+
+          {openPanel === "progress" ? (
+            currentProgress === null || currentSection === undefined ? (
+              <p>Open a section to view reading progress.</p>
+            ) : (
+              <div className="publisher-reader-progress-panel">
+                <h3>{currentSection.title}</h3>
+                <dl>
+                  <div><dt>Status</dt><dd>{progressStatusLabel(currentProgress.status)}</dd></div>
+                  <div><dt>Complete</dt><dd>{currentProgress.progress?.percent ?? 0}%</dd></div>
+                  <div><dt>Reading time</dt><dd>{formatReadingTime(currentProgress.progress?.readingTimeMs ?? 0)}</dd></div>
+                  <div><dt>Visits</dt><dd>{new Intl.NumberFormat().format(currentProgress.progress?.openCount ?? 0)}</dd></div>
+                  <div><dt>Returns</dt><dd>{new Intl.NumberFormat().format(Math.max(0, (currentProgress.progress?.openCount ?? 0) - 1))}</dd></div>
+                </dl>
+                {currentProgress.status === "read" ? null : (
+                  <button className="publisher-reader-primary-action" type="button" onClick={markCurrentSectionRead}>Mark current version as read</button>
+                )}
+              </div>
             )
           ) : null}
 
