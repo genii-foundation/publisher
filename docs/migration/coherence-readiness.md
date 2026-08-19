@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 17 upgraded | 17 | Publisher implements a stronger checked contract. |
+| 19 upgraded | 19 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 25 planned | 25 | Accepted Publisher scope is not implemented yet. |
+| 23 planned | 23 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -109,9 +109,10 @@ by narration timing and assistive technology.
 
 Publisher now treats pure preference state as framework-neutral. The official
 renderer exposes bounded text size, color, motion, highlight, and focus controls,
-with distinct focus widths and a reduced-motion contract. Prepaint application
-and theme-declared font choices remain planned. Publication fonts, labels,
-colors, and defaults remain theme data.
+with distinct focus widths and a reduced-motion contract. The complete default
+interface now includes the font-family field restricted to the renderer's closed
+publication policy. Prepaint application and theme-declared font choices remain
+planned. Publication fonts, labels, colors, and defaults remain theme data.
 
 ### Search and capability-sliced data
 
@@ -125,8 +126,10 @@ section identity, titles, destinations, plain text, and search fields. Its parse
 rejects identity drift and fabricated folds. Unicode and diacritic handling plus
 original-text snippet offsets improve on Coherence's ASCII fold. The default
 Reader rail fetches that artifact only when search opens and supplies loading,
-failure, no-result, and bounded result states. Bookmark-augmented results plus
-separate outline and breadcrumb artifacts remain planned. The default section
+failure, no-result, and bounded result states. It queries the latest private
+bookmark document separately and renders saved-passage matches before public
+manuscript results without placing private state in the generated artifact.
+Separate outline and breadcrumb artifacts remain planned. The default section
 page now renders work and section ancestry without JavaScript from validated
 parent identities and canonical destinations. The hydrated contents panel shows
 the same current path and marks its active outline entry.
@@ -259,8 +262,8 @@ product decision:
 
 1. Add publication heatmaps, recent sections, and next-section recommendations.
 2. Add virtualized bookmark presentation, selection capture, and margin markers.
-3. Project capability-sliced client artifacts and a default search interface.
-4. Add default settings, focus, progress, bookmark, and toolbar components.
+3. Project the remaining capability-sliced client artifacts.
+4. Complete selection capture, bookmark markers, virtualized collections, and focus markup.
 5. Add the default narration player and timing interaction.
 6. Add atomic offline package planning and official service worker integration.
 7. Add cross-tab synchronization notifications and richer synchronized-status surfaces.

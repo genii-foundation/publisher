@@ -281,8 +281,13 @@ export const READER_PARITY = Object.freeze([
     id: "reader.preferences.default_interface",
     capability: "Accessible default settings interface for every Reader preference",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "The default settings panel exposes every bounded preference, restricts fonts to publication policy, applies changes immediately, and persists them under the publication-scoped key.",
+    evidence: {
+      decision: "docs/architecture/0031-default-settings-and-bookmark-search.md",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
     sourcePaths: ["src/components/ReaderSettingsIsland.tsx"],
   },
   {
@@ -323,8 +328,13 @@ export const READER_PARITY = Object.freeze([
     id: "reader.search.default_interface",
     capability: "Keyboard-accessible search with useful empty and bookmark states",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
+    status: "upgraded",
+    why: "The lazy build-bound publication search and latest private bookmark document remain separate, while one labeled interface combines their bounded results and reports an empty state only when neither matches.",
+    evidence: {
+      decision: "docs/architecture/0031-default-settings-and-bookmark-search.md",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
     sourcePaths: ["src/components/SearchMenuIsland.tsx"],
   },
   {

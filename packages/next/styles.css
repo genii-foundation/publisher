@@ -254,6 +254,7 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 
 .publisher-reader-outline,
 .publisher-reader-breadcrumbs ol,
+.publisher-reader-search-bookmarks ol,
 .publisher-reader-search-results,
 .publisher-reader-bookmarks {
   display: grid;
@@ -298,6 +299,7 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 }
 
 .publisher-reader-outline a,
+.publisher-reader-search-bookmarks a,
 .publisher-reader-search-results a,
 .publisher-reader-bookmarks a {
   display: block;
@@ -315,6 +317,11 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 .publisher-reader-sync {
   display: grid;
   gap: 0.9rem;
+}
+
+.publisher-reader-search-bookmarks h3 {
+  margin: 0;
+  font-size: 0.9rem;
 }
 
 .publisher-reader-progress-panel h3 {

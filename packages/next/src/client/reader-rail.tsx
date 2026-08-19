@@ -865,9 +865,13 @@ export function PublisherReaderRail({
   const currentProgress = currentSection === undefined
     ? null
     : resolveReaderSectionProgress(progress, currentSection);
-  const results = searchIndex === null || query.trim().length < 2
+  const normalizedQuery = query.trim();
+  const results = searchIndex === null || normalizedQuery.length < 2
     ? []
     : searchReaderIndex(searchIndex, query, { limit: 12, snippetCodeUnits: 180 });
+  const bookmarkSearchResults = normalizedQuery.length < 2 || normalizedQuery.length > 280
+    ? []
+    : queryReaderBookmarks(bookmarkState, { text: normalizedQuery }).slice(0, 12);
 
   const updatePreference = (update: ReaderPreferencesUpdate): void => {
     const next = updateReaderPreferences(preferences, update, DEFAULT_FONT_POLICY);
@@ -1150,10 +1154,23 @@ export function PublisherReaderRail({
           {openPanel === "search" ? (
             <div className="publisher-reader-search">
               <label htmlFor={`${panelId}-query`}>Search this publication</label>
-              <input id={`${panelId}-query`} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Title, phrase, or idea" type="search" value={query} />
+              <input id={`${panelId}-query`} maxLength={280} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="Title, phrase, saved passage, or note" type="search" value={query} />
               {searchState === "loading" ? <p role="status">Loading search index…</p> : null}
               {searchState === "failed" ? <p role="alert">Search could not load. Reload the page and try again.</p> : null}
-              {searchState === "ready" && query.trim().length >= 2 && results.length === 0 ? <p>No matching passages.</p> : null}
+              {searchState === "ready" && normalizedQuery.length >= 2 && results.length === 0 && bookmarkSearchResults.length === 0 ? <p>No matching passages.</p> : null}
+              {bookmarkSearchResults.length === 0 ? null : (
+                <div className="publisher-reader-search-bookmarks">
+                  <h3>Saved passages</h3>
+                  <ol>
+                    {bookmarkSearchResults.map((bookmark) => (
+                      <li key={bookmark.id}>
+                        <a href={bookmark.href}><q>{bookmark.quote}</q></a>
+                        {bookmark.note === undefined ? null : <p>{bookmark.note}</p>}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
               <ol className="publisher-reader-search-results">
                 {results.map((result) => (
                   <li key={`${result.entry.workId}:${result.entry.sectionId}`}>
@@ -1209,6 +1226,11 @@ export function PublisherReaderRail({
               <label>Text size
                 <select value={preferences.fontScale} onChange={(event) => updatePreference({ fontScale: Number(event.currentTarget.value) as ReaderPreferences["fontScale"] })}>
                   {READER_FONT_SCALES.map((scale) => <option key={scale} value={scale}>{scale}%</option>)}
+                </select>
+              </label>
+              <label>Font
+                <select value={preferences.fontFamilyId} onChange={(event) => updatePreference({ fontFamilyId: event.currentTarget.value })}>
+                  {DEFAULT_FONT_POLICY.fontFamilyIds.map((font) => <option key={font} value={font}>{font}</option>)}
                 </select>
               </label>
               <label>Color

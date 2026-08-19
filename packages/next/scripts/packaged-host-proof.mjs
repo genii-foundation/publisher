@@ -906,6 +906,62 @@ async function assertHydratedReaderTools({
       "The default Reader did not accumulate visible active reading time.",
     );
 
+    const openedSettings = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+        '    .find((candidate) => candidate.textContent?.includes("Settings"));',
+        "  button?.click();",
+        "  return button !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(openedSettings.result?.value, true);
+    let settingsReady = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          'document.querySelectorAll(".publisher-reader-settings select").length === 5 && document.querySelector(".publisher-reader-settings input[type=checkbox]") !== null',
+        returnByValue: true,
+      });
+      settingsReady = evaluated.result?.value === true;
+      if (settingsReady) break;
+      await wait(50);
+    }
+    assert.equal(settingsReady, true, "The default settings panel omitted a Reader preference.");
+    await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const labels = Array.from(document.querySelectorAll(".publisher-reader-settings label"));',
+        '  const select = labels.find((label) => label.textContent?.includes("Color"))?.querySelector("select");',
+        "  if (!(select instanceof HTMLSelectElement)) return false;",
+        '  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;',
+        '  setter?.call(select, "dark");',
+        '  select.dispatchEvent(new Event("change", { bubbles: true }));',
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    let darkPreference = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const key = Object.keys(localStorage).find((candidate) => candidate.includes("reader.preferences"));',
+          "  const saved = key === undefined ? null : JSON.parse(localStorage.getItem(key));",
+          '  return document.documentElement.dataset.publisherReaderScheme === "dark" && saved?.colorScheme === "dark";',
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      darkPreference = evaluated.result?.value === true;
+      if (darkPreference) break;
+      await wait(50);
+    }
+    assert.equal(darkPreference, true, "The default settings interface did not persist and apply color.");
+
     const openedSync = await page.send("Runtime.evaluate", {
       expression: [
         "(() => {",
@@ -1138,6 +1194,75 @@ async function assertHydratedReaderTools({
         bookmarkProof.quote,
         "The first Reader tab did not render bookmark state written by its peer tab.",
       );
+      const bookmarkInSearch = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const searchButton = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+          '    .find((candidate) => candidate.textContent?.includes("Search"));',
+          "  searchButton?.click();",
+          "  return searchButton !== undefined;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(bookmarkInSearch.result?.value, true);
+      let bookmarkSearchInputReady = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const input = document.querySelector(".publisher-reader-search input[type=search]");',
+            "  if (!(input instanceof HTMLInputElement)) return false;",
+            '  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;',
+            `  setter?.call(input, ${JSON.stringify(bookmarkProof.quote)});`,
+            '  input.dispatchEvent(new Event("input", { bubbles: true }));',
+            "  return true;",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        bookmarkSearchInputReady = evaluated.result?.value === true;
+        if (bookmarkSearchInputReady) break;
+        await wait(50);
+      }
+      assert.equal(bookmarkSearchInputReady, true);
+      let bookmarkSearchQuote = "";
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression:
+            'document.querySelector(".publisher-reader-search-bookmarks q")?.textContent ?? ""',
+          returnByValue: true,
+        });
+        bookmarkSearchQuote = evaluated.result?.value ?? "";
+        if (bookmarkSearchQuote === bookmarkProof.quote) break;
+        await wait(50);
+      }
+      assert.equal(
+        bookmarkSearchQuote,
+        bookmarkProof.quote,
+        "The publication search did not include the reactive saved-passage state.",
+      );
+      await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+          '    .find((candidate) => candidate.textContent?.includes("Bookmarks"));',
+          "  button?.click();",
+          "})()",
+        ].join("\n"),
+      });
+      let bookmarkPanelReady = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression:
+            'document.querySelector(".publisher-reader-bookmark-tools input[type=search]") !== null',
+          returnByValue: true,
+        });
+        bookmarkPanelReady = evaluated.result?.value === true;
+        if (bookmarkPanelReady) break;
+        await wait(50);
+      }
+      assert.equal(bookmarkPanelReady, true);
       const setBookmarkQuery = async (value) => page.send("Runtime.evaluate", {
         expression: [
           "((value) => {",
