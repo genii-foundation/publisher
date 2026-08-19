@@ -173,7 +173,8 @@ The provider-neutral server route and reference adapter now transfer remote
 progress, bookmarks, engagement, and consent without exposing a provider SDK or
 accepting reader or publication identity from the browser. The local-first
 browser coordinator, including reconciliation, retry, and in-flight edits,
-remains planned.
+now exists as a framework-neutral Reader state machine. Default Reader wiring
+and live browser evidence remain planned.
 The reference provider now scopes every stored row, bookmark lock, event
 identity, and retention query by both publication and authenticated reader.
 Existing unscoped rows are preserved under a reserved legacy marker for explicit

@@ -55,6 +55,10 @@
       "types": "./dist/bookmarks.d.ts",
       "import": "./dist/bookmarks.js"
     },
+    "./sync": {
+      "types": "./dist/sync.d.ts",
+      "import": "./dist/sync.js"
+    },
     "./search": {
       "types": "./dist/search.d.ts",
       "import": "./dist/search.js"

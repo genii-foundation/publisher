@@ -493,7 +493,7 @@ test("aggregate percent uses current word counts and exposes canonical statuses"
 test("browser state modules do not reference ambient browser or server authority", async () => {
   const source = (
     await Promise.all(
-      ["preferences.js", "progress.js"].map((name) =>
+      ["preferences.js", "progress.js", "sync.js"].map((name) =>
         readFile(
           new URL(`../packages/reader/dist/${name}`, import.meta.url),
           "utf8",

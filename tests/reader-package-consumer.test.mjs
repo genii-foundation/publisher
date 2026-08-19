@@ -412,6 +412,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     "progress",
     "passage-range",
     "bookmarks",
+    "sync",
     "search",
   ]) {
     assert.deepEqual(readerManifest.exports[`./${subpath}`], {
@@ -873,6 +874,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         type ReaderBookmarksState,
       } from "@genii-foundation/publisher-reader/bookmarks";
       import {
+        createReaderSyncCoordinatorState,
+        type ReaderSyncCoordinatorState,
+      } from "@genii-foundation/publisher-reader/sync";
+      import {
         createReaderSearchTerms,
         type ReaderSearchIndex,
       } from "@genii-foundation/publisher-reader/search";
@@ -908,6 +913,8 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       const rangeValidation = validateReaderPassageRange(range);
       const bookmarks: ReaderBookmarksState =
         createEmptyReaderBookmarksState("portable-reader");
+      const sync: ReaderSyncCoordinatorState =
+        createReaderSyncCoordinatorState("portable-reader");
       declare const searchIndex: ReaderSearchIndex;
       const terms: readonly string[] = createReaderSearchTerms("portable");
       void [
@@ -924,6 +931,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         progress,
         rangeValidation,
         bookmarks,
+        sync,
         searchIndex,
         terms,
       ];
@@ -985,6 +993,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       "progress",
       "passage-range",
       "bookmarks",
+      "sync",
       "search",
     ];
     const browserClosures = new Map();
@@ -1105,6 +1114,9 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         createEmptyReaderBookmarksState,
       } from "@genii-foundation/publisher-reader/bookmarks";
       import {
+        createReaderSyncCoordinatorState,
+      } from "@genii-foundation/publisher-reader/sync";
+      import {
         createReaderSearchTerms,
       } from "@genii-foundation/publisher-reader/search";
 
@@ -1192,6 +1204,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       assert.equal(
         createEmptyReaderBookmarksState("portable-reader").publicationId,
         "portable-reader",
+      );
+      assert.equal(
+        createReaderSyncCoordinatorState("portable-reader").phase,
+        "idle",
       );
       assert.deepEqual(createReaderSearchTerms("Portable Reader"), [
         "portable",

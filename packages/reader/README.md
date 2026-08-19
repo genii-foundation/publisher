@@ -8,7 +8,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 
 The serialized reader envelope contains renderable publication structure, Markdown blocks, public addresses, link locations, assets, routes, statistics, and the complete fixed Publisher attribution. It omits repository paths, source provenance, extension declarations, capability grants, configuration, payloads, provider state, credentials, progress, bookmarks, preferences, analytics, audio state, and sync state.
 
-Projection and full validation are build-time Node.js operations. Browser code should import the `runtime`, `preferences`, `progress`, `passage-range`, `bookmarks`, or `search` subpath. These subpaths contain no filesystem, network, environment, process, DOM, storage, clock, or randomness access.
+Projection and full validation are build-time Node.js operations. Browser code should import the `runtime`, `preferences`, `progress`, `passage-range`, `bookmarks`, `sync`, or `search` subpath. These subpaths contain no filesystem, network, environment, process, DOM, storage, clock, or randomness access.
 
 The runtime never chooses a primary collection, rewrites routes, trims trailing slashes, or infers a canonical reader address from object order. Callers supply collection context explicitly when a work belongs to more than one collection.
 
@@ -92,6 +92,8 @@ The `passage-range` subpath identifies a selection by work, reviewed section con
 The `bookmarks` subpath stores caller-identified selections, optional notes, and absorbing deletion tombstones in a publication-scoped versioned document. It bounds every string, input size, output size, live count, and retained tombstone count. Merge is commutative, idempotent, deterministic under equal timestamps, and incapable of reviving an ID once either side has deleted it. A failed range resolution may reanchor by an exact quote plus its bounded context across the section's ordered block text. More than one matching location remains ambiguous.
 
 The bookmark core does not generate IDs, inspect a document, open storage, or contact a sync provider. Hosts supply IDs and time, turn selections into passage ranges, persist the canonical serialization, and decide whether to use the stricter remote byte budget.
+
+The `sync` subpath coordinates local-first transfer without owning a network or storage implementation. Its clock-driven state machine debounces local changes, pauses offline, retries with bounded exponential delay, and schedules edits made during an active request immediately after that request completes. Reconciliation merges the latest local progress and bookmark state with the returned remote documents, so an in-flight edit or deletion tombstone cannot be replaced by an older response. A schema-ahead document freezes only its own capability and never blocks a compatible sibling capability.
 
 ## Search artifact
 
