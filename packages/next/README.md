@@ -16,7 +16,7 @@ The renderer owns:
 - canonical trailing-slash redirects
 - deterministic application-manifest identity
 
-A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state and optional provider-neutral synchronization. It does not execute extensions, play audio, or claim static-export support.
+A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state, lazy default narration playback, and optional provider-neutral synchronization. It does not execute extensions or claim static-export support.
 
 Progress and complete bookmark documents share one publication-scoped reactive
 store. Its atomic updater always sees the latest in-memory snapshot. Same-tab
@@ -24,6 +24,15 @@ writers notify each other directly, native storage events converge separate
 tabs, and canonically equal replacements cause no write or render churn. A
 stable empty server snapshot preserves hydration, while unavailable browser
 persistence leaves the current tab's in-memory reading state usable.
+
+The default Listen panel fetches the build-bound narration envelope only when a
+reader opens it. One persistent media element supplies play, pause, seek, bounded
+speed, remembered voice choice, previous and next movement, and automatic queue
+continuation. It joins section identities to the lazy progress catalog for human
+titles and canonical destinations, while exact duration and coverage remain
+honest when clips omit duration. Closing the panel does not destroy playback.
+Word timing highlights, route-preserving playback intent, and offline audio
+packages remain separate planned capabilities.
 
 ## Supported toolchain
 

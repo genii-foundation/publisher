@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 25 upgraded | 25 | Publisher implements a stronger checked contract. |
+| 28 upgraded | 28 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 17 planned | 17 | Accepted Publisher scope is not implemented yet. |
+| 14 planned | 14 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -144,8 +144,9 @@ Reader rail fetches that artifact only when search opens and supplies loading,
 failure, no-result, and bounded result states. It queries the latest private
 bookmark document separately and renders saved-passage matches before public
 manuscript results without placing private state in the generated artifact.
-Search and publication progress are separate bounded artifacts fetched only
-when their interfaces open. Current-page outline and breadcrumbs remain small
+Search, publication progress, and narration are separate bounded artifacts
+fetched only when their interfaces open. Current-page outline and breadcrumbs
+remain small
 server-supplied renderer context rather than a second client download. The
 default section page renders work and section ancestry without JavaScript from
 validated parent identities and canonical destinations. The hydrated contents
@@ -171,10 +172,16 @@ offline audio, exact recorded duration, and corpus estimates from measured
 narrator pace. Recent changes also repaired navigation timing and audiobook
 download contrast.
 
-Publisher now validates, resolves, and materializes a generic narration catalog
-and its synchronization envelope. It does not yet ship the default player. ADR
-0015 supersedes the earlier claim that playback should remain outside the engine
-application.
+Publisher validates, resolves, and materializes a generic narration catalog and
+its build-bound envelope. The official renderer now fetches that envelope only
+when Listen opens. Its persistent default player supplies play, pause, seek,
+bounded speed, remembered voice choice, ordered queue movement, automatic queue
+continuation, exact declared duration, queue position, timed-clip coverage, and
+unnarrated coverage. A strict browser parser refuses stale identity, unsafe URLs,
+duplicate section coverage, malformed statistics, and oversized input. The
+packed-host Chrome proof exercises a real recording and persists the chosen
+voice and speed. ADR 0015 supersedes the earlier claim that playback should
+remain outside the engine application.
 
 Per-word timing data does not belong in the reader artifact. It remains in lazy
 narration sidecars bound to the narration catalog and exact Reader build.
@@ -277,7 +284,8 @@ sections, and 10,000 continuity redirects.
 The following are accepted scope, not release blockers waiting for another
 product decision:
 
-1. Add the default narration player and timing interaction.
+1. Add word timing sidecars, anchor interaction, and route-preserving playback
+   intent.
 2. Add atomic offline package planning and official service worker integration.
 3. Add cross-tab synchronization notifications and richer synchronized-status surfaces.
 4. Generalize audio checkpoint, promotion, and manuscript publication guards.
@@ -309,7 +317,7 @@ these concerns. It does not own the values that make Coherence itself.
 4. Complete local progress, preferences, bookmarks, ranges, and reactive stores.
 5. Add official renderer controls without weakening server-rendered reading.
 6. Add cross-tab synchronization notifications over the stable server routes.
-7. Add default narration playback and author publication guards.
+7. Add narration timing interaction and author publication guards.
 8. Build offline dependency closure over the final route, Reader, and audio graph.
 9. Prove the Coherence Updates adapter and migration compatibility.
 10. Prove the same contracts with an unrelated second publication.

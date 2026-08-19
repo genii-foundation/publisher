@@ -8,7 +8,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 
 The serialized reader envelope contains renderable publication structure, Markdown blocks, public addresses, link locations, assets, routes, statistics, and the complete fixed Publisher attribution. It omits repository paths, source provenance, extension declarations, capability grants, configuration, payloads, provider state, credentials, progress, bookmarks, preferences, analytics, audio state, and sync state.
 
-Projection and full validation are build-time Node.js operations. Browser code should import the `runtime`, `preferences`, `progress`, `progress-catalog`, `progress-overview`, `passage-range`, `bookmarks`, `sync`, or `search` subpath. These subpaths contain no filesystem, network, environment, process, DOM, storage, clock, or randomness access.
+Projection and full validation are build-time Node.js operations. Browser code should import the `runtime`, `preferences`, `progress`, `progress-catalog`, `progress-overview`, `passage-range`, `bookmarks`, `sync`, `search`, or `narration` subpath. These subpaths contain no filesystem, network, environment, process, DOM, storage, clock, or randomness access.
 
 The runtime never chooses a primary collection, rewrites routes, trims trailing slashes, or infers a canonical reader address from object order. Callers supply collection context explicitly when a work belongs to more than one collection.
 
@@ -88,6 +88,12 @@ Progress entries use every reviewed continuity progress group from each `ReaderS
 The `progress-overview` subpath combines that canonical section resolution with live bookmark presence. It produces one word-weighted publication summary, ordered section states, updated-first recommendations, and recently read sections without reading storage, the clock, the network, or manuscript text.
 
 The `progress-catalog` subpath projects and validates the small, lazy artifact used by publication progress surfaces. It carries navigable section titles, destinations, continuity, hashes, word counts, and exact Reader identity. It excludes manuscript blocks and unrelated Reader capabilities.
+
+The `narration` subpath parses a fetched audio envelope into a bounded immutable
+playback projection only after its publication and Reader build identities match.
+It refuses unknown fields, unsafe clip destinations, duplicate section coverage,
+drifted statistics, and oversized data. It also owns the versioned local voice
+and playback-rate preference document. It does not fetch, store, or play media.
 
 All mutation, parsing, sanitization, and merge calls that can interpret time require an explicit `now` value in epoch milliseconds. The module never reads the clock. Parsing clamps future timestamps to that value. A local event older than the state's latest accepted update is refused instead of rewinding newer evidence. Parsing also rejects a publication mismatch or newer schema, bounds input bytes and entry counts, and stores entries in a frozen null-prototype record. Aggregate percentage is weighted by each supplied section's current `wordCount`.
 

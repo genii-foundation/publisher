@@ -737,7 +737,7 @@ async function assertHydratedReaderTools({
       ready = evaluated.result?.value;
       if (
         ready?.complete === true &&
-        ready.controls === 6 &&
+        ready.controls === 7 &&
         ready.inViewport === true
       ) {
         break;
@@ -746,7 +746,7 @@ async function assertHydratedReaderTools({
     }
     assert.deepEqual(
       ready,
-      { complete: true, controls: 6, inViewport: true },
+      { complete: true, controls: 7, inViewport: true },
       "The hydrated Reader rail was not reachable inside the mobile viewport.",
     );
     const progressRequestsBeforeOpen = await page.send("Runtime.evaluate", {
@@ -758,6 +758,16 @@ async function assertHydratedReaderTools({
       progressRequestsBeforeOpen.result?.value,
       0,
       "The progress catalog loaded before its interface opened.",
+    );
+    const narrationRequestsBeforeOpen = await page.send("Runtime.evaluate", {
+      expression:
+        'performance.getEntriesByType("resource").filter((entry) => entry.name.includes("publication-audio.json")).length',
+      returnByValue: true,
+    });
+    assert.equal(
+      narrationRequestsBeforeOpen.result?.value,
+      0,
+      "Narration loaded before its interface opened.",
     );
 
     const focusMarkup = await page.send("Runtime.evaluate", {
@@ -964,6 +974,153 @@ async function assertHydratedReaderTools({
       renderedProgress?.readingTimeMs > 0,
       "The default Reader did not accumulate visible active reading time.",
     );
+
+    const openedNarration = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+        '    .find((candidate) => candidate.textContent?.includes("Listen"));',
+        "  button?.click();",
+        "  return button !== undefined;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(openedNarration.result?.value, true);
+    let narrationState;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const panel = document.querySelector(".publisher-reader-narration");',
+          '  const now = panel?.querySelector(".publisher-reader-narration-now strong")?.textContent ?? "";',
+          "  return {",
+          '    alert: panel?.querySelector("[role=alert]")?.textContent ?? "",',
+          '    audioRequestCount: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("publication-audio.json")).length,',
+          '    now,',
+          '    queue: panel?.querySelector(".publisher-reader-narration-now small")?.textContent ?? "",',
+          '    selects: panel?.querySelectorAll("select").length ?? 0,',
+          '    summary: panel?.querySelector(".publisher-reader-narration-summary")?.textContent ?? "",',
+          '    inViewport: (() => { const rect = document.querySelector(".publisher-reader-panel")?.getBoundingClientRect(); return rect !== undefined && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight; })(),',
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      narrationState = evaluated.result?.value;
+      if (narrationState?.now.length > 0 && narrationState.selects === 2) break;
+      await wait(50);
+    }
+    assert.equal(narrationState?.alert, "");
+    assert.equal(narrationState?.audioRequestCount, 1);
+    assert.ok(narrationState?.now.length > 0);
+    assert.match(narrationState?.queue ?? "", /of 2 recordings/u);
+    assert.equal(narrationState?.selects, 2);
+    assert.match(narrationState?.summary ?? "", /recorded across 2 timed clips/u);
+    assert.equal(narrationState?.inViewport, true);
+
+    const playCenter = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const button = Array.from(document.querySelectorAll(".publisher-reader-narration-controls button"))',
+        '    .find((candidate) => candidate.textContent === "Play");',
+        "  const rect = button?.getBoundingClientRect();",
+        "  return rect === undefined ? null : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.ok(playCenter.result?.value);
+    await page.send("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      button: "left",
+      clickCount: 1,
+      x: playCenter.result.value.x,
+      y: playCenter.result.value.y,
+    });
+    await page.send("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      button: "left",
+      clickCount: 1,
+      x: playCenter.result.value.x,
+      y: playCenter.result.value.y,
+    });
+    let playbackStarted = false;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          '(() => { const audio = document.querySelector(".publisher-reader-rail > audio"); return audio instanceof HTMLAudioElement && !audio.paused && audio.currentTime > 0; })()',
+        returnByValue: true,
+      });
+      playbackStarted = evaluated.result?.value === true;
+      if (playbackStarted) break;
+      await wait(25);
+    }
+    assert.equal(playbackStarted, true, "The default narration player did not start its recording.");
+
+    const queueAdvanced = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const buttons = Array.from(document.querySelectorAll(".publisher-reader-narration-controls button"));',
+        '  const button = buttons.find((candidate) => !candidate.disabled && (candidate.textContent === "Next" || candidate.textContent === "Previous"));',
+        '  const before = document.querySelector(".publisher-reader-narration-now strong")?.textContent ?? "";',
+        "  button?.click();",
+        "  return { before, moved: button !== undefined };",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(queueAdvanced.result?.value?.moved, true);
+    let advancedTitle = queueAdvanced.result?.value?.before ?? "";
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression:
+          'document.querySelector(".publisher-reader-narration-now strong")?.textContent ?? ""',
+        returnByValue: true,
+      });
+      advancedTitle = evaluated.result?.value ?? "";
+      if (advancedTitle !== queueAdvanced.result?.value?.before) break;
+      await wait(25);
+    }
+    assert.notEqual(advancedTitle, queueAdvanced.result?.value?.before);
+
+    const narrationPreference = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const selects = document.querySelectorAll(".publisher-reader-narration select");',
+        "  const voice = selects[0];",
+        "  const speed = selects[1];",
+        "  if (!(voice instanceof HTMLSelectElement) || !(speed instanceof HTMLSelectElement)) return null;",
+        '  voice.value = "bright";',
+        '  voice.dispatchEvent(new Event("change", { bubbles: true }));',
+        '  speed.value = "1.5";',
+        '  speed.dispatchEvent(new Event("change", { bubbles: true }));',
+        '  const key = Object.keys(localStorage).find((candidate) => candidate.endsWith(".narration"));',
+        "  return key === undefined ? null : { key, value: JSON.parse(localStorage.getItem(key)) };",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    let savedNarrationPreference = narrationPreference.result?.value;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (
+        savedNarrationPreference?.value?.selectedVoiceId === "bright" &&
+        savedNarrationPreference?.value?.playbackRate === 1.5
+      ) break;
+      await wait(25);
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const key = Object.keys(localStorage).find((candidate) => candidate.endsWith(".narration"));',
+          "  return key === undefined ? null : { key, value: JSON.parse(localStorage.getItem(key)) };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      savedNarrationPreference = evaluated.result?.value;
+    }
+    assert.equal(savedNarrationPreference?.value?.selectedVoiceId, "bright");
+    assert.equal(savedNarrationPreference?.value?.playbackRate, 1.5);
 
     const openedSettings = await page.send("Runtime.evaluate", {
       expression: [
@@ -2206,6 +2363,32 @@ function createProofPng() {
   ]);
 }
 
+function createProofWav(durationSeconds = 2) {
+  const sampleRate = 8_000;
+  const sampleCount = sampleRate * durationSeconds;
+  const dataSize = sampleCount * 2;
+  const wav = Buffer.alloc(44 + dataSize);
+  wav.write("RIFF", 0, "ascii");
+  wav.writeUInt32LE(36 + dataSize, 4);
+  wav.write("WAVEfmt ", 8, "ascii");
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(sampleRate, 24);
+  wav.writeUInt32LE(sampleRate * 2, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write("data", 36, "ascii");
+  wav.writeUInt32LE(dataSize, 40);
+  for (let index = 0; index < sampleCount; index += 1) {
+    const sample = Math.round(
+      Math.sin(2 * Math.PI * 220 * index / sampleRate) * 2_000,
+    );
+    wav.writeInt16LE(sample, 44 + index * 2);
+  }
+  return wav;
+}
+
 // Host-relative POSIX paths of every source file, so the written host can be
 // compared against the renderer contract plus declared proof scaffolding.
 async function listHostSourcePaths(root) {
@@ -2516,7 +2699,9 @@ export async function runPackagedHostProof(
       `app/${basename(globalErrorRoot)}/page.tsx`,
       `app/${basename(boundaryProofRoot)}/page.tsx`,
       "public/proof.png",
+      "public/proof.wav",
       hostTemplate.readerDataPath,
+      hostTemplate.audioDataPath,
       hostTemplate.progressDataPath,
       hostTemplate.searchDataPath,
       hostTemplate.syncDataPath,
@@ -2530,6 +2715,57 @@ export async function runPackagedHostProof(
       );
     }
 
+    const narratedSections = reader.works.flatMap((work) =>
+      work.sections.filter((section) => section.navigable));
+    assert.ok(narratedSections.length >= 2);
+    const narrationEnvelope = {
+      $schema: "https://publisher.genii.foundation/schemas/audio-envelope.schema.json",
+      schemaVersion: "1.0",
+      publicationId: reader.publicationId,
+      engineVersion: reader.engineVersion,
+      buildId: reader.buildId,
+      source: {
+        adapter: { package: "@example/packed-narrator" },
+        catalogPath: "publication/audio/catalog.json",
+        catalogSha256: `sha256:${"d".repeat(64)}`,
+      },
+      voices: [
+        {
+          id: "calm",
+          label: "Calm",
+          clips: narratedSections.slice(0, 2).map((section) => ({
+            sectionId: section.id,
+            audioVersionId: `${section.id}.calm`,
+            href: "/proof.wav",
+            format: "wav",
+            byteSize: createProofWav().byteLength,
+            durationSeconds: 2,
+          })),
+          narratedSectionCount: 2,
+          unnarratedSectionCount: narratedSections.length - 2,
+        },
+        {
+          id: "bright",
+          label: "Bright",
+          clips: narratedSections.slice(0, 1).map((section) => ({
+            sectionId: section.id,
+            audioVersionId: `${section.id}.bright`,
+            href: "/proof.wav",
+            format: "wav",
+            byteSize: createProofWav().byteLength,
+            durationSeconds: 2,
+          })),
+          narratedSectionCount: 1,
+          unnarratedSectionCount: narratedSections.length - 1,
+        },
+      ],
+      statistics: {
+        voiceCount: 2,
+        clipCount: 3,
+        sectionCount: narratedSections.length,
+      },
+    };
+
     await Promise.all([
       writeJson(
         join(hostRoot, hostTemplate.readerDataPath),
@@ -2539,6 +2775,10 @@ export async function runPackagedHostProof(
         join(hostRoot, hostTemplate.progressDataPath),
         serializeReaderProgressCatalog(createReaderProgressCatalog(reader)),
         "utf8",
+      ),
+      writeJson(
+        join(hostRoot, hostTemplate.audioDataPath),
+        narrationEnvelope,
       ),
       writeFile(
         join(hostRoot, hostTemplate.searchDataPath),
@@ -2607,6 +2847,10 @@ export async function runPackagedHostProof(
           "",
         ].join("\n"),
         "utf8",
+      ),
+      writeFile(
+        join(hostRoot, "public", "proof.wav"),
+        createProofWav(),
       ),
       writeFile(
         join(appRoot, "layout.tsx"),

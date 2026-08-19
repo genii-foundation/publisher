@@ -70,6 +70,10 @@
     "./search": {
       "types": "./dist/search.d.ts",
       "import": "./dist/search.js"
+    },
+    "./narration": {
+      "types": "./dist/narration.d.ts",
+      "import": "./dist/narration.js"
     }
   },
   "scripts": {

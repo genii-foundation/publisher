@@ -40,5 +40,6 @@ These records define the accepted foundation of GENII Publisher.
 36. [ADR 0036: Focus text ownership](./0036-focus-text-ownership.md)
 37. [ADR 0037: Reader progress overview](./0037-reader-progress-overview.md)
 38. [ADR 0038: Lazy Reader progress catalog](./0038-lazy-reader-progress-catalog.md)
+39. [ADR 0039: Lazy default narration player](./0039-lazy-default-narration-player.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

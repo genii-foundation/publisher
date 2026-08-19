@@ -2,6 +2,11 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher reader is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-19, GENII Foundation
+
+- Added a strict browser-safe narration-envelope projection bound to one publication and Reader build.
+- Added versioned publication-scoped voice and playback-rate preferences without storage or media authority.
+
 ## 2026-08-18, GENII Foundation
 
 - Added a bounded Reader-build-bound progress catalog that excludes manuscript text and feeds the pure progress overview.

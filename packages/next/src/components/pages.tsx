@@ -681,6 +681,7 @@ function PublisherPageShell({
           publicationId={publication.id}
           publicationTitle={publication.title}
           readerBuildId={reader.buildId}
+          audioPath="/publication-audio.json"
           progressPath="/publication-reader-progress.json"
           searchPath="/publication-reader-search.json"
           sync={reader.sync}

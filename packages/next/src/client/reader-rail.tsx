@@ -107,6 +107,7 @@ import {
 import { createPortal } from "react-dom";
 import { PublisherReaderBookmarkList } from "./reader-bookmark-list.js";
 import { PublisherReaderBookmarkMarkers } from "./reader-bookmark-markers.js";
+import { PublisherReaderNarration } from "./reader-narration.js";
 import {
   createPublisherReaderStore,
   usePublisherReaderStore,
@@ -128,6 +129,7 @@ export interface PublisherReaderRailProps {
   readonly publicationId: string;
   readonly publicationTitle: string;
   readonly readerBuildId: Sha256Digest;
+  readonly audioPath: string;
   readonly progressPath: string;
   readonly searchPath: string;
   readonly outline: readonly PublisherReaderOutlineEntry[];
@@ -136,7 +138,7 @@ export interface PublisherReaderRailProps {
   readonly sync: SyncEnvelope | null;
 }
 
-type ReaderPanel = "outline" | "progress" | "search" | "bookmarks" | "settings" | "sync";
+type ReaderPanel = "outline" | "progress" | "audio" | "search" | "bookmarks" | "settings" | "sync";
 type ReaderSyncState = "idle" | "loading" | "signed-out" | "signed-in" | "unavailable";
 type ReaderBookmarkDeletion =
   | { readonly kind: "all" }
@@ -193,6 +195,7 @@ function panelLabel(panel: ReaderPanel): string {
   switch (panel) {
     case "outline": return "Contents";
     case "progress": return "Reading progress";
+    case "audio": return "Listen";
     case "search": return "Search";
     case "bookmarks": return "Bookmarks";
     case "settings": return "Reading settings";
@@ -286,6 +289,7 @@ function createClientEventId(now: number): string {
 
 export function PublisherReaderRail({
   breadcrumbs,
+  audioPath,
   publicationId,
   publicationTitle,
   readerBuildId,
@@ -809,7 +813,10 @@ export function PublisherReaderRail({
   }, [currentSection, progressStore, publicationId]);
 
   useEffect(() => {
-    if (openPanel !== "progress" || progressCatalogState !== "idle") return;
+    if (
+      (openPanel !== "progress" && openPanel !== "audio") ||
+      progressCatalogState !== "idle"
+    ) return;
     setProgressCatalogState("loading");
     void fetch(progressPath, { credentials: "same-origin" })
       .then((response) => {
@@ -1295,6 +1302,9 @@ export function PublisherReaderRail({
         <button aria-controls={panelId} aria-expanded={openPanel === "progress"} onClick={() => toggle("progress")} type="button">
           <RailIcon><path d="M12 3a9 9 0 1 1-9 9" /><path d="M12 7v5l3 2" /></RailIcon><span>Progress</span>
         </button>
+        <button aria-controls={panelId} aria-expanded={openPanel === "audio"} onClick={() => toggle("audio")} type="button">
+          <RailIcon><path d="M5 10v4h3l4 3V7L8 10Z" /><path d="M16 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12" /></RailIcon><span>Listen</span>
+        </button>
         <button aria-controls={panelId} aria-expanded={openPanel === "search"} onClick={() => toggle("search")} type="button">
           <RailIcon><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></RailIcon><span>Search</span>
         </button>
@@ -1311,7 +1321,18 @@ export function PublisherReaderRail({
         )}
       </div>
 
-      {openPanel === null ? null : (
+      <PublisherReaderNarration
+        active={openPanel === "audio"}
+        audioPath={audioPath}
+        {...(currentSection === undefined ? {} : { currentSectionId: currentSection.id })}
+        panelId={panelId}
+        progressCatalog={progressCatalog}
+        publicationId={publicationId}
+        readerBuildId={readerBuildId}
+        onClose={() => setOpenPanel(null)}
+      />
+
+      {openPanel === null || openPanel === "audio" ? null : (
         <section className="publisher-reader-panel" id={panelId} aria-label={panelLabel(openPanel)}>
           <header>
             <h2>{panelLabel(openPanel)}</h2>

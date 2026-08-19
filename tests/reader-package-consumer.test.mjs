@@ -414,6 +414,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     "bookmarks",
     "sync",
     "search",
+    "narration",
   ]) {
     assert.deepEqual(readerManifest.exports[`./${subpath}`], {
       types: `./dist/${subpath}.d.ts`,
@@ -889,6 +890,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         createReaderSearchTerms,
         type ReaderSearchIndex,
       } from "@genii-foundation/publisher-reader/search";
+      import {
+        createReaderNarrationPreferences,
+        type ReaderNarrationPreferences,
+      } from "@genii-foundation/publisher-reader/narration";
 
       declare const input: unknown;
       declare const envelope: PublicationReaderEnvelope;
@@ -929,6 +934,8 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         createReaderSyncCoordinatorState("portable-reader");
       declare const searchIndex: ReaderSearchIndex;
       const terms: readonly string[] = createReaderSearchTerms("portable");
+      const narration: ReaderNarrationPreferences =
+        createReaderNarrationPreferences();
       void [
         READER_PROJECTOR_VERSION,
         projected,
@@ -948,6 +955,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         sync,
         searchIndex,
         terms,
+        narration,
       ];
     `;
     await Promise.all([
@@ -1009,6 +1017,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       "bookmarks",
       "sync",
       "search",
+      "narration",
     ];
     const browserClosures = new Map();
     for (const subpath of browserSubpaths) {
@@ -1141,6 +1150,9 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       import {
         createReaderSearchTerms,
       } from "@genii-foundation/publisher-reader/search";
+      import {
+        createReaderNarrationPreferences,
+      } from "@genii-foundation/publisher-reader/narration";
 
       const digest = "sha256:" + "0".repeat(64);
       const envelope = {
@@ -1251,6 +1263,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         "portable",
         "reader",
       ]);
+      assert.equal(createReaderNarrationPreferences().playbackRate, 1);
       console.log("browser-runtime-ok");
     `;
     const proofOutput = run(
