@@ -4,6 +4,9 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Added server-owned linkable headings with hydrated adjacent copy actions and polite status reporting.
+- Added bounded pipe tables as labeled keyboard regions with column scope, alignment, narrow-viewport scrolling, safe inline Markdown, focus markup, and narration anchors.
+- Extended the clean packed-host Chrome proof through mobile table containment, keyboard focus, exact heading URL copy, and unchanged heading text.
 - Advanced the host contract to 0.9.0 with a pure build-bound offline catalog route and a generic service worker.
 - Added explicit work downloads with staged verification, atomic activation, retained complete versions after failure, dependency discovery, and visible update progress.
 - Restricted disconnected public search to installed works while retaining local bookmarks and full document navigation.

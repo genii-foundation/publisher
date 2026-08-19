@@ -40,6 +40,7 @@ import type {
 } from "../types.js";
 import { PublisherAttribution } from "./attribution.js";
 import {
+  PublisherLinkableHeading,
   PublisherMarkdownBlock,
   PublisherMarkdownInline,
 } from "./markdown.js";
@@ -211,31 +212,31 @@ function SectionContent({
     >
       {headingLevel === undefined
         ? null
-        : createElement(
-            `h${Math.min(6, Math.max(2, headingLevel))}`,
-            {
-              className: "publisher-section-title",
-              ...(headingBlock === null
+        : (
+            <PublisherLinkableHeading
+              block={headingBlock}
+              className="publisher-section-title"
+              level={
+                Math.min(6, Math.max(2, headingLevel)) as
+                  2 | 3 | 4 | 5 | 6
+              }
+              {...(headingBlockDomId === null
                 ? {}
-                : {
-                    "data-publisher-block": headingBlock.id,
-                  }),
-              ...(headingBlockDomId === null
-                ? {}
-                : { id: headingBlockDomId }),
-            },
-            headingBlock === null ? (
-              section.title
-            ) : (
-              <PublisherMarkdownInline
-                assetHrefs={assetHrefs}
-                markdown={markdownForBlock(
-                  workId,
-                  section.id,
-                  headingBlock,
-                )}
-              />
-            ),
+                : { id: headingBlockDomId })}
+            >
+              {headingBlock === null ? (
+                section.title
+              ) : (
+                <PublisherMarkdownInline
+                  assetHrefs={assetHrefs}
+                  markdown={markdownForBlock(
+                    workId,
+                    section.id,
+                    headingBlock,
+                  )}
+                />
+              )}
+            </PublisherLinkableHeading>
           )}
       {section.blocks.flatMap((block) =>
         block.id === omittedBlockId
@@ -343,10 +344,9 @@ function WorkPage({
       lang={page.work.language}
     >
       <header>
-        <h1
-          {...(titleBlock === null
-            ? {}
-            : { "data-publisher-block": titleBlock.id })}
+        <PublisherLinkableHeading
+          block={titleBlock}
+          level={1}
           {...(titleBlockDomId === null
             ? {}
             : { id: titleBlockDomId })}
@@ -363,7 +363,7 @@ function WorkPage({
               )}
             />
           )}
-        </h1>
+        </PublisherLinkableHeading>
         {page.work.subtitle === undefined ? null : (
           <p className="publisher-work-subtitle">{page.work.subtitle}</p>
         )}
@@ -463,10 +463,9 @@ function SectionPage({
             ))}
           </ol>
         </nav>
-        <h1
-          {...(headingBlock === null
-            ? {}
-            : { "data-publisher-block": headingBlock.id })}
+        <PublisherLinkableHeading
+          block={headingBlock}
+          level={1}
           {...(headingDomId === null
             ? {}
             : { id: headingDomId })}
@@ -483,7 +482,7 @@ function SectionPage({
               )}
             />
           )}
-        </h1>
+        </PublisherLinkableHeading>
       </header>
       <div className="publisher-manuscript">
         <SectionContent

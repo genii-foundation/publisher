@@ -8,7 +8,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 
 The renderer owns:
 
-- the publication shell, safe Markdown renderer, and ordinary HTML anchors
+- the publication shell, safe Markdown renderer, ordinary HTML anchors, adjacent heading actions, and accessible table regions
 - home, work, collection, section, and optional Updates page resolution
 - the persistent linked GENII Publisher footer and publication source link
 - one closed theme-token API
@@ -464,6 +464,19 @@ The renderer dispatches only from validated reader route targets. It does not in
 The home catalog lists published works and collections. Unlisted and archived works remain available at their declared direct routes. Preview reader envelopes may also render draft routes, but public reader envelopes omit drafts before this package receives them.
 
 Every work route contains the server-rendered manuscript. Section routes render focused sections with ordinary DOM IDs and adjacent-section navigation. Reader text remains available without client JavaScript.
+
+Addressable manuscript headings keep their exact server-rendered level, text,
+block identity, and DOM anchor. After hydration, one adjacent button copies the
+canonical absolute heading URL and reports success or failure without becoming
+part of the heading text. The button remains hidden without JavaScript.
+
+An adapter-classified `table` block with bounded pipe syntax, one header row,
+and one delimiter row renders as a named, keyboard-focusable horizontal region.
+Column headers retain `scope="col"`, cell alignment follows the delimiter, and
+inline content uses the same safe Markdown, focus, narration, link, image, and
+HTML refusal behavior as other blocks. Malformed or unequal rows remain ordinary
+manuscript text. The author adapter owns the plain block text used by search and
+narration. See [ADR 0047](../../docs/architecture/0047-accessible-manuscript-extensions.md).
 
 Validated `block-markdown` source links become ordinary anchors in manuscript blocks and normalized heading content. Semantic relationships remain reader data and do not become visible links. Application creation fails when a source range crosses Markdown structure or otherwise cannot be represented without changing the manuscript.
 

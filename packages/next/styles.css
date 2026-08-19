@@ -952,9 +952,107 @@ html[data-publisher-reader-motion="reduced"] *::after {
   margin-block: 0 1em;
 }
 
+.publisher-linkable-heading {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.publisher-linkable-heading > :is(h1, h2, h3, h4, h5, h6) {
+  min-width: 0;
+}
+
+.publisher-heading-action {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--publisher-color-accent);
+  cursor: pointer;
+  padding: 0;
+}
+
+.publisher-heading-action:hover,
+.publisher-heading-action:focus-visible {
+  border-color: var(--publisher-color-border);
+  background: var(--publisher-color-surface);
+}
+
+.publisher-heading-status {
+  position: fixed;
+  z-index: 1100;
+  right: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  max-width: calc(100vw - 2rem);
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--publisher-color-border);
+  border-radius: var(--publisher-control-radius);
+  background: var(--publisher-color-surface);
+  color: var(--publisher-color-text);
+  box-shadow: 0 0.8rem 2rem color-mix(in srgb, var(--publisher-color-text) 18%, transparent);
+  font-family: var(--publisher-font-mono);
+  font-size: 0.82rem;
+  transform: translateX(50%);
+}
+
+.publisher-heading-status[data-copy-status="failed"] {
+  border-color: var(--publisher-color-focus);
+}
+
 .publisher-markdown {
   min-width: 0;
   scroll-margin-top: var(--publisher-section-gap);
+}
+
+.publisher-table-region {
+  max-width: 100%;
+  margin-block: 1.25rem;
+  overflow-x: auto;
+  border-radius: var(--publisher-control-radius);
+}
+
+.publisher-table-region:focus-visible {
+  outline: 0.2rem solid var(--publisher-color-focus);
+  outline-offset: 0.16rem;
+}
+
+.publisher-table-region table {
+  width: 100%;
+  min-width: 36rem;
+  border-collapse: collapse;
+  font-family: var(--publisher-font-body);
+  font-size: 0.95em;
+  line-height: 1.45;
+}
+
+.publisher-table-region caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.publisher-table-region th,
+.publisher-table-region td {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--publisher-color-border);
+  vertical-align: top;
+}
+
+.publisher-table-region th {
+  background: var(--publisher-color-surface);
+  font-family: var(--publisher-font-heading);
+  font-weight: 700;
 }
 
 .publisher-markdown img,

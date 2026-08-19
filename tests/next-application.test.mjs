@@ -335,6 +335,8 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
   assert.match(firstHtml, /class="publisher-breadcrumbs"/u);
   assert.match(firstHtml, /aria-label="Breadcrumb"/u);
   assert.match(firstHtml, /aria-current="page">Opening<\/span>/u);
+  assert.match(firstHtml, /aria-label="Copy link to Opening"/u);
+  assert.match(firstHtml, /class="publisher-heading-action"[^>]*hidden=""/u);
   assert.match(semanticFirstHtml, /<em>safe<\/em>/);
   assert.match(
     semanticFirstHtml,
@@ -382,6 +384,12 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
   assert.doesNotMatch(secondHtml, /href="javascript:/iu);
   assert.doesNotMatch(secondHtml, /<a[^>]*>unsafe link<\/a>/iu);
   assert.doesNotMatch(secondHtml, /onerror=/iu);
+  assert.match(secondHtml, /class="publisher-table-region"/u);
+  assert.match(secondHtml, /role="region"/u);
+  assert.match(secondHtml, /tabindex="0"/u);
+  assert.match(secondHtml, /Reading window/u);
+  assert.match(secondHtml, /Tide height/u);
+  assert.equal(secondHtml.match(/scope="col"/gu)?.length, 2);
   assert.match(
     secondHtml,
     new RegExp(
@@ -1240,6 +1248,114 @@ test("Markdown focus markup preserves one text occurrence and existing emphasis"
     html.replace(/<[^>]+>/gu, ""),
     "Alpha, beta 123 and strong words with code words.",
   );
+});
+
+test("Markdown headings add a copy action beside owned manuscript text", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: {
+        id: "low-water-heading",
+        kind: "heading",
+        text: "Low water",
+        readerAddress: {
+          path: "/works/first-light/",
+          anchor: "low-water",
+        },
+        domId: "low-water",
+      },
+      markdown: "## Low water",
+      renderedPath: "/works/first-light/",
+    }),
+  );
+  const semanticHtml = withoutFocusMarkup(html);
+  assert.match(html, /class="publisher-linkable-heading"/u);
+  assert.match(semanticHtml, /<h2>Low water<\/h2>/u);
+  assert.match(html, /aria-label="Copy link to Low water"/u);
+  assert.match(
+    html,
+    /data-publisher-heading-href="\/works\/first-light\/#low-water"/u,
+  );
+  assert.match(html, /hidden=""/u);
+  assert.equal(html.replace(/<[^>]+>/gu, ""), "Low water");
+});
+
+test("Markdown tables become labeled keyboard regions without changing cells", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: {
+        id: "tide-table",
+        kind: "table",
+        text: "Reading window Tide height First light 1.4 m",
+        readerAddress: {
+          path: "/works/first-light/",
+          anchor: "tide-table",
+        },
+        domId: "tide-table",
+      },
+      markdown: [
+        "| Reading window | Tide height |",
+        "| :--- | ---: |",
+        "| First *light* | 1.4 m |",
+      ].join("\n"),
+      narrationWords: true,
+      renderedPath: "/works/first-light/",
+    }),
+  );
+  assert.match(html, /class="publisher-table-region"/u);
+  assert.match(html, /role="region"/u);
+  assert.match(html, /tabindex="0"/u);
+  assert.match(
+    html,
+    /aria-labelledby="publisher-table-tide-table"/u,
+  );
+  assert.match(html, /<caption id="publisher-table-tide-table">/u);
+  assert.equal(html.match(/scope="col"/gu)?.length, 2);
+  assert.match(html, /text-align:left/u);
+  assert.match(html, /text-align:right/u);
+  assert.match(withoutFocusMarkup(html), /<em>light<\/em>/u);
+  assert.ok(
+    (html.match(/data-publisher-narration-word="true"/gu)?.length ?? 0) > 0,
+  );
+});
+
+test("malformed table syntax remains ordinary manuscript text", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: {
+        id: "not-a-table",
+        kind: "table",
+        text: "A B C",
+        readerAddress: null,
+        domId: null,
+      },
+      markdown: "| A | B |\n| --- |\n| C | D |",
+      renderedPath: "/",
+    }),
+  );
+  assert.doesNotMatch(html, /publisher-table-region/u);
+  assert.match(withoutFocusMarkup(html), /\| A \| B \|/u);
+});
+
+test("pipe syntax requires an adapter-classified table block", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: {
+        id: "unclassified-table",
+        kind: "paragraph",
+        text: "A B C D",
+        readerAddress: null,
+        domId: null,
+      },
+      markdown: "| A | B |\n| --- | --- |\n| C | D |",
+      renderedPath: "/",
+    }),
+  );
+  assert.doesNotMatch(html, /publisher-table-region/u);
+  assert.match(withoutFocusMarkup(html), /\| --- \| --- \|/u);
 });
 
 test("narration anchors share the spoken word profile", () => {

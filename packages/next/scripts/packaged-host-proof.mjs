@@ -2382,6 +2382,129 @@ async function assertHydratedReaderTools({
   }
 }
 
+async function assertAccessibleManuscriptExtensions({
+  browser,
+  url,
+}) {
+  const page = await openDevToolsPage(browser);
+  try {
+    await page.send("Page.addScriptToEvaluateOnNewDocument", {
+      source: [
+        "Object.defineProperty(navigator, 'clipboard', {",
+        "  configurable: true,",
+        "  value: { writeText: async (text) => { globalThis.__publisherCopiedHeadingHref = text; } },",
+        "});",
+      ].join("\n"),
+    });
+    await page.send("Emulation.setDeviceMetricsOverride", {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
+    const navigation = await page.send("Page.navigate", { url });
+    assert.equal(
+      navigation.errorText,
+      undefined,
+      `Accessible manuscript navigation failed: ${navigation.errorText}`,
+    );
+    let ready;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const action = document.querySelector(".publisher-heading-action");',
+          '  const region = document.querySelector(".publisher-table-region");',
+          "  return {",
+          '    actionReady: action instanceof HTMLButtonElement && !action.hidden,',
+          '    regionReady: region instanceof HTMLElement,',
+          '    complete: document.readyState === "complete",',
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      ready = evaluated.result?.value;
+      if (
+        ready?.complete === true &&
+        ready.actionReady === true &&
+        ready.regionReady === true
+      ) {
+        break;
+      }
+      await wait(100);
+    }
+    assert.deepEqual(ready, {
+      actionReady: true,
+      regionReady: true,
+      complete: true,
+    });
+
+    const before = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const action = document.querySelector(".publisher-heading-action");',
+        '  const heading = action?.closest(".publisher-linkable-heading")?.querySelector("h1, h2, h3, h4, h5, h6");',
+        '  const region = document.querySelector(".publisher-table-region");',
+        '  const table = region?.querySelector("table");',
+        "  if (!(action instanceof HTMLButtonElement) || !(heading instanceof HTMLElement) || !(region instanceof HTMLElement) || !(table instanceof HTMLTableElement)) return null;",
+        "  action.focus();",
+        "  const target = action.dataset.publisherHeadingHref ?? '';",
+        "  action.click();",
+        "  region.focus();",
+        "  return {",
+        '    actionLabel: action.getAttribute("aria-label") ?? "",',
+        '    activeRegion: document.activeElement === region,',
+        '    caption: table.querySelector("caption")?.textContent ?? "",',
+        '    columnHeaders: table.querySelectorAll("th[scope=col]").length,',
+        '    headingText: heading.textContent ?? "",',
+        '    regionLabelledBy: region.getAttribute("aria-labelledby") ?? "",',
+        '    regionRole: region.getAttribute("role") ?? "",',
+        '    regionTabIndex: region.tabIndex,',
+        "    scrollContained: region.getBoundingClientRect().left >= 0 && region.getBoundingClientRect().right <= innerWidth + 1,",
+        "    scrollable: region.scrollWidth > region.clientWidth,",
+        "    target: new URL(target, location.origin).href,",
+        "  };",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.notEqual(before.result?.value, null);
+    assert.match(before.result.value.actionLabel, /^Copy link to /u);
+    assert.equal(before.result.value.activeRegion, true);
+    assert.ok(before.result.value.caption.startsWith("Table in "));
+    assert.equal(before.result.value.columnHeaders, 2);
+    assert.ok(before.result.value.headingText.length > 0);
+    assert.ok(before.result.value.regionLabelledBy.length > 0);
+    assert.equal(before.result.value.regionRole, "region");
+    assert.equal(before.result.value.regionTabIndex, 0);
+    assert.equal(before.result.value.scrollContained, true);
+    assert.equal(before.result.value.scrollable, true);
+
+    let copied;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "({",
+          '  copied: globalThis.__publisherCopiedHeadingHref ?? "",',
+          '  headingText: document.querySelector(".publisher-linkable-heading h1, .publisher-linkable-heading h2, .publisher-linkable-heading h3, .publisher-linkable-heading h4, .publisher-linkable-heading h5, .publisher-linkable-heading h6")?.textContent ?? "",',
+          '  status: document.querySelector(".publisher-heading-status")?.textContent ?? "",',
+          "})",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      copied = evaluated.result?.value;
+      if (copied?.status === "Link copied") break;
+      await wait(50);
+    }
+    assert.equal(copied?.copied, before.result.value.target);
+    assert.equal(copied?.headingText, before.result.value.headingText);
+    assert.equal(copied?.status, "Link copied");
+  } finally {
+    page.close();
+  }
+}
+
 async function assertOfflineReaderTools({
   browser,
   destinationUrl,
@@ -3952,6 +4075,7 @@ export async function runPackagedHostProof(
     let frameworkErrorStatuses;
     let runtimeErrorStatus;
     let imageContentType;
+    let manuscriptExtensionsVerified = false;
     let readerToolsHydrationVerified = false;
     let offlineReaderVerified = false;
     try {
@@ -4028,6 +4152,17 @@ export async function runPackagedHostProof(
           url: `${host.origin}${sectionPath}`,
         });
         readerToolsHydrationVerified = true;
+        const tableRoute = reader.routes.active.find(
+          ({ target }) =>
+            target.kind === "section" &&
+            target.sectionId === "published-closing",
+        );
+        assert.notEqual(tableRoute, undefined);
+        await assertAccessibleManuscriptExtensions({
+          browser,
+          url: `${host.origin}${tableRoute.path}`,
+        });
+        manuscriptExtensionsVerified = true;
         const timedRoute = reader.routes.active.find(
           ({ target }) =>
             target.kind === "section" &&
@@ -4390,6 +4525,7 @@ export async function runPackagedHostProof(
       auditVulnerabilities:
         audit.metadata.vulnerabilities.total,
       browserHydrationVerified: browser !== undefined,
+      manuscriptExtensionsVerified,
       offlineReaderVerified,
       readerToolsHydrationVerified,
       globalErrorStatus,

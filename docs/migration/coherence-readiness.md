@@ -42,9 +42,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 39 upgraded | 39 | Publisher implements a stronger checked contract. |
+| 41 upgraded | 41 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 3 planned | 3 | Accepted Publisher scope is not implemented yet. |
+| 1 planned | 1 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -283,10 +283,12 @@ Markdown rendering gained safer hierarchy behavior, heading actions, and
 keyboard-focusable labeled table regions.
 
 The official renderer now supplies one viewport-bounded rail, mobile bottom
-controls, keyboard focus, reduced motion, and dark and black reading modes. Table
-regions, heading actions, bookmark margin markers, and publication-specific
-dimensions, icons, copy, palette, and branded motion remain theme or publication
-choices.
+controls, keyboard focus, reduced motion, dark and black reading modes, exact
+adjacent heading copy actions, and labeled horizontally scrollable table regions.
+The server retains the heading and cell text. Hydrated code owns only clipboard
+interaction, while the table wrapper owns only access and scrolling. Bookmark
+margin markers and publication-specific dimensions, icons, copy, palette, and
+branded motion remain theme or publication choices.
 
 ## Current Publisher strengths
 
@@ -346,9 +348,8 @@ sections, and 10,000 continuity redirects.
 The following are accepted scope, not release blockers waiting for another
 product decision:
 
-1. Complete accessible manuscript table regions and heading extension slots.
-2. Add exact local preview candidate identity for branch, commit, worktree, and bytes.
-3. Adopt Coherence through a reviewed migration plan with dual-read or
+1. Add exact local preview candidate identity for branch, commit, worktree, and bytes.
+2. Adopt Coherence through a reviewed migration plan with dual-read or
    copy-and-verify state compatibility.
 
 ## Material that remains Coherence-owned
