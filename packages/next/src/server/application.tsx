@@ -76,6 +76,9 @@ import {
 import {
   PublisherReaderOfflineProvider,
 } from "../client/reader-offline-provider.js";
+import {
+  PublisherReaderPrepaint,
+} from "../client/reader-prepaint.js";
 import type {
   PublisherNextMarkdownForBlock,
 } from "../components/pages.js";
@@ -2832,7 +2835,15 @@ export async function createPublicationNextApplication(
         children,
       }: PublisherNextRootLayoutProps): ReactElement {
         return (
-          <html lang={reader.publication.language}>
+          <html
+            lang={reader.publication.language}
+            suppressHydrationWarning
+          >
+            <head>
+              <PublisherReaderPrepaint
+                publicationId={reader.publicationId}
+              />
+            </head>
             <body>
               <PublisherReaderOfflineProvider
                 catalogPath={offlineCatalog.catalogHref}

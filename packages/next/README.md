@@ -25,6 +25,13 @@ tabs, and canonically equal replacements cause no write or render churn. A
 stable empty server snapshot preserves hydration, while unavailable browser
 persistence leaves the current tab's in-memory reading state usable.
 
+The root layout applies one bounded, publication-scoped preference document
+before body paint. It accepts only the complete Reader preference schema and
+the renderer's closed value policy. Invalid or unavailable storage leaves the
+server defaults untouched. The hydrated Reader then parses the same document
+through the framework-neutral contract and owns every later change. See
+[ADR 0055](../../docs/architecture/0055-reader-preference-prepaint.md).
+
 Passage selection and bookmark markers share one renderer text coordinate
 system. It excludes adjacent controls and status text from canonical manuscript
 offsets and measured rectangles, while leaving those controls available to

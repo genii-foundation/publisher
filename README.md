@@ -27,7 +27,7 @@ scripts, what they require, and which gate currently stops them.
 
 ## Ownership boundary
 
-GENII Publisher owns the generic schema, compiler, reader, renderer, optional adapters, migration framework, and validation contracts. The schema, compiler, reader, and initial renderer exist now. Optional adapters and the migration framework remain 1.0 work.
+GENII Publisher owns the generic schema, compiler, reader, renderer, optional adapters, migration framework, and validation contracts. Those package boundaries and their neutral proofs exist now. Public release infrastructure and reviewed Coherence adoption remain 1.0 work.
 
 Each publication repository owns its manuscripts, editorial evidence, assets, configuration, route continuity, deployment history, credentials, and provider state. A build or preview may read publication sources, but it must not modify them.
 

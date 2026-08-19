@@ -134,8 +134,11 @@ interface now includes the font-family field restricted to the renderer's closed
 publication policy. The Markdown renderer now emits deterministic focus segments
 during server rendering while preserving one exact text occurrence, semantic
 strong and code content, selection ranges, bookmark offsets, and assistive text.
-Prepaint application and theme-declared font choices remain planned. Publication
-fonts, labels, colors, and defaults remain theme data.
+Publisher now applies one fully validated, publication-scoped preference
+document before body paint. Invalid or oversized storage leaves the server
+defaults untouched. The packed host verifies the actual selected background and
+text scale with hydration scripts blocked. Theme-declared font choices remain
+planned. Publication fonts, labels, colors, and defaults remain theme data.
 
 ### Search and capability-sliced data
 

@@ -34,32 +34,32 @@ If you wish to allow use of your version of this file only under the terms of th
 
 html[data-publisher-reader-scheme="light"] .publisher-root,
 html[data-publisher-reader-scheme="light"] .publisher-reader-audio-host {
-  --publisher-color-canvas: #f5f7f4;
-  --publisher-color-surface: #fcfdfb;
-  --publisher-color-text: #162225;
-  --publisher-color-muted-text: #526166;
-  --publisher-color-accent: #18586c;
-  --publisher-color-focus: #9a4e00;
-  --publisher-color-border: #c8d0cf;
+  --publisher-color-canvas: #f5f7f4 !important;
+  --publisher-color-surface: #fcfdfb !important;
+  --publisher-color-text: #162225 !important;
+  --publisher-color-muted-text: #526166 !important;
+  --publisher-color-accent: #18586c !important;
+  --publisher-color-focus: #9a4e00 !important;
+  --publisher-color-border: #c8d0cf !important;
 }
 
 html[data-publisher-reader-scheme="dark"] .publisher-root,
 html[data-publisher-reader-scheme="black"] .publisher-root,
 html[data-publisher-reader-scheme="dark"] .publisher-reader-audio-host,
 html[data-publisher-reader-scheme="black"] .publisher-reader-audio-host {
-  --publisher-color-canvas: #11191b;
-  --publisher-color-surface: #182326;
-  --publisher-color-text: #f1f4ef;
-  --publisher-color-muted-text: #b8c3c4;
-  --publisher-color-accent: #86d0e0;
-  --publisher-color-focus: #f0ae54;
-  --publisher-color-border: #3d5055;
+  --publisher-color-canvas: #11191b !important;
+  --publisher-color-surface: #182326 !important;
+  --publisher-color-text: #f1f4ef !important;
+  --publisher-color-muted-text: #b8c3c4 !important;
+  --publisher-color-accent: #86d0e0 !important;
+  --publisher-color-focus: #f0ae54 !important;
+  --publisher-color-border: #3d5055 !important;
 }
 
 html[data-publisher-reader-scheme="black"] .publisher-root,
 html[data-publisher-reader-scheme="black"] .publisher-reader-audio-host {
-  --publisher-color-canvas: #000;
-  --publisher-color-surface: #0d1011;
+  --publisher-color-canvas: #000 !important;
+  --publisher-color-surface: #0d1011 !important;
 }
 
 .publisher-root a,

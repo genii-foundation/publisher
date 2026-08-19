@@ -466,6 +466,15 @@ test("authored work languages and English renderer chrome are scoped", async () 
     }),
   );
   assert.match(root, /<html lang="fr">/u);
+  assert.match(root, /data-publisher-reader-prepaint=""/u);
+  assert.match(
+    root,
+    /genii\.publisher\.reader\.preferences\.v1\.renderer-proof/u,
+  );
+  assert.ok(
+    root.indexOf("data-publisher-reader-prepaint") <
+      root.indexOf("<body>"),
+  );
   assert.match(root, /<h2 id="publisher-works-heading" lang="en">/u);
   assert.match(root, /class="publisher-skip-link"[^>]*lang="en"/u);
 

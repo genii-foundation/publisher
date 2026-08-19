@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Applied bounded publication-scoped Reader appearance preferences before body paint and verified them without hydration.
+- Corrected color scheme precedence so selected light, dark, and black palettes override initial inline theme defaults.
 - Advanced the host contract to 0.14.0 with awaited exact extension request dispatch through generated Proxy.
 - Added namespaced extension handlers with method enforcement, one-megabyte detached request bodies, validated responses, framework-header refusal, and generic failure containment.
 - Extended the independently packed extension with a real POST handler and unsupported-method proof while keeping handler data out of browser chunks.

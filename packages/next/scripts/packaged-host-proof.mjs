@@ -2610,6 +2610,82 @@ async function assertHydratedReaderTools({
   }
 }
 
+async function assertReaderPreferencePrepaint({
+  browser,
+  publicationId,
+  url,
+}) {
+  const page = await openDevToolsPage(browser);
+  const storageKey =
+    `genii.publisher.reader.preferences.v1.${publicationId}`;
+  try {
+    await page.send("Network.enable");
+    await page.send("Network.setBlockedURLs", {
+      urls: ["*.js", "*.mjs"],
+    });
+    await page.send("Page.addScriptToEvaluateOnNewDocument", {
+      source: [
+        "try {",
+        `  localStorage.setItem(${JSON.stringify(storageKey)}, ${JSON.stringify(JSON.stringify({
+          schemaVersion: 1,
+          fontScale: 120,
+          fontFamilyId: "serif",
+          colorScheme: "black",
+          motion: "reduced",
+          highlights: false,
+          focus: "strong",
+        }))});`,
+        "} catch {}",
+      ].join("\n"),
+    });
+    const navigation = await page.send("Page.navigate", { url });
+    assert.equal(
+      navigation.errorText,
+      undefined,
+      `Reader prepaint navigation failed: ${navigation.errorText}`,
+    );
+    let result;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const root = document.querySelector(".publisher-root");',
+          "  if (!(root instanceof HTMLElement)) return null;",
+          "  const style = getComputedStyle(root);",
+          "  return {",
+          "    backgroundColor: style.backgroundColor,",
+          "    focus: document.documentElement.dataset.publisherReaderFocus ?? null,",
+          '    fontScale: document.documentElement.style.getPropertyValue("--publisher-reader-font-scale"),',
+          "    highlights: document.documentElement.dataset.publisherReaderHighlights ?? null,",
+          "    motion: document.documentElement.dataset.publisherReaderMotion ?? null,",
+          "    scheme: document.documentElement.dataset.publisherReaderScheme ?? null,",
+          "    scripts: Array.from(document.scripts).map((script) => script.src).filter(Boolean),",
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      result = evaluated.result?.value;
+      if (result !== null && result !== undefined) break;
+      await wait(50);
+    }
+    assert.notEqual(result, null);
+    assert.notEqual(result, undefined);
+    assert.equal(result.scheme, "black");
+    assert.equal(result.motion, "reduced");
+    assert.equal(result.focus, "strong");
+    assert.equal(result.highlights, "off");
+    assert.equal(result.fontScale, "1.2");
+    assert.equal(result.backgroundColor, "rgb(0, 0, 0)");
+    assert.ok(result.scripts.length > 0);
+  } finally {
+    await page.send("Runtime.evaluate", {
+      expression: `try { localStorage.removeItem(${JSON.stringify(storageKey)}); } catch {}`,
+    }).catch(() => undefined);
+    page.close();
+  }
+}
+
 async function assertAccessibleManuscriptExtensions({
   browser,
   url,
@@ -4617,6 +4693,7 @@ export async function runPackagedHostProof(
     let extensionClientHydrationVerified = false;
     let extensionHandlerVerified = false;
     let manuscriptExtensionsVerified = false;
+    let readerPrepaintVerified = false;
     let readerToolsHydrationVerified = false;
     let offlineReaderVerified = false;
     try {
@@ -4720,6 +4797,12 @@ export async function runPackagedHostProof(
           ({ target }) => target.kind === "section",
         )?.path;
         assert.equal(typeof sectionPath, "string");
+        await assertReaderPreferencePrepaint({
+          browser,
+          publicationId: reader.publicationId,
+          url: `${host.origin}${homeRoute.path}`,
+        });
+        readerPrepaintVerified = true;
         await assertHydratedExtensionClient({
           browser,
           clientDataSentinel: packedExtensionClientDataSentinel,
@@ -5111,6 +5194,7 @@ export async function runPackagedHostProof(
       extensionHandlerVerified,
       manuscriptExtensionsVerified,
       offlineReaderVerified,
+      readerPrepaintVerified,
       readerToolsHydrationVerified,
       globalErrorStatus,
       frameworkErrorStatuses,
