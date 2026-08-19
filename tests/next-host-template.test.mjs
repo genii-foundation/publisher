@@ -197,7 +197,21 @@ test("the host contract declares exactly the author host file set", () => {
         "Add publisher.extensions.mjs when the publication manifest declares extensions, importing each separately installed extension package explicitly.",
       ],
     },
+    {
+      from: "0.11.0",
+      to: "0.12.0",
+      summary:
+        "Declare the device-width viewport required by mobile Reader controls and extension surfaces.",
+    },
   ]);
+});
+
+test("the App Router layout declares the mobile viewport", () => {
+  const layout = contentsOf(template(), "app/layout.tsx");
+  assert.match(layout, /import type \{ Viewport \} from "next";/u);
+  assert.match(layout, /export const viewport: Viewport = \{/u);
+  assert.match(layout, /initialScale: 1/u);
+  assert.match(layout, /width: "device-width"/u);
 });
 
 test("offline host files expose only generic cache and catalog contracts", () => {

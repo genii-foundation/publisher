@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.11.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.12.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -246,12 +246,18 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.10.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.11.0",
       summary:
         "Connect explicit author extension registration and build-bound server slot data to the official host.",
       manualSteps: Object.freeze([
         "Add publisher.extensions.mjs when the publication manifest declares extensions, importing each separately installed extension package explicitly.",
       ]),
+    }),
+    Object.freeze({
+      from: "0.11.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Declare the device-width viewport required by mobile Reader controls and extension surfaces.",
     }),
   ]);
 
@@ -832,7 +838,13 @@ export function createPublisherNextHostTemplate(
       path: "app/layout.tsx",
       contents: lines(
         'import "@genii-foundation/publisher-next/styles.css";',
+        'import type { Viewport } from "next";',
         'import { application } from "../publisher-application.js";',
+        "",
+        "export const viewport: Viewport = {",
+        "  initialScale: 1,",
+        '  width: "device-width",',
+        "};",
         "",
         "export default function RootLayout(",
         "  props: Parameters<typeof application.RootLayout>[0],",

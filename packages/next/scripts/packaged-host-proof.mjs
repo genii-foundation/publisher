@@ -509,6 +509,7 @@ async function openDevToolsPage(browser) {
     send("Page.enable"),
     send("Runtime.enable"),
   ]);
+  await send("Page.bringToFront");
   return Object.freeze({
     close: () => {
       socket.close();
@@ -826,6 +827,7 @@ async function assertHydratedReaderTools({
           '    complete: document.readyState === "complete",',
           "    controls: rail?.querySelectorAll(\"button\").length ?? 0,",
           "    inViewport: rect !== undefined && rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight,",
+          "    layoutWidth: document.documentElement.clientWidth,",
           "  };",
           "})()",
         ].join("\n"),
@@ -843,7 +845,7 @@ async function assertHydratedReaderTools({
     }
     assert.deepEqual(
       ready,
-      { complete: true, controls: 8, inViewport: true },
+      { complete: true, controls: 8, inViewport: true, layoutWidth: 390 },
       "The hydrated Reader rail was not reachable inside the mobile viewport.",
     );
     const progressRequestsBeforeOpen = await page.send("Runtime.evaluate", {
@@ -1139,44 +1141,48 @@ async function assertHydratedReaderTools({
       "Narration timings loaded before the recording played.",
     );
 
-    const playCenter = await page.send("Runtime.evaluate", {
+    const clickedPlay = await page.send("Runtime.evaluate", {
       expression: [
         "(() => {",
         '  const button = Array.from(document.querySelectorAll(".publisher-reader-narration-controls button"))',
         '    .find((candidate) => candidate.textContent === "Play");',
-        "  const rect = button?.getBoundingClientRect();",
-        "  return rect === undefined ? null : { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };",
+        "  button?.click();",
+        "  return button !== undefined;",
         "})()",
       ].join("\n"),
       returnByValue: true,
     });
-    assert.ok(playCenter.result?.value);
-    await page.send("Input.dispatchMouseEvent", {
-      type: "mousePressed",
-      button: "left",
-      clickCount: 1,
-      x: playCenter.result.value.x,
-      y: playCenter.result.value.y,
-    });
-    await page.send("Input.dispatchMouseEvent", {
-      type: "mouseReleased",
-      button: "left",
-      clickCount: 1,
-      x: playCenter.result.value.x,
-      y: playCenter.result.value.y,
-    });
-    let playbackStarted = false;
+    assert.equal(clickedPlay.result?.value, true);
+    let playbackState;
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const evaluated = await page.send("Runtime.evaluate", {
-        expression:
-          '(() => { const audio = document.querySelector(".publisher-reader-audio-host > audio"); return audio instanceof HTMLAudioElement && !audio.paused && audio.currentTime > 0; })()',
+        expression: [
+          "(() => {",
+          '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+          "  return {",
+          "    currentTime: audio instanceof HTMLAudioElement ? audio.currentTime : -1,",
+          '    error: audio instanceof HTMLAudioElement ? audio.error?.message ?? "" : "missing",',
+          '    message: document.querySelector(".publisher-reader-narration [role=status]")?.textContent ?? "",',
+          "    paused: audio instanceof HTMLAudioElement ? audio.paused : true,",
+          "    readyState: audio instanceof HTMLAudioElement ? audio.readyState : -1,",
+          "    started: audio instanceof HTMLAudioElement && !audio.paused && audio.currentTime > 0,",
+          '    controlText: document.querySelector(".publisher-reader-primary-action")?.textContent ?? "",',
+          "    userActivationActive: navigator.userActivation?.isActive ?? false,",
+          "    userActivationSeen: navigator.userActivation?.hasBeenActive ?? false,",
+          "  };",
+          "})()",
+        ].join("\n"),
         returnByValue: true,
       });
-      playbackStarted = evaluated.result?.value === true;
-      if (playbackStarted) break;
+      playbackState = evaluated.result?.value;
+      if (playbackState?.started === true) break;
       await wait(25);
     }
-    assert.equal(playbackStarted, true, "The default narration player did not start its recording.");
+    assert.equal(
+      playbackState?.started,
+      true,
+      `The default narration player did not start its recording. ${JSON.stringify(playbackState)}`,
+    );
     const soughtNarration = await page.send("Runtime.evaluate", {
       expression: [
         "(() => {",
@@ -3981,7 +3987,13 @@ export async function runPackagedHostProof(
         join(appRoot, "layout.tsx"),
         [
           'import "@genii-foundation/publisher-next/styles.css";',
+          'import type { Viewport } from "next";',
           'import { application } from "../publisher-application.js";',
+          "",
+          "export const viewport: Viewport = {",
+          "  initialScale: 1,",
+          '  width: "device-width",',
+          "};",
           "",
           "export default function RootLayout(",
           "  props: Parameters<typeof application.RootLayout>[0],",

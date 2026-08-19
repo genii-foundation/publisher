@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Advanced the host contract to 0.12.0 with the device-width viewport required for reachable mobile Reader controls and extension surfaces.
+- Corrected the mobile Chrome proof to reject scaled layout viewports and activate playback through the hydrated control.
 - Added the fixed `page.client` extension mount with exact grants, isolated browser projection, narrow page context, and engine-owned error containment.
 - Extended the packed extension through a real Client Component, static chunk separation, hydrated interaction, and contained failure proof.
 - Advanced the host contract to 0.11.0 with explicit author extension registration and a required build-bound extension artifact.

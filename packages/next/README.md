@@ -154,8 +154,14 @@ Use the engine layout and structural stylesheet.
 ```tsx
 // app/layout.tsx
 import "@genii-foundation/publisher-next/styles.css";
+import type { Viewport } from "next";
 
 import { publisher } from "../publisher.mjs";
+
+export const viewport: Viewport = {
+  initialScale: 1,
+  width: "device-width",
+};
 
 export default publisher.RootLayout;
 ```
