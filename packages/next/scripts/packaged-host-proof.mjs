@@ -2664,6 +2664,18 @@ async function assertReaderPreferencePrepaint({
   const page = await openDevToolsPage(browser);
   const storageKey =
     `genii.publisher.reader.preferences.v1.${publicationId}`;
+  const legacyStorageKey = "packed-reader-preferences-v1";
+  const reportStorageKey =
+    `genii.publisher.reader-state-bootstrap.v1.${publicationId}`;
+  const preferenceDocument = JSON.stringify({
+    schemaVersion: 1,
+    fontScale: 120,
+    fontFamilyId: readerFontFamilyId,
+    colorScheme: "black",
+    motion: "reduced",
+    highlights: false,
+    focus: "strong",
+  });
   try {
     await page.send("Network.enable");
     await page.send("Network.setBlockedURLs", {
@@ -2672,15 +2684,8 @@ async function assertReaderPreferencePrepaint({
     await page.send("Page.addScriptToEvaluateOnNewDocument", {
       source: [
         "try {",
-        `  localStorage.setItem(${JSON.stringify(storageKey)}, ${JSON.stringify(JSON.stringify({
-          schemaVersion: 1,
-          fontScale: 120,
-          fontFamilyId: readerFontFamilyId,
-          colorScheme: "black",
-          motion: "reduced",
-          highlights: false,
-          focus: "strong",
-        }))});`,
+        `  localStorage.removeItem(${JSON.stringify(storageKey)});`,
+        `  localStorage.setItem(${JSON.stringify(legacyStorageKey)}, ${JSON.stringify(preferenceDocument)});`,
         "} catch {}",
       ].join("\n"),
     });
@@ -2700,11 +2705,15 @@ async function assertReaderPreferencePrepaint({
           "  const style = getComputedStyle(root);",
           "  return {",
           "    backgroundColor: style.backgroundColor,",
+          "    bootstrapStatus: document.documentElement.dataset.publisherReaderStateBootstrap ?? null,",
           "    focus: document.documentElement.dataset.publisherReaderFocus ?? null,",
           '    fontFamily: document.documentElement.style.getPropertyValue("--publisher-reader-font-family"),',
           '    fontScale: document.documentElement.style.getPropertyValue("--publisher-reader-font-scale"),',
           "    highlights: document.documentElement.dataset.publisherReaderHighlights ?? null,",
           "    motion: document.documentElement.dataset.publisherReaderMotion ?? null,",
+          `    legacy: localStorage.getItem(${JSON.stringify(legacyStorageKey)}),`,
+          `    migrated: localStorage.getItem(${JSON.stringify(storageKey)}),`,
+          `    report: JSON.parse(localStorage.getItem(${JSON.stringify(reportStorageKey)}) ?? "null"),`,
           "    scheme: document.documentElement.dataset.publisherReaderScheme ?? null,",
           "    scripts: Array.from(document.scripts).map((script) => script.src).filter(Boolean),",
           "  };",
@@ -2725,10 +2734,25 @@ async function assertReaderPreferencePrepaint({
     assert.equal(result.fontFamily, readerFontFamily);
     assert.equal(result.fontScale, "1.2");
     assert.equal(result.backgroundColor, "rgb(0, 0, 0)");
+    assert.equal(result.bootstrapStatus, "completed");
+    assert.equal(result.legacy, preferenceDocument);
+    assert.equal(result.migrated, preferenceDocument);
+    assert.deepEqual(result.report, {
+      schemaVersion: "1.0",
+      adapter: {
+        package: "@example/packed-reader-state-bootstrap",
+        version: "1.0.0",
+        sourceHash: result.report.adapter.sourceHash,
+      },
+      status: "completed",
+      copied: ["preferences"],
+      refused: [],
+    });
+    assert.match(result.report.adapter.sourceHash, /^sha256:[0-9a-f]{64}$/u);
     assert.ok(result.scripts.length > 0);
   } finally {
     await page.send("Runtime.evaluate", {
-      expression: `try { localStorage.removeItem(${JSON.stringify(storageKey)}); } catch {}`,
+      expression: `try { for (const key of ${JSON.stringify([storageKey, legacyStorageKey, reportStorageKey])}) localStorage.removeItem(key); } catch {}`,
     }).catch(() => undefined);
     page.close();
   }
@@ -4264,6 +4288,38 @@ export async function runPackagedHostProof(
           'import { definePublisherNextHostConfig } from "@genii-foundation/publisher-next/server/sync";',
           "",
           "export default definePublisherNextHostConfig({",
+          "  readerStateBootstrap: {",
+          '    package: "@example/packed-reader-state-bootstrap",',
+          '    version: "1.0.0",',
+          '    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",',
+          "    config: {},",
+          "    implementation: {",
+          '      kind: "genii.publisher.next-reader-state-bootstrap",',
+          '      apiVersion: "1.0",',
+          "      configure() {",
+          "        return {",
+          "          valid: true,",
+          "          value: {",
+          "            createSource() {",
+          "              return {",
+          "                valid: true,",
+          "                value: [",
+          '                  \'const legacy = localStorage.getItem("packed-reader-preferences-v1");\',',
+          "                  'if (legacy !== null && localStorage.getItem(context.targetStorageKeys.preferences) === null) {',",
+          "                  '  localStorage.setItem(context.targetStorageKeys.preferences, legacy);',",
+          '                  \'  return { schemaVersion: "1.0", copied: ["preferences"], refused: [] };\',',
+          "                  '}',",
+          '                  \'return { schemaVersion: "1.0", copied: [], refused: [] };\',',
+          '                ].join("\\n"),',
+          "                diagnostics: [],",
+          "              };",
+          "            },",
+          "          },",
+          "          diagnostics: [],",
+          "        };",
+          "      },",
+          "    },",
+          "  },",
           "  syncProvider: {",
           '    kind: "genii.publisher.sync-provider",',
           '    package: "@example/packed-sync-provider",',

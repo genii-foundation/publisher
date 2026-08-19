@@ -38,7 +38,7 @@ import type {
 } from "./error-identity.js";
 
 export const PUBLISHER_NEXT_VERSION = "0.1.0-alpha.0";
-export const PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION = "1.0";
+export const PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION = "1.1";
 export const PUBLISHER_NEXT_APPLICATION_SCHEMA_URL =
   "https://publisher.genii.foundation/schemas/next-application-manifest.schema.json";
 export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_KIND =
@@ -49,6 +49,12 @@ export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH =
   "renderers/next/application.json";
 export const PUBLISHER_NEXT_THEME_API_VERSION = "2.0";
 export const PUBLISHER_NEXT_UPDATES_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION =
+  "1.0";
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_REPORT_SCHEMA_VERSION =
+  "1.0";
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES =
+  32_768;
 export const PUBLISHER_NEXT_EXTENSION_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES =
@@ -194,6 +200,54 @@ export interface PublisherNextReaderFontFamily {
   readonly id: string;
   readonly label: string;
   readonly family: string;
+}
+
+export interface PublisherNextReaderStateBootstrapContext {
+  readonly publicationId: string;
+  readonly reportStorageKey: string;
+  readonly targetStorageKeys: {
+    readonly bookmarks: string;
+    readonly engagement: string;
+    readonly narrationPreferences: string;
+    readonly preferences: string;
+    readonly progress: string;
+    readonly syncConsent: string;
+  };
+}
+
+export interface PublisherNextReaderStateBootstrapReport {
+  readonly schemaVersion:
+    typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_REPORT_SCHEMA_VERSION;
+  readonly copied: readonly string[];
+  readonly refused: readonly string[];
+}
+
+export interface PublisherNextReaderStateBootstrapInstance {
+  /**
+   * Return a synchronous JavaScript function body. The renderer executes it in
+   * the initial HTML head with one frozen `context` argument before Reader state is
+   * read. The body must return a closed bootstrap report.
+   */
+  readonly createSource: (
+    context: PublisherNextReaderStateBootstrapContext,
+  ) => ValidationResult<string>;
+}
+
+export interface PublisherNextReaderStateBootstrap {
+  readonly kind: "genii.publisher.next-reader-state-bootstrap";
+  readonly apiVersion:
+    typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION;
+  readonly configure: (
+    config: PublisherNextJsonObject,
+  ) => ValidationResult<PublisherNextReaderStateBootstrapInstance>;
+}
+
+export interface ResolvedPublisherNextReaderStateBootstrap {
+  readonly package: string;
+  readonly version: string;
+  readonly rendererCompatibility: string;
+  readonly config: PublisherNextJsonObject;
+  readonly implementation: PublisherNextReaderStateBootstrap;
 }
 
 export interface PublisherNextThemeInstance {
@@ -358,6 +412,15 @@ export interface PublisherNextApplicationManifest {
     readonly configHash: Sha256Digest;
     readonly viewHash: Sha256Digest;
   } | null;
+  readonly readerStateBootstrap: {
+    readonly package: string;
+    readonly version: string;
+    readonly rendererCompatibility: string;
+    readonly apiVersion:
+      typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION;
+    readonly configHash: Sha256Digest;
+    readonly sourceHash: Sha256Digest;
+  } | null;
   readonly extensions: {
     readonly schemaVersion: "1.0";
     readonly buildId: Sha256Digest;
@@ -472,6 +535,8 @@ export interface CreatePublicationNextApplicationOptions {
   readonly audioData?: unknown;
   readonly extensionData?: unknown;
   readonly extensions?: unknown;
+  readonly readerStateBootstrap?:
+    ResolvedPublisherNextReaderStateBootstrap;
   readonly syncData?: unknown;
   readonly theme?: ResolvedPublisherNextTheme;
   readonly updates?: ResolvedPublisherNextUpdates;

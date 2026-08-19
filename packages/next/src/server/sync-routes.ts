@@ -19,6 +19,9 @@ import type {
   SyncCapability,
   SyncEnvelope,
 } from "@genii-foundation/publisher-schema";
+import type {
+  ResolvedPublisherNextReaderStateBootstrap,
+} from "../types.js";
 
 export type PublisherSyncAccountDeletionResult =
   | "deleted"
@@ -136,6 +139,8 @@ export interface PublisherNextSyncRoutes {
 }
 
 export interface PublisherNextHostConfig {
+  readonly readerStateBootstrap?:
+    ResolvedPublisherNextReaderStateBootstrap;
   readonly syncProvider?: PublisherNextSyncProvider;
 }
 
@@ -151,14 +156,31 @@ export function definePublisherNextHostConfig(
   } catch {
     throw new TypeError("Publisher host configuration could not be inspected.");
   }
-  if (keys.some((key) => key !== "syncProvider")) {
+  if (
+    keys.some(
+      (key) =>
+        key !== "readerStateBootstrap" && key !== "syncProvider",
+    )
+  ) {
     throw new TypeError("Publisher host configuration contains an unsupported field.");
   }
-  if (!keys.includes("syncProvider")) {
-    return Object.freeze({});
-  }
   return Object.freeze({
-    syncProvider: exactDataProperty(config, "syncProvider") as PublisherNextSyncProvider,
+    ...(keys.includes("readerStateBootstrap")
+      ? {
+          readerStateBootstrap: exactDataProperty(
+            config,
+            "readerStateBootstrap",
+          ) as ResolvedPublisherNextReaderStateBootstrap,
+        }
+      : {}),
+    ...(keys.includes("syncProvider")
+      ? {
+          syncProvider: exactDataProperty(
+            config,
+            "syncProvider",
+          ) as PublisherNextSyncProvider,
+        }
+      : {}),
   });
 }
 

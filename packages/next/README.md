@@ -833,6 +833,38 @@ Next.js 16.2.12 otherwise resolves versions affected by four high-severity advis
 
 The attributed framework-error gate is also closed. The package supplies separate client-safe error components, the complete host contract wires every required framework surface, and the automated proof checks static, runtime, and hydrated browser behavior.
 
+## Legacy Reader state
+
+An existing publication may register one temporary Reader state bootstrap in
+`publisher.config.ts`. The adapter is trusted author code. It configures on the
+server and returns a synchronous JavaScript function body for the document head.
+Publisher supplies a frozen publication ID, a report key, and target keys derived
+by the framework-neutral Reader contracts. The body runs before preference
+prepaint and before hydrated stores read local state.
+
+The body must return a version 1.0 report with unique bounded `copied` and
+`refused` labels. It must preserve every legacy key, refuse lossy translations,
+leave an existing Publisher value unchanged, and be safe to run again. Publisher
+contains throws, rejects script escape sequences, limits source to 32,768 UTF-8
+bytes, and records a deterministic report without private values. The adapter
+identity, configuration hash, and exact source hash contribute to application
+manifest 1.1 and its build ID.
+
+```ts
+import {
+  definePublisherNextHostConfig,
+} from "@genii-foundation/publisher-next/server/sync";
+import legacyState from "@example/publication-state-bootstrap";
+
+export default definePublisherNextHostConfig({
+  readerStateBootstrap: legacyState,
+});
+```
+
+Remove the adapter after the publication's declared compatibility and rollback
+window. Do not delete old browser keys as part of removal. See
+[ADR 0057](../../docs/architecture/0057-explicit-reader-state-bootstrap.md).
+
 The generated host reserves `/api/auth/start`, `/api/auth/verify`,
 `/api/session`, `/api/sync`, `/auth/callback`, and `/api/account` for optional
 synchronization. Every route returns the same opaque 404 when the publication has

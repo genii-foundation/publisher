@@ -39,6 +39,10 @@ export type {
   PublisherNextRootLayoutProps,
   PublisherNextRouteParams,
   PublisherNextRouteResolution,
+  PublisherNextReaderStateBootstrap,
+  PublisherNextReaderStateBootstrapContext,
+  PublisherNextReaderStateBootstrapInstance,
+  PublisherNextReaderStateBootstrapReport,
   PublisherNextUpdates,
   PublisherNextUpdatesEntry,
   PublisherNextUpdatesInstance,
@@ -56,6 +60,7 @@ export type {
   PublisherNextExtensionRenderInput,
   PublisherNextExtensionSlot,
   ResolvedPublisherNextUpdates,
+  ResolvedPublisherNextReaderStateBootstrap,
 } from "../types.js";
 export type {
   CreatePublisherNextSyncRoutesInput,

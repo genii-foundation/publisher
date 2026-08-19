@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Advanced the application manifest to 1.1 and the host contract to 0.15.0 with an explicit build-bound Reader state bootstrap.
+- Added frozen publication-scoped target keys, bounded synchronous source, script-escape refusal, deterministic copied and refused reports, and failure isolation before preference prepaint.
 - Advanced the theme adapter API to 2.0 with validated ordered Reader font choices and an explicit default.
 - Applied the selected theme font before paint and through hydrated settings, with an independently packed custom theme browser proof.
 - Applied bounded publication-scoped Reader appearance preferences before body paint and verified them without hydration.

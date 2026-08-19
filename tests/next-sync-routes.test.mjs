@@ -74,6 +74,14 @@ function provider(overrides = {}) {
 
 test("host configuration is closed and never invokes accessors", () => {
   assert.deepEqual(definePublisherNextHostConfig({}), {});
+  const readerStateBootstrap = Object.freeze({
+    package: "@example/legacy-state",
+  });
+  const configured = definePublisherNextHostConfig({
+    readerStateBootstrap,
+  });
+  assert.equal(configured.readerStateBootstrap, readerStateBootstrap);
+  assert.equal(Object.isFrozen(configured), true);
   assert.throws(
     () => definePublisherNextHostConfig({ unknown: true }),
     /unsupported field/u,
@@ -81,6 +89,14 @@ test("host configuration is closed and never invokes accessors", () => {
   assert.throws(
     () => definePublisherNextHostConfig({
       get syncProvider() {
+        throw new Error("secret");
+      },
+    }),
+    /data property/u,
+  );
+  assert.throws(
+    () => definePublisherNextHostConfig({
+      get readerStateBootstrap() {
         throw new Error("secret");
       },
     }),

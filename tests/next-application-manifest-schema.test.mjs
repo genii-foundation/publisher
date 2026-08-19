@@ -113,7 +113,9 @@ test("the raw schema identity matches its public package export", () => {
 
 test("the real Next application manifest satisfies the raw schema", async () => {
   const manifest = await createRealApplicationManifest();
+  assert.equal(manifest.schemaVersion, "1.1");
   assert.equal(manifest.theme.apiVersion, "2.0");
+  assert.equal(manifest.readerStateBootstrap, null);
   assertValid(manifest);
 });
 
@@ -213,6 +215,36 @@ test("the application manifest schema rejects invalid adapter API and package fi
         apiVersion: "2.0",
         configHash: `sha256:${"0".repeat(64)}`,
       };
+    },
+  ]) {
+    const candidate = structuredClone(manifest);
+    mutate(candidate);
+    assertInvalid(candidate);
+  }
+});
+
+test("the application manifest schema binds Reader state bootstrap source identity", async () => {
+  const manifest = structuredClone(
+    await createRealApplicationManifest(),
+  );
+  manifest.readerStateBootstrap = {
+    package: "@example/legacy-state",
+    version: "1.0.0",
+    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+    apiVersion: "1.0",
+    configHash: `sha256:${"2".repeat(64)}`,
+    sourceHash: `sha256:${"3".repeat(64)}`,
+  };
+  assertValid(manifest);
+  for (const mutate of [
+    (candidate) => {
+      candidate.readerStateBootstrap.sourceHash = "not-a-digest";
+    },
+    (candidate) => {
+      candidate.readerStateBootstrap.apiVersion = "2.0";
+    },
+    (candidate) => {
+      candidate.readerStateBootstrap.unexpected = true;
     },
   ]) {
     const candidate = structuredClone(manifest);

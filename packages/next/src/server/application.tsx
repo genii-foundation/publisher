@@ -24,6 +24,20 @@ import {
   serializeReaderOfflineCatalog,
 } from "@genii-foundation/publisher-reader/offline";
 import {
+  createReaderBookmarksStorageKey,
+} from "@genii-foundation/publisher-reader/bookmarks";
+import {
+  createReaderPreferencesStorageKey,
+} from "@genii-foundation/publisher-reader/preferences";
+import {
+  createReaderProgressStorageKey,
+} from "@genii-foundation/publisher-reader/progress";
+import {
+  createReaderEngagementStorageKey,
+  createReaderSyncConsentStorageKey,
+} from "@genii-foundation/publisher-reader/sync";
+import {
+  createReaderNarrationPreferencesStorageKey,
   parseReaderNarrationEnvelope,
   type ReaderNarrationEnvelope,
 } from "@genii-foundation/publisher-reader/narration";
@@ -118,6 +132,8 @@ import {
   PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES,
   PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS,
   PUBLISHER_NEXT_EXTENSION_SLOTS,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES,
   PUBLISHER_NEXT_THEME_API_VERSION,
   PUBLISHER_NEXT_UPDATES_API_VERSION,
   PUBLISHER_NEXT_VERSION,
@@ -135,6 +151,8 @@ import type {
   PublisherNextExtensionSlot,
   PublisherNextJsonObject,
   PublisherNextPage,
+  PublisherNextReaderStateBootstrapContext,
+  PublisherNextReaderStateBootstrapInstance,
   PublisherNextRouteResolution,
   PublisherNextRootLayoutProps,
   PublisherNextThemeInstance,
@@ -143,6 +161,7 @@ import type {
   PublisherNextUpdatesPage,
   PublisherNextUpdatesView,
   ResolvedPublisherNextTheme,
+  ResolvedPublisherNextReaderStateBootstrap,
   ResolvedPublisherNextUpdates,
 } from "../types.js";
 
@@ -177,6 +196,18 @@ interface ConfiguredUpdatesState {
   readonly config: PublisherNextJsonObject;
   readonly configHash: ReturnType<typeof hashCanonicalJson>;
   readonly instance: PublisherNextUpdatesInstance;
+}
+
+interface ResolvedReaderStateBootstrapState {
+  readonly identity: {
+    readonly package: string;
+    readonly version: string;
+    readonly rendererCompatibility: string;
+  };
+  readonly configHash: ReturnType<typeof hashCanonicalJson>;
+  readonly context: PublisherNextReaderStateBootstrapContext;
+  readonly source: string;
+  readonly sourceHash: ReturnType<typeof sha256>;
 }
 
 interface ResolvedUpdatesState extends ConfiguredUpdatesState {
@@ -1790,6 +1821,215 @@ function configuredValue(
   return success(valueOf(inspected, "value"));
 }
 
+function createReaderStateBootstrapContext(
+  publicationId: string,
+): PublisherNextReaderStateBootstrapContext {
+  return Object.freeze({
+    publicationId,
+    reportStorageKey:
+      `genii.publisher.reader-state-bootstrap.v1.${publicationId}`,
+    targetStorageKeys: Object.freeze({
+      bookmarks: createReaderBookmarksStorageKey(publicationId),
+      engagement: createReaderEngagementStorageKey(publicationId),
+      narrationPreferences:
+        createReaderNarrationPreferencesStorageKey(publicationId),
+      preferences: createReaderPreferencesStorageKey(publicationId),
+      progress: createReaderProgressStorageKey(publicationId),
+      syncConsent: createReaderSyncConsentStorageKey(publicationId),
+    }),
+  });
+}
+
+function readerStateBootstrapSourceValue(
+  result: unknown,
+): ValidationResult<string> {
+  const inspected = inspectRecord(
+    result,
+    ["diagnostics", "valid"],
+    ["value"],
+  );
+  if (inspected === null) {
+    return failure(
+      "next.reader_state_bootstrap.source_result_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap returned an invalid source result.",
+      "type",
+    );
+  }
+  if (valueOf(inspected, "valid") === false) {
+    return failure(
+      "next.reader_state_bootstrap.source_rejected",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap refused to create browser source.",
+      "adapter",
+    );
+  }
+  const source = valueOf(inspected, "value");
+  if (
+    valueOf(inspected, "valid") !== true ||
+    typeof source !== "string" ||
+    source.length === 0
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.source_result_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap must return one nonempty JavaScript function body.",
+      "type",
+    );
+  }
+  return success(source);
+}
+
+function resolveReaderStateBootstrap(
+  resolved: ResolvedPublisherNextReaderStateBootstrap,
+  publicationId: string,
+): ValidationResult<ResolvedReaderStateBootstrapState> {
+  const inspected = inspectRecord(resolved, [
+    "config",
+    "implementation",
+    "package",
+    "rendererCompatibility",
+    "version",
+  ]);
+  if (inspected === null) {
+    return failure(
+      "next.reader_state_bootstrap.resolution_invalid",
+      "/readerStateBootstrap",
+      "The resolved Reader state bootstrap must use the complete closed adapter shape.",
+      "properties",
+    );
+  }
+  const identity = inspectIdentity(
+    valueOf(inspected, "package"),
+    valueOf(inspected, "version"),
+    valueOf(inspected, "rendererCompatibility"),
+    "/readerStateBootstrap",
+  );
+  if (!identity.valid) return identity;
+  const config = snapshotJsonObject(
+    valueOf(inspected, "config"),
+    "/readerStateBootstrap/config",
+  );
+  if (!config.valid) return config;
+  const implementation = inspectRecord(
+    valueOf(inspected, "implementation"),
+    ["apiVersion", "configure", "kind"],
+  );
+  if (
+    implementation === null ||
+    valueOf(implementation, "kind") !==
+      "genii.publisher.next-reader-state-bootstrap" ||
+    valueOf(implementation, "apiVersion") !==
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION ||
+    typeof valueOf(implementation, "configure") !== "function"
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.implementation_invalid",
+      "/readerStateBootstrap/implementation",
+      "The Reader state bootstrap does not match the renderer bootstrap API.",
+      "apiVersion",
+    );
+  }
+  let configured: unknown;
+  try {
+    configured = Reflect.apply(
+      valueOf(implementation, "configure") as (
+        config: PublisherNextJsonObject,
+      ) => unknown,
+      valueOf(inspected, "implementation"),
+      [config.value],
+    );
+  } catch {
+    return failure(
+      "next.reader_state_bootstrap.configuration_threw",
+      "/readerStateBootstrap/config",
+      "The Reader state bootstrap threw while configuring.",
+      "adapter",
+    );
+  }
+  const configuredBootstrap = configuredValue(
+    configured,
+    "/readerStateBootstrap/config",
+  );
+  if (!configuredBootstrap.valid) return configuredBootstrap;
+  const instance = inspectRecord(
+    configuredBootstrap.value,
+    ["createSource"],
+  );
+  if (
+    instance === null ||
+    typeof valueOf(instance, "createSource") !== "function"
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.instance_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap must return exactly one createSource function.",
+      "properties",
+    );
+  }
+  const context = createReaderStateBootstrapContext(publicationId);
+  let sourceResult: unknown;
+  try {
+    sourceResult = Reflect.apply(
+      valueOf(instance, "createSource") as
+        PublisherNextReaderStateBootstrapInstance["createSource"],
+      configuredBootstrap.value,
+      [context],
+    );
+  } catch {
+    return failure(
+      "next.reader_state_bootstrap.source_threw",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap threw while creating browser source.",
+      "adapter",
+    );
+  }
+  const source = readerStateBootstrapSourceValue(sourceResult);
+  if (!source.valid) return source;
+  const sourceBytes = new TextEncoder().encode(source.value).length;
+  if (
+    sourceBytes >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.source_too_large",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap source exceeds the renderer byte limit.",
+      "maxLength",
+      {
+        actualBytes: sourceBytes,
+        maximumBytes:
+          PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES,
+      },
+    );
+  }
+  if (/<\/?script|<!--|-->/iu.test(source.value)) {
+    return failure(
+      "next.reader_state_bootstrap.source_unsafe",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap source contains an unsafe HTML script sequence.",
+      "content",
+    );
+  }
+  try {
+    Function("context", `"use strict";\n${source.value}`);
+  } catch {
+    return failure(
+      "next.reader_state_bootstrap.source_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap source is not a valid synchronous JavaScript function body.",
+      "syntax",
+    );
+  }
+  return success(Object.freeze({
+    identity: identity.value,
+    configHash: hashCanonicalJson(config.value),
+    context,
+    source: source.value,
+    sourceHash: sha256(source.value),
+  }));
+}
+
 function resolveTheme(
   resolved: ResolvedPublisherNextTheme,
 ): ValidationResult<ResolvedThemeState> {
@@ -2331,6 +2571,7 @@ function createApplicationArtifact(
   reader: PublicationReaderEnvelope,
   theme: ResolvedThemeState,
   updates: ResolvedUpdatesState | null,
+  readerStateBootstrap: ResolvedReaderStateBootstrapState | null,
   extensions: ResolvedExtensionsState | null,
   sync: SyncEnvelope | null,
   continuity: PublisherNextContinuityHandler,
@@ -2359,6 +2600,16 @@ function createApplicationArtifact(
           apiVersion: PUBLISHER_NEXT_UPDATES_API_VERSION,
           configHash: updates.configHash,
           viewHash: updates.viewHash,
+        });
+  const readerStateBootstrapIdentity =
+    readerStateBootstrap === null
+      ? null
+      : Object.freeze({
+          ...readerStateBootstrap.identity,
+          apiVersion:
+            PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION,
+          configHash: readerStateBootstrap.configHash,
+          sourceHash: readerStateBootstrap.sourceHash,
         });
   const continuityIdentity = Object.freeze({
     mode: "proxy" as const,
@@ -2406,6 +2657,7 @@ function createApplicationArtifact(
     source,
     theme: themeIdentity,
     updates: updatesIdentity,
+    readerStateBootstrap: readerStateBootstrapIdentity,
     extensions: extensionIdentity,
     sync: syncIdentity,
     continuity: continuityIdentity,
@@ -2441,6 +2693,7 @@ export async function createPublicationNextApplication(
         "audioData",
         "extensionData",
         "extensions",
+        "readerStateBootstrap",
         "syncData",
         "theme",
         "updates",
@@ -2462,6 +2715,21 @@ export async function createPublicationNextApplication(
       return readerResult;
     }
     const reader = readerResult.value;
+    const suppliedReaderStateBootstrap = valueOf(
+      inspectedOptions,
+      "readerStateBootstrap",
+    );
+    let readerStateBootstrap:
+      ResolvedReaderStateBootstrapState | null = null;
+    if (suppliedReaderStateBootstrap !== undefined) {
+      const bootstrapResult = resolveReaderStateBootstrap(
+        suppliedReaderStateBootstrap as
+          ResolvedPublisherNextReaderStateBootstrap,
+        reader.publicationId,
+      );
+      if (!bootstrapResult.valid) return bootstrapResult;
+      readerStateBootstrap = bootstrapResult.value;
+    }
     const extensionsResult = resolveExtensions(
       valueOf(inspectedOptions, "extensionData"),
       valueOf(inspectedOptions, "extensions"),
@@ -2668,6 +2936,7 @@ export async function createPublicationNextApplication(
       reader,
       themeResult.value,
       updatesState,
+      readerStateBootstrap,
       extensions,
       sync,
       continuity,
@@ -2842,6 +3111,19 @@ export async function createPublicationNextApplication(
             <head>
               <PublisherReaderPrepaint
                 publicationId={reader.publicationId}
+                {...(readerStateBootstrap === null
+                  ? {}
+                  : {
+                      readerStateBootstrap: {
+                        package:
+                          readerStateBootstrap.identity.package,
+                        version:
+                          readerStateBootstrap.identity.version,
+                        context: readerStateBootstrap.context,
+                        source: readerStateBootstrap.source,
+                        sourceHash: readerStateBootstrap.sourceHash,
+                      },
+                    })}
                 readerFontFamilies={
                   themeResult.value.instance.tokens.typography
                     .readerFontFamilies

@@ -216,6 +216,15 @@ test("the host contract declares exactly the author host file set", () => {
       summary:
         "Await closed extension request handlers in the official Proxy boundary.",
     },
+    {
+      from: "0.14.0",
+      to: "0.15.0",
+      summary:
+        "Connect an optional build-bound Reader state bootstrap through the server-only author configuration.",
+      manualSteps: [
+        "Add readerStateBootstrap to publisher.config.ts only while an explicit legacy local-state compatibility window is active.",
+      ],
+    },
   ]);
 });
 
@@ -378,6 +387,11 @@ test("declared inputs reach the files that need them", () => {
   const application = contentsOf(template(), "publisher-application.js");
   assert.match(application, /genii-publisher:theme/u);
   assert.match(application, /genii-publisher:extensions/u);
+  assert.match(application, /genii-publisher:config/u);
+  assert.match(
+    application,
+    /readerStateBootstrap: publisherConfig\.readerStateBootstrap/u,
+  );
   assert.match(application, /publication-extensions\.json/u);
   assert.match(application, /extensionData, extensions/u);
 

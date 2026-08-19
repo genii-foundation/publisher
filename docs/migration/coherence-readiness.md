@@ -393,9 +393,12 @@ product decision:
 
 The executable, reversible sequence is recorded in
 [`coherence-adoption-plan.md`](coherence-adoption-plan.md). It is pinned to exact
-Publisher and Coherence commits, names the remaining host dependency and local
-state compatibility preconditions, preserves the current Coherence workbench and
-provider state, and stops before merge or production deployment.
+Publisher and Coherence commits, names the remaining host dependency
+reconciliation and Coherence-specific state adapter acceptance work, preserves
+the current Coherence workbench and provider state, and stops before merge or
+production deployment. Publisher's generic closed bootstrap hook is complete.
+The remaining state work is the Coherence adapter and its fixtures, not another
+renderer interface.
 
 ## Material that remains Coherence-owned
 

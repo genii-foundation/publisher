@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.14.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.15.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -268,9 +268,18 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.13.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.14.0",
       summary:
         "Await closed extension request handlers in the official Proxy boundary.",
+    }),
+    Object.freeze({
+      from: "0.14.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Connect an optional build-bound Reader state bootstrap through the server-only author configuration.",
+      manualSteps: Object.freeze([
+        "Add readerStateBootstrap to publisher.config.ts only while an explicit legacy local-state compatibility window is active.",
+      ]),
     }),
   ]);
 
@@ -596,6 +605,7 @@ export function createPublisherNextHostTemplate(
         'import { existsSync, readFileSync } from "node:fs";',
         'import { join } from "node:path";',
         `import reader from "./${PUBLISHER_NEXT_READER_DATA_PATH}" with { type: "json" };`,
+        'import publisherConfig from "genii-publisher:config";',
         'import extensions from "genii-publisher:extensions";',
         'import theme from "genii-publisher:theme";',
         'import { createPublicationNextApplication } from "@genii-foundation/publisher-next/server";',
@@ -608,7 +618,7 @@ export function createPublisherNextHostTemplate(
         'const audioData = existsSync(audioPath) ? JSON.parse(readFileSync(audioPath, "utf8")) : undefined;',
         `const extensionPath = join(process.cwd(), "${PUBLISHER_NEXT_EXTENSION_DATA_PATH}");`,
         'const extensionData = existsSync(extensionPath) ? JSON.parse(readFileSync(extensionPath, "utf8")) : undefined;',
-        "const created = await createPublicationNextApplication({ reader, audioData, extensionData, extensions, syncData, theme, updatesData });",
+        "const created = await createPublicationNextApplication({ reader, audioData, extensionData, extensions, readerStateBootstrap: publisherConfig.readerStateBootstrap, syncData, theme, updatesData });",
         "if (!created.valid) {",
         "  throw new Error(JSON.stringify(created.diagnostics));",
         "}",

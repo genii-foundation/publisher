@@ -99,6 +99,40 @@ function createUpdates(config = {}, loadOverride) {
   };
 }
 
+function createReaderStateBootstrap({
+  config = {},
+  createSource = () =>
+    'return { schemaVersion: "1.0", copied: [], refused: [] };',
+  implementation = {},
+} = {}) {
+  return {
+    package: "@example/reader-state-bootstrap",
+    version: "1.2.3",
+    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+    config,
+    implementation: {
+      kind: "genii.publisher.next-reader-state-bootstrap",
+      apiVersion: "1.0",
+      configure(snapshot) {
+        return {
+          valid: true,
+          value: {
+            createSource(context) {
+              return {
+                valid: true,
+                value: createSource(context, snapshot),
+                diagnostics: [],
+              };
+            },
+          },
+          diagnostics: [],
+        };
+      },
+      ...implementation,
+    },
+  };
+}
+
 async function createApplication(options = {}) {
   const reader =
     options.reader ??
@@ -111,6 +145,12 @@ async function createApplication(options = {}) {
   return assertValid(
     await createPublicationNextApplication({
       reader,
+      ...(options.readerStateBootstrap === undefined
+        ? {}
+        : {
+            readerStateBootstrap:
+              options.readerStateBootstrap,
+          }),
       ...(options.syncData === undefined ? {} : { syncData: options.syncData }),
       theme:
         options.theme ?? resolveDefaultPublisherNextTheme(),
@@ -493,6 +533,147 @@ test("authored work languages and English renderer chrome are scoped", async () 
     work,
     /class="publisher-reading-stat" lang="en"/u,
   );
+});
+
+test("Reader state bootstrap is ordered, frozen, and bound to application identity", async () => {
+  let receivedContext;
+  let receivedConfig;
+  const source = [
+    'const legacy = localStorage.getItem("legacy.preferences");',
+    "if (legacy !== null && localStorage.getItem(context.targetStorageKeys.preferences) === null) {",
+    "  localStorage.setItem(context.targetStorageKeys.preferences, legacy);",
+    '  return { schemaVersion: "1.0", copied: ["preferences"], refused: [] };',
+    "}",
+    'return { schemaVersion: "1.0", copied: [], refused: [] };',
+  ].join("\n");
+  const application = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      config: { legacyPrefix: "legacy" },
+      createSource(context, config) {
+        receivedContext = context;
+        receivedConfig = config;
+        return source;
+      },
+    }),
+  });
+
+  assert.equal(Object.isFrozen(receivedContext), true);
+  assert.equal(Object.isFrozen(receivedContext.targetStorageKeys), true);
+  assert.equal(Object.isFrozen(receivedConfig), true);
+  assert.equal(receivedContext.publicationId, "renderer-proof");
+  assert.equal(
+    receivedContext.targetStorageKeys.preferences,
+    "genii.publisher.reader.preferences.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.progress,
+    "genii.publisher.reader.progress.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.bookmarks,
+    "genii.publisher.reader.bookmarks.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.syncConsent,
+    "genii.publisher.reader.sync-consent.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.engagement,
+    "genii.publisher.reader.engagement.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.narrationPreferences,
+    "genii.publisher.reader.renderer-proof.narration",
+  );
+  assert.deepEqual(application.manifest.readerStateBootstrap, {
+    package: "@example/reader-state-bootstrap",
+    version: "1.2.3",
+    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+    apiVersion: "1.0",
+    configHash: hashCanonicalJson({ legacyPrefix: "legacy" }),
+    sourceHash: sha256(source),
+  });
+  assert.equal(application.manifest.schemaVersion, "1.1");
+
+  const root = renderToStaticMarkup(
+    application.RootLayout({ children: "proof" }),
+  );
+  assert.match(root, /data-publisher-reader-state-bootstrap=""/u);
+  assert.ok(
+    root.indexOf("data-publisher-reader-state-bootstrap") <
+      root.indexOf("data-publisher-reader-prepaint"),
+  );
+  assert.ok(
+    root.indexOf("data-publisher-reader-prepaint") <
+      root.indexOf("<body>"),
+  );
+  assert.match(
+    root,
+    /genii\.publisher\.reader-state-bootstrap\.v1\.renderer-proof/u,
+  );
+
+  const changed = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      config: { legacyPrefix: "changed" },
+      createSource: () => source,
+    }),
+  });
+  assert.notEqual(
+    changed.manifest.readerStateBootstrap.configHash,
+    application.manifest.readerStateBootstrap.configHash,
+  );
+  assert.notEqual(
+    changed.manifest.buildId,
+    application.manifest.buildId,
+  );
+});
+
+test("Reader state bootstrap rejects incompatible, unsafe, invalid, and oversized source", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const candidates = [
+    {
+      adapter: createReaderStateBootstrap({
+        implementation: { apiVersion: "2.0" },
+      }),
+      code: "next.reader_state_bootstrap.implementation_invalid",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => 'return "</script>";',
+      }),
+      code: "next.reader_state_bootstrap.source_unsafe",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => 'return "-->";',
+      }),
+      code: "next.reader_state_bootstrap.source_unsafe",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => "return {",
+      }),
+      code: "next.reader_state_bootstrap.source_invalid",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => "x".repeat(32_769),
+      }),
+      code: "next.reader_state_bootstrap.source_too_large",
+    },
+  ];
+  for (const { adapter, code } of candidates) {
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: adapter,
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      result.diagnostics.some((diagnostic) => diagnostic.code === code),
+      true,
+      JSON.stringify(result.diagnostics, null, 2),
+    );
+  }
 });
 
 test("every page carries fixed linked attribution and source credit", async () => {

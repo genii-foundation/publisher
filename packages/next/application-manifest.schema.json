@@ -16,6 +16,7 @@
     "source",
     "theme",
     "updates",
+    "readerStateBootstrap",
     "extensions",
     "sync",
     "continuity"
@@ -25,7 +26,7 @@
       "const": "https://publisher.genii.foundation/schemas/next-application-manifest.schema.json"
     },
     "schemaVersion": {
-      "const": "1.0"
+      "const": "1.1"
     },
     "publicationId": {
       "$ref": "#/$defs/stableId"
@@ -55,6 +56,16 @@
         },
         {
           "$ref": "#/$defs/updates"
+        }
+      ]
+    },
+    "readerStateBootstrap": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/readerStateBootstrap"
         }
       ]
     },
@@ -247,6 +258,47 @@
               "$ref": "#/$defs/sha256Digest"
             },
             "viewHash": {
+              "$ref": "#/$defs/sha256Digest"
+            }
+          }
+        }
+      ]
+    },
+    "readerStateBootstrap": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/adapterBase"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "package",
+            "version",
+            "rendererCompatibility",
+            "apiVersion",
+            "configHash",
+            "sourceHash"
+          ],
+          "properties": {
+            "package": {
+              "$ref": "#/$defs/packageName"
+            },
+            "version": {
+              "$ref": "#/$defs/exactSemver"
+            },
+            "rendererCompatibility": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "apiVersion": {
+              "const": "1.0"
+            },
+            "configHash": {
+              "$ref": "#/$defs/sha256Digest"
+            },
+            "sourceHash": {
               "$ref": "#/$defs/sha256Digest"
             }
           }

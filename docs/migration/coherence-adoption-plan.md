@@ -82,12 +82,14 @@ graph. A framework downgrade is not assumed safe.
 
 ### Local state compatibility interface
 
-Publisher already namespaces new state by publication identity, but the official
-renderer does not yet expose an injected bootstrap or storage compatibility hook.
-That interface must exist before Coherence preview adoption. It must run before
-prepaint and before any Reader store reads new keys, be bounded and deterministic,
-report what it copied or refused, leave legacy keys intact, and be safe to run
-again.
+Publisher namespaces new state by publication identity and the official renderer
+now exposes the closed Reader state bootstrap described by ADR 0057. The generic
+hook runs before prepaint, receives renderer-derived target keys, is bounded and
+deterministic, reports what it copied or refused, leaves legacy keys intact, and
+is safe to run again. Coherence preview adoption still requires a
+publication-owned adapter plus acceptance fixtures for its exact legacy document
+versions. Those fixtures must prove lossless copies and explicit refusal of any
+state that cannot be represented safely.
 
 The Coherence adapter must map these legacy keys:
 
