@@ -234,9 +234,14 @@ export const READER_PARITY = Object.freeze([
     id: "reader.bookmarks.margin_markers",
     capability: "Stable margin markers instead of prose-obscuring bookmark highlights",
     home: "renderer",
-    status: "planned",
-    plannedBy: "docs/architecture/0015-opinionated-reader-application.md",
-    sourcePaths: ["src/components/BookmarkHighlightIsland.tsx", "src/app/globals.css"],
+    status: "upgraded",
+    why: "The official renderer accepts only exact or uniquely relocated canonical ranges, keeps every marker outside the manuscript subtree, measures immediately in background tabs, and routes the accessible marker into the existing bookmark surface.",
+    evidence: {
+      decision: "docs/architecture/0034-bookmark-margin-markers.md",
+      renderer: "packages/next/src/client/reader-bookmark-markers.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/ReaderBookmarkHighlightIsland.tsx", "src/app/globals.css"],
   },
   {
     id: "reader.bookmarks.safe_deletion",

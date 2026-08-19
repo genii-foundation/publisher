@@ -1569,6 +1569,145 @@ async function assertHydratedReaderTools({
         startBlockId: selectedPassage.result.value.blockId,
         status: "Saved passage.",
       });
+      let bookmarkMarker;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const marker = document.querySelector(".publisher-reader-bookmark-marker");',
+            '  const line = marker?.querySelector(".publisher-reader-bookmark-marker-line");',
+            '  const blockId = marker?.getAttribute("data-publisher-start-block");',
+            '  const block = blockId === null || blockId === undefined ? null : document.querySelector(`[data-publisher-block="${CSS.escape(blockId)}"]`);',
+            "  const markerBox = marker?.getBoundingClientRect();",
+            "  const lineBox = line?.getBoundingClientRect();",
+            "  const blockBox = block?.getBoundingClientRect();",
+            "  return {",
+            "    background: marker === null ? \"\" : getComputedStyle(marker).backgroundColor,",
+            "    hasIcon: marker?.querySelector(\"svg\") !== null,",
+            "    height: markerBox?.height ?? 0,",
+            "    insideViewport: markerBox !== undefined && markerBox.left >= 0 && markerBox.right <= innerWidth && markerBox.top >= 0 && markerBox.bottom <= innerHeight,",
+            "    lineBeforeProse: lineBox !== undefined && blockBox !== undefined && lineBox.right <= blockBox.left,",
+            '    manuscriptMarkerCount: document.querySelectorAll(".publisher-manuscript .publisher-reader-bookmark-marker").length,',
+            '    quote: marker?.getAttribute("aria-label") ?? "",',
+            "  };",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        bookmarkMarker = evaluated.result?.value;
+        if (bookmarkMarker?.quote.startsWith("Saved passage:")) break;
+        await wait(50);
+      }
+      const bookmarkMarkerContext = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          `  const state = JSON.parse(localStorage.getItem(${JSON.stringify(bookmarkProof.storageKey)}));`,
+          "  const live = Object.values(state.bookmarks ?? {}).filter((bookmark) => bookmark.deletedAt === undefined);",
+          "  const startBlockId = live[0]?.range?.start?.blockId ?? \"\";",
+          "  return {",
+          '    highlights: document.documentElement.dataset.publisherReaderHighlights ?? "",',
+          "    liveBookmarks: live.length,",
+          '    matchingBlocks: startBlockId.length === 0 ? 0 : document.querySelectorAll(`[data-publisher-block="${CSS.escape(startBlockId)}"]`).length,',
+          '    sections: document.querySelectorAll("[data-publisher-section]").length,',
+          "    startBlockId,",
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.deepEqual(bookmarkMarkerContext.result?.value, {
+        highlights: "on",
+        liveBookmarks: 1,
+        matchingBlocks: 1,
+        sections: 1,
+        startBlockId: selectedPassage.result.value.blockId,
+      });
+      assert.deepEqual(bookmarkMarker, {
+        background: "rgba(0, 0, 0, 0)",
+        hasIcon: true,
+        height: 44,
+        insideViewport: true,
+        lineBeforeProse: true,
+        manuscriptMarkerCount: 0,
+        quote: `Saved passage: ${selectedPassage.result.value.quote.slice(0, 80)}`,
+      });
+      const openedMarkerBookmark = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const marker = document.querySelector(".publisher-reader-bookmark-marker");',
+          "  marker?.click();",
+          "  return marker !== null;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(openedMarkerBookmark.result?.value, true);
+      let markerDestination;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const input = document.querySelector(".publisher-reader-bookmark-tools input[type=search]");',
+            "  return {",
+            "    focused: document.activeElement === input,",
+            '    query: input instanceof HTMLInputElement ? input.value : "",',
+            '    quote: document.querySelector(".publisher-reader-bookmarks q")?.textContent ?? "",',
+            "  };",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        markerDestination = evaluated.result?.value;
+        if (markerDestination?.focused === true) break;
+        await wait(50);
+      }
+      assert.deepEqual(markerDestination, {
+        focused: true,
+        query: selectedPassage.result.value.quote,
+        quote: selectedPassage.result.value.quote,
+      });
+      const openedMarkerSettings = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const settings = Array.from(document.querySelectorAll(".publisher-reader-rail-actions button"))',
+          '    .find((button) => button.textContent?.includes("Settings"));',
+          "  settings?.click();",
+          "  return settings !== undefined;",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      assert.equal(openedMarkerSettings.result?.value, true);
+      let hidBookmarkMarkers = false;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression: [
+            "(() => {",
+            '  const toggle = document.querySelector(".publisher-reader-settings input[type=checkbox]");',
+            "  if (!(toggle instanceof HTMLInputElement) || !toggle.checked) return false;",
+            "  toggle.click();",
+            "  return true;",
+            "})()",
+          ].join("\n"),
+          returnByValue: true,
+        });
+        hidBookmarkMarkers = evaluated.result?.value === true;
+        if (hidBookmarkMarkers) break;
+        await wait(50);
+      }
+      assert.equal(hidBookmarkMarkers, true);
+      let hiddenMarkerCount = -1;
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const evaluated = await page.send("Runtime.evaluate", {
+          expression:
+            'document.querySelectorAll(".publisher-reader-bookmark-marker").length',
+          returnByValue: true,
+        });
+        hiddenMarkerCount = evaluated.result?.value ?? -1;
+        if (hiddenMarkerCount === 0) break;
+        await wait(50);
+      }
+      assert.equal(hiddenMarkerCount, 0);
     } finally {
       peerPage.close();
     }

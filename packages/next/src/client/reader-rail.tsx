@@ -25,6 +25,7 @@ import {
   queryReaderBookmarks,
   removeReaderBookmark,
   serializeReaderBookmarksState,
+  type ReaderBookmark,
   type ReaderBookmarksState,
 } from "@genii-foundation/publisher-reader/bookmarks";
 import {
@@ -97,6 +98,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { PublisherReaderBookmarkMarkers } from "./reader-bookmark-markers.js";
 import {
   createPublisherReaderStore,
   usePublisherReaderStore,
@@ -953,6 +955,10 @@ export function PublisherReaderRail({
     if (selectionEditing) selectionNoteRef.current?.focus();
   }, [selectionEditing]);
 
+  useEffect(() => {
+    if (openPanel === "bookmarks") bookmarkQueryRef.current?.focus();
+  }, [bookmarkQuery, openPanel]);
+
   const currentProgress = currentSection === undefined
     ? null
     : resolveReaderSectionProgress(progress, currentSection);
@@ -1212,8 +1218,24 @@ export function PublisherReaderRail({
     ? null
     : document.querySelector<HTMLElement>(".publisher-root");
 
+  const openBookmarkFromMarker = (bookmark: ReaderBookmark): void => {
+    setBookmarkDeletePending(null);
+    setBookmarkQuery(bookmark.quote.slice(0, 280));
+    setOpenPanel("bookmarks");
+  };
+
   return (
     <>
+    {currentSection === undefined || currentWorkId === undefined ? null : (
+      <PublisherReaderBookmarkMarkers
+        bookmarks={bookmarkState}
+        enabled={preferences.highlights}
+        onOpenBookmark={openBookmarkFromMarker}
+        portalTarget={portalTarget}
+        section={currentSection}
+        workId={currentWorkId}
+      />
+    )}
     <aside className="publisher-reader-rail" aria-label="Reader tools">
       <div className="publisher-reader-rail-progress" aria-label={
         currentProgress === null

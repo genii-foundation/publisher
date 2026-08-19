@@ -41,9 +41,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 19 upgraded | 19 | Publisher implements a stronger checked contract. |
+| 20 upgraded | 20 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 23 planned | 23 | Accepted Publisher scope is not implemented yet. |
+| 22 planned | 22 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -99,8 +99,10 @@ confirmation, deliberate focus movement, and absorbing synchronization
 tombstones. Canonical passage selection now refuses mismatched DOM text and
 cross-section ranges before translating visible UTF-16 offsets into portable
 block anchors. Its viewport-contained capture editor stores an optional private
-note without invalidating the selected range. Virtualized presentation, margin
-markers, and secondary Reader surfaces remain planned.
+note without invalidating the selected range. Exact and uniquely relocated
+ranges now receive reactive margin markers outside the manuscript DOM, including
+deterministic first measurement in background tabs. Virtualized presentation and
+secondary Reader surfaces remain planned.
 
 ### Preferences and focus
 
@@ -264,9 +266,9 @@ The following are accepted scope, not release blockers waiting for another
 product decision:
 
 1. Add publication heatmaps, recent sections, and next-section recommendations.
-2. Add virtualized bookmark presentation and margin markers.
+2. Add virtualized bookmark presentation.
 3. Project the remaining capability-sliced client artifacts.
-4. Complete bookmark markers, virtualized collections, and focus markup.
+4. Complete virtualized collections and focus markup.
 5. Add the default narration player and timing interaction.
 6. Add atomic offline package planning and official service worker integration.
 7. Add cross-tab synchronization notifications and richer synchronized-status surfaces.

@@ -261,6 +261,46 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   box-shadow: 0 0.8rem 2rem color-mix(in srgb, var(--publisher-color-text) 18%, transparent);
 }
 
+.publisher-reader-bookmark-marker {
+  position: absolute;
+  z-index: 2;
+  width: 1.25rem;
+  min-height: 2.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--publisher-color-accent);
+  cursor: pointer;
+}
+
+.publisher-reader-bookmark-marker svg {
+  position: absolute;
+  top: 0.1rem;
+  left: 0;
+  width: 1rem;
+  height: 1rem;
+  fill: var(--publisher-color-surface);
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.4;
+}
+
+.publisher-reader-bookmark-marker-line {
+  position: absolute;
+  top: 1.3rem;
+  bottom: 0;
+  left: 0.42rem;
+  width: 3px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.publisher-reader-bookmark-marker:hover,
+.publisher-reader-bookmark-marker:focus-visible {
+  color: var(--publisher-color-focus);
+}
+
 .publisher-reader-selection-editor {
   display: grid;
   gap: 0.7rem;

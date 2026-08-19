@@ -35,5 +35,6 @@ These records define the accepted foundation of GENII Publisher.
 31. [ADR 0031: Default settings and bookmark-aware search](./0031-default-settings-and-bookmark-search.md)
 32. [ADR 0032: Canonical passage selection](./0032-canonical-passage-selection.md)
 33. [ADR 0033: Optional bookmark capture note](./0033-optional-bookmark-capture-note.md)
+34. [ADR 0034: Bookmark margin markers](./0034-bookmark-margin-markers.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.
