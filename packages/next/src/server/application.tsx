@@ -54,6 +54,9 @@ import {
   PublisherNotFoundView,
   PublisherPageView,
 } from "../components/pages.js";
+import {
+  PublisherReaderNarrationProvider,
+} from "../client/reader-narration-provider.js";
 import type {
   PublisherNextMarkdownForBlock,
 } from "../components/pages.js";
@@ -76,6 +79,7 @@ import {
 import {
   resolveDefaultPublisherNextTheme,
 } from "../theme/default.js";
+import { publisherNextThemeStyle } from "../theme/style.js";
 import {
   validatePublisherNextThemeInstance,
 } from "../theme/validation.js";
@@ -1814,7 +1818,17 @@ export async function createPublicationNextApplication(
       }: PublisherNextRootLayoutProps): ReactElement {
         return (
           <html lang={reader.publication.language}>
-            <body>{children}</body>
+            <body>
+              <PublisherReaderNarrationProvider
+                audioPath="/publication-audio.json"
+                progressPath="/publication-reader-progress.json"
+                publicationId={reader.publicationId}
+                readerBuildId={reader.buildId}
+                themeStyle={publisherNextThemeStyle(themeResult.value.instance)}
+              >
+                {children}
+              </PublisherReaderNarrationProvider>
+            </body>
           </html>
         );
       },

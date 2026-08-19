@@ -17,6 +17,7 @@ import {
   READER_NARRATION_PLAYBACK_RATES,
   createReaderNarrationPreferencesStorageKey,
   parseReaderNarrationEnvelope,
+  parseReaderNarrationNavigationIntent,
   parseReaderNarrationPreferences,
   parseReaderNarrationTimingDocument,
   readerNarrationTimingHref,
@@ -33,8 +34,20 @@ import {
   useMemo,
   useRef,
   useState,
+  type AnchorHTMLAttributes,
+  type ComponentType,
   type ReactElement,
 } from "react";
+import { flushSync } from "react-dom";
+import NextLink from "next/link.js";
+import {
+  PUBLISHER_READER_NARRATION_NAVIGATION_EVENT,
+  requestPublisherReaderNarrationNavigation,
+} from "./reader-narration-navigation.js";
+
+const PublisherLink = NextLink as unknown as ComponentType<
+  AnchorHTMLAttributes<HTMLAnchorElement> & { readonly href: string }
+>;
 
 export interface PublisherReaderNarrationProps {
   readonly active: boolean;
@@ -45,6 +58,7 @@ export interface PublisherReaderNarrationProps {
   readonly publicationId: string;
   readonly readerBuildId: Sha256Digest;
   readonly onClose: () => void;
+  readonly onOpen: () => void;
 }
 
 type NarrationLoadState = "idle" | "loading" | "ready" | "absent" | "failed";
@@ -114,6 +128,7 @@ export function PublisherReaderNarration({
   publicationId,
   readerBuildId,
   onClose,
+  onOpen,
 }: PublisherReaderNarrationProps): ReactElement {
   const audioRef = useRef<HTMLAudioElement>(null);
   const pendingPlayRef = useRef(false);
@@ -190,6 +205,59 @@ export function PublisherReaderNarration({
   }, [preferences.playbackRate]);
 
   const selectedClip = selectedVoice?.clips[selectedClipIndex] ?? null;
+
+  useEffect(() => {
+    const navigateAndPlay = (event: Event): void => {
+      if (!(event instanceof CustomEvent)) return;
+      const intent = parseReaderNarrationNavigationIntent(event.detail, {
+        publicationId,
+      });
+      if (
+        intent === null ||
+        loadState !== "ready" ||
+        selectedVoice === null ||
+        progressCatalog === null
+      ) return;
+      const destination = progressCatalog.entries.find(
+        (entry) => entry.id === intent.sectionId,
+      );
+      if (destination === undefined || destination.href !== intent.href) return;
+      const clipIndex = selectedVoice.clips.findIndex(
+        (clip) => clip.sectionId === intent.sectionId,
+      );
+      const audio = audioRef.current;
+      if (clipIndex < 0 || audio === null) return;
+
+      event.preventDefault();
+      onOpen();
+      setMessage("");
+      if (clipIndex === selectedClipIndex) {
+        void audio.play().catch(() => {
+          setMessage("Playback is ready. Press play to continue.");
+        });
+      } else {
+        pendingPlayRef.current = true;
+        flushSync(() => setSelectedClipIndex(clipIndex));
+      }
+    };
+    window.addEventListener(
+      PUBLISHER_READER_NARRATION_NAVIGATION_EVENT,
+      navigateAndPlay,
+    );
+    return () => {
+      window.removeEventListener(
+        PUBLISHER_READER_NARRATION_NAVIGATION_EVENT,
+        navigateAndPlay,
+      );
+    };
+  }, [
+    loadState,
+    onOpen,
+    progressCatalog,
+    publicationId,
+    selectedClipIndex,
+    selectedVoice,
+  ]);
 
   const clearActiveWord = (): void => {
     activeWordRef.current?.classList.remove("publisher-narration-word-current");
@@ -446,7 +514,25 @@ export function PublisherReaderNarration({
                     {new Intl.NumberFormat().format(selectedClipIndex + 1)} of {new Intl.NumberFormat().format(selectedVoice.clips.length)} recordings
                   </small>
                   {selectedSection === undefined ? null : (
-                    <a href={selectedSection.href}>Open this section</a>
+                    <PublisherLink
+                      href={selectedSection.href}
+                      onClick={(event) => {
+                        if (
+                          event.defaultPrevented ||
+                          event.metaKey ||
+                          event.ctrlKey ||
+                          event.shiftKey ||
+                          event.altKey
+                        ) return;
+                        requestPublisherReaderNarrationNavigation({
+                          publicationId,
+                          sectionId: selectedClip.sectionId,
+                          href: selectedSection.href,
+                        });
+                      }}
+                    >
+                      Open this section
+                    </PublisherLink>
                   )}
                 </div>
                 <div className="publisher-reader-narration-controls">

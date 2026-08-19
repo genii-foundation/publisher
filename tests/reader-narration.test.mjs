@@ -19,6 +19,7 @@ import {
   createReaderNarrationPreferencesStorageKey,
   createReaderNarrationSectionTextProfile,
   parseReaderNarrationEnvelope,
+  parseReaderNarrationNavigationIntent,
   parseReaderNarrationPreferences,
   parseReaderNarrationTimingDocument,
   readerNarrationTimingHref,
@@ -144,6 +145,35 @@ test("voice and speed preferences are bounded and deterministic", () => {
     createReaderNarrationPreferencesStorageKey("narrated-tides"),
     "genii.publisher.reader.narrated-tides.narration",
   );
+});
+
+test("narration navigation intents are closed and publication bound", () => {
+  const intent = {
+    publicationId: "narrated-tides",
+    sectionId: "closing",
+    href: "/works/tides#closing",
+  };
+  const parsed = parseReaderNarrationNavigationIntent(intent, {
+    publicationId: "narrated-tides",
+  });
+  assert.deepEqual(parsed, intent);
+  assert.equal(Object.isFrozen(parsed), true);
+  assert.equal(parseReaderNarrationNavigationIntent(
+    { ...intent, publicationId: "another-publication" },
+    { publicationId: "narrated-tides" },
+  ), null);
+  assert.equal(parseReaderNarrationNavigationIntent(
+    { ...intent, extra: true },
+    { publicationId: "narrated-tides" },
+  ), null);
+  assert.equal(parseReaderNarrationNavigationIntent(
+    { ...intent, href: "https://example.org/closing" },
+    { publicationId: "narrated-tides" },
+  ), null);
+  assert.equal(parseReaderNarrationNavigationIntent(
+    { ...intent, href: "//example.org/closing" },
+    { publicationId: "narrated-tides" },
+  ), null);
 });
 
 test("section narration text and timing hrefs follow one closed profile", () => {

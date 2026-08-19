@@ -46,5 +46,6 @@ These records define the accepted foundation of GENII Publisher.
 42. [ADR 0042: Exact base selective audio promotion planning](./0042-exact-base-audio-promotion-planning.md)
 43. [ADR 0043: Narration publication evidence guard](./0043-narration-publication-guard.md)
 44. [ADR 0044: Spoken input identity](./0044-spoken-input-identity.md)
+45. [ADR 0045: Route-preserving narration intent](./0045-route-preserving-narration-intent.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

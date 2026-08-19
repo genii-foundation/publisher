@@ -12,7 +12,9 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 .publisher-root,
-.publisher-root * {
+.publisher-root *,
+.publisher-reader-audio-host,
+.publisher-reader-audio-host * {
   box-sizing: border-box;
 }
 
@@ -30,7 +32,8 @@ If you wish to allow use of your version of this file only under the terms of th
   line-height: var(--publisher-line-height);
 }
 
-html[data-publisher-reader-scheme="light"] .publisher-root {
+html[data-publisher-reader-scheme="light"] .publisher-root,
+html[data-publisher-reader-scheme="light"] .publisher-reader-audio-host {
   --publisher-color-canvas: #f5f7f4;
   --publisher-color-surface: #fcfdfb;
   --publisher-color-text: #162225;
@@ -41,7 +44,9 @@ html[data-publisher-reader-scheme="light"] .publisher-root {
 }
 
 html[data-publisher-reader-scheme="dark"] .publisher-root,
-html[data-publisher-reader-scheme="black"] .publisher-root {
+html[data-publisher-reader-scheme="black"] .publisher-root,
+html[data-publisher-reader-scheme="dark"] .publisher-reader-audio-host,
+html[data-publisher-reader-scheme="black"] .publisher-reader-audio-host {
   --publisher-color-canvas: #11191b;
   --publisher-color-surface: #182326;
   --publisher-color-text: #f1f4ef;
@@ -51,18 +56,21 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   --publisher-color-border: #3d5055;
 }
 
-html[data-publisher-reader-scheme="black"] .publisher-root {
+html[data-publisher-reader-scheme="black"] .publisher-root,
+html[data-publisher-reader-scheme="black"] .publisher-reader-audio-host {
   --publisher-color-canvas: #000;
   --publisher-color-surface: #0d1011;
 }
 
-.publisher-root a {
+.publisher-root a,
+.publisher-reader-audio-host a {
   color: var(--publisher-color-accent);
   text-decoration-thickness: 0.08em;
   text-underline-offset: 0.15em;
 }
 
-.publisher-root a:focus-visible {
+.publisher-root a:focus-visible,
+.publisher-reader-audio-host a:focus-visible {
   border-radius: var(--publisher-control-radius);
   outline: 0.2rem solid var(--publisher-color-focus);
   outline-offset: 0.2rem;
@@ -71,7 +79,10 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
 .publisher-root button:focus-visible,
 .publisher-root input:focus-visible,
 .publisher-root select:focus-visible,
-.publisher-root textarea:focus-visible {
+.publisher-root textarea:focus-visible,
+.publisher-reader-audio-host button:focus-visible,
+.publisher-reader-audio-host input:focus-visible,
+.publisher-reader-audio-host select:focus-visible {
   outline: 0.2rem solid var(--publisher-color-focus);
   outline-offset: 0.16rem;
 }
@@ -480,7 +491,7 @@ html[data-publisher-reader-scheme="black"] .publisher-root {
   gap: 0.9rem;
 }
 
-.publisher-reader-rail > audio {
+.publisher-reader-audio-host > audio {
   display: none;
 }
 

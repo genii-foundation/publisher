@@ -893,6 +893,8 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       import {
         createReaderNarrationPreferences,
         createReaderNarrationSectionTextProfile,
+        parseReaderNarrationNavigationIntent,
+        type ReaderNarrationNavigationIntent,
         type ReaderNarrationPreferences,
         type ReaderNarrationSectionTextProfile,
       } from "@genii-foundation/publisher-reader/narration";
@@ -938,6 +940,14 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       const terms: readonly string[] = createReaderSearchTerms("portable");
       const narration: ReaderNarrationPreferences =
         createReaderNarrationPreferences();
+      const navigation: ReaderNarrationNavigationIntent = {
+        publicationId: "portable-reader",
+        sectionId: "opening",
+        href: "/opening",
+      };
+      void parseReaderNarrationNavigationIntent(navigation, {
+        publicationId: "portable-reader",
+      });
       declare const narrationText: ReaderNarrationSectionTextProfile;
       void createReaderNarrationSectionTextProfile;
       void [
@@ -960,6 +970,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         searchIndex,
         terms,
         narration,
+        navigation,
         narrationText,
       ];
     `;

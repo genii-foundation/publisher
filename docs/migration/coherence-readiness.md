@@ -42,9 +42,9 @@ synchronization capabilities.
 | Status | Count | Meaning |
 | --- | ---: | --- |
 | 16 preserved | 16 | The target owner currently implements equivalent behavior. |
-| 34 upgraded | 34 | Publisher implements a stronger checked contract. |
+| 35 upgraded | 35 | Publisher implements a stronger checked contract. |
 | 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
-| 8 planned | 8 | Accepted Publisher scope is not implemented yet. |
+| 7 planned | 7 | Accepted Publisher scope is not implemented yet. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
@@ -187,8 +187,15 @@ bytes, section, audio version, voice, spoken-text length, monotonic word ranges,
 alignment quality, and interpolation limits. Existing server-rendered words are
 the only highlight anchors, so the manuscript retains one accessible text
 occurrence. The Chrome proof requires one post-play timing request, an active
-word, and unchanged manuscript text. ADR 0015 supersedes the earlier claim that
-playback should remain outside the engine application.
+word, and unchanged manuscript text. A closed publication-bound navigation
+intent now starts or resumes one exact narrated section only after its canonical
+destination matches the build-bound progress catalog. The persistent player
+is owned by the root layout, so routed rails keep playback and the open Listen
+panel through current-section and cross-route Next.js navigation. Invalid or
+unready requests retain ordinary link behavior.
+The Chrome proof covers destination mismatch refusal and both navigation cases.
+ADR 0015 supersedes the earlier claim that playback should remain outside the
+engine application. ADR 0045 records the routed playback boundary.
 
 Per-word timing data does not belong in the reader artifact. It remains in lazy
 narration sidecars bound to the narration catalog and exact Reader build.

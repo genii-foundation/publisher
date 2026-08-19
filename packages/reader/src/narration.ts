@@ -65,6 +65,16 @@ export interface ReaderNarrationIdentity {
   readonly readerBuildId: Sha256Digest;
 }
 
+export interface ReaderNarrationNavigationIntent {
+  readonly publicationId: string;
+  readonly sectionId: string;
+  readonly href: string;
+}
+
+export interface ReaderNarrationNavigationIdentity {
+  readonly publicationId: string;
+}
+
 export interface ReaderNarrationWordTiming {
   readonly charStart: number;
   readonly charEnd: number;
@@ -193,6 +203,15 @@ function boundedInteger(value: unknown, maximum: number): value is number {
     value <= maximum;
 }
 
+function readerHref(value: unknown): value is string {
+  return typeof value === "string" &&
+    value.length >= 1 &&
+    value.length <= 8_192 &&
+    value.startsWith("/") &&
+    !value.startsWith("//") &&
+    !/[\\\u0000-\u0020\u007f]/u.test(value);
+}
+
 function positiveNumber(value: unknown, maximum: number): value is number {
   return typeof value === "number" &&
     Number.isFinite(value) &&
@@ -210,6 +229,31 @@ export function countReaderNarrationWords(value: string): number {
   let count = 0;
   while (NARRATION_WORD_PATTERN.exec(value) !== null) count += 1;
   return count;
+}
+
+/**
+ * Parses the untrusted browser intent used to join section navigation to the
+ * default narration queue. The renderer must still require an exact section
+ * and href match from its build-bound progress catalog before consuming it.
+ */
+export function parseReaderNarrationNavigationIntent(
+  value: unknown,
+  expected: ReaderNarrationNavigationIdentity,
+): ReaderNarrationNavigationIntent | null {
+  const record = plainRecord(value);
+  if (
+    record === null ||
+    !hasKeys(record, ["publicationId", "sectionId", "href"]) ||
+    !stableId(expected.publicationId, 256) ||
+    record.publicationId !== expected.publicationId ||
+    !stableId(record.sectionId, 256) ||
+    !readerHref(record.href)
+  ) return null;
+  return Object.freeze({
+    publicationId: expected.publicationId,
+    sectionId: record.sectionId,
+    href: record.href,
+  });
 }
 
 /**

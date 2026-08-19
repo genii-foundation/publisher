@@ -1002,7 +1002,7 @@ async function assertHydratedReaderTools({
       ].join("\n"),
       returnByValue: true,
     });
-    assert.equal(openedNarration.result?.value, true);
+    assert.equal(openedNarration.result?.value, true, "Listen button was unavailable.");
     let narrationState;
     for (let attempt = 0; attempt < 200; attempt += 1) {
       const evaluated = await page.send("Runtime.evaluate", {
@@ -1033,7 +1033,7 @@ async function assertHydratedReaderTools({
     assert.match(narrationState?.queue ?? "", /of 2 recordings/u);
     assert.equal(narrationState?.selects, 2);
     assert.match(narrationState?.summary ?? "", /recorded across 2 timed clips/u);
-    assert.equal(narrationState?.inViewport, true);
+    assert.equal(narrationState?.inViewport, true, "Listen panel escaped the viewport.");
     const timingRequestsBeforePlayback = await page.send("Runtime.evaluate", {
       expression:
         'performance.getEntriesByType("resource").filter((entry) => entry.name.includes("proof.timings.json")).length',
@@ -1075,7 +1075,7 @@ async function assertHydratedReaderTools({
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const evaluated = await page.send("Runtime.evaluate", {
         expression:
-          '(() => { const audio = document.querySelector(".publisher-reader-rail > audio"); return audio instanceof HTMLAudioElement && !audio.paused && audio.currentTime > 0; })()',
+          '(() => { const audio = document.querySelector(".publisher-reader-audio-host > audio"); return audio instanceof HTMLAudioElement && !audio.paused && audio.currentTime > 0; })()',
         returnByValue: true,
       });
       playbackStarted = evaluated.result?.value === true;
@@ -1083,6 +1083,40 @@ async function assertHydratedReaderTools({
       await wait(25);
     }
     assert.equal(playbackStarted, true, "The default narration player did not start its recording.");
+    const soughtNarration = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+        "  if (!(audio instanceof HTMLAudioElement)) return false;",
+        "  audio.currentTime = 4;",
+        '  audio.dispatchEvent(new Event("timeupdate"));',
+        "  return true;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(soughtNarration.result?.value, true, "Persistent audio element was unavailable for timing proof.");
+
+    const refusedNarrationIntent = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const link = document.querySelector(".publisher-reader-narration-now a");',
+        "  if (!(link instanceof HTMLAnchorElement)) return null;",
+        '  const event = new CustomEvent("genii:publisher-reader-narration-navigation", {',
+        "    cancelable: true,",
+        "    detail: {",
+        '      publicationId: "renderer-proof",',
+        '      sectionId: document.querySelector("[data-publisher-section]")?.getAttribute("data-publisher-section") ?? "",',
+        '      href: "/wrong-destination",',
+        "    },",
+        "  });",
+        "  window.dispatchEvent(event);",
+        "  return event.defaultPrevented;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(refusedNarrationIntent.result?.value, false);
 
     let timingState;
     for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -1092,6 +1126,9 @@ async function assertHydratedReaderTools({
           '  const activeWord = document.querySelector(".publisher-narration-word-current");',
           "  return {",
           '    activeWord: activeWord?.textContent ?? "",',
+          '    audioCurrentTime: document.querySelector(".publisher-reader-audio-host > audio")?.currentTime ?? -1,',
+          '    audioPaused: document.querySelector(".publisher-reader-audio-host > audio")?.paused ?? true,',
+          '    narrationAnchorCount: document.querySelectorAll("[data-publisher-narration-word=true]").length,',
           '    manuscriptUnchanged: (document.querySelector(".publisher-manuscript")?.textContent ?? "") === globalThis.__publisherFocusProof.manuscriptText,',
           '    requestCount: performance.getEntriesByType("resource").filter((entry) => entry.name.includes("proof.timings.json")).length,',
           "  };",
@@ -1104,8 +1141,59 @@ async function assertHydratedReaderTools({
       await wait(25);
     }
     assert.equal(timingState?.requestCount, 1);
-    assert.ok(timingState?.activeWord.length > 0);
-    assert.equal(timingState?.manuscriptUnchanged, true);
+    assert.ok(
+      timingState?.activeWord.length > 0,
+      JSON.stringify(timingState),
+    );
+    assert.equal(timingState?.manuscriptUnchanged, true, "Narration changed manuscript text.");
+
+    const sameSectionNavigation = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const link = document.querySelector(".publisher-reader-narration-now a");',
+        "  if (!(link instanceof HTMLAnchorElement)) return null;",
+        '  globalThis.__publisherNarrationNavigationHandled = false;',
+        '  window.addEventListener("genii:publisher-reader-narration-navigation", (event) => {',
+        '    globalThis.__publisherNarrationNavigationHandled = event.defaultPrevented;',
+        "  }, { once: true });",
+        '  globalThis.__publisherNarrationNavigationTarget = `${new URL(link.href).pathname}${new URL(link.href).hash}`;',
+        "  link.click();",
+        "  return globalThis.__publisherNarrationNavigationTarget;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(typeof sameSectionNavigation.result?.value, "string");
+    let sameSectionNavigationState;
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+          "  return {",
+          '    handled: globalThis.__publisherNarrationNavigationHandled === true,',
+          '    playing: audio instanceof HTMLAudioElement && !audio.paused,',
+          '    route: `${location.pathname}${location.hash}`,',
+          '    target: globalThis.__publisherNarrationNavigationTarget ?? "",',
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      sameSectionNavigationState = evaluated.result?.value;
+      if (
+        sameSectionNavigationState?.handled === true &&
+        sameSectionNavigationState.playing === true &&
+        sameSectionNavigationState.route === sameSectionNavigationState.target
+      ) break;
+      await wait(25);
+    }
+    assert.deepEqual(sameSectionNavigationState, {
+      handled: true,
+      playing: true,
+      route: sameSectionNavigation.result.value,
+      target: sameSectionNavigation.result.value,
+    });
 
     const queueAdvanced = await page.send("Runtime.evaluate", {
       expression: [
@@ -1119,7 +1207,7 @@ async function assertHydratedReaderTools({
       ].join("\n"),
       returnByValue: true,
     });
-    assert.equal(queueAdvanced.result?.value?.moved, true);
+    assert.equal(queueAdvanced.result?.value?.moved, true, "Narration queue could not move.");
     let advancedTitle = queueAdvanced.result?.value?.before ?? "";
     for (let attempt = 0; attempt < 100; attempt += 1) {
       const evaluated = await page.send("Runtime.evaluate", {
@@ -1132,6 +1220,85 @@ async function assertHydratedReaderTools({
       await wait(25);
     }
     assert.notEqual(advancedTitle, queueAdvanced.result?.value?.before);
+
+    const crossRouteNavigation = await page.send("Runtime.evaluate", {
+      expression: [
+        "(() => {",
+        '  const link = document.querySelector(".publisher-reader-narration-now a");',
+        "  if (!(link instanceof HTMLAnchorElement)) return null;",
+        '  globalThis.__publisherNarrationCrossRouteTarget = `${new URL(link.href).pathname}${new URL(link.href).hash}`;',
+        '  globalThis.__publisherNarrationCrossRouteTitle = document.querySelector(".publisher-reader-narration-now strong")?.textContent ?? "";',
+        "  link.click();",
+        "  return globalThis.__publisherNarrationCrossRouteTarget;",
+        "})()",
+      ].join("\n"),
+      returnByValue: true,
+    });
+    assert.equal(typeof crossRouteNavigation.result?.value, "string");
+    assert.notEqual(
+      crossRouteNavigation.result.value,
+      sameSectionNavigation.result.value,
+    );
+    let crossRouteNavigationState;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => {",
+          '  const audio = document.querySelector(".publisher-reader-audio-host > audio");',
+          "  return {",
+          '    panelOpen: document.querySelector(".publisher-reader-narration") !== null,',
+          '    playing: audio instanceof HTMLAudioElement && !audio.paused,',
+          '    route: `${location.pathname}${location.hash}`,',
+          '    target: globalThis.__publisherNarrationCrossRouteTarget ?? "",',
+          '    title: document.querySelector(".publisher-reader-narration-now strong")?.textContent ?? "",',
+          '    targetTitle: globalThis.__publisherNarrationCrossRouteTitle ?? "",',
+          "  };",
+          "})()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      crossRouteNavigationState = evaluated.result?.value;
+      if (
+        crossRouteNavigationState?.panelOpen === true &&
+        crossRouteNavigationState.playing === true &&
+        crossRouteNavigationState.route === crossRouteNavigationState.target &&
+        crossRouteNavigationState.title === crossRouteNavigationState.targetTitle
+      ) break;
+      await wait(25);
+    }
+    assert.deepEqual(crossRouteNavigationState, {
+      panelOpen: true,
+      playing: true,
+      route: crossRouteNavigation.result.value,
+      target: crossRouteNavigation.result.value,
+      title: advancedTitle,
+      targetTitle: advancedTitle,
+    });
+    await page.send("Runtime.evaluate", {
+      expression: "history.back()",
+    });
+    let originalNarrationRouteRestored = false;
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const evaluated = await page.send("Runtime.evaluate", {
+        expression: [
+          "(() => ({",
+          '  manuscript: (document.querySelector(".publisher-manuscript")?.textContent ?? "") === globalThis.__publisherFocusProof.manuscriptText,',
+          '  route: `${location.pathname}${location.hash}` === globalThis.__publisherNarrationNavigationTarget,',
+          "}))()",
+        ].join("\n"),
+        returnByValue: true,
+      });
+      originalNarrationRouteRestored =
+        evaluated.result?.value?.manuscript === true &&
+        evaluated.result.value.route === true;
+      if (originalNarrationRouteRestored) break;
+      await wait(25);
+    }
+    assert.equal(
+      originalNarrationRouteRestored,
+      true,
+      "The packed proof could not restore its original manuscript route.",
+    );
 
     const narrationPreference = await page.send("Runtime.evaluate", {
       expression: [
@@ -1437,12 +1604,12 @@ async function assertHydratedReaderTools({
       synchronizedState,
       {
         message: "Reading data synced.",
-        progressEntries: 1,
+        progressEntries: 2,
         bookmarksSchemaVersion: null,
         consentGranted: true,
-        acknowledgedEvents: 1,
+        acknowledgedEvents: 3,
       },
-      "The default Reader did not complete and acknowledge its sparse local-first synchronization transfer.",
+      "The default Reader did not complete and acknowledge its routed local-first synchronization transfer.",
     );
     const peerPage = await openDevToolsPage(browser);
     try {
@@ -2412,7 +2579,7 @@ function createProofPng() {
   ]);
 }
 
-function createProofWav(durationSeconds = 2) {
+function createProofWav(durationSeconds = 8) {
   const sampleRate = 8_000;
   const sampleCount = sampleRate * durationSeconds;
   const dataSize = sampleCount * 2;
@@ -2768,6 +2935,7 @@ export async function runPackagedHostProof(
     const narratedSections = reader.works.flatMap((work) =>
       work.sections.filter((section) => section.navigable));
     assert.ok(narratedSections.length >= 2);
+    const proofAudioDurationSeconds = 8;
     const timedSection = narratedSections[0];
     const timedSectionProfile = createReaderNarrationSectionTextProfile(
       timedSection,
@@ -2779,8 +2947,12 @@ export async function runPackagedHostProof(
     ).map((match, index, matches) => ({
       charStart: match.index,
       charEnd: match.index + match[0].length,
-      startSeconds: Number(((index * 2) / matches.length).toFixed(3)),
-      endSeconds: Number((((index + 1) * 2) / matches.length).toFixed(3)),
+      startSeconds: Number(
+        ((index * proofAudioDurationSeconds) / matches.length).toFixed(3),
+      ),
+      endSeconds: Number(
+        (((index + 1) * proofAudioDurationSeconds) / matches.length).toFixed(3),
+      ),
       match: "exact",
     }));
     const timingDocumentText = `${JSON.stringify({
@@ -2789,7 +2961,7 @@ export async function runPackagedHostProof(
       audioVersionId: `${timedSection.id}.calm`,
       voiceId: "calm",
       textCharacters: timedSectionProfile.textCharacters,
-      durationSeconds: 2,
+      durationSeconds: proofAudioDurationSeconds,
       exactWordCount: timingWords.length,
       interpolatedWordCount: 0,
       words: timingWords,
@@ -2818,7 +2990,7 @@ export async function runPackagedHostProof(
             ...(index === 0
               ? { timingsByteSize: Buffer.byteLength(timingDocumentText) }
               : {}),
-            durationSeconds: 2,
+            durationSeconds: proofAudioDurationSeconds,
           })),
           narratedSectionCount: 2,
           unnarratedSectionCount: narratedSections.length - 2,
@@ -2832,7 +3004,7 @@ export async function runPackagedHostProof(
             href: "/proof.wav",
             format: "wav",
             byteSize: createProofWav().byteLength,
-            durationSeconds: 2,
+            durationSeconds: proofAudioDurationSeconds,
           })),
           narratedSectionCount: 1,
           unnarratedSectionCount: narratedSections.length - 1,
@@ -2959,20 +3131,23 @@ export async function runPackagedHostProof(
         [
           'import { PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES, PUBLISHER_NEXT_VERSION } from "@genii-foundation/publisher-next";',
           'import { createPublisherNextRoutePlan, type PublicationNextApplication } from "@genii-foundation/publisher-next/server";',
-          'import { createPublisherNextErrorIdentity, PublisherNextErrorPage, PublisherNextFrameworkErrorPage, PublisherNextGlobalErrorPage, type PublisherNextErrorIdentity } from "@genii-foundation/publisher-next/client";',
+          'import { createPublisherNextErrorIdentity, PublisherNextErrorPage, PublisherNextFrameworkErrorPage, PublisherNextGlobalErrorPage, requestPublisherReaderNarrationNavigation, type PublisherNextErrorIdentity, type ReaderNarrationNavigationIntent } from "@genii-foundation/publisher-next/client";',
           'import { createPublisherNextConfig } from "@genii-foundation/publisher-next/config";',
           'import { defaultPublisherNextTheme, validatePublisherNextThemeInstance } from "@genii-foundation/publisher-next/theme";',
           'import { defaultPublisherNextTheme as directDefaultTheme } from "@genii-foundation/publisher-next/theme/default";',
           "",
           "declare const application: PublicationNextApplication;",
           "declare const errorIdentity: PublisherNextErrorIdentity;",
+          "declare const narrationIntent: ReaderNarrationNavigationIntent;",
           "void application;",
           "void errorIdentity;",
+          "void narrationIntent;",
           "void PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES;",
           "void PUBLISHER_NEXT_VERSION;",
           "void PublisherNextErrorPage;",
           "void PublisherNextFrameworkErrorPage;",
           "void PublisherNextGlobalErrorPage;",
+          "void requestPublisherReaderNarrationNavigation;",
           "void createPublisherNextErrorIdentity;",
           "void createPublisherNextConfig;",
           "void createPublisherNextRoutePlan;",
@@ -2999,6 +3174,8 @@ export async function runPackagedHostProof(
           "assert.equal(typeof client.PublisherNextFrameworkErrorPage, \"function\");",
           "assert.equal(typeof client.PublisherNextGlobalErrorPage, \"function\");",
           "assert.equal(typeof client.createPublisherNextErrorIdentity, \"function\");",
+          "assert.equal(typeof client.requestPublisherReaderNarrationNavigation, \"function\");",
+          "assert.equal(typeof client.PUBLISHER_READER_NARRATION_NAVIGATION_EVENT, \"string\");",
           "assert.equal(typeof config.createPublisherNextConfig, \"function\");",
           "assert.equal(typeof config.createPublisherNextRoutePlan, \"function\");",
           "assert.equal(root.defaultPublisherNextTheme, theme.defaultPublisherNextTheme);",

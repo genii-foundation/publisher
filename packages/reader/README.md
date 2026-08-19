@@ -96,8 +96,11 @@ drifted statistics, and oversized data. It also owns the versioned local voice
 and playback-rate preference document. Its closed spoken-text profile and strict
 timing parser bind a sidecar's exact bytes, clip identity, voice, text length,
 word ranges, alignment quality, and interpolation runs before binary time lookup.
-It derives the sidecar URL from the clip URL. It does not fetch, store, inspect
-the DOM, or play media.
+It derives the sidecar URL from the clip URL. The same subpath parses a closed,
+publication-bound section navigation intent. A renderer must match its section
+and destination against the exact build-bound progress catalog before consuming
+it. The subpath does not fetch, store, inspect the DOM, dispatch events, navigate,
+or play media.
 
 All mutation, parsing, sanitization, and merge calls that can interpret time require an explicit `now` value in epoch milliseconds. The module never reads the clock. Parsing clamps future timestamps to that value. A local event older than the state's latest accepted update is refused instead of rewinding newer evidence. Parsing also rejects a publication mismatch or newer schema, bounds input bytes and entry counts, and stores entries in a frozen null-prototype record. Aggregate percentage is weighted by each supplied section's current `wordCount`.
 

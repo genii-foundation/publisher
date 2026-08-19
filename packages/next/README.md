@@ -34,8 +34,14 @@ honest when clips omit duration. Closing the panel does not destroy playback.
 When a clip declares timings, playback starts before one bounded sidecar request.
 The result must match the exact clip and spoken-text profile before it can mark
 an existing server-rendered word. No duplicate manuscript text is introduced,
-and timing failure cannot stop audio or reading. Route-preserving playback intent
-and offline audio packages remain separate planned capabilities.
+and timing failure cannot stop audio or reading. The client export offers a
+cancelable, publication-bound section playback request. The player consumes it
+only after the requested section and destination exactly match the selected
+voice and lazy build-bound progress catalog. A root-layout provider owns the
+media element and open panel while each routed rail controls that persistent
+state. Playback therefore survives current-section and cross-route Next.js
+navigation. Ordinary link behavior wins when the player cannot consume the
+request. Offline audio packages remain a separate planned capability.
 
 ## Supported toolchain
 
