@@ -374,6 +374,7 @@ function offlineServiceWorkerSource(): string {
     "",
     "function shouldHandle(request) {",
     '  if (request.method !== "GET") return false;',
+    '  if (request.headers.has("range")) return false;',
     "  const url = new URL(request.url);",
     "  if (url.origin !== self.location.origin) return false;",
     '  if (request.headers.get("rsc") === "1" || url.searchParams.has("_rsc")) return false;',

@@ -3232,6 +3232,36 @@ async function assertOfflineReaderTools({
       uploadThroughput: 0,
       connectionType: "none",
     });
+    const rangedOfflineFetch = await page.send("Runtime.evaluate", {
+      expression: [
+        "(async () => {",
+        "  try {",
+        `    const response = await fetch(${JSON.stringify(destinationUrl)}, {`,
+        '      cache: "no-store",',
+        '      credentials: "omit",',
+        '      headers: { Range: "bytes=0-7" },',
+        "    });",
+        "    return {",
+        '      outcome: "response",',
+        "      status: response.status,",
+        "      bytes: (await response.arrayBuffer()).byteLength,",
+        "    };",
+        "  } catch (error) {",
+        "    return {",
+        '      outcome: "rejected",',
+        '      name: error instanceof Error ? error.name : "unknown",',
+        "    };",
+        "  }",
+        "})()",
+      ].join("\n"),
+      awaitPromise: true,
+      returnByValue: true,
+    });
+    assert.deepEqual(
+      rangedOfflineFetch.result?.value,
+      { outcome: "rejected", name: "TypeError" },
+      "An offline Range request received a cached full response.",
+    );
     const offlineNavigation = await page.send("Page.navigate", {
       url: destinationUrl,
     });

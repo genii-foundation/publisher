@@ -288,6 +288,7 @@ test("offline host files expose only generic cache and catalog contracts", () =>
   assert.match(worker, /headers\.get\("rsc"\)/u);
   assert.match(worker, /next-router-state-tree/u);
   assert.match(worker, /response\.status !== 206/u);
+  assert.match(worker, /if \(request\.headers\.has\("range"\)\) return false;/u);
   assert.match(worker, /request\.headers\.has\("range"\)/u);
   assert.match(worker, /matchActivePackage/u);
   assert.match(worker, /genii-publisher-offline-metadata-v1/u);
