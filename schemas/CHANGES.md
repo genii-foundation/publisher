@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-20, GENII Foundation
+
+- Corrected the public audio envelope voice declaration to expose `clips`, matching the closed schema and runtime artifact, while preserving `sections` in source audio catalogs.
+
 ## 2026-08-19, GENII Foundation
 
 - Added a separately bounded, immutable, Reader-build-bound public state projection for publication-owned legacy translation evidence, with an independent total static HTML transport limit.

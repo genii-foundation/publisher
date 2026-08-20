@@ -381,8 +381,18 @@ test("the envelope calls them clips, and the catalog still calls them sections",
   // document and names them for what they are.
   const { catalogText, envelope } = await narratedEnvelope();
   assert.ok(JSON.parse(catalogText).voices[0].sections);
-  assert.ok(envelope.envelope.voices[0].clips);
-  assert.equal(envelope.envelope.voices[0].sections, undefined);
+  const envelopeVoice = envelope.envelope.voices[0];
+  assert.ok(envelopeVoice.clips);
+  assert.equal(envelopeVoice.sections, undefined);
+  assert.deepEqual(Object.keys(envelopeVoice).sort(), [
+    "clips",
+    "id",
+    "label",
+    "model",
+    "narratedSectionCount",
+    "provider",
+    "unnarratedSectionCount",
+  ]);
 });
 
 test("a build identity that is not a digest is refused", () => {

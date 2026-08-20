@@ -462,6 +462,7 @@ import {
   parsePreviewCandidateIdentity,
   PUBLISHER_SOURCE_LOADER_LIMITS,
   verifyPreviewCandidateIdentity,
+  type BuiltAudioEnvelope,
   type CapturePreviewCandidateIdentityInput,
   type CompileLoadedPublicationContentInput,
   type LoadedPublicationCompilationSources,
@@ -499,6 +500,11 @@ const source: CompilationSourceInput = {
 };
 declare const publication: PublicationManifest;
 declare const sourceGraph: ResolvedPublicationSourceGraph;
+declare const builtAudio: BuiltAudioEnvelope;
+const firstClipHref: string | undefined =
+  builtAudio.envelope.voices[0]?.clips[0]?.href;
+// @ts-expect-error Audio envelopes expose clips, not catalog sections.
+builtAudio.envelope.voices[0]?.sections;
 // @ts-expect-error Loader snapshots are opaque and cannot be constructed.
 const forged: LoadedPublicationCompilationSources = {
   publication,
@@ -519,7 +525,16 @@ async function useLoaded(): Promise<readonly Diagnostic[]> {
   });
   return validation.diagnostics;
 }
-void [version, limits, forged, compiled, previewPending, verifiedPreview, useLoaded];
+void [
+  version,
+  limits,
+  firstClipHref,
+  forged,
+  compiled,
+  previewPending,
+  verifiedPreview,
+  useLoaded,
+];
 `,
         "utf8",
       ),

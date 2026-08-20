@@ -827,6 +827,9 @@ if (
         validateContentEnvelopeShape,
         validatePublicationShape,
         validateReaderEnvelopeShape,
+        type AudioCatalogVoice,
+        type AudioClip,
+        type AudioEnvelopeVoice,
         type CanonicalRoutePathInspection,
         type ExtensionCapability,
         type PublicationContentEnvelope,
@@ -846,8 +849,26 @@ if (
       } from "@genii-foundation/publisher-schema/reader";
 
       declare const publication: PublicationManifest;
+      const catalogVoice: AudioCatalogVoice = {
+        id: "reader-one",
+        label: "Reader One",
+        sections: [],
+      };
+      const envelopeVoice: AudioEnvelopeVoice = {
+        id: "reader-one",
+        label: "Reader One",
+        clips: [],
+        narratedSectionCount: 0,
+        unnarratedSectionCount: 1,
+      };
+      const catalogSections: readonly AudioClip[] = catalogVoice.sections;
+      const envelopeClips: readonly AudioClip[] = envelopeVoice.clips;
+      // @ts-expect-error Audio envelopes expose clips, not catalog sections.
+      envelopeVoice.sections;
+      // @ts-expect-error Audio catalogs retain sections, not envelope clips.
+      catalogVoice.clips;
       const capability: ExtensionCapability = "renderer.slot";
-      void capability;
+      void [capability, catalogSections, envelopeClips];
       void PORTABLE_REPOSITORY_CASE_FOLDING_VERSION;
       void PORTABLE_REPOSITORY_NORMALIZATION_VERSION;
       void normalizePortableRepositoryText("Cafe\\u0301");

@@ -245,7 +245,18 @@ export interface AudioCheckpoint {
   readonly units: readonly AudioCheckpointUnit[];
 }
 
-export interface AudioEnvelopeVoice extends AudioCatalogVoice {
+export interface AudioEnvelopeVoice {
+  readonly id: string;
+  readonly label: string;
+  readonly provider?: string;
+  readonly model?: string;
+  /**
+   * Clips this voice has recorded, one per section.
+   *
+   * The source catalog retains its established `sections` property. The built
+   * envelope uses `clips`, matching its closed schema and runtime artifact.
+   */
+  readonly clips: readonly AudioClip[];
   /** Sections this voice narrates. */
   readonly narratedSectionCount: number;
   /** Sections in the publication this voice has no narration for. */
