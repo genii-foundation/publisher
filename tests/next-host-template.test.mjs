@@ -231,6 +231,15 @@ test("the host contract declares exactly the author host file set", () => {
       summary:
         "Refresh the checked Next declaration file for the exact Next.js 16.3.1 generated type roots.",
     },
+    {
+      from: "0.16.0",
+      to: "0.17.0",
+      summary:
+        "Extend the Reader state bootstrap input contract with an optional separately bounded state projection.",
+      manualSteps: [
+        "If readerStateBootstrap is configured, update its implementation apiVersion from 1.0 to 1.1 and review the optional createProjection input before acknowledging this migration.",
+      ],
+    },
   ]);
 });
 

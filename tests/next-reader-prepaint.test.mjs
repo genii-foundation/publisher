@@ -24,7 +24,11 @@ import {
   createPublisherReaderStateBootstrapSource,
 } from "../packages/next/dist/client/reader-prepaint.js";
 
-function executeStateBootstrap(source, initial = {}) {
+function executeStateBootstrap(
+  source,
+  initial = {},
+  projectionText = null,
+) {
   const storage = new Map(Object.entries(initial));
   const attributes = Object.create(null);
   const writes = [];
@@ -47,8 +51,9 @@ function executeStateBootstrap(source, initial = {}) {
     sourceHash: `sha256:${"a".repeat(64)}`,
     source,
     context,
+    projectionText,
   });
-  vm.runInNewContext(compiled, {
+  const sandbox = {
     document: {
       documentElement: {
         dataset: new Proxy(attributes, {
@@ -57,6 +62,11 @@ function executeStateBootstrap(source, initial = {}) {
             return true;
           },
         }),
+        setAttribute(name, value) {
+          if (name === "data-publisher-reader-state-bootstrap") {
+            attributes.publisherReaderStateBootstrap = value;
+          }
+        },
       },
     },
     localStorage: {
@@ -68,8 +78,16 @@ function executeStateBootstrap(source, initial = {}) {
         storage.set(key, value);
       },
     },
-  });
-  return { attributes, compiled, context, storage, writes };
+  };
+  vm.runInNewContext(compiled, sandbox);
+  return {
+    attributes,
+    compiled,
+    context,
+    sandbox,
+    storage,
+    writes,
+  };
 }
 
 function executePrepaint({
@@ -333,4 +351,284 @@ test("Reader state bootstrap snapshots data properties and refuses accessors", (
     arrayAccessor.storage.get(arrayAccessor.context.reportStorageKey),
     /private-value/u,
   );
+});
+
+test("Reader state bootstrap receives one deeply frozen projection without global exposure", () => {
+  const projectionText = JSON.stringify({
+    buildId: `sha256:${"b".repeat(64)}`,
+    data: JSON.parse(
+      '{"__proto__":{"safe":true},"nested":{"values":["proof"]}}',
+    ),
+    engineVersion: "1.0.0",
+    publicationId: "prepaint-proof",
+    schemaVersion: "1.0",
+  });
+  const result = executeStateBootstrap([
+    "if (projection === null || !Object.isFrozen(projection) || !Object.isFrozen(projection.data) || !Object.isFrozen(projection.data.nested) || !Object.isFrozen(projection.data.nested.values)) throw new Error(\"not frozen\");",
+    "if (!Object.hasOwn(projection.data, \"__proto__\") || Object.getPrototypeOf(projection.data) !== Object.prototype || Object.getPrototypeOf({}).safe !== undefined) throw new Error(\"prototype changed\");",
+    "try { projection.data.nested.values[0] = \"mutated\"; } catch {}",
+    "if (projection.data.nested.values[0] !== \"proof\") throw new Error(\"projection mutated\");",
+    'return { schemaVersion: "1.0", copied: ["projection-proof"], refused: [] };',
+  ].join("\n"), {}, projectionText);
+
+  assert.equal(
+    result.attributes.publisherReaderStateBootstrap,
+    "completed",
+  );
+  assert.deepEqual(
+    JSON.parse(result.storage.get(result.context.reportStorageKey)).copied,
+    ["projection-proof"],
+  );
+  assert.equal(Object.hasOwn(result.sandbox, "projection"), false);
+  assert.equal(Object.getPrototypeOf({}).safe, undefined);
+});
+
+test("Reader state projection script encoding contains HTML and line separator data", () => {
+  const privateValue = "</script><!-- -->\u2028\u2029";
+  const projectionText = JSON.stringify({
+    buildId: `sha256:${"b".repeat(64)}`,
+    data: { privateValue },
+    engineVersion: "1.0.0",
+    publicationId: "prepaint-proof",
+    schemaVersion: "1.0",
+  });
+  const result = executeStateBootstrap([
+    "if (projection.data.privateValue.length === 0) throw new Error(\"missing\");",
+    'return { schemaVersion: "1.0", copied: [], refused: [] };',
+  ].join("\n"), {}, projectionText);
+  assert.equal(
+    result.attributes.publisherReaderStateBootstrap,
+    "completed",
+  );
+  assert.doesNotMatch(result.compiled, /<\/script|<!--|-->/u);
+  assert.doesNotMatch(result.compiled, /[\u2028\u2029]/u);
+  assert.equal(Object.hasOwn(result.sandbox, "projection"), false);
+  assert.doesNotMatch(
+    result.storage.get(result.context.reportStorageKey),
+    /script|privateValue/u,
+  );
+});
+
+test("Reader state projection parse failure is contained and privately reported", () => {
+  const result = executeStateBootstrap(
+    'return { schemaVersion: "1.0", copied: [], refused: [] };',
+    {},
+    "private invalid projection",
+  );
+  assert.equal(
+    result.attributes.publisherReaderStateBootstrap,
+    "failed",
+  );
+  assert.doesNotMatch(
+    result.storage.get(result.context.reportStorageKey),
+    /private invalid projection/u,
+  );
+});
+
+test("Reader state bootstrap cannot corrupt renderer report locals", () => {
+  const privateValue = "private_report_sentinel";
+  const result = executeStateBootstrap([
+    'const privateValue = localStorage.getItem("legacy.private");',
+    "try { i.adapter.package = privateValue; } catch {}",
+    "try { copied = [privateValue]; } catch {}",
+    "try { refused = [privateValue]; } catch {}",
+    "try { status = privateValue; } catch {}",
+    "Object.prototype.toJSON = () => privateValue;",
+    "JSON.stringify = () => privateValue;",
+    "RegExp.prototype.test = () => true;",
+    "return new Proxy({}, {",
+    "  getPrototypeOf() {",
+    "    try { copied = [privateValue]; } catch {}",
+    "    throw new Error(privateValue);",
+    "  },",
+    "});",
+  ].join("\n"), {
+    "legacy.private": privateValue,
+  });
+  const reportText = result.storage.get(result.context.reportStorageKey);
+  assert.equal(
+    result.attributes.publisherReaderStateBootstrap,
+    "failed",
+  );
+  assert.doesNotMatch(reportText, new RegExp(privateValue, "u"));
+  assert.deepEqual(JSON.parse(reportText), {
+    schemaVersion: "1.0",
+    adapter: {
+      package: "@example/legacy-state",
+      version: "1.0.0",
+      sourceHash: `sha256:${"a".repeat(64)}`,
+    },
+    status: "failed",
+    copied: [],
+    refused: [],
+  });
+
+  const labelBypass = executeStateBootstrap([
+    "String.prototype.charCodeAt = () => 97;",
+    'return { schemaVersion: "1.0", copied: [localStorage.getItem("legacy.private")], refused: [] };',
+  ].join("\n"), {
+    "legacy.private": "PRIVATE VALUE WITH SPACES",
+  });
+  const bypassReport = labelBypass.storage.get(
+    labelBypass.context.reportStorageKey,
+  );
+  assert.equal(
+    labelBypass.attributes.publisherReaderStateBootstrap,
+    "invalid-report",
+  );
+  assert.doesNotMatch(bypassReport, /PRIVATE VALUE WITH SPACES/u);
+
+  const arrayIndexPoison = executeStateBootstrap([
+    'const privateValue = localStorage.getItem("legacy.private");',
+    'Object.defineProperty(Array.prototype, "0", {',
+    "  configurable: true,",
+    "  get() { return privateValue; },",
+    "  set() {},",
+    "});",
+    'return { schemaVersion: "1.0", copied: ["valid-label"], refused: [] };',
+  ].join("\n"), {
+    "legacy.private": privateValue,
+  });
+  const indexPoisonReport = arrayIndexPoison.storage.get(
+    arrayIndexPoison.context.reportStorageKey,
+  );
+  assert.equal(
+    arrayIndexPoison.attributes.publisherReaderStateBootstrap,
+    "completed",
+  );
+  assert.deepEqual(JSON.parse(indexPoisonReport).copied, ["valid-label"]);
+  assert.doesNotMatch(indexPoisonReport, new RegExp(privateValue, "u"));
+
+  const iteratorPoison = executeStateBootstrap([
+    "Array.prototype[Symbol.iterator] = function* empty() {};",
+    'return { schemaVersion: "1.0", copied: ["same"], refused: ["same"] };',
+  ].join("\n"));
+  assert.equal(
+    iteratorPoison.attributes.publisherReaderStateBootstrap,
+    "invalid-report",
+  );
+
+  const stringConstructorPoison = executeStateBootstrap([
+    "let stringCalls = 0;",
+    "globalThis.String = () => {",
+    "  stringCalls += 1;",
+    '  return stringCalls <= 3 ? "0" : "length";',
+    "};",
+    'return { schemaVersion: "1.0", copied: ["valid-label"], refused: [] };',
+  ].join("\n"));
+  assert.equal(
+    stringConstructorPoison.attributes.publisherReaderStateBootstrap,
+    "completed",
+  );
+  assert.deepEqual(
+    JSON.parse(stringConstructorPoison.storage.get(
+      stringConstructorPoison.context.reportStorageKey,
+    )).copied,
+    ["valid-label"],
+  );
+
+  const proxyPoison = executeStateBootstrap([
+    'const privateValue = localStorage.getItem("legacy.private");',
+    "const report = {",
+    '  schemaVersion: "1.0",',
+    "  copied: [privateValue],",
+    "  refused: [],",
+    "};",
+    "return new Proxy(report, {",
+    "  getPrototypeOf() {",
+    "    String.prototype.charCodeAt = () => 97;",
+    '    Object.defineProperty(Array.prototype, "0", {',
+    "      configurable: true,",
+    "      get() { return privateValue; },",
+    "      set() {},",
+    "    });",
+    "    return Object.prototype;",
+    "  },",
+    "});",
+  ].join("\n"), {
+    "legacy.private": "PRIVATE PROXY VALUE WITH SPACES",
+  });
+  const proxyPoisonReport = proxyPoison.storage.get(
+    proxyPoison.context.reportStorageKey,
+  );
+  assert.equal(
+    proxyPoison.attributes.publisherReaderStateBootstrap,
+    "invalid-report",
+  );
+  assert.doesNotMatch(proxyPoisonReport, /PRIVATE PROXY VALUE WITH SPACES/u);
+
+  for (const poisonedGlobal of ["Object", "JSON"]) {
+    const globalReceiverPoison = executeStateBootstrap([
+      'const privateValue = localStorage.getItem("legacy.private");',
+      "const defineGlobal = Object.defineProperty;",
+      "const objectPrototype = Object.prototype;",
+      "const report = {",
+      '  schemaVersion: "1.0",',
+      '  copied: ["valid-label"],',
+      "  refused: [],",
+      "};",
+      "return new Proxy(report, {",
+      "  getPrototypeOf() {",
+      `    defineGlobal(globalThis, "${poisonedGlobal}", {`,
+      "      configurable: true,",
+      "      get() { throw new Error(privateValue); },",
+      "    });",
+      "    return objectPrototype;",
+      "  },",
+      "});",
+    ].join("\n"), {
+      "legacy.private": privateValue,
+    });
+    const globalReceiverReport = globalReceiverPoison.storage.get(
+      globalReceiverPoison.context.reportStorageKey,
+    );
+    assert.equal(
+      globalReceiverPoison.attributes.publisherReaderStateBootstrap,
+      "completed",
+    );
+    assert.deepEqual(
+      JSON.parse(globalReceiverReport).copied,
+      ["valid-label"],
+    );
+    assert.doesNotMatch(
+      globalReceiverReport,
+      new RegExp(privateValue, "u"),
+    );
+  }
+
+  const documentRedirect = executeStateBootstrap([
+    'const privateValue = localStorage.getItem("legacy.private");',
+    "const defineGlobal = Object.defineProperty;",
+    "const objectPrototype = Object.prototype;",
+    "const realDataset = document.documentElement.dataset;",
+    "const report = {",
+    '  schemaVersion: "1.0",',
+    '  copied: ["valid-label"],',
+    "  refused: [],",
+    "};",
+    "return new Proxy(report, {",
+    "  getPrototypeOf() {",
+    "    realDataset.publisherReaderStateBootstrap = privateValue;",
+    '    defineGlobal(globalThis, "document", {',
+    "      configurable: true,",
+    "      get() { return { documentElement: { dataset: {} } }; },",
+    "    });",
+    "    return objectPrototype;",
+    "  },",
+    "});",
+  ].join("\n"), {
+    "legacy.private": "PRIVATE STATUS SENTINEL",
+  });
+  const documentRedirectReport = documentRedirect.storage.get(
+    documentRedirect.context.reportStorageKey,
+  );
+  assert.equal(
+    documentRedirect.attributes.publisherReaderStateBootstrap,
+    "completed",
+  );
+  assert.deepEqual(
+    JSON.parse(documentRedirectReport).copied,
+    ["valid-label"],
+  );
+  assert.doesNotMatch(documentRedirectReport, /PRIVATE STATUS SENTINEL/u);
 });

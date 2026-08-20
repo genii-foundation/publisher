@@ -84,10 +84,11 @@ and appear once in the installed dependency graph.
 ### Local state compatibility interface
 
 Publisher namespaces new state by publication identity and the official renderer
-now exposes the closed Reader state bootstrap described by ADR 0057. The generic
-hook runs before prepaint, receives renderer-derived target keys, is bounded and
-deterministic, reports what it copied or refused, leaves legacy keys intact, and
-is safe to run again. Coherence preview adoption still requires a
+now exposes the closed Reader state bootstrap and separately bounded public
+projection described by ADR 0057 and ADR 0059. The generic hook runs before
+prepaint, receives renderer-derived target keys and a frozen build-bound
+projection, reports what it copied or refused, leaves legacy keys intact, and is
+safe to run again. Coherence preview adoption still requires a
 publication-owned adapter plus acceptance fixtures for its exact legacy document
 versions. Those fixtures must prove lossless copies and explicit refusal of any
 state that cannot be represented safely.
@@ -112,13 +113,15 @@ without loss and must have round-trip tests. Legacy cache names are evidence for
 offline-package replacement, not mutable state to rename in place.
 
 The executable source alone cannot contain the complete Coherence translation
-census. The committed route mapping already exceeds the 32,768 byte source limit
-before block identities and historical hashes are added. Publisher must first add
-one separately bounded, immutable, build-bound projection. Its exact JSON bytes,
-hash, and size must contribute to application identity, and the browser must receive
-only a frozen parsed value beside the frozen context. The projection may contain
-committed publication identities and mappings. It may never contain private Reader
-state.
+census. The separately bounded, immutable, build-bound projection supplied by
+Publisher carries committed publication identities and mappings. Its exact
+canonical bytes, hash, and size contribute to application identity, and the
+browser receives only a frozen parsed value beside the frozen context. The
+Coherence adapter must prove its full current and historical identity census fits
+the generic projection limits. The projection may never contain private Reader
+state. Retained evidence must also prove that the exact inline script multiplied
+by the complete static route count remains within Publisher's total static
+transport limit.
 
 Acceptance fixtures must cover every currently valid legacy shape, not only values
 that happen to fit Publisher today. Textured preferences, progress fields without
@@ -290,7 +293,11 @@ Run the following classes of evidence against the exact candidate commit:
    bookmarks, narration, and offline reading.
 7. Seed sanitized legacy state, load the candidate, verify exact or documented
    monotonic translation, reload, simulate rollback, and prove the preserved legacy
-   state remains readable.
+   state remains readable. Retain the full census coverage record, the exact
+   canonical projection byte size and hash matching application manifest 1.2,
+   unchanged target and legacy bytes on refusal and rerun, and proof that private
+   sentinels are absent from projection HTML, root attributes, and the normalized
+   report.
 8. Install a work from a cold browser, disconnect transport, reload, navigate,
    search, edit bookmarks, and play timed narration. A failed replacement must
    leave the prior complete package active.

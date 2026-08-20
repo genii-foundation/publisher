@@ -26,7 +26,7 @@
       "const": "https://publisher.genii.foundation/schemas/next-application-manifest.schema.json"
     },
     "schemaVersion": {
-      "const": "1.1"
+      "const": "1.2"
     },
     "publicationId": {
       "$ref": "#/$defs/stableId"
@@ -278,7 +278,8 @@
             "rendererCompatibility",
             "apiVersion",
             "configHash",
-            "sourceHash"
+            "sourceHash",
+            "projection"
           ],
           "properties": {
             "package": {
@@ -293,17 +294,49 @@
               "maxLength": 1024
             },
             "apiVersion": {
-              "const": "1.0"
+              "const": "1.1"
             },
             "configHash": {
               "$ref": "#/$defs/sha256Digest"
             },
             "sourceHash": {
               "$ref": "#/$defs/sha256Digest"
+            },
+            "projection": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/$defs/readerStateBootstrapProjection"
+                }
+              ]
             }
           }
         }
       ]
+    },
+    "readerStateBootstrapProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "byteSize",
+        "hash"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 161,
+          "maximum": 8388608
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256Digest"
+        }
+      }
     },
     "extensions": {
       "type": "object",

@@ -32,7 +32,7 @@ import {
 } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   assertReleaseTag,
@@ -371,6 +371,39 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
         `Packed rebuild changed dist/${distPath}.`,
       );
     }
+    const packedRoot = await import(
+      `${pathToFileURL(join(extractedRoot, "dist", "index.js")).href}?projection-contract`
+    );
+    assert.deepEqual(
+      {
+        projectionBytes:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+        projectionContainers:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS,
+        projectionDepth:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+        projectionEntries:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+        projectionSchemaVersion:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION,
+        scriptBytes:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+        sourceBytes:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES,
+        staticScriptBytes:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
+      },
+      {
+        projectionBytes: 8_388_608,
+        projectionContainers: 100_000,
+        projectionDepth: 64,
+        projectionEntries: 1_000_000,
+        projectionSchemaVersion: "1.0",
+        scriptBytes: 16_777_216,
+        sourceBytes: 32_768,
+        staticScriptBytes: 134_217_728,
+      },
+    );
   } finally {
     await removeOwnedTemporaryRoot(temporaryRoot);
   }

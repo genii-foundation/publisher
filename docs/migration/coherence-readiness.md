@@ -398,17 +398,15 @@ product decision:
 
 The executable, reversible sequence is recorded in
 [`coherence-adoption-plan.md`](coherence-adoption-plan.md). It is pinned to exact
-Publisher and Coherence commits, names the remaining state projection and
-Coherence-specific adapter acceptance work, preserves the current Coherence
+Publisher and Coherence commits, names the remaining Coherence-specific adapter
+and full-census acceptance work, preserves the current Coherence
 workbench and provider state, and stops before merge or production deployment.
-Publisher's closed executable bootstrap boundary is complete. The current
-source-only limit cannot carry Coherence's complete section, historical hash,
-and paragraph mapping census. Publisher must add a separately bounded,
-immutable, build-bound projection before progress and bookmark migration can be
-lossless. Valid textured preferences, detailed progress evidence, system voice
-choices, pitch, several narration rates, and the legacy last-sync display also
-need an explicit compatible target or honest refusal policy. A narrow happy-path
-fixture cannot close this gate.
+Publisher's closed executable bootstrap and separately bounded public state
+projection are complete. The remaining adapter must populate that projection
+from Coherence-owned committed identity evidence. Valid textured preferences,
+detailed progress evidence, system voice choices, pitch, several narration
+rates, and the legacy last-sync display still need an explicit compatible target
+or honest refusal policy. A narrow happy-path fixture cannot close this gate.
 
 ## Material that remains Coherence-owned
 

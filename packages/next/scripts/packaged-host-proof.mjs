@@ -2656,6 +2656,7 @@ async function assertHydratedReaderTools({
 
 async function assertReaderPreferencePrepaint({
   browser,
+  projectionMarker,
   publicationId,
   readerFontFamily,
   readerFontFamilyId,
@@ -2703,9 +2704,11 @@ async function assertReaderPreferencePrepaint({
           '  const root = document.querySelector(".publisher-root");',
           "  if (!(root instanceof HTMLElement)) return null;",
           "  const style = getComputedStyle(root);",
+          '  const bootstrapScript = document.querySelector("script[data-publisher-reader-state-bootstrap]");',
           "  return {",
           "    backgroundColor: style.backgroundColor,",
           "    bootstrapStatus: document.documentElement.dataset.publisherReaderStateBootstrap ?? null,",
+          "    bootstrapScriptBytes: bootstrapScript === null ? 0 : new TextEncoder().encode(bootstrapScript.textContent ?? \"\").length,",
           "    focus: document.documentElement.dataset.publisherReaderFocus ?? null,",
           '    fontFamily: document.documentElement.style.getPropertyValue("--publisher-reader-font-family"),',
           '    fontScale: document.documentElement.style.getPropertyValue("--publisher-reader-font-scale"),',
@@ -2713,6 +2716,8 @@ async function assertReaderPreferencePrepaint({
           "    motion: document.documentElement.dataset.publisherReaderMotion ?? null,",
           `    legacy: localStorage.getItem(${JSON.stringify(legacyStorageKey)}),`,
           `    migrated: localStorage.getItem(${JSON.stringify(storageKey)}),`,
+          "    projectionGlobal: Object.hasOwn(globalThis, \"projection\"),",
+          `    projectionMarkerInScript: bootstrapScript?.textContent?.includes(${JSON.stringify(projectionMarker)}) ?? false,`,
           `    report: JSON.parse(localStorage.getItem(${JSON.stringify(reportStorageKey)}) ?? "null"),`,
           "    scheme: document.documentElement.dataset.publisherReaderScheme ?? null,",
           "    scripts: Array.from(document.scripts).map((script) => script.src).filter(Boolean),",
@@ -2735,8 +2740,11 @@ async function assertReaderPreferencePrepaint({
     assert.equal(result.fontScale, "1.2");
     assert.equal(result.backgroundColor, "rgb(0, 0, 0)");
     assert.equal(result.bootstrapStatus, "completed");
+    assert.ok(result.bootstrapScriptBytes > 32_768);
     assert.equal(result.legacy, preferenceDocument);
     assert.equal(result.migrated, preferenceDocument);
+    assert.equal(result.projectionGlobal, false);
+    assert.equal(result.projectionMarkerInScript, true);
     assert.deepEqual(result.report, {
       schemaVersion: "1.0",
       adapter: {
@@ -2749,6 +2757,7 @@ async function assertReaderPreferencePrepaint({
       refused: [],
     });
     assert.match(result.report.adapter.sourceHash, /^sha256:[0-9a-f]{64}$/u);
+    assert.equal(JSON.stringify(result.report).includes(projectionMarker), false);
     assert.ok(result.scripts.length > 0);
   } finally {
     await page.send("Runtime.evaluate", {
@@ -3917,6 +3926,8 @@ export async function runPackagedHostProof(
     "PACKED_EXTENSION_HANDLER_DATA_ONLY";
   const packedExtensionHandlerPath =
     "/api/extensions/packed-publication-extension/echo";
+  const packedReaderStateProjectionMarker =
+    "PACKED_READER_STATE_PROJECTION_PUBLIC";
 
   const temporaryRoot = await mkdtemp(
     join(tmpdir(), "genii-publisher-next-host-"),
@@ -4460,15 +4471,26 @@ export async function runPackagedHostProof(
           "    config: {},",
           "    implementation: {",
           '      kind: "genii.publisher.next-reader-state-bootstrap",',
-          '      apiVersion: "1.0",',
+          '      apiVersion: "1.1",',
           "      configure() {",
           "        return {",
           "          valid: true,",
           "          value: {",
+          "            createProjection() {",
+          "              return {",
+          "                valid: true,",
+          "                value: {",
+          `                  marker: "${packedReaderStateProjectionMarker}",`,
+          '                  padding: "p".repeat(40_000),',
+          "                },",
+          "                diagnostics: [],",
+          "              };",
+          "            },",
           "            createSource() {",
           "              return {",
           "                valid: true,",
           "                value: [",
+          `                  'if (projection === null || !Object.isFrozen(projection) || !Object.isFrozen(projection.data) || projection.buildId !== "${reader.buildId}" || projection.engineVersion !== "${reader.engineVersion}" || projection.publicationId !== "${reader.publicationId}" || projection.data.marker !== "${packedReaderStateProjectionMarker}" || projection.data.padding.length !== 40000) { return { schemaVersion: "1.0", copied: [], refused: ["projection"] }; }',`,
           '                  \'const legacy = localStorage.getItem("packed-reader-preferences-v1");\',',
           "                  'if (legacy !== null && localStorage.getItem(context.targetStorageKeys.preferences) === null) {',",
           "                  '  localStorage.setItem(context.targetStorageKeys.preferences, legacy);',",
@@ -4579,7 +4601,7 @@ export async function runPackagedHostProof(
       writeFile(
         join(hostRoot, "declaration-probe.ts"),
         [
-          'import { PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES, PUBLISHER_NEXT_VERSION } from "@genii-foundation/publisher-next";',
+          'import { PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES, PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS, PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH, PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES, PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES, PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES, PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES, PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION, PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES, PUBLISHER_NEXT_VERSION, type PublisherNextReaderStateBootstrapProjection, type PublisherNextReaderStateBootstrapProjectionDescriptor } from "@genii-foundation/publisher-next";',
           'import { createPublisherNextRoutePlan, type PublicationNextApplication } from "@genii-foundation/publisher-next/server";',
           'import { createPublisherNextErrorIdentity, PublisherNextErrorPage, PublisherNextFrameworkErrorPage, PublisherNextGlobalErrorPage, requestPublisherReaderNarrationNavigation, type PublisherNextErrorIdentity, type ReaderNarrationNavigationIntent } from "@genii-foundation/publisher-next/client";',
           'import { createPublisherNextConfig } from "@genii-foundation/publisher-next/config";',
@@ -4589,9 +4611,21 @@ export async function runPackagedHostProof(
           "declare const application: PublicationNextApplication;",
           "declare const errorIdentity: PublisherNextErrorIdentity;",
           "declare const narrationIntent: ReaderNarrationNavigationIntent;",
+          "declare const readerStateProjection: PublisherNextReaderStateBootstrapProjection;",
+          "declare const readerStateProjectionDescriptor: PublisherNextReaderStateBootstrapProjectionDescriptor;",
           "void application;",
           "void errorIdentity;",
           "void narrationIntent;",
+          "void readerStateProjection;",
+          "void readerStateProjectionDescriptor;",
+          "void PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES;",
+          "void PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS;",
+          "void PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH;",
+          "void PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES;",
+          "void PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES;",
+          "void PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES;",
+          "void PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES;",
+          "void PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION;",
           "void PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES;",
           "void PUBLISHER_NEXT_VERSION;",
           "void PublisherNextErrorPage;",
@@ -4961,6 +4995,7 @@ export async function runPackagedHostProof(
       packedExtensionServerSentinel,
       packedExtensionRouteDataSentinel,
       packedExtensionHandlerDataSentinel,
+      packedReaderStateProjectionMarker,
     ]) {
       assert.equal(
         clientChunks.includes(manuscriptSentinel),
@@ -5084,6 +5119,7 @@ export async function runPackagedHostProof(
         assert.equal(typeof sectionPath, "string");
         await assertReaderPreferencePrepaint({
           browser,
+          projectionMarker: packedReaderStateProjectionMarker,
           publicationId: reader.publicationId,
           readerFontFamily: portableReaderFontFamily,
           readerFontFamilyId: portableReaderFontFamilyId,

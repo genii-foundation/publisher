@@ -74,7 +74,10 @@ test("publication rendering stays server-only outside the error boundary entry",
   // browser globals as quoted strings without ever executing them. It is
   // exempted from the whole-file scan and held to the narrower conditions below
   // instead, because a blanket exemption would also hide a real directive.
-  const templateDataModules = new Set(["src/host.ts"]);
+  const templateDataModules = new Set([
+    "src/host.ts",
+    "src/reader-state-bootstrap-source.ts",
+  ]);
 
   for (const filePath of await sourceFiles()) {
     const source = await readFile(filePath, "utf8");

@@ -93,6 +93,9 @@ import {
 import {
   PublisherReaderPrepaint,
 } from "../client/reader-prepaint.js";
+import {
+  createPublisherReaderStateBootstrapSource,
+} from "../reader-state-bootstrap-source.js";
 import type {
   PublisherNextMarkdownForBlock,
 } from "../components/pages.js";
@@ -133,7 +136,14 @@ import {
   PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS,
   PUBLISHER_NEXT_EXTENSION_SLOTS,
   PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
   PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION,
   PUBLISHER_NEXT_THEME_API_VERSION,
   PUBLISHER_NEXT_UPDATES_API_VERSION,
   PUBLISHER_NEXT_VERSION,
@@ -153,6 +163,7 @@ import type {
   PublisherNextPage,
   PublisherNextReaderStateBootstrapContext,
   PublisherNextReaderStateBootstrapInstance,
+  PublisherNextReaderStateBootstrapProjectionDescriptor,
   PublisherNextRouteResolution,
   PublisherNextRootLayoutProps,
   PublisherNextThemeInstance,
@@ -171,6 +182,41 @@ const UPDATE_ID = /^[\p{L}\p{N}][\p{L}\p{N}._:-]{0,127}$/u;
 const UPDATE_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const UPDATE_INSTANT =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
+const READER_STATE_PROJECTION_ARRAY_IS_ARRAY = Array.isArray;
+const READER_STATE_PROJECTION_ARRAY_JOIN = Array.prototype.join;
+const READER_STATE_PROJECTION_ARRAY_PROTOTYPE = Array.prototype;
+const READER_STATE_PROJECTION_ARRAY_SORT = Array.prototype.sort;
+const READER_STATE_PROJECTION_FUNCTION = Function;
+const READER_STATE_PROJECTION_JSON_STRINGIFY = JSON.stringify;
+const READER_STATE_PROJECTION_NUMBER = Number;
+const READER_STATE_PROJECTION_NUMBER_IS_FINITE = Number.isFinite;
+const READER_STATE_PROJECTION_NUMBER_IS_SAFE_INTEGER =
+  Number.isSafeInteger;
+const READER_STATE_PROJECTION_OBJECT_CREATE = Object.create;
+const READER_STATE_PROJECTION_OBJECT_DEFINE_PROPERTY =
+  Object.defineProperty;
+const READER_STATE_PROJECTION_OBJECT_FREEZE = Object.freeze;
+const READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR =
+  Object.getOwnPropertyDescriptor;
+const READER_STATE_PROJECTION_OBJECT_GET_PROTOTYPE_OF =
+  Object.getPrototypeOf;
+const READER_STATE_PROJECTION_OBJECT_PROTOTYPE = Object.prototype;
+const READER_STATE_PROJECTION_REGEXP_EXEC = RegExp.prototype.exec;
+const READER_STATE_PROJECTION_REFLECT_APPLY = Reflect.apply;
+const READER_STATE_PROJECTION_REFLECT_OWN_KEYS = Reflect.ownKeys;
+const READER_STATE_PROJECTION_STRING = String;
+const READER_STATE_PROJECTION_STRING_CHAR_CODE_AT =
+  String.prototype.charCodeAt;
+const READER_STATE_PROJECTION_TEXT_ENCODER = new TextEncoder();
+const READER_STATE_PROJECTION_TEXT_ENCODE =
+  TextEncoder.prototype.encode;
+const READER_STATE_PROJECTION_WEAK_SET = WeakSet;
+const READER_STATE_PROJECTION_WEAK_SET_ADD = WeakSet.prototype.add;
+const READER_STATE_PROJECTION_WEAK_SET_DELETE =
+  WeakSet.prototype.delete;
+const READER_STATE_PROJECTION_WEAK_SET_HAS = WeakSet.prototype.has;
+const READER_STATE_PROJECTION_UNSAFE_SOURCE =
+  /<\/?script|<!--|-->/iu;
 interface InspectedRecord {
   readonly descriptors: Readonly<Record<string, PropertyDescriptor>>;
 }
@@ -206,6 +252,13 @@ interface ResolvedReaderStateBootstrapState {
   };
   readonly configHash: ReturnType<typeof hashCanonicalJson>;
   readonly context: PublisherNextReaderStateBootstrapContext;
+  readonly projection: {
+    readonly text: string;
+    readonly descriptor:
+      PublisherNextReaderStateBootstrapProjectionDescriptor;
+  } | null;
+  readonly script: string;
+  readonly scriptBytes: number;
   readonly source: string;
   readonly sourceHash: ReturnType<typeof sha256>;
 }
@@ -241,13 +294,13 @@ function diagnostic(
   keyword: string,
   params: Readonly<Record<string, unknown>> = {},
 ): Diagnostic {
-  return Object.freeze({
+  return READER_STATE_PROJECTION_OBJECT_FREEZE({
     code,
     severity: "error",
     path,
     message,
     keyword,
-    params: Object.freeze({ ...params }),
+    params: READER_STATE_PROJECTION_OBJECT_FREEZE({ ...params }),
   });
 }
 
@@ -258,19 +311,19 @@ function failure<T>(
   keyword: string,
   params: Readonly<Record<string, unknown>> = {},
 ): ValidationResult<T> {
-  return Object.freeze({
+  return READER_STATE_PROJECTION_OBJECT_FREEZE({
     valid: false,
-    diagnostics: Object.freeze([
+    diagnostics: READER_STATE_PROJECTION_OBJECT_FREEZE([
       diagnostic(code, path, message, keyword, params),
     ]),
   });
 }
 
 function success<T>(value: T): ValidationResult<T> {
-  return Object.freeze({
+  return READER_STATE_PROJECTION_OBJECT_FREEZE({
     valid: true,
     value,
-    diagnostics: Object.freeze([]),
+    diagnostics: READER_STATE_PROJECTION_OBJECT_FREEZE([]),
   });
 }
 
@@ -406,37 +459,82 @@ function inspectRecord(
     if (value === null || typeof value !== "object") {
       return null;
     }
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
+    const prototype =
+      READER_STATE_PROJECTION_OBJECT_GET_PROTOTYPE_OF(value);
+    if (
+      prototype !== READER_STATE_PROJECTION_OBJECT_PROTOTYPE &&
+      prototype !== null
+    ) {
       return null;
     }
-    if (Object.getOwnPropertySymbols(value).length > 0) {
-      return null;
-    }
-    const descriptors = Object.getOwnPropertyDescriptors(
-      value,
+    const keys = READER_STATE_PROJECTION_REFLECT_OWN_KEYS(value);
+    const descriptors = READER_STATE_PROJECTION_OBJECT_CREATE(
+      null,
     ) as Record<string, PropertyDescriptor>;
-    const allowed = new Set([...requiredKeys, ...optionalKeys]);
-    for (const key of Object.keys(descriptors)) {
-      const descriptor = descriptors[key];
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+      const key = keys[keyIndex];
+      if (typeof key !== "string") {
+        return null;
+      }
+      let allowed = false;
+      for (
+        let requiredIndex = 0;
+        requiredIndex < requiredKeys.length;
+        requiredIndex += 1
+      ) {
+        if (requiredKeys[requiredIndex] === key) {
+          allowed = true;
+          break;
+        }
+      }
+      if (!allowed) {
+        for (
+          let optionalIndex = 0;
+          optionalIndex < optionalKeys.length;
+          optionalIndex += 1
+        ) {
+          if (optionalKeys[optionalIndex] === key) {
+            allowed = true;
+            break;
+          }
+        }
+      }
+      const descriptor =
+        READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+          value,
+          key,
+        );
       if (
-        !allowed.has(key) ||
+        !allowed ||
         descriptor === undefined ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) {
         return null;
       }
+      READER_STATE_PROJECTION_OBJECT_DEFINE_PROPERTY(
+        descriptors,
+        key,
+        {
+          value: descriptor,
+          enumerable: true,
+          configurable: false,
+          writable: false,
+        },
+      );
     }
-    if (
-      requiredKeys.some(
-        (key) => !Object.hasOwn(descriptors, key),
-      )
+    for (
+      let requiredIndex = 0;
+      requiredIndex < requiredKeys.length;
+      requiredIndex += 1
     ) {
-      return null;
+      if (descriptors[requiredKeys[requiredIndex] ?? ""] === undefined) {
+        return null;
+      }
     }
-    return Object.freeze({
-      descriptors: Object.freeze(descriptors),
+    return READER_STATE_PROJECTION_OBJECT_FREEZE({
+      descriptors:
+        READER_STATE_PROJECTION_OBJECT_FREEZE(descriptors),
     });
   } catch {
     return null;
@@ -1880,9 +1978,541 @@ function readerStateBootstrapSourceValue(
   return success(source);
 }
 
+type ReaderStateBootstrapProjectionFailure =
+  | "bytes"
+  | "containers"
+  | "depth"
+  | "entries"
+  | "json";
+
+class ReaderStateBootstrapProjectionError extends Error {
+  readonly kind: ReaderStateBootstrapProjectionFailure;
+  readonly actual: number | null;
+  readonly maximum: number | null;
+
+  constructor(
+    kind: ReaderStateBootstrapProjectionFailure,
+    actual: number | null = null,
+    maximum: number | null = null,
+  ) {
+    super(kind);
+    this.kind = kind;
+    this.actual = actual;
+    this.maximum = maximum;
+  }
+}
+
+interface ReaderStateBootstrapProjectionSnapshot {
+  readonly text: string;
+  readonly descriptor:
+    PublisherNextReaderStateBootstrapProjectionDescriptor;
+}
+
+function canonicalJsonStringByteSize(
+  value: string,
+  initialByteSize: number,
+): number {
+  let byteSize = initialByteSize + 2;
+  if (
+    byteSize >
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES
+  ) {
+    throw new ReaderStateBootstrapProjectionError(
+      "bytes",
+      byteSize,
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+    );
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const unit = READER_STATE_PROJECTION_REFLECT_APPLY(
+      READER_STATE_PROJECTION_STRING_CHAR_CODE_AT,
+      value,
+      [index],
+    );
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = READER_STATE_PROJECTION_REFLECT_APPLY(
+        READER_STATE_PROJECTION_STRING_CHAR_CODE_AT,
+        value,
+        [index + 1],
+      );
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        throw new ReaderStateBootstrapProjectionError("json");
+      }
+      byteSize += 4;
+      index += 1;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      throw new ReaderStateBootstrapProjectionError("json");
+    } else if (unit === 0x22 || unit === 0x5c) {
+      byteSize += 2;
+    } else if (unit < 0x20) {
+      byteSize +=
+        unit === 0x08 ||
+        unit === 0x09 ||
+        unit === 0x0a ||
+        unit === 0x0c ||
+        unit === 0x0d
+          ? 2
+          : 6;
+    } else if (unit < 0x80) {
+      byteSize += 1;
+    } else if (unit < 0x800) {
+      byteSize += 2;
+    } else {
+      byteSize += 3;
+    }
+    if (
+      byteSize >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "bytes",
+        byteSize,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+      );
+    }
+  }
+  return byteSize;
+}
+
+function snapshotReaderStateBootstrapProjection(
+  data: unknown,
+  reader: PublicationReaderEnvelope,
+): ReaderStateBootstrapProjectionSnapshot {
+  if (
+    data === null ||
+    typeof data !== "object" ||
+    READER_STATE_PROJECTION_ARRAY_IS_ARRAY(data)
+  ) {
+    throw new ReaderStateBootstrapProjectionError("json");
+  }
+
+  const output: string[] = [];
+  let outputLength = 0;
+  const active = new READER_STATE_PROJECTION_WEAK_SET<object>();
+  let byteSize = 0;
+  let containerCount = 0;
+  let entryCount = 0;
+
+  const appendOutput = (value: string): void => {
+    READER_STATE_PROJECTION_OBJECT_DEFINE_PROPERTY(
+      output,
+      READER_STATE_PROJECTION_STRING(outputLength),
+      {
+        value,
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      },
+    );
+    outputLength += 1;
+  };
+
+  const appendAscii = (value: string): void => {
+    byteSize += value.length;
+    if (
+      byteSize >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "bytes",
+        byteSize,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+      );
+    }
+    appendOutput(value);
+  };
+  const appendString = (value: string): void => {
+    byteSize = canonicalJsonStringByteSize(value, byteSize);
+    const serialized = READER_STATE_PROJECTION_JSON_STRINGIFY(value);
+    if (typeof serialized !== "string") {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+    appendOutput(serialized);
+  };
+  const enterEntries = (count: number): void => {
+    entryCount += count;
+    if (
+      entryCount >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "entries",
+        entryCount,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+      );
+    }
+  };
+
+  const writeValue = (value: unknown, depth: number): void => {
+    if (value === null) {
+      appendAscii("null");
+      return;
+    }
+    if (typeof value === "string") {
+      appendString(value);
+      return;
+    }
+    if (typeof value === "boolean") {
+      appendAscii(value ? "true" : "false");
+      return;
+    }
+    if (typeof value === "number") {
+      if (!READER_STATE_PROJECTION_NUMBER_IS_FINITE(value)) {
+        throw new ReaderStateBootstrapProjectionError("json");
+      }
+      const serialized = READER_STATE_PROJECTION_JSON_STRINGIFY(value);
+      if (typeof serialized !== "string") {
+        throw new ReaderStateBootstrapProjectionError("json");
+      }
+      appendAscii(serialized);
+      return;
+    }
+    if (typeof value !== "object") {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+    if (
+      depth >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "depth",
+        depth,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+      );
+    }
+    containerCount += 1;
+    if (
+      containerCount >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "containers",
+        containerCount,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS,
+      );
+    }
+    if (
+      READER_STATE_PROJECTION_REFLECT_APPLY(
+        READER_STATE_PROJECTION_WEAK_SET_HAS,
+        active,
+        [value],
+      )
+    ) {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+
+    const array = READER_STATE_PROJECTION_ARRAY_IS_ARRAY(value);
+    let prototype: object | null;
+    try {
+      prototype = READER_STATE_PROJECTION_OBJECT_GET_PROTOTYPE_OF(
+        value,
+      );
+    } catch {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+    if (
+      (!array &&
+        prototype !== READER_STATE_PROJECTION_OBJECT_PROTOTYPE &&
+        prototype !== null) ||
+      (array &&
+        prototype !== READER_STATE_PROJECTION_ARRAY_PROTOTYPE)
+    ) {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+
+    READER_STATE_PROJECTION_REFLECT_APPLY(
+      READER_STATE_PROJECTION_WEAK_SET_ADD,
+      active,
+      [value],
+    );
+    try {
+      if (array) {
+        let lengthDescriptor: PropertyDescriptor | undefined;
+        try {
+          lengthDescriptor =
+            READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+            value,
+            "length",
+          );
+        } catch {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        const length =
+          lengthDescriptor !== undefined &&
+          "value" in lengthDescriptor
+            ? lengthDescriptor.value
+            : undefined;
+        if (
+          typeof length !== "number" ||
+          !READER_STATE_PROJECTION_NUMBER_IS_SAFE_INTEGER(length) ||
+          length < 0
+        ) {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        enterEntries(length);
+        let keys: readonly PropertyKey[];
+        try {
+          keys = READER_STATE_PROJECTION_REFLECT_OWN_KEYS(value);
+        } catch {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        if (keys.length !== length + 1) {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+          const key = keys[keyIndex];
+          if (key === "length") continue;
+          if (
+            typeof key !== "string" ||
+            READER_STATE_PROJECTION_STRING(
+              READER_STATE_PROJECTION_NUMBER(key),
+            ) !== key ||
+            READER_STATE_PROJECTION_NUMBER(key) >= length
+          ) {
+            throw new ReaderStateBootstrapProjectionError("json");
+          }
+        }
+        appendAscii("[");
+        for (let index = 0; index < length; index += 1) {
+          let descriptor: PropertyDescriptor | undefined;
+          try {
+            descriptor =
+              READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+              value,
+              READER_STATE_PROJECTION_STRING(index),
+            );
+          } catch {
+            throw new ReaderStateBootstrapProjectionError("json");
+          }
+          if (
+            descriptor === undefined ||
+            !descriptor.enumerable ||
+            !("value" in descriptor)
+          ) {
+            throw new ReaderStateBootstrapProjectionError("json");
+          }
+          if (index > 0) appendAscii(",");
+          writeValue(descriptor.value, depth + 1);
+        }
+        appendAscii("]");
+        return;
+      }
+
+      let keys: PropertyKey[];
+      try {
+        keys = READER_STATE_PROJECTION_REFLECT_OWN_KEYS(value);
+      } catch {
+        throw new ReaderStateBootstrapProjectionError("json");
+      }
+      enterEntries(keys.length);
+      for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+        if (typeof keys[keyIndex] !== "string") {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+      }
+      const stringKeys = keys as string[];
+      READER_STATE_PROJECTION_REFLECT_APPLY(
+        READER_STATE_PROJECTION_ARRAY_SORT,
+        stringKeys,
+        [],
+      );
+      appendAscii("{");
+      for (let index = 0; index < stringKeys.length; index += 1) {
+        const key = stringKeys[index];
+        if (key === undefined) continue;
+        let descriptor: PropertyDescriptor | undefined;
+        try {
+          descriptor =
+            READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+              value,
+              key,
+            );
+        } catch {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        if (
+          descriptor === undefined ||
+          !descriptor.enumerable ||
+          !("value" in descriptor)
+        ) {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        if (index > 0) appendAscii(",");
+        appendString(key);
+        appendAscii(":");
+        writeValue(descriptor.value, depth + 1);
+      }
+      appendAscii("}");
+    } finally {
+      READER_STATE_PROJECTION_REFLECT_APPLY(
+        READER_STATE_PROJECTION_WEAK_SET_DELETE,
+        active,
+        [value],
+      );
+    }
+  };
+
+  appendAscii("{");
+  appendString("buildId");
+  appendAscii(":");
+  appendString(reader.buildId);
+  appendAscii(",");
+  appendString("data");
+  appendAscii(":");
+  writeValue(data, 1);
+  appendAscii(",");
+  appendString("engineVersion");
+  appendAscii(":");
+  appendString(reader.engineVersion);
+  appendAscii(",");
+  appendString("publicationId");
+  appendAscii(":");
+  appendString(reader.publicationId);
+  appendAscii(",");
+  appendString("schemaVersion");
+  appendAscii(":");
+  appendString(
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION,
+  );
+  appendAscii("}");
+
+  const text = READER_STATE_PROJECTION_REFLECT_APPLY(
+    READER_STATE_PROJECTION_ARRAY_JOIN,
+    output,
+    [""],
+  );
+  return READER_STATE_PROJECTION_OBJECT_FREEZE({
+    text,
+    descriptor: READER_STATE_PROJECTION_OBJECT_FREEZE({
+      schemaVersion:
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION,
+      byteSize,
+      hash: sha256(text),
+    }),
+  });
+}
+
+function readerStateBootstrapProjectionValue(
+  result: unknown,
+  reader: PublicationReaderEnvelope,
+): ValidationResult<ReaderStateBootstrapProjectionSnapshot> {
+  const inspected = inspectRecord(
+    result,
+    ["diagnostics", "valid"],
+    ["value"],
+  );
+  if (inspected === null) {
+    return failure(
+      "next.reader_state_bootstrap.projection_result_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap returned an invalid projection result.",
+      "type",
+    );
+  }
+  if (valueOf(inspected, "valid") === false) {
+    return failure(
+      "next.reader_state_bootstrap.projection_rejected",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap refused to create a state projection.",
+      "adapter",
+    );
+  }
+  if (
+    valueOf(inspected, "valid") !== true ||
+    !Object.hasOwn(inspected.descriptors, "value")
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.projection_result_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap returned an invalid projection result.",
+      "type",
+    );
+  }
+  const value = valueOf(inspected, "value");
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    READER_STATE_PROJECTION_ARRAY_IS_ARRAY(value)
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.projection_root_invalid",
+      "/readerStateBootstrap",
+      "Reader state projection data must be one plain JSON object.",
+      "type",
+    );
+  }
+  try {
+    return success(
+      snapshotReaderStateBootstrapProjection(value, reader),
+    );
+  } catch (error) {
+    const kind =
+      error instanceof ReaderStateBootstrapProjectionError
+        ? error.kind
+        : "json";
+    const details = {
+      bytes: [
+        "next.reader_state_bootstrap.projection_too_large",
+        "Reader state projection exceeds the renderer byte limit.",
+        "maxLength",
+      ],
+      containers: [
+        "next.reader_state_bootstrap.projection_too_many_containers",
+        "Reader state projection exceeds the renderer container limit.",
+        "maxItems",
+      ],
+      depth: [
+        "next.reader_state_bootstrap.projection_too_deep",
+        "Reader state projection exceeds the renderer depth limit.",
+        "maxDepth",
+      ],
+      entries: [
+        "next.reader_state_bootstrap.projection_too_many_entries",
+        "Reader state projection exceeds the renderer entry limit.",
+        "maxItems",
+      ],
+      json: [
+        "next.reader_state_bootstrap.projection_json_invalid",
+        "Reader state projection must be finite, acyclic plain JSON data.",
+        "json",
+      ],
+    } as const;
+    const detail = details[kind];
+    const code = detail[0];
+    const message = detail[1];
+    const rule = detail[2];
+    const params =
+      error instanceof ReaderStateBootstrapProjectionError &&
+      error.actual !== null &&
+      error.maximum !== null
+        ? kind === "bytes"
+          ? {
+              actualBytes: error.actual,
+              maximumBytes: error.maximum,
+            }
+          : kind === "depth"
+            ? {
+                actualDepth: error.actual,
+                maximumDepth: error.maximum,
+              }
+            : {
+                actualItems: error.actual,
+                maximumItems: error.maximum,
+              }
+        : {};
+    return failure(
+      code,
+      "/readerStateBootstrap",
+      message,
+      rule,
+      params,
+    );
+  }
+}
+
 function resolveReaderStateBootstrap(
   resolved: ResolvedPublisherNextReaderStateBootstrap,
-  publicationId: string,
+  reader: PublicationReaderEnvelope,
 ): ValidationResult<ResolvedReaderStateBootstrapState> {
   const inspected = inspectRecord(resolved, [
     "config",
@@ -1911,6 +2541,10 @@ function resolveReaderStateBootstrap(
     "/readerStateBootstrap/config",
   );
   if (!config.valid) return config;
+  const configHash = hashCanonicalJson(config.value);
+  const context = createReaderStateBootstrapContext(
+    reader.publicationId,
+  );
   const implementation = inspectRecord(
     valueOf(inspected, "implementation"),
     ["apiVersion", "configure", "kind"],
@@ -1932,7 +2566,7 @@ function resolveReaderStateBootstrap(
   }
   let configured: unknown;
   try {
-    configured = Reflect.apply(
+    configured = READER_STATE_PROJECTION_REFLECT_APPLY(
       valueOf(implementation, "configure") as (
         config: PublisherNextJsonObject,
       ) => unknown,
@@ -1955,22 +2589,55 @@ function resolveReaderStateBootstrap(
   const instance = inspectRecord(
     configuredBootstrap.value,
     ["createSource"],
+    ["createProjection"],
   );
+  const createProjection =
+    instance === null
+      ? undefined
+      : valueOf(instance, "createProjection");
   if (
     instance === null ||
-    typeof valueOf(instance, "createSource") !== "function"
+    typeof valueOf(instance, "createSource") !== "function" ||
+    (createProjection !== undefined &&
+      typeof createProjection !== "function")
   ) {
     return failure(
       "next.reader_state_bootstrap.instance_invalid",
       "/readerStateBootstrap",
-      "The Reader state bootstrap must return exactly one createSource function.",
+      "The Reader state bootstrap must return createSource and may return createProjection.",
       "properties",
     );
   }
-  const context = createReaderStateBootstrapContext(publicationId);
+  let projection: ReaderStateBootstrapProjectionSnapshot | null = null;
+  if (typeof createProjection === "function") {
+    let projectionResult: unknown;
+    try {
+      projectionResult = READER_STATE_PROJECTION_REFLECT_APPLY(
+        createProjection as
+          NonNullable<
+            PublisherNextReaderStateBootstrapInstance["createProjection"]
+          >,
+        configuredBootstrap.value,
+        [context],
+      );
+    } catch {
+      return failure(
+        "next.reader_state_bootstrap.projection_threw",
+        "/readerStateBootstrap",
+        "The Reader state bootstrap threw while creating a state projection.",
+        "adapter",
+      );
+    }
+    const projectionValue = readerStateBootstrapProjectionValue(
+      projectionResult,
+      reader,
+    );
+    if (!projectionValue.valid) return projectionValue;
+    projection = projectionValue.value;
+  }
   let sourceResult: unknown;
   try {
-    sourceResult = Reflect.apply(
+    sourceResult = READER_STATE_PROJECTION_REFLECT_APPLY(
       valueOf(instance, "createSource") as
         PublisherNextReaderStateBootstrapInstance["createSource"],
       configuredBootstrap.value,
@@ -1986,7 +2653,11 @@ function resolveReaderStateBootstrap(
   }
   const source = readerStateBootstrapSourceValue(sourceResult);
   if (!source.valid) return source;
-  const sourceBytes = new TextEncoder().encode(source.value).length;
+  const sourceBytes = READER_STATE_PROJECTION_REFLECT_APPLY(
+    READER_STATE_PROJECTION_TEXT_ENCODE,
+    READER_STATE_PROJECTION_TEXT_ENCODER,
+    [source.value],
+  ).length;
   if (
     sourceBytes >
       PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES
@@ -2003,7 +2674,13 @@ function resolveReaderStateBootstrap(
       },
     );
   }
-  if (/<\/?script|<!--|-->/iu.test(source.value)) {
+  if (
+    READER_STATE_PROJECTION_REFLECT_APPLY(
+      READER_STATE_PROJECTION_REGEXP_EXEC,
+      READER_STATE_PROJECTION_UNSAFE_SOURCE,
+      [source.value],
+    ) !== null
+  ) {
     return failure(
       "next.reader_state_bootstrap.source_unsafe",
       "/readerStateBootstrap",
@@ -2012,7 +2689,11 @@ function resolveReaderStateBootstrap(
     );
   }
   try {
-    Function("context", `"use strict";\n${source.value}`);
+    READER_STATE_PROJECTION_FUNCTION(
+      "context",
+      "projection",
+      `"use strict";\n${source.value}`,
+    );
   } catch {
     return failure(
       "next.reader_state_bootstrap.source_invalid",
@@ -2021,12 +2702,45 @@ function resolveReaderStateBootstrap(
       "syntax",
     );
   }
-  return success(Object.freeze({
-    identity: identity.value,
-    configHash: hashCanonicalJson(config.value),
-    context,
+  const sourceHash = sha256(source.value);
+  const script = createPublisherReaderStateBootstrapSource({
+    package: identity.value.package,
+    version: identity.value.version,
+    sourceHash,
     source: source.value,
-    sourceHash: sha256(source.value),
+    context,
+    projectionText: projection?.text ?? null,
+  });
+  const scriptBytes = READER_STATE_PROJECTION_REFLECT_APPLY(
+    READER_STATE_PROJECTION_TEXT_ENCODE,
+    READER_STATE_PROJECTION_TEXT_ENCODER,
+    [script],
+  ).length;
+  if (
+    scriptBytes >
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.script_too_large",
+      "/readerStateBootstrap",
+      "The generated Reader state bootstrap script exceeds the renderer byte limit.",
+      "maxLength",
+      {
+        actualBytes: scriptBytes,
+        maximumBytes:
+          PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+      },
+    );
+  }
+  return success(READER_STATE_PROJECTION_OBJECT_FREEZE({
+    identity: identity.value,
+    configHash,
+    context,
+    projection,
+    script,
+    scriptBytes,
+    source: source.value,
+    sourceHash,
   }));
 }
 
@@ -2610,6 +3324,8 @@ function createApplicationArtifact(
             PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION,
           configHash: readerStateBootstrap.configHash,
           sourceHash: readerStateBootstrap.sourceHash,
+          projection:
+            readerStateBootstrap.projection?.descriptor ?? null,
         });
   const continuityIdentity = Object.freeze({
     mode: "proxy" as const,
@@ -2725,7 +3441,7 @@ export async function createPublicationNextApplication(
       const bootstrapResult = resolveReaderStateBootstrap(
         suppliedReaderStateBootstrap as
           ResolvedPublisherNextReaderStateBootstrap,
-        reader.publicationId,
+        reader,
       );
       if (!bootstrapResult.valid) return bootstrapResult;
       readerStateBootstrap = bootstrapResult.value;
@@ -2806,6 +3522,29 @@ export async function createPublicationNextApplication(
       return routePlanResult;
     }
     const routePlan = routePlanResult.value;
+    if (readerStateBootstrap !== null) {
+      const documentCount = routePlan.staticParams.length;
+      const totalScriptBytes =
+        readerStateBootstrap.scriptBytes * documentCount;
+      if (
+        totalScriptBytes >
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES
+      ) {
+        return failure(
+          "next.reader_state_bootstrap.static_script_too_large",
+          "/readerStateBootstrap",
+          "The Reader state bootstrap would exceed the renderer total static HTML byte limit.",
+          "maxLength",
+          {
+            actualBytes: totalScriptBytes,
+            documentCount,
+            maximumBytes:
+              PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
+            scriptBytes: readerStateBootstrap.scriptBytes,
+          },
+        );
+      }
+    }
     const hasUpdatesRoute = reader.routes.active.some(
       ({ target }) => target.kind === "updates",
     );
@@ -3114,15 +3853,8 @@ export async function createPublicationNextApplication(
                 {...(readerStateBootstrap === null
                   ? {}
                   : {
-                      readerStateBootstrap: {
-                        package:
-                          readerStateBootstrap.identity.package,
-                        version:
-                          readerStateBootstrap.identity.version,
-                        context: readerStateBootstrap.context,
-                        source: readerStateBootstrap.source,
-                        sourceHash: readerStateBootstrap.sourceHash,
-                      },
+                      readerStateBootstrapSource:
+                        readerStateBootstrap.script,
                     })}
                 readerFontFamilies={
                   themeResult.value.instance.tokens.typography

@@ -113,7 +113,7 @@ test("the raw schema identity matches its public package export", () => {
 
 test("the real Next application manifest satisfies the raw schema", async () => {
   const manifest = await createRealApplicationManifest();
-  assert.equal(manifest.schemaVersion, "1.1");
+  assert.equal(manifest.schemaVersion, "1.2");
   assert.equal(manifest.theme.apiVersion, "2.0");
   assert.equal(manifest.readerStateBootstrap, null);
   assertValid(manifest);
@@ -223,7 +223,7 @@ test("the application manifest schema rejects invalid adapter API and package fi
   }
 });
 
-test("the application manifest schema binds Reader state bootstrap source identity", async () => {
+test("the application manifest schema binds Reader state bootstrap source and projection identity", async () => {
   const manifest = structuredClone(
     await createRealApplicationManifest(),
   );
@@ -231,9 +231,14 @@ test("the application manifest schema binds Reader state bootstrap source identi
     package: "@example/legacy-state",
     version: "1.0.0",
     rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
-    apiVersion: "1.0",
+    apiVersion: "1.1",
     configHash: `sha256:${"2".repeat(64)}`,
     sourceHash: `sha256:${"3".repeat(64)}`,
+    projection: {
+      schemaVersion: "1.0",
+      byteSize: 161,
+      hash: `sha256:${"4".repeat(64)}`,
+    },
   };
   assertValid(manifest);
   for (const mutate of [
@@ -241,16 +246,42 @@ test("the application manifest schema binds Reader state bootstrap source identi
       candidate.readerStateBootstrap.sourceHash = "not-a-digest";
     },
     (candidate) => {
+      candidate.readerStateBootstrap.apiVersion = "1.0";
+    },
+    (candidate) => {
       candidate.readerStateBootstrap.apiVersion = "2.0";
     },
     (candidate) => {
       candidate.readerStateBootstrap.unexpected = true;
+    },
+    (candidate) => {
+      delete candidate.readerStateBootstrap.projection;
+    },
+    (candidate) => {
+      candidate.readerStateBootstrap.projection.schemaVersion = "2.0";
+    },
+    (candidate) => {
+      candidate.readerStateBootstrap.projection.byteSize = 160;
+    },
+    (candidate) => {
+      candidate.readerStateBootstrap.projection.byteSize = 8_388_609;
+    },
+    (candidate) => {
+      candidate.readerStateBootstrap.projection.byteSize = 128.5;
+    },
+    (candidate) => {
+      candidate.readerStateBootstrap.projection.hash = "not-a-digest";
+    },
+    (candidate) => {
+      candidate.readerStateBootstrap.projection.unexpected = true;
     },
   ]) {
     const candidate = structuredClone(manifest);
     mutate(candidate);
     assertInvalid(candidate);
   }
+  manifest.readerStateBootstrap.projection = null;
+  assertValid(manifest);
 });
 
 test("the application manifest schema records every implemented extension renderer grant", async () => {

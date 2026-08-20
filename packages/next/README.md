@@ -850,13 +850,25 @@ Publisher supplies a frozen publication ID, a report key, and target keys derive
 by the framework-neutral Reader contracts. The body runs before preference
 prepaint and before hydrated stores read local state.
 
+Bootstrap API 1.1 may also return a public projection from
+`createProjection(context)`. Publisher wraps that plain JSON object with its
+schema, publication ID, engine version, and exact Reader build ID, then passes
+the deeply frozen envelope to the browser function body as `projection`. The
+canonical envelope is limited to 8,388,608 UTF-8 bytes, depth 64, 100,000
+containers, and 1,000,000 entries. The final inline script has a separate
+16,777,216 byte limit. Its exact size multiplied by the static route count may
+not exceed 134,217,728 bytes. Projection data may contain only committed
+publication metadata and translation tables. Credentials,
+tokens, user identifiers, private Reader state, local storage values, cookies,
+request data, session data, and provider configuration are forbidden.
+
 The body must return a version 1.0 report with unique bounded `copied` and
 `refused` labels. It must preserve every legacy key, refuse lossy translations,
 leave an existing Publisher value unchanged, and be safe to run again. Publisher
 contains throws, rejects script escape sequences, limits source to 32,768 UTF-8
 bytes, and records a deterministic report without private values. The adapter
-identity, configuration hash, and exact source hash contribute to application
-manifest 1.1 and its build ID.
+identity, configuration hash, exact source hash, and optional projection
+descriptor contribute to application manifest 1.2 and its build ID.
 
 ```ts
 import {
@@ -871,7 +883,8 @@ export default definePublisherNextHostConfig({
 
 Remove the adapter after the publication's declared compatibility and rollback
 window. Do not delete old browser keys as part of removal. See
-[ADR 0057](../../docs/architecture/0057-explicit-reader-state-bootstrap.md).
+[ADR 0057](../../docs/architecture/0057-explicit-reader-state-bootstrap.md)
+and [ADR 0059](../../docs/architecture/0059-bounded-reader-state-projection.md).
 
 The generated host reserves `/api/auth/start`, `/api/auth/verify`,
 `/api/session`, `/api/sync`, `/auth/callback`, and `/api/account` for optional

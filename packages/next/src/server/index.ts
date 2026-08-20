@@ -42,6 +42,8 @@ export type {
   PublisherNextReaderStateBootstrap,
   PublisherNextReaderStateBootstrapContext,
   PublisherNextReaderStateBootstrapInstance,
+  PublisherNextReaderStateBootstrapProjection,
+  PublisherNextReaderStateBootstrapProjectionDescriptor,
   PublisherNextReaderStateBootstrapReport,
   PublisherNextUpdates,
   PublisherNextUpdatesEntry,

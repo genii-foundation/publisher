@@ -23,38 +23,22 @@ import {
   createReaderPreferencesStorageKey,
 } from "@genii-foundation/publisher-reader/preferences";
 import type { ReactElement } from "react";
-import {
-  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_REPORT_SCHEMA_VERSION,
-} from "../types.js";
 import type {
   PublisherNextReaderFontFamily,
-  PublisherNextReaderStateBootstrapContext,
 } from "../types.js";
+import {
+  createPublisherReaderStateBootstrapSource,
+} from "../reader-state-bootstrap-source.js";
+import type {
+  PublisherReaderStateBootstrapSource,
+} from "../reader-state-bootstrap-source.js";
 
-export interface PublisherReaderStateBootstrapSource {
-  readonly package: string;
-  readonly version: string;
-  readonly sourceHash: string;
-  readonly source: string;
-  readonly context: PublisherNextReaderStateBootstrapContext;
-}
-
-export function createPublisherReaderStateBootstrapSource(
-  bootstrap: PublisherReaderStateBootstrapSource,
-): string {
-  const input = JSON.stringify({
-    adapter: {
-      package: bootstrap.package,
-      version: bootstrap.version,
-      sourceHash: bootstrap.sourceHash,
-    },
-    context: bootstrap.context,
-    reportSchemaVersion:
-      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_REPORT_SCHEMA_VERSION,
-  }).replace(/</gu, "\\u003c");
-
-  return `(()=>{const i=${input},context=Object.freeze({...i.context,targetStorageKeys:Object.freeze(i.context.targetStorageKeys)}),record=(value,keys)=>{if(value===null||typeof value!=="object"||Array.isArray(value)||Object.getPrototypeOf(value)!==Object.prototype)return null;const descriptors=Object.getOwnPropertyDescriptors(value),owned=Reflect.ownKeys(descriptors);if(owned.length!==keys.length||owned.some((key)=>typeof key!=="string"||!keys.includes(key)))return null;for(const key of keys){const descriptor=descriptors[key];if(descriptor===undefined||!descriptor.enumerable||!("value" in descriptor))return null}return descriptors},labels=(value)=>{if(!Array.isArray(value)||Object.getPrototypeOf(value)!==Array.prototype)return null;const descriptors=Object.getOwnPropertyDescriptors(value),owned=Reflect.ownKeys(descriptors),lengthDescriptor=descriptors.length,length=lengthDescriptor!==undefined&&"value" in lengthDescriptor?lengthDescriptor.value:-1;if(!Number.isSafeInteger(length)||length<0||length>64||owned.length!==length+1)return null;const snapshot=[];for(let index=0;index<length;index+=1){const descriptor=descriptors[String(index)],id=descriptor!==undefined&&"value" in descriptor?descriptor.value:null;if(descriptor===undefined||!descriptor.enumerable||!("value" in descriptor)||typeof id!=="string"||id.length>128||!/^[a-z0-9]+(?:[._:-][a-z0-9]+)*$/u.test(id)||snapshot.includes(id))return null;snapshot.push(id)}return snapshot};let status="failed",copied=[],refused=[];try{const report=(function(context){"use strict";${bootstrap.source}\n})(context),descriptors=record(report,["schemaVersion","copied","refused"]),acceptedCopied=descriptors===null?null:labels(descriptors.copied.value),acceptedRefused=descriptors===null?null:labels(descriptors.refused.value);if(descriptors!==null&&descriptors.schemaVersion.value===i.reportSchemaVersion&&acceptedCopied!==null&&acceptedRefused!==null&&acceptedCopied.every((id)=>!acceptedRefused.includes(id))){status="completed";copied=acceptedCopied;refused=acceptedRefused}else{status="invalid-report"}}catch{status="failed"}try{document.documentElement.dataset.publisherReaderStateBootstrap=status}catch{}try{localStorage.setItem(context.reportStorageKey,JSON.stringify({schemaVersion:i.reportSchemaVersion,adapter:i.adapter,status,copied,refused}))}catch{}})();`;
-}
+export {
+  createPublisherReaderStateBootstrapSource,
+} from "../reader-state-bootstrap-source.js";
+export type {
+  PublisherReaderStateBootstrapSource,
+} from "../reader-state-bootstrap-source.js";
 
 export function createPublisherReaderPrepaintSource(
   publicationId: string,
@@ -81,20 +65,18 @@ export function createPublisherReaderPrepaintSource(
 export function PublisherReaderPrepaint({
   publicationId,
   readerFontFamilies,
-  readerStateBootstrap,
+  readerStateBootstrapSource,
 }: {
   readonly publicationId: string;
   readonly readerFontFamilies: readonly PublisherNextReaderFontFamily[];
-  readonly readerStateBootstrap?: PublisherReaderStateBootstrapSource;
+  readonly readerStateBootstrapSource?: string;
 }): ReactElement {
   return (
     <>
-      {readerStateBootstrap === undefined ? null : (
+      {readerStateBootstrapSource === undefined ? null : (
         <script
           dangerouslySetInnerHTML={{
-            __html: createPublisherReaderStateBootstrapSource(
-              readerStateBootstrap,
-            ),
+            __html: readerStateBootstrapSource,
           }}
           data-publisher-reader-state-bootstrap=""
         />

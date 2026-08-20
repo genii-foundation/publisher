@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canonicalizeJson,
   hashCanonicalJson,
   sha256,
 } from "@genii-foundation/publisher-content";
@@ -24,10 +25,29 @@ import {
 import {
   renderToStaticMarkup,
 } from "react-dom/server";
+import {
+  createReaderBookmarksStorageKey,
+} from "../packages/reader/dist/bookmarks.js";
+import {
+  createReaderNarrationPreferencesStorageKey,
+} from "../packages/reader/dist/narration.js";
+import {
+  createReaderPreferencesStorageKey,
+} from "../packages/reader/dist/preferences.js";
+import {
+  createReaderProgressStorageKey,
+} from "../packages/reader/dist/progress.js";
+import {
+  createReaderEngagementStorageKey,
+  createReaderSyncConsentStorageKey,
+} from "../packages/reader/dist/sync.js";
 
 import {
   createPublicationNextApplication,
 } from "../packages/next/dist/server/application.js";
+import {
+  createPublisherReaderStateBootstrapSource,
+} from "../packages/next/dist/client/reader-prepaint.js";
 import {
   resolveDefaultPublisherNextTheme,
 } from "../packages/next/dist/theme/default.js";
@@ -44,6 +64,14 @@ import {
 import {
   createPublisherNextErrorIdentity,
 } from "../packages/next/dist/error-identity.js";
+import {
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
+} from "../packages/next/dist/index.js";
 
 import {
   createFixtureReader,
@@ -101,6 +129,7 @@ function createUpdates(config = {}, loadOverride) {
 
 function createReaderStateBootstrap({
   config = {},
+  createProjection,
   createSource = () =>
     'return { schemaVersion: "1.0", copied: [], refused: [] };',
   implementation = {},
@@ -112,11 +141,22 @@ function createReaderStateBootstrap({
     config,
     implementation: {
       kind: "genii.publisher.next-reader-state-bootstrap",
-      apiVersion: "1.0",
+      apiVersion: "1.1",
       configure(snapshot) {
         return {
           valid: true,
           value: {
+            ...(createProjection === undefined
+              ? {}
+              : {
+                  createProjection(context) {
+                    return {
+                      valid: true,
+                      value: createProjection(context, snapshot),
+                      diagnostics: [],
+                    };
+                  },
+                }),
             createSource(context) {
               return {
                 valid: true,
@@ -589,11 +629,12 @@ test("Reader state bootstrap is ordered, frozen, and bound to application identi
     package: "@example/reader-state-bootstrap",
     version: "1.2.3",
     rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
-    apiVersion: "1.0",
+    apiVersion: "1.1",
     configHash: hashCanonicalJson({ legacyPrefix: "legacy" }),
     sourceHash: sha256(source),
+    projection: null,
   });
-  assert.equal(application.manifest.schemaVersion, "1.1");
+  assert.equal(application.manifest.schemaVersion, "1.2");
 
   const root = renderToStaticMarkup(
     application.RootLayout({ children: "proof" }),
@@ -628,6 +669,562 @@ test("Reader state bootstrap is ordered, frozen, and bound to application identi
   );
 });
 
+test("Reader state bootstrap snapshots a public projection and binds its exact envelope", async () => {
+  let projectionCalls = 0;
+  let sourceCalls = 0;
+  const invocationOrder = [];
+  let projectionContext;
+  let sourceContext;
+  const projectionData = JSON.parse(
+    '{"zeta":[{"value":"proof"}],"__proto__":{"safe":true},"alpha":1}',
+  );
+  projectionData.special = 'line\n"\\💡';
+  const source = [
+    "if (projection === null || !Object.isFrozen(projection) || !Object.isFrozen(projection.data) || !Object.isFrozen(projection.data.zeta[0])) throw new Error(\"projection not frozen\");",
+    'return { schemaVersion: "1.0", copied: [], refused: [] };',
+  ].join("\n");
+  const application = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection(context) {
+        projectionCalls += 1;
+        invocationOrder.push("projection");
+        projectionContext = context;
+        return projectionData;
+      },
+      createSource(context) {
+        sourceCalls += 1;
+        invocationOrder.push("source");
+        sourceContext = context;
+        return source;
+      },
+    }),
+  });
+  const expectedEnvelope = {
+    buildId: application.reader.buildId,
+    data: projectionData,
+    engineVersion: application.reader.engineVersion,
+    publicationId: "renderer-proof",
+    schemaVersion: "1.0",
+  };
+  const expectedText = canonicalizeJson(expectedEnvelope);
+  assert.equal(projectionCalls, 1);
+  assert.equal(sourceCalls, 1);
+  assert.deepEqual(invocationOrder, ["projection", "source"]);
+  assert.equal(projectionContext, sourceContext);
+  assert.equal(Object.isFrozen(projectionContext), true);
+  assert.deepEqual(application.manifest.readerStateBootstrap.projection, {
+    schemaVersion: "1.0",
+    byteSize: new TextEncoder().encode(expectedText).length,
+    hash: sha256(expectedText),
+  });
+
+  projectionData.alpha = 99;
+  projectionData.zeta[0].value = "mutated";
+  const root = renderToStaticMarkup(
+    application.RootLayout({ children: "proof" }),
+  );
+  const expectedScript = createPublisherReaderStateBootstrapSource({
+    package: "@example/reader-state-bootstrap",
+    version: "1.2.3",
+    sourceHash: sha256(source),
+    source,
+    context: sourceContext,
+    projectionText: expectedText,
+  });
+  assert.match(root, /projectionText/u);
+  assert.equal(root.includes(expectedScript), true);
+  assert.doesNotMatch(root, /mutated/u);
+
+  const reordered = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection: () => JSON.parse(
+        '{"special":"line\\n\\"\\\\💡","alpha":1,"__proto__":{"safe":true},"zeta":[{"value":"proof"}]}',
+      ),
+      createSource: () => source,
+    }),
+  });
+  assert.deepEqual(
+    reordered.manifest.readerStateBootstrap.projection,
+    application.manifest.readerStateBootstrap.projection,
+  );
+  assert.equal(reordered.manifest.buildId, application.manifest.buildId);
+
+  const changed = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection: () => ({ alpha: 2 }),
+      createSource: () => source,
+    }),
+  });
+  assert.notEqual(
+    changed.manifest.readerStateBootstrap.projection.hash,
+    application.manifest.readerStateBootstrap.projection.hash,
+  );
+  assert.notEqual(changed.manifest.buildId, application.manifest.buildId);
+});
+
+test("Reader state bootstrap projection callbacks cannot replace trusted serialization", async () => {
+  const originalStringify = JSON.stringify;
+  const marker = "publisherProjectionSerializerWasReplaced";
+  const projectionData = new Proxy({ proof: "stable" }, {
+    getPrototypeOf(target) {
+      JSON.stringify = (value, ...args) => {
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          Object.hasOwn(value, "projectionText") &&
+          Object.hasOwn(value, "reportSchemaVersion")
+        ) {
+          return `(()=>{globalThis.${marker}=true;return ${originalStringify(value, ...args)}})()`;
+        }
+        return originalStringify(value, ...args);
+      };
+      return Object.getPrototypeOf(target);
+    },
+  });
+  try {
+    const application = await createApplication({
+      readerStateBootstrap: createReaderStateBootstrap({
+        createProjection: () => projectionData,
+      }),
+    });
+    const expectedText = canonicalizeJson({
+      buildId: application.reader.buildId,
+      data: { proof: "stable" },
+      engineVersion: application.reader.engineVersion,
+      publicationId: application.reader.publicationId,
+      schemaVersion: "1.0",
+    });
+    assert.deepEqual(
+      application.manifest.readerStateBootstrap.projection,
+      {
+        schemaVersion: "1.0",
+        byteSize: new TextEncoder().encode(expectedText).length,
+        hash: sha256(expectedText),
+      },
+    );
+    const root = renderToStaticMarkup(
+      application.RootLayout({ children: "proof" }),
+    );
+    assert.doesNotMatch(root, new RegExp(marker, "u"));
+  } finally {
+    JSON.stringify = originalStringify;
+  }
+});
+
+test("Reader state bootstrap projection enforces exact independent resource limits", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const createResult = (data) =>
+    createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        createProjection: () => data,
+      }),
+    });
+  const nested = (depth) => {
+    let value = {};
+    for (let index = 1; index < depth; index += 1) {
+      value = { child: value };
+    }
+    return value;
+  };
+
+  assert.equal((await createResult(
+    nested(PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH),
+  )).valid, true);
+  let result = await createResult(
+    nested(PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH + 1),
+  );
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_deep");
+  assert.deepEqual(result.diagnostics[0].params, {
+    actualDepth:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH + 1,
+    maximumDepth:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+  });
+
+  const acceptedContainers = {
+    values: Array(
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS - 2,
+    ).fill(Object.freeze({})),
+  };
+  assert.equal((await createResult(acceptedContainers)).valid, true);
+  acceptedContainers.values.push({});
+  result = await createResult(acceptedContainers);
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_many_containers");
+
+  const acceptedEntries = {
+    values: Array.from(
+      {
+        length:
+          PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES - 1,
+      },
+      () => 0,
+    ),
+  };
+  assert.equal((await createResult(acceptedEntries)).valid, true);
+  acceptedEntries.values.push(0);
+  result = await createResult(acceptedEntries);
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_many_entries");
+  assert.deepEqual(result.diagnostics[0].params, {
+    actualItems:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES + 1,
+    maximumItems:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+  });
+
+  let overLimitArrayOwnKeysCalled = false;
+  const overLimitArray = new Proxy(
+    Array(
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+    ),
+    {
+      ownKeys() {
+        overLimitArrayOwnKeysCalled = true;
+        throw new Error("private ownKeys trap");
+      },
+    },
+  );
+  result = await createResult({ values: overLimitArray });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_many_entries");
+  assert.equal(overLimitArrayOwnKeysCalled, false);
+
+  let overDepthPrototypeCalled = false;
+  let overDepthValue = new Proxy({}, {
+    getPrototypeOf() {
+      overDepthPrototypeCalled = true;
+      throw new Error("private prototype trap");
+    },
+  });
+  for (
+    let index = 0;
+    index < PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH;
+    index += 1
+  ) {
+    overDepthValue = { child: overDepthValue };
+  }
+  result = await createResult(overDepthValue);
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_deep");
+  assert.equal(overDepthPrototypeCalled, false);
+
+  const emptyEnvelopeBytes = new TextEncoder().encode(
+    canonicalizeJson({
+      buildId: reader.buildId,
+      data: { payload: "" },
+      engineVersion: reader.engineVersion,
+      publicationId: "renderer-proof",
+      schemaVersion: "1.0",
+    }),
+  ).length;
+  const acceptedBytes = {
+    payload: "x".repeat(
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES -
+        emptyEnvelopeBytes,
+    ),
+  };
+  result = await createResult(acceptedBytes);
+  assert.equal(result.valid, true,
+    JSON.stringify(result.diagnostics, null, 2));
+  assert.equal(
+    result.value.manifest.readerStateBootstrap.projection.byteSize,
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  );
+  acceptedBytes.payload += "x";
+  result = await createResult(acceptedBytes);
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_large");
+  assert.equal(
+    result.diagnostics[0].params.maximumBytes,
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  );
+
+  result = await createResult({
+    prefix: "p".repeat(1_000_000),
+    value: "v".repeat(7_500_000),
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_large");
+  assert.deepEqual(result.diagnostics[0].params, {
+    actualBytes:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES + 1,
+    maximumBytes:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  });
+
+  result = await createResult({ payload: "<".repeat(3_000_000) });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.script_too_large");
+  assert.equal(
+    result.diagnostics[0].params.maximumBytes,
+    16_777_216,
+  );
+
+  const staticTransport = await createPublicationNextApplication({
+    reader: await createFixtureReader({ includeUpdates: true }),
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection: () => ({ payload: "<".repeat(2_600_000) }),
+    }),
+    theme: resolveDefaultPublisherNextTheme(),
+    updates: createUpdates(),
+  });
+  assert.equal(staticTransport.valid, false);
+  assert.equal(
+    staticTransport.diagnostics[0].code,
+    "next.reader_state_bootstrap.static_script_too_large",
+  );
+  assert.equal(
+    staticTransport.diagnostics[0].params.maximumBytes,
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
+  );
+  assert.equal(staticTransport.diagnostics[0].params.documentCount, 9);
+
+  const boundarySource =
+    'return { schemaVersion: "1.0", copied: [], refused: [] };';
+  const boundaryContext = Object.freeze({
+    publicationId: reader.publicationId,
+    reportStorageKey:
+      `genii.publisher.reader-state-bootstrap.v1.${reader.publicationId}`,
+    targetStorageKeys: Object.freeze({
+      bookmarks: createReaderBookmarksStorageKey(reader.publicationId),
+      engagement: createReaderEngagementStorageKey(reader.publicationId),
+      narrationPreferences:
+        createReaderNarrationPreferencesStorageKey(reader.publicationId),
+      preferences: createReaderPreferencesStorageKey(reader.publicationId),
+      progress: createReaderProgressStorageKey(reader.publicationId),
+      syncConsent: createReaderSyncConsentStorageKey(reader.publicationId),
+    }),
+  });
+  const scriptBytesFor = (data) => {
+    const projectionText = canonicalizeJson({
+      buildId: reader.buildId,
+      data,
+      engineVersion: reader.engineVersion,
+      publicationId: reader.publicationId,
+      schemaVersion: "1.0",
+    });
+    return new TextEncoder().encode(
+      createPublisherReaderStateBootstrapSource({
+        package: "@example/reader-state-bootstrap",
+        version: "1.2.3",
+        sourceHash: sha256(boundarySource),
+        source: boundarySource,
+        context: boundaryContext,
+        projectionText,
+      }),
+    ).length;
+  };
+  const boundaryBase = { escaped: "", filler: "" };
+  const remainingScriptBytes =
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES -
+    scriptBytesFor(boundaryBase);
+  const boundaryData = {
+    escaped: "<".repeat(Math.floor(remainingScriptBytes / 6)),
+    filler: "x".repeat(remainingScriptBytes % 6),
+  };
+  assert.equal(
+    scriptBytesFor(boundaryData),
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+  );
+  result = await createResult(boundaryData);
+  assert.equal(result.valid, true,
+    JSON.stringify(result.diagnostics, null, 2));
+  boundaryData.filler += "x";
+  assert.equal(
+    scriptBytesFor(boundaryData),
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES + 1,
+  );
+  result = await createResult(boundaryData);
+  assert.equal(result.valid, false);
+  assert.equal(
+    result.diagnostics[0].code,
+    "next.reader_state_bootstrap.script_too_large",
+  );
+  assert.deepEqual(result.diagnostics[0].params, {
+    actualBytes:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES + 1,
+    maximumBytes:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+  });
+});
+
+test("Reader state bootstrap projection rejects hostile values and private failures", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const accessor = {};
+  Object.defineProperty(accessor, "private", {
+    enumerable: true,
+    get() {
+      return "private projection value";
+    },
+  });
+  const cyclic = {};
+  cyclic.self = cyclic;
+  const sparse = [];
+  sparse.length = 1;
+  const candidates = [
+    accessor,
+    cyclic,
+    { sparse },
+    { custom: Object.create({ inherited: true }) },
+    { invalid: Number.POSITIVE_INFINITY },
+    { invalid: "\ud800" },
+    new Proxy({}, {
+      ownKeys() {
+        throw new Error("private projection proxy trap");
+      },
+    }),
+  ];
+  for (const data of candidates) {
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        createProjection: () => data,
+      }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      result.diagnostics[0].code,
+      "next.reader_state_bootstrap.projection_json_invalid",
+    );
+    assert.doesNotMatch(
+      JSON.stringify(result.diagnostics),
+      /private projection value/u,
+    );
+  }
+
+  for (const data of [null, [], "not an object"]) {
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        createProjection: () => data,
+      }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      result.diagnostics[0].code,
+      "next.reader_state_bootstrap.projection_root_invalid",
+    );
+  }
+
+  let thrownSourceCalls = 0;
+  const thrown = await createPublicationNextApplication({
+    reader,
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection() {
+        throw new Error("private projection throw");
+      },
+      createSource() {
+        thrownSourceCalls += 1;
+        return 'return { schemaVersion: "1.0", copied: [], refused: [] };';
+      },
+    }),
+  });
+  assert.equal(thrown.valid, false);
+  assert.equal(
+    thrown.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_threw",
+  );
+  assert.doesNotMatch(JSON.stringify(thrown.diagnostics), /private/u);
+  assert.equal(thrownSourceCalls, 0);
+
+  for (const [projectionResult, code] of [
+    [
+      { valid: false, diagnostics: [{ private: "private rejection" }] },
+      "next.reader_state_bootstrap.projection_rejected",
+    ],
+    [
+      { valid: true, diagnostics: [] },
+      "next.reader_state_bootstrap.projection_result_invalid",
+    ],
+  ]) {
+    let invalidSourceCalls = 0;
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        implementation: {
+          configure() {
+            return {
+              valid: true,
+              diagnostics: [],
+              value: {
+                createProjection() {
+                  return projectionResult;
+                },
+                createSource() {
+                  invalidSourceCalls += 1;
+                  return {
+                    valid: true,
+                    diagnostics: [],
+                    value:
+                      'return { schemaVersion: "1.0", copied: [], refused: [] };',
+                  };
+                },
+              },
+            };
+          },
+        },
+      }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.diagnostics[0].code, code);
+    assert.doesNotMatch(JSON.stringify(result.diagnostics), /private/u);
+    assert.equal(invalidSourceCalls, 0);
+  }
+
+  let accessorCalls = 0;
+  const invalidInstances = [
+    {
+      createProjection: "not a function",
+      createSource() {},
+    },
+    (() => {
+      const instance = { createSource() {} };
+      Object.defineProperty(instance, "createProjection", {
+        enumerable: true,
+        get() {
+          accessorCalls += 1;
+          throw new Error("private projection accessor");
+        },
+      });
+      return instance;
+    })(),
+  ];
+  for (const instance of invalidInstances) {
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        implementation: {
+          configure() {
+            return {
+              valid: true,
+              diagnostics: [],
+              value: instance,
+            };
+          },
+        },
+      }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      result.diagnostics[0].code,
+      "next.reader_state_bootstrap.instance_invalid",
+    );
+    assert.doesNotMatch(JSON.stringify(result.diagnostics), /private/u);
+  }
+  assert.equal(accessorCalls, 0);
+});
+
 test("Reader state bootstrap rejects incompatible, unsafe, invalid, and oversized source", async () => {
   const reader = await createFixtureReader({ includeUpdates: false });
   const candidates = [
@@ -640,6 +1237,12 @@ test("Reader state bootstrap rejects incompatible, unsafe, invalid, and oversize
     {
       adapter: createReaderStateBootstrap({
         createSource: () => 'return "</script>";',
+      }),
+      code: "next.reader_state_bootstrap.source_unsafe",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => 'return "<ſcript>";',
       }),
       code: "next.reader_state_bootstrap.source_unsafe",
     },

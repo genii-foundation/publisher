@@ -4,6 +4,9 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-19, GENII Foundation
 
+- Added a separately bounded, immutable, Reader-build-bound public state projection for publication-owned legacy translation evidence, with an independent total static HTML transport limit.
+- Advanced the Next application manifest to 1.2 with an exact optional Reader state projection descriptor.
+- Bound projection serialization and bootstrap source generation to trusted renderer intrinsics so adapter callbacks cannot replace counted or executable bytes.
 - Raised the real lifecycle package proof's machine-time allowance above observed clean-install variance without changing its package or integrity assertions.
 - Refreshed Coherence Reader parity through its narrow-phone toolbar correction and hardened the official Reader against 320-pixel page overflow at maximum text size.
 - Added closed extension request handlers with build-bound owned paths, exact methods, bounded detached requests, validated responses, and packed-host proof.

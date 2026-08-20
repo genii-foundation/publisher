@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.16.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.17.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -283,9 +283,18 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.15.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.16.0",
       summary:
         "Refresh the checked Next declaration file for the exact Next.js 16.3.1 generated type roots.",
+    }),
+    Object.freeze({
+      from: "0.16.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Extend the Reader state bootstrap input contract with an optional separately bounded state projection.",
+      manualSteps: Object.freeze([
+        "If readerStateBootstrap is configured, update its implementation apiVersion from 1.0 to 1.1 and review the optional createProjection input before acknowledging this migration.",
+      ]),
     }),
   ]);
 

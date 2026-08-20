@@ -281,6 +281,110 @@ test("a newer contract is planned, applied, and recorded", (t) => {
   assert.ok(managed.includes("app/error.tsx"));
 });
 
+test("a contract-only upgrade changes no generated files and rolls back exactly", (t) => {
+  const { hostRoot } = workspace(t, {
+    contractVersion: "0.16.0",
+    version: "1.0.0",
+  });
+  initialize(hostRoot);
+  const before = {
+    page: readFileSync(join(hostRoot, "app", "page.tsx"), "utf8"),
+    layout: readFileSync(join(hostRoot, "app", "layout.tsx"), "utf8"),
+    state: readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
+  };
+  const manualStep =
+    "If readerStateBootstrap is configured, update its implementation apiVersion from 1.0 to 1.1 and review the optional createProjection input before acknowledging this migration.";
+
+  installRenderer(hostRoot, {
+    contractVersion: "0.17.0",
+    version: "2.0.0",
+    migrations: [
+      {
+        from: "0.16.0",
+        to: "0.17.0",
+        summary:
+          "extends the Reader state bootstrap input contract without changing generated files",
+        manualSteps: [manualStep],
+      },
+    ],
+  });
+
+  const planned = run(hostRoot, [
+    "upgrade",
+    "plan",
+    "--renderer",
+    rendererName,
+  ]);
+  assert.equal(planned.status, 0, planned.stderr);
+  assert.match(planned.stdout, /Contract\s+0\.16\.0 to 0\.17\.0/u);
+  assert.match(planned.stdout, /without changing generated files/u);
+  assert.match(planned.stdout, /update its implementation apiVersion/u);
+  const planHash = planHashFrom(planned.stdout);
+
+  const refused = run(hostRoot, [
+    "upgrade",
+    "apply",
+    "--renderer",
+    rendererName,
+    "--plan",
+    planHash,
+  ]);
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr, /the engine will not perform/u);
+  assert.equal(
+    readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
+    before.state,
+  );
+
+  const applied = run(hostRoot, [
+    "upgrade",
+    "apply",
+    "--renderer",
+    rendererName,
+    "--plan",
+    planHash,
+    "--acknowledge-manual-steps",
+  ]);
+  assert.equal(applied.status, 0, applied.stderr);
+  assert.equal(
+    readFileSync(join(hostRoot, "app", "page.tsx"), "utf8"),
+    before.page,
+  );
+  assert.equal(
+    readFileSync(join(hostRoot, "app", "layout.tsx"), "utf8"),
+    before.layout,
+  );
+  assert.equal(
+    JSON.parse(
+      readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
+    ).hostContractVersion,
+    "0.17.0",
+  );
+
+  const rollbackPlan = run(hostRoot, ["rollback", "plan"]);
+  assert.equal(rollbackPlan.status, 0, rollbackPlan.stderr);
+  assert.match(rollbackPlan.stdout, /Undoing\s+upgrade/u);
+  const rolledBack = run(hostRoot, [
+    "rollback",
+    "apply",
+    "--plan",
+    planHashFrom(rollbackPlan.stdout),
+  ]);
+  assert.equal(rolledBack.status, 0, rolledBack.stderr);
+  assert.equal(
+    readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
+    before.state,
+  );
+  assert.equal(
+    readFileSync(join(hostRoot, "app", "page.tsx"), "utf8"),
+    before.page,
+  );
+  assert.equal(
+    readFileSync(join(hostRoot, "app", "layout.tsx"), "utf8"),
+    before.layout,
+  );
+});
+
 test("a stale plan hash is refused", (t) => {
   const { hostRoot } = workspace(t);
   initialize(hostRoot);

@@ -38,7 +38,7 @@ import type {
 } from "./error-identity.js";
 
 export const PUBLISHER_NEXT_VERSION = "0.1.0-alpha.0";
-export const PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION = "1.1";
+export const PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION = "1.2";
 export const PUBLISHER_NEXT_APPLICATION_SCHEMA_URL =
   "https://publisher.genii.foundation/schemas/next-application-manifest.schema.json";
 export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_KIND =
@@ -50,11 +50,25 @@ export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH =
 export const PUBLISHER_NEXT_THEME_API_VERSION = "2.0";
 export const PUBLISHER_NEXT_UPDATES_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION =
-  "1.0";
+  "1.1";
 export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_REPORT_SCHEMA_VERSION =
   "1.0";
 export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES =
   32_768;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION =
+  "1.0";
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES =
+  8_388_608;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH =
+  64;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS =
+  100_000;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES =
+  1_000_000;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES =
+  16_777_216;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES =
+  134_217_728;
 export const PUBLISHER_NEXT_EXTENSION_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION = "1.0";
 export const PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES =
@@ -222,15 +236,41 @@ export interface PublisherNextReaderStateBootstrapReport {
   readonly refused: readonly string[];
 }
 
+export interface PublisherNextReaderStateBootstrapProjection {
+  readonly buildId: Sha256Digest;
+  readonly data: PublisherNextJsonObject;
+  readonly engineVersion: string;
+  readonly publicationId: string;
+  readonly schemaVersion:
+    typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION;
+}
+
+export interface PublisherNextReaderStateBootstrapProjectionDescriptor {
+  readonly schemaVersion:
+    typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION;
+  readonly byteSize: number;
+  readonly hash: Sha256Digest;
+}
+
 export interface PublisherNextReaderStateBootstrapInstance {
   /**
    * Return a synchronous JavaScript function body. The renderer executes it in
-   * the initial HTML head with one frozen `context` argument before Reader state is
-   * read. The body must return a closed bootstrap report.
+   * the initial HTML head with frozen `context` and `projection` arguments
+   * before Reader state is read. The body must return a closed bootstrap
+   * report.
    */
   readonly createSource: (
     context: PublisherNextReaderStateBootstrapContext,
   ) => ValidationResult<string>;
+  /**
+   * Return optional public, publication-owned JSON data used to translate
+   * private legacy Reader state in the browser. The renderer owns the
+   * projection envelope, snapshots and bounds the data, and passes the frozen
+   * envelope as the second browser function argument.
+   */
+  readonly createProjection?: (
+    context: PublisherNextReaderStateBootstrapContext,
+  ) => ValidationResult<PublisherNextJsonObject>;
 }
 
 export interface PublisherNextReaderStateBootstrap {
@@ -420,6 +460,8 @@ export interface PublisherNextApplicationManifest {
       typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION;
     readonly configHash: Sha256Digest;
     readonly sourceHash: Sha256Digest;
+    readonly projection:
+      PublisherNextReaderStateBootstrapProjectionDescriptor | null;
   } | null;
   readonly extensions: {
     readonly schemaVersion: "1.0";
