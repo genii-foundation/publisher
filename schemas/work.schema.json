@@ -65,6 +65,15 @@
     "assets": {
       "$ref": "#/$defs/sourcePath"
     },
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50000,
+      "items": {
+        "$ref": "#/$defs/sectionDeclaration"
+      },
+      "description": "Explicit preorder section structure. IDs, routes, hierarchy, and continuity are durable author data. Source selectors locate boundaries but never derive those identities."
+    },
     "metadata": {
       "type": "object",
       "additionalProperties": true
@@ -80,6 +89,97 @@
       "minLength": 1,
       "maxLength": 128,
       "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "contentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "sectionStart": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": {
+            "kind": { "const": "document" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "blockKind", "text"],
+          "properties": {
+            "kind": { "const": "block" },
+            "blockKind": { "$ref": "#/$defs/stableId" },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "occurrence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            }
+          }
+        }
+      ]
+    },
+    "continuity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "legacyIds", "progressGroups", "historicalSectionIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/contentId" },
+        "legacyIds": {
+          "type": "array",
+          "maxItems": 50000,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/contentId" }
+        },
+        "progressGroups": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50000,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50000,
+            "items": { "$ref": "#/$defs/contentId" }
+          }
+        },
+        "historicalSectionIds": {
+          "type": "array",
+          "maxItems": 50000,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/contentId" }
+        }
+      }
+    },
+    "sectionDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "start"],
+      "properties": {
+        "id": { "$ref": "#/$defs/contentId" },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "role": { "$ref": "#/$defs/stableId" },
+        "parentId": { "$ref": "#/$defs/contentId" },
+        "route": { "$ref": "#/$defs/routePath" },
+        "navigable": { "type": "boolean" },
+        "start": { "$ref": "#/$defs/sectionStart" },
+        "continuity": { "$ref": "#/$defs/continuity" },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
     },
     "relativePath": {
       "type": "string",

@@ -35,6 +35,10 @@
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
     },
+    "./server/sync": {
+      "types": "./dist/server/sync.d.ts",
+      "import": "./dist/server/sync.js"
+    },
     "./client": {
       "types": "./dist/client/index.d.ts",
       "import": "./dist/client/index.js"
@@ -78,7 +82,8 @@
     "provenance": true
   },
   "publisherHostOverrides": {
-    "next@16.2.12": {
+    "next@16.3.1": {
+      "nanoid": "3.3.18",
       "postcss": "8.5.24",
       "sharp": "0.35.3"
     }
@@ -92,7 +97,7 @@
     "semver": "7.8.5"
   },
   "peerDependencies": {
-    "next": "16.2.12",
+    "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -101,7 +106,7 @@
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@types/semver": "7.7.1",
-    "next": "16.2.12",
+    "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "typescript": "7.0.2"

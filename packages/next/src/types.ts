@@ -20,17 +20,25 @@ import type {
   ReaderSection,
   ReaderWork,
   Sha256Digest,
+  SyncEnvelope,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
+import type {
+  ReaderOfflineCatalog,
+} from "@genii-foundation/publisher-reader/offline";
 import type { Metadata, NextConfig } from "next";
-import type { ReactElement, ReactNode } from "react";
+import type {
+  ComponentType,
+  ReactElement,
+  ReactNode,
+} from "react";
 
 import type {
   PublisherNextErrorIdentity,
 } from "./error-identity.js";
 
 export const PUBLISHER_NEXT_VERSION = "0.1.0-alpha.0";
-export const PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION = "1.0";
+export const PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION = "1.2";
 export const PUBLISHER_NEXT_APPLICATION_SCHEMA_URL =
   "https://publisher.genii.foundation/schemas/next-application-manifest.schema.json";
 export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_KIND =
@@ -39,11 +47,51 @@ export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_MEDIA_TYPE =
   "application/vnd.genii.publisher.next-application+json";
 export const PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH =
   "renderers/next/application.json";
-export const PUBLISHER_NEXT_THEME_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_THEME_API_VERSION = "2.0";
 export const PUBLISHER_NEXT_UPDATES_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION =
+  "1.1";
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_REPORT_SCHEMA_VERSION =
+  "1.0";
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES =
+  32_768;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION =
+  "1.0";
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES =
+  8_388_608;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH =
+  64;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS =
+  100_000;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES =
+  1_000_000;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES =
+  16_777_216;
+export const PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES =
+  134_217_728;
+export const PUBLISHER_NEXT_EXTENSION_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION = "1.0";
+export const PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES =
+  1_048_576;
+export const PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS = Object.freeze([
+  "DELETE",
+  "GET",
+  "HEAD",
+  "OPTIONS",
+  "PATCH",
+  "POST",
+  "PUT",
+] as const);
+export const PUBLISHER_NEXT_EXTENSION_SLOTS = Object.freeze([
+  "page.before-main",
+  "page.after-main",
+] as const);
+export const PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT =
+  "page.client" as const;
 export const PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES =
   Object.freeze({
-    "next@16.2.12": Object.freeze({
+    "next@16.3.1": Object.freeze({
+      nanoid: "3.3.18",
       postcss: "8.5.24",
       sharp: "0.35.3",
     }),
@@ -52,6 +100,88 @@ export const PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES =
 export type PublisherNextJsonObject = Readonly<
   Record<string, JSONValue>
 >;
+
+export type PublisherNextExtensionSlot =
+  typeof PUBLISHER_NEXT_EXTENSION_SLOTS[number];
+
+export type PublisherNextExtensionHandlerMethod =
+  typeof PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS[number];
+
+export interface PublisherNextExtensionPageContext {
+  readonly kind: PublisherNextPage["kind"];
+  readonly path: string;
+  readonly publication: {
+    readonly id: string;
+    readonly title: string;
+    readonly language: string;
+  };
+  readonly work?: {
+    readonly id: string;
+    readonly title: string;
+  };
+  readonly section?: {
+    readonly id: string;
+    readonly title: string;
+  };
+  readonly extension?: {
+    readonly id: string;
+    readonly routeId: string;
+  };
+}
+
+export interface PublisherNextExtensionRenderInput {
+  readonly slot: PublisherNextExtensionSlot;
+  readonly page: PublisherNextExtensionPageContext;
+  readonly serverData?: JSONValue;
+}
+
+export interface PublisherNextExtensionClientProps {
+  readonly mount:
+    typeof PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT;
+  readonly page: PublisherNextExtensionPageContext;
+  readonly clientData?: JSONValue;
+}
+
+export interface PublisherNextExtensionRenderer {
+  readonly kind: "genii.publisher.next-extension";
+  readonly apiVersion: typeof PUBLISHER_NEXT_EXTENSION_API_VERSION;
+  readonly rendererCompatibility: string;
+  readonly renderSlot?: (
+    input: PublisherNextExtensionRenderInput,
+  ) => ReactNode | Promise<ReactNode>;
+  readonly Client?: ComponentType<PublisherNextExtensionClientProps>;
+}
+
+export interface PublisherNextExtensionHost {
+  readonly kind: "genii.publisher.next-host-extension";
+  readonly apiVersion:
+    typeof PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION;
+  readonly rendererCompatibility: string;
+  readonly renderRoute?: (
+    input: PublisherNextExtensionRouteRenderInput,
+  ) => ReactNode | Promise<ReactNode>;
+  readonly handleRequest?: (
+    input: PublisherNextExtensionHandlerInput,
+  ) => Response | Promise<Response>;
+}
+
+export interface PublisherNextExtensionRouteRenderInput {
+  readonly page: PublisherNextExtensionRoutePage;
+  readonly serverData?: JSONValue;
+}
+
+export interface PublisherNextExtensionHandlerDescriptor {
+  readonly id: string;
+  readonly path: string;
+  readonly methods: readonly PublisherNextExtensionHandlerMethod[];
+  readonly data?: JSONValue;
+}
+
+export interface PublisherNextExtensionHandlerInput {
+  readonly handler: PublisherNextExtensionHandlerDescriptor;
+  readonly request: Request;
+  readonly serverData?: JSONValue;
+}
 
 export interface PublisherNextThemeTokens {
   readonly color: {
@@ -69,6 +199,8 @@ export interface PublisherNextThemeTokens {
     readonly monoFamily: string;
     readonly baseSize: string;
     readonly lineHeight: number;
+    readonly defaultReaderFontFamilyId: string;
+    readonly readerFontFamilies: readonly PublisherNextReaderFontFamily[];
   };
   readonly layout: {
     readonly readingMeasure: string;
@@ -76,6 +208,86 @@ export interface PublisherNextThemeTokens {
     readonly sectionGap: string;
     readonly controlRadius: string;
   };
+}
+
+export interface PublisherNextReaderFontFamily {
+  readonly id: string;
+  readonly label: string;
+  readonly family: string;
+}
+
+export interface PublisherNextReaderStateBootstrapContext {
+  readonly publicationId: string;
+  readonly reportStorageKey: string;
+  readonly targetStorageKeys: {
+    readonly bookmarks: string;
+    readonly engagement: string;
+    readonly narrationPreferences: string;
+    readonly preferences: string;
+    readonly progress: string;
+    readonly syncConsent: string;
+  };
+}
+
+export interface PublisherNextReaderStateBootstrapReport {
+  readonly schemaVersion:
+    typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_REPORT_SCHEMA_VERSION;
+  readonly copied: readonly string[];
+  readonly refused: readonly string[];
+}
+
+export interface PublisherNextReaderStateBootstrapProjection {
+  readonly buildId: Sha256Digest;
+  readonly data: PublisherNextJsonObject;
+  readonly engineVersion: string;
+  readonly publicationId: string;
+  readonly schemaVersion:
+    typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION;
+}
+
+export interface PublisherNextReaderStateBootstrapProjectionDescriptor {
+  readonly schemaVersion:
+    typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION;
+  readonly byteSize: number;
+  readonly hash: Sha256Digest;
+}
+
+export interface PublisherNextReaderStateBootstrapInstance {
+  /**
+   * Return a synchronous JavaScript function body. The renderer executes it in
+   * the initial HTML head with frozen `context` and `projection` arguments
+   * before Reader state is read. The body must return a closed bootstrap
+   * report.
+   */
+  readonly createSource: (
+    context: PublisherNextReaderStateBootstrapContext,
+  ) => ValidationResult<string>;
+  /**
+   * Return optional public, publication-owned JSON data used to translate
+   * private legacy Reader state in the browser. The renderer owns the
+   * projection envelope, snapshots and bounds the data, and passes the frozen
+   * envelope as the second browser function argument.
+   */
+  readonly createProjection?: (
+    context: PublisherNextReaderStateBootstrapContext,
+  ) => ValidationResult<PublisherNextJsonObject>;
+}
+
+export interface PublisherNextReaderStateBootstrap {
+  readonly kind: "genii.publisher.next-reader-state-bootstrap";
+  readonly apiVersion:
+    typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION;
+  readonly configure: (
+    config: PublisherNextJsonObject,
+  ) => ValidationResult<PublisherNextReaderStateBootstrapInstance>;
+}
+
+export interface ResolvedPublisherNextReaderStateBootstrap {
+  readonly package: string;
+  readonly version: string;
+  readonly rendererCompatibility: string;
+  readonly config: PublisherNextJsonObject;
+  readonly implementation: PublisherNextReaderStateBootstrap;
 }
 
 export interface PublisherNextThemeInstance {
@@ -139,6 +351,21 @@ export interface PublisherNextSectionPage
 export interface PublisherNextUpdatesPage
   extends PublisherNextPageBase {
   readonly kind: "updates";
+  readonly viewId: string;
+  readonly pageNumber: number;
+  readonly pageSize?: number;
+  readonly previousPath?: string;
+  readonly nextPath?: string;
+}
+
+export interface PublisherNextExtensionRoutePage
+  extends PublisherNextPageBase {
+  readonly kind: "extension";
+  readonly extensionId: string;
+  readonly routeId: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly data?: JSONValue;
 }
 
 export interface PublisherNextUpdatesEntry {
@@ -161,7 +388,8 @@ export type PublisherNextPage =
   | PublisherNextWorkPage
   | PublisherNextCollectionPage
   | PublisherNextSectionPage
-  | PublisherNextUpdatesPage;
+  | PublisherNextUpdatesPage
+  | PublisherNextExtensionRoutePage;
 
 export interface PublisherNextUpdatesInstance {
   readonly load: (
@@ -224,6 +452,42 @@ export interface PublisherNextApplicationManifest {
     readonly configHash: Sha256Digest;
     readonly viewHash: Sha256Digest;
   } | null;
+  readonly readerStateBootstrap: {
+    readonly package: string;
+    readonly version: string;
+    readonly rendererCompatibility: string;
+    readonly apiVersion:
+      typeof PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION;
+    readonly configHash: Sha256Digest;
+    readonly sourceHash: Sha256Digest;
+    readonly projection:
+      PublisherNextReaderStateBootstrapProjectionDescriptor | null;
+  } | null;
+  readonly extensions: {
+    readonly schemaVersion: "1.0";
+    readonly buildId: Sha256Digest;
+    readonly entries: readonly {
+      readonly id: string;
+      readonly package: string;
+      readonly version: string;
+      readonly capabilities: readonly string[];
+      readonly projectionHash: Sha256Digest;
+      readonly rendererApiVersion:
+        typeof PUBLISHER_NEXT_EXTENSION_API_VERSION | null;
+      readonly rendererCompatibility: string | null;
+      readonly hostApiVersion:
+        typeof PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION | null;
+      readonly hostCompatibility: string | null;
+    }[];
+  } | null;
+  readonly sync: {
+    readonly schemaVersion: SyncEnvelope["schemaVersion"];
+    readonly buildId: Sha256Digest;
+    readonly providerPackage: string;
+    readonly consent: "opt-in";
+    readonly localFallback: true;
+    readonly capabilities: readonly SyncEnvelope["capabilities"][number][];
+  } | null;
   readonly continuity: {
     readonly mode: "proxy";
     readonly explicitRedirectCount: number;
@@ -270,6 +534,8 @@ export interface PublicationNextApplication {
   readonly reader: PublicationReaderEnvelope;
   readonly manifest: PublisherNextApplicationManifest;
   readonly artifact: PublisherNextApplicationArtifact;
+  readonly offlineCatalog: ReaderOfflineCatalog;
+  readonly offlineCatalogText: string;
   readonly theme: PublisherNextThemeInstance;
   readonly errorIdentity: PublisherNextErrorIdentity;
   readonly slashPolicy:
@@ -300,7 +566,7 @@ export interface PublicationNextApplication {
   ) => Promise<Metadata>;
   readonly handleRequest: (
     request: Request,
-  ) => Response | undefined;
+  ) => Promise<Response | undefined>;
   readonly createNextConfig: (
     baseConfig?: NextConfig,
   ) => NextConfig;
@@ -308,6 +574,13 @@ export interface PublicationNextApplication {
 
 export interface CreatePublicationNextApplicationOptions {
   readonly reader: unknown;
+  readonly audioData?: unknown;
+  readonly extensionData?: unknown;
+  readonly extensions?: unknown;
+  readonly readerStateBootstrap?:
+    ResolvedPublisherNextReaderStateBootstrap;
+  readonly syncData?: unknown;
   readonly theme?: ResolvedPublisherNextTheme;
   readonly updates?: ResolvedPublisherNextUpdates;
+  readonly updatesData?: unknown;
 }

@@ -23,6 +23,7 @@ export {
 } from "../types.js";
 export type {
   PublisherNextJsonObject,
+  PublisherNextReaderFontFamily,
   PublisherNextTheme,
   PublisherNextThemeInstance,
   PublisherNextThemeTokens,

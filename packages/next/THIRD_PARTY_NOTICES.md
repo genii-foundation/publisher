@@ -4,7 +4,7 @@
 
 | Package | Version | Relationship | License |
 | --- | --- | --- | --- |
-| `next` | 16.2.12 | peer | MIT |
+| `next` | 16.3.1 | peer | MIT |
 | `react` | 19.2.8 | peer | MIT |
 | `react-dom` | 19.2.8 | peer | MIT |
 | `react-markdown` | 10.1.0 | dependency | MIT |

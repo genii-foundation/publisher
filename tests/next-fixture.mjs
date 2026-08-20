@@ -225,6 +225,11 @@ function markdownFor(workId) {
         "## Next",
         "",
         "Second [unsafe link](javascript:alert(1)) with <script>alert(2)</script> text.",
+        "",
+        "| Reading window | Tide height |",
+        "| :--- | ---: |",
+        "| First light | 1.4 m |",
+        "| Late morning | 0.8 m |",
       ].join("\n");
     case "unlisted-notes":
       return "# Quiet Draft\n\nThis route exists without a catalog card.";
@@ -241,7 +246,15 @@ function createTwoSectionWork(
 ) {
   const root = compiledWork.sections[0];
   assert.ok(root);
-  assert.equal(root.blocks.length, 4);
+  assert.equal(root.blocks.length, 5);
+  const tableBlock = root.blocks[4];
+  assert.ok(tableBlock);
+  assert.match(tableBlock.markdown, /^\| Reading window \|/u);
+  const classifiedTableBlock = {
+    ...tableBlock,
+    kind: "table",
+    text: "Reading window Tide height First light 1.4 m Late morning 0.8 m",
+  };
   return {
     ...compiledWork,
     sections: [
@@ -291,7 +304,10 @@ function createTwoSectionWork(
           historicalSectionIds: [],
         },
         navigable: true,
-        blocks: root.blocks.slice(2),
+        blocks: [
+          ...root.blocks.slice(2, 4),
+          classifiedTableBlock,
+        ],
       },
     ],
   };
@@ -317,6 +333,7 @@ function createWorkRouteSection(compiledWork) {
 function createReaderLinkFixtures(
   works,
   headingReaderLink,
+  formattedReaderLink,
   unrepresentableReaderLink,
 ) {
   const work = works.find(
@@ -335,9 +352,11 @@ function createReaderLinkFixtures(
   assert.ok(block);
   const selected = headingReaderLink
     ? "Opening"
-    : unrepresentableReaderLink
-      ? "good link"
-      : "First";
+    : formattedReaderLink
+      ? "safe"
+      : unrepresentableReaderLink
+        ? "good link"
+        : "First";
   const start = block.markdown.indexOf(selected);
   assert.notEqual(start, -1);
 
@@ -501,6 +520,7 @@ export async function createFixtureReader(options = {}) {
           : createReaderLinkFixtures(
               works,
               options.headingReaderLink ?? false,
+              options.formattedReaderLink ?? false,
               options.unrepresentableReaderLink ?? false,
             ),
     }),

@@ -36,9 +36,11 @@ import * as publisherNode from "../packages/publisher/dist/node.js";
 import { PUBLISHER_SYNC_PROVIDER } from "../packages/sync-supabase/provider.mjs";
 import {
   AUDIO_PARITY,
+  COHERENCE_PARITY_SOURCE,
   PARITY_HOMES,
   PARITY_LEDGER,
   PARITY_STATUSES,
+  READER_PARITY,
   SYNC_PARITY,
 } from "./coherence-parity-ledger.mjs";
 
@@ -57,10 +59,37 @@ const migrationSql = readdirSync(migrationRoot)
 
 // ------------------------------------------------------- the ledger is well formed
 
-test("the ledger covers both subsystems and is not empty", () => {
+test("the ledger covers Reader, narration, and synchronization", () => {
+  assert.ok(READER_PARITY.length >= 30, `only ${READER_PARITY.length} Reader entries`);
   assert.ok(AUDIO_PARITY.length >= 10, `only ${AUDIO_PARITY.length} audio entries`);
   assert.ok(SYNC_PARITY.length >= 10, `only ${SYNC_PARITY.length} sync entries`);
-  assert.equal(PARITY_LEDGER.length, AUDIO_PARITY.length + SYNC_PARITY.length);
+  assert.equal(
+    PARITY_LEDGER.length,
+    READER_PARITY.length + AUDIO_PARITY.length + SYNC_PARITY.length,
+  );
+});
+
+test("the Reader inventory is pinned to the current audited Coherence ref", () => {
+  assert.match(COHERENCE_PARITY_SOURCE.ref, /^[0-9a-f]{40}$/u);
+  assert.equal(
+    COHERENCE_PARITY_SOURCE.ref,
+    "d250a760b51a071037af0c18ac73cc3131312f09",
+  );
+  for (const entry of READER_PARITY) {
+    assert.ok(
+      Array.isArray(entry.sourcePaths) && entry.sourcePaths.length > 0,
+      `${entry.id} names no observed Coherence source path`,
+    );
+    for (const path of entry.sourcePaths) {
+      assert.equal(typeof path, "string", `${entry.id} has a non-string source path`);
+      assert.equal(path.startsWith("/"), false, `${entry.id} uses an absolute source path`);
+      assert.equal(
+        path.split("/").includes(".."),
+        false,
+        `${entry.id} uses a parent source path`,
+      );
+    }
+  }
 });
 
 test("every entry has a unique identifier", () => {
@@ -101,8 +130,13 @@ test("nothing is lost, dropped, or unowned", () => {
 
 // -------------------------------------------------- claims about the engine hold
 
-test("every engine capability names evidence that exists", () => {
-  const engineEntries = PARITY_LEDGER.filter((entry) => entry.home === "engine");
+test("every implemented engine or renderer capability names evidence that exists", () => {
+  const engineEntries = PARITY_LEDGER.filter(
+    (entry) =>
+      (entry.home === "engine" || entry.home === "renderer") &&
+      entry.status !== "blocked" &&
+      entry.status !== "planned",
+  );
   assert.ok(engineEntries.length > 0, "no engine entries, so this checks nothing");
   for (const entry of engineEntries) {
     assert.ok(
@@ -113,6 +147,12 @@ test("every engine capability names evidence that exists", () => {
       assert.ok(
         existsSync(join(schemaRoot, entry.evidence.schema)),
         `${entry.id} names schema ${entry.evidence.schema}, which does not exist`,
+      );
+    }
+    if (entry.evidence.file !== undefined) {
+      assert.ok(
+        existsSync(join(repositoryRoot, entry.evidence.file)),
+        `${entry.id} names file ${entry.evidence.file}, which does not exist`,
       );
     }
     if (entry.evidence.export !== undefined) {
@@ -142,7 +182,10 @@ test("every engine capability names evidence that exists", () => {
 
 test("every provider capability names a migration that exists", () => {
   const providerEntries = PARITY_LEDGER.filter(
-    (entry) => entry.home === "provider",
+    (entry) =>
+      entry.home === "provider" &&
+      entry.status !== "blocked" &&
+      entry.status !== "planned",
   );
   assert.ok(providerEntries.length > 0, "no provider entries");
   for (const entry of providerEntries) {
@@ -159,6 +202,9 @@ test("every provider capability names a migration that exists", () => {
 
 test("every table and function a provider entry names is really created", () => {
   for (const entry of PARITY_LEDGER) {
+    if (entry.status === "blocked" || entry.status === "planned") {
+      continue;
+    }
     const table = entry.evidence?.table;
     if (table !== undefined) {
       assert.match(
@@ -213,7 +259,6 @@ test("a host capability says what the engine supplies for it", () => {
 
 test("every blocked capability names the decision it waits on", () => {
   const blocked = PARITY_LEDGER.filter((entry) => entry.status === "blocked");
-  assert.ok(blocked.length > 0, "no blocked entries, so this checks nothing");
   for (const entry of blocked) {
     assert.match(
       entry.blockedBy ?? "",
@@ -227,7 +272,22 @@ test("every blocked capability names the decision it waits on", () => {
   }
 });
 
-test("nothing claims to be preserved while being blocked", () => {
+test("every planned capability names its accepted architecture decision", () => {
+  const planned = PARITY_LEDGER.filter((entry) => entry.status === "planned");
+  for (const entry of planned) {
+    assert.match(
+      entry.plannedBy ?? "",
+      /^docs\/architecture\/\d{4}-[a-z0-9-]+\.md$/u,
+      `${entry.id} is planned and names no accepted architecture record`,
+    );
+    assert.ok(
+      existsSync(join(repositoryRoot, entry.plannedBy)),
+      `${entry.id} names missing plan ${entry.plannedBy}`,
+    );
+  }
+});
+
+test("nothing claims to be implemented while carrying a blocker or plan", () => {
   // The failure this ledger is most likely to suffer: an entry described as
   // preserved that in fact cannot run.
   for (const entry of PARITY_LEDGER) {
@@ -236,6 +296,13 @@ test("nothing claims to be preserved while being blocked", () => {
         entry.status,
         "blocked",
         `${entry.id} names a blocker and claims status ${entry.status}`,
+      );
+    }
+    if (entry.plannedBy !== undefined) {
+      assert.equal(
+        entry.status,
+        "planned",
+        `${entry.id} names a plan and claims status ${entry.status}`,
       );
     }
   }
@@ -277,6 +344,46 @@ test("the readiness audit quotes the ledger's real totals", () => {
       audit,
       new RegExp(`${count} ${status}`, "u"),
       `the audit does not quote ${count} ${status}`,
+    );
+  }
+});
+
+test("the Coherence adoption plan pins authority and rollback boundaries", () => {
+  const plan = readFileSync(
+    join(repositoryRoot, "docs", "migration", "coherence-adoption-plan.md"),
+    "utf8",
+  );
+  assert.match(
+    plan,
+    /Publisher implementation baseline: `31255c268a03571fe61e52a85f8542de16b0a694`/u,
+  );
+  assert.match(
+    plan,
+    /Coherence acceptance baseline: `d250a760b51a071037af0c18ac73cc3131312f09`/u,
+  );
+  assert.match(
+    plan,
+    /No second Coherence Vercel\s+project may be created\./u,
+  );
+  assert.match(plan, /No database migration is part of this adoption plan\./u);
+  assert.match(
+    plan,
+    /The final migration cannot merge under this plan without fresh explicit approval\./u,
+  );
+  assert.match(
+    plan,
+    /@genii-foundation\/publisher-sync-supabase` is currently private at version\s+`0\.0\.0`/u,
+  );
+  assert.match(
+    plan,
+    /separately bounded, immutable, build-bound projection/u,
+  );
+  assert.doesNotMatch(plan, /\.\.\/(?:publisher|coherence-thesis)/u);
+  for (let gate = 1; gate <= 14; gate += 1) {
+    assert.match(
+      plan,
+      new RegExp(`^${gate}\\. `, "mu"),
+      `the adoption plan is missing acceptance gate ${gate}`,
     );
   }
 });

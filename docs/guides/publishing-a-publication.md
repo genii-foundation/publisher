@@ -19,6 +19,38 @@ A renderer installed into your repository, such as
 contract from your own installation rather than depending on a renderer itself,
 which is also why a third-party renderer works with no changes here.
 
+Install a custom theme package into the same repository when you want one. After
+initialization, select it through author-owned host code:
+
+```js
+// publisher.theme.mjs
+export { theme as default } from "@example/publisher-theme";
+```
+
+The engine never creates or rewrites this file. The generated host uses the same
+explicit adapter for ordinary pages and framework error surfaces. Package names
+in `publication.json` remain provenance data and are never treated as import
+instructions.
+
+Install every declared extension package into the host and register it through
+author-owned code:
+
+```js
+// publisher.extensions.mjs
+import stationIndex from "@example/station-index-extension";
+
+export default Object.freeze([stationIndex]);
+```
+
+The registration order must match `publication.json`. A manifest package string
+never imports code. `content.project` emits a separate build-bound artifact. The
+official Next renderer invokes only explicitly granted server slots and client
+mounts. A `host.route` grant may add validated static pages through a separately
+compatible host adapter while Publisher retains the shell, metadata, continuity,
+and attribution. A client extension receives only its browser projection and
+narrow page identity. The engine never creates or rewrites
+`publisher.extensions.mjs`.
+
 Node 22.12.0 or newer, and npm 10.9.0.
 
 ## Your publication
@@ -68,15 +100,14 @@ A manifest that exists but cannot be parsed is refused rather than treated as
 declaring nothing. Returning no protection from an unreadable manifest would turn
 a typo into an unprotected tree.
 
-An Updates route is not servable by the Next renderer. If your manifest declares
-`routes.updates`, `build` refuses before writing anything and names the route,
-because writing the artifact would leave a host that fails to start. Updates
-support is a known gap rather than a bug in your manifest.
+An Updates route requires a top level `updates` block and a catalog written by
+the publication's authoring pipeline. `build` validates the catalog, binds it to
+the Reader build, and writes the artifact the Next host imports. The engine
+records the declared adapter for provenance but never executes it.
 
-If you want a working publication to start from, copy `fixtures/canonical-tide-tables`.
-It is the one fixture the shipped renderer can serve end to end. The other two
-declare Updates routes and exist to exercise the protocol rather than to be
-copied.
+Use `fixtures/canonical-field-notes` for a compact single Updates view, or
+`fixtures/declared-night-dispatch` for named ordinary and literary views with
+pagination. `fixtures/canonical-tide-tables` proves Updates remains optional.
 
 Three things that catch people, all refused with the file and the field named:
 
@@ -254,6 +285,11 @@ different artifacts, so a preview build must not be deployed as the public one.
 Building twice over unchanged sources writes nothing and says so. The file's
 modification time stays put, so a watching build tool is not restarted by an
 identical write.
+
+The build also writes `publication-public-identity.json`. It contains the
+publication title, language, home route, attribution, and Reader build identity,
+but no manuscript blocks. Client framework errors read this small artifact
+instead of importing the Reader envelope into browser chunks.
 
 ### Deciding what happens to the artifact
 
@@ -455,20 +491,39 @@ refuses an artifact containing anything else. That refusal happens before a byte
 is written, because the alternative is a successful build and a host that will not
 boot, which is a much worse place to find out.
 
-```
-/home/you/estuary cannot serve this publication.
-  host.route_kind_unsupported   /routes/active
-    This publication has 1 updates route(s) that @genii-foundation/publisher-next
-    cannot serve: /updates. Writing the artifact would leave a host that fails to
-    start, so nothing has been written. Remove the route from your publication
-    manifest, or use a renderer that serves it.
-```
-
-`status` reports the same thing under "This host cannot serve".
+The official Next renderer declares home, work, collection, section, and Updates
+routes. A third party renderer may support a smaller set. `status` reports any
+unsupported route or generated data artifact before a build writes anything.
 
 A renderer that declares no capability set at all is refused rather than assumed
 capable. An absent declaration and a claim of full support are different claims,
 and only one of them is safe to guess at.
+
+## Prove a local preview candidate
+
+After your managed preview has completed any source-generating startup step,
+capture the exact Git candidate it is serving:
+
+```sh
+genii-publisher preview identity --json > .publisher/preview.json
+```
+
+The evidence names the canonical worktree, branch or detached state, full HEAD
+commit, dirty state, and every present tracked or untracked, nonignored source
+path with its byte digest. `.publisher/` is ignored by the canonical host. If you
+choose another evidence path, ignore it before capture. Saving evidence as an
+ordinary untracked source file changes the candidate and makes the record stale.
+
+Verify the handoff without writing anything:
+
+```sh
+genii-publisher preview verify --identity .publisher/preview.json
+```
+
+A stale verification exits nonzero and reports whether the worktree, branch,
+commit, dirty state, candidate bytes, or full identity changed. These commands do
+not start or stop the preview. The host preview manager remains responsible for
+the URL, process, and readiness check it binds to this candidate evidence.
 
 ## Command summary
 
@@ -484,6 +539,8 @@ and only one of them is safe to guess at.
 | `rollback plan` | no | no | a file changed since the apply |
 | `rollback apply` | yes | no | a file changed since the apply |
 | `recover` | restores a baseline | no | never |
+| `preview identity` | no | no | the candidate cannot be captured exactly |
+| `preview verify` | no | no | saved evidence is invalid or stale |
 
 Add `--json` to any of them for machine readable output. Stdout is always a JSON
 document, on success and on failure, and the exit code says which. There are two
@@ -520,6 +577,20 @@ The engine does not decide when narration is out of date. A clip's version token
 your pipeline's, composed however that pipeline composes it, and the engine treats it
 as opaque. Regenerate the catalog when prose changes and the engine will publish what
 you regenerated.
+
+A clip may declare `timingsByteSize`. Its timing file sits beside the clip and
+replaces the clip extension with `.timings.json`. The timing document names version
+`1`, the exact section ID, audio version ID, voice ID, spoken text character count,
+duration, exact and interpolated word counts, and ordered word ranges. Each word
+records UTF-16 `charStart` and `charEnd`, `startSeconds`, `endSeconds`, and an `exact`
+or `interpolated` match. The declared byte size must equal the fetched file.
+
+The spoken text is the trimmed section title, two newline characters, and the body
+from ordered Reader blocks with whitespace collapsed to single spaces. A structural
+first heading equal to the section title is omitted from the body so the title is not
+spoken twice. At least 60 percent of timing words must be exact, and no more than 12
+interpolated words may be adjacent. The default reader starts audio before requesting
+this optional file. Missing or rejected timings disable highlighting only.
 
 Synchronization declares a provider and what a reader may choose to synchronize:
 

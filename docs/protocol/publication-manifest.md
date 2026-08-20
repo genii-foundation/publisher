@@ -222,7 +222,7 @@ Every extension must declare a nonempty `capabilities` array with unique members
 - `host.route` permits declarative public page routes subject to canonical route and collision validation.
 - `host.handler` permits server request handlers through host-owned factories and validation.
 
-No grant implies another, and there is no wildcard. Package configuration, package exports, and installed metadata cannot widen the author-reviewed grant list. This protocol defines the grants but does not yet implement any of their invocation surfaces.
+No grant implies another, and there is no wildcard. Package configuration, package exports, and installed metadata cannot widen the author-reviewed grant list. Publisher orchestration implements `content.project` plus build-time `host.route` and `host.handler` projection. The official Next renderer implements `renderer.slot`, `renderer.client`, declarative `host.route` pages, and exact namespaced `host.handler` request dispatch. Handler paths remain inside `/api/extensions/<extension-id>`, request bodies are bounded, and framework control response headers are refused.
 
 Package configuration must contain JSON data only. Secrets do not belong in `publication.json`. Providers resolve private credentials from their runtime environment.
 
@@ -234,11 +234,20 @@ Capability grants control which interfaces the engine invokes and which data it 
 
 Editorial packages are independent inputs, not engine internals. A foundation or publisher may release voice profiles, style rules, schemas, and supervised editorial commands as separately versioned packages. The author repository chooses and configures them.
 
-The pure schema runtime validates package reference syntax and manifest relationships only. It does not inspect an installation. Later engine orchestration verifies that referenced theme, extension, audio, and sync packages are installed at exact author-controlled versions and declare compatible engine and protocol ranges.
+The pure schema runtime validates package reference syntax and manifest relationships only. It does not inspect an installation. Engine orchestration requires an explicit author registration with exact extension version and compatible engine range. Author package metadata and the lockfile remain the installation authority.
 
-## Optional audio and sync
+## Optional audio, Updates, and sync
 
 The presence of `audio` enables an audio adapter. Its optional catalog is a repository relative source path. The adapter contract determines the catalog contents.
+
+The presence of `updates` names an authoring adapter and a required repository
+relative catalog path. The adapter interprets author-owned history, path
+classification, and title corrections outside the engine. Publisher records the
+package reference, reads only the declared plain JSON catalog, checks its
+publication and named views against `routes.updates`, and emits a separate
+Reader-build-bound envelope. A compact string route uses the stable view identity
+`updates`. An array declares stable view IDs, canonical paths, and optional page
+templates with bounded page sizes.
 
 The presence of `sync` enables an installed provider for the listed capabilities. `sync.capabilities` is an independent provider feature list, not the closed `extensions[].capabilities` grant vocabulary. Sync is always opt in and must preserve a local fallback. Absence of `sync` means reading progress and preferences remain local. The generic protocol contains no provider project IDs, database tables, credentials, or vendor specific policy.
 
@@ -301,7 +310,7 @@ JSON Schema validates shape and lexical string constraints. The pure schema runt
 - Absolute, credential-free HTTP or HTTPS network source URL syntax.
 - Preservation of the fixed footer attribution contract.
 
-This pure validation does not inspect installed theme, extension, audio, or sync packages. Later engine orchestration verifies package availability, exact lockfile resolution, and compatibility with the active engine and protocol.
+This pure validation does not inspect installed theme, extension, audio, or sync packages. The author package manifest and lockfile establish package availability and exact installation. Engine integration validates the explicit adapter identity and compatibility before invocation.
 
 `validatePublicationSemantics` performs complete manifest-owned route and redirect checks. A content compiler may call the narrower `resolvePublicationSourcesForContentCompilation` before adapter-owned section routes exist. That function deliberately defers only redirect terminal resolution. The compiler must register adapter routes and perform final redirect, asset, and public-path authority validation before it accepts or serializes a content envelope. The narrow resolver is not an artifact acceptance API.
 

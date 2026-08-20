@@ -19,6 +19,9 @@ import {
   resolveDefaultPublisherNextTheme,
   validatePublisherNextThemeInstance,
 } from "../packages/next/dist/theme/index.js";
+import {
+  publisherNextThemeStyle,
+} from "../packages/next/dist/theme/style.js";
 
 function assertValid(result) {
   assert.equal(
@@ -56,19 +59,50 @@ test("the default theme resolves a closed immutable token snapshot", () => {
       version: "0.1.0-alpha.0",
       rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
       kind: "genii.publisher.next-theme",
-      apiVersion: "1.0",
+      apiVersion: "2.0",
     },
   );
 
   const configured = assertValid(
     resolved.implementation.configure(resolved.config),
   );
-  assert.equal(configured.tokens.color.canvas, "#11181A");
+  assert.deepEqual(configured.tokens.color, {
+    canvas: "#11191B",
+    surface: "#182326",
+    text: "#F1F4EF",
+    mutedText: "#B8C3C4",
+    accent: "#86D0E0",
+    focus: "#F0AE54",
+    border: "#3D5055",
+  });
   assert.equal(Object.isFrozen(configured), true);
   assert.equal(Object.isFrozen(configured.tokens), true);
   assert.equal(Object.isFrozen(configured.tokens.color), true);
   assert.equal(Object.isFrozen(configured.tokens.typography), true);
+  assert.equal(
+    Object.isFrozen(configured.tokens.typography.readerFontFamilies),
+    true,
+  );
+  assert.equal(
+    Object.isFrozen(configured.tokens.typography.readerFontFamilies[0]),
+    true,
+  );
+  assert.deepEqual(
+    configured.tokens.typography.readerFontFamilies.map(
+      ({ id, label }) => ({ id, label }),
+    ),
+    [
+      { id: "serif", label: "Serif" },
+      { id: "sans-serif", label: "Sans serif" },
+    ],
+  );
   assert.equal(Object.isFrozen(configured.tokens.layout), true);
+  assert.equal(
+    publisherNextThemeStyle(configured)[
+      "--publisher-reader-default-font-family"
+    ],
+    "Charter, Bitstream Charter, Sitka Text, Cambria, serif",
+  );
 });
 
 test("theme validation rejects extra properties and unsafe CSS values", () => {
@@ -158,6 +192,59 @@ test("theme validation enforces readable color contrast", () => {
   }
 });
 
+test("theme validation closes the Reader font policy", () => {
+  const cases = [
+    {
+      code: "next.theme.reader_font_id.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies[1].id = "serif";
+      },
+    },
+    {
+      code: "next.theme.reader_font_default.invalid",
+      mutate(input) {
+        input.tokens.typography.defaultReaderFontFamilyId = "missing";
+      },
+    },
+    {
+      code: "next.theme.reader_font_default.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies = [
+          input.tokens.typography.readerFontFamilies[1],
+        ];
+        input.tokens.typography.defaultReaderFontFamilyId = "sans-serif";
+      },
+    },
+    {
+      code: "next.theme.reader_font_label.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies[1].label = " hidden ";
+      },
+    },
+    {
+      code: "next.theme.reader_font_family.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies[1].family =
+          "serif; display: none";
+      },
+    },
+    {
+      code: "next.theme.reader_fonts.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies.length = 3;
+      },
+    },
+  ];
+
+  for (const { code, mutate } of cases) {
+    const input = validThemeInput();
+    mutate(input);
+    const result = validatePublisherNextThemeInstance(input);
+    assert.equal(result.valid, false, code);
+    assert.deepEqual(diagnosticCodes(result), [code]);
+  }
+});
+
 test("theme validation never invokes accessors", () => {
   const input = validThemeInput();
   let getterCalls = 0;
@@ -244,12 +331,19 @@ test("validated tokens are detached from mutable caller input", () => {
     validatePublisherNextThemeInstance(input),
   );
   const original = result.tokens.color.text;
+  const originalReaderFamily =
+    result.tokens.typography.readerFontFamilies[0].family;
   input.tokens.color.text = "#000000";
   input.tokens.layout.pageGutter = "99rem";
+  input.tokens.typography.readerFontFamilies[0].family = "fantasy";
 
   assert.equal(result.tokens.color.text, original);
   assert.notEqual(
     result.tokens.layout.pageGutter,
     input.tokens.layout.pageGutter,
+  );
+  assert.equal(
+    result.tokens.typography.readerFontFamilies[0].family,
+    originalReaderFamily,
   );
 });

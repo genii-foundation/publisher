@@ -465,30 +465,6 @@ function validateRepresentableRange(
     );
     return;
   }
-
-  const partialFormatting = candidate.ancestors
-    .map((ancestor) => ({
-      ancestor,
-      range: nodeRange(ancestor),
-    }))
-    .find(
-      ({ ancestor, range }) =>
-        FORMATTING_NODE_TYPES.has(ancestor.type) &&
-        (range === undefined ||
-          range.start !== link.start ||
-          range.end !== link.end),
-    );
-  if (partialFormatting !== undefined) {
-    diagnostics.push(
-      diagnostic(
-        "reader.markdown.link_formatting_partial",
-        path,
-        "A ReaderLink cannot select only part of an emphasis or strong container.",
-        "completeFormattingContainer",
-        { context: partialFormatting.ancestor.type },
-      ),
-    );
-  }
 }
 
 function injectionKey(start: number, end: number): string {

@@ -2,6 +2,17 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher content is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-19, GENII Foundation
+
+- Added strict immutable narration checkpoint evidence validation without remote storage mutation.
+- Added exact-base selective narration promotion planning without storage or write authority.
+- Added a pure narration publication guard over exact catalogs, changed spoken units, and immutable checkpoints.
+- Added deterministic spoken-input identity over trimmed titles and normalized presentation-free bodies.
+
+## 2026-08-18, GENII Foundation
+
+- Compiled named Updates views and their pagination authority into deterministic content routes.
+
 ## 2026-07-28, GENII Foundation
 
 - Established the framework-neutral content package boundary.

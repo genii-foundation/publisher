@@ -40,9 +40,39 @@ test("the packed renderer builds a thin host with server rendered prose", async 
     result.browserHydrationVerified,
     browserExecutable !== undefined,
   );
-  assert.equal(result.nextVersion, "16.2.12");
+  assert.equal(
+    result.readerToolsHydrationVerified,
+    browserExecutable !== undefined,
+  );
+  assert.equal(
+    result.readerPrepaintVerified,
+    browserExecutable !== undefined,
+  );
+  assert.equal(
+    result.extensionClientHydrationVerified,
+    browserExecutable !== undefined,
+  );
+  assert.equal(result.extensionHandlerVerified, true);
+  assert.equal(
+    result.manuscriptExtensionsVerified,
+    browserExecutable !== undefined,
+  );
+  assert.equal(
+    result.offlineReaderVerified,
+    browserExecutable !== undefined,
+  );
+  assert.equal(result.nextVersion, "16.3.1");
   assert.equal(result.postcssVersion, "8.5.24");
+  assert.equal(result.nanoidVersion, "3.3.18");
   assert.equal(result.sharpVersion, "0.35.3");
+  assert.equal(
+    result.extensionPackage,
+    "@example/packed-publication-extension@1.0.0",
+  );
+  assert.equal(
+    result.themePackage,
+    "@example/packed-publication-theme@1.0.0",
+  );
   assert.equal(typeof result.vipsVersion, "string");
   assert.equal(result.auditVulnerabilities, 0);
   assert.equal(result.imageContentType, "image/webp");
@@ -51,17 +81,22 @@ test("the packed renderer builds a thin host with server rendered prose", async 
   assert.deepEqual(result.frameworkErrorStatuses, [404, 500]);
   assert.deepEqual(
     result.renderedRoutes,
-    reader.routes.active.map(({ path }) => path),
+    [
+      ...reader.routes.active.map(({ path }) => path),
+      "/extension-field-station",
+    ],
   );
   assert.ok(result.renderedRoutes.includes("/"));
   assert.ok(result.renderedRoutes.includes("/home"));
   assert.ok(
     result.renderedRoutes.includes("/works/caf%C3%A9+notes/"),
   );
+  assert.ok(result.renderedRoutes.includes("/extension-field-station"));
   assert.deepEqual(result.htmlFiles, [
     "_not-found.html",
     "collections/field-notes.html",
     "collections/retired.html",
+    "extension-field-station.html",
     "home.html",
     "index.html",
     "readings/café+one.html",

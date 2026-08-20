@@ -38,6 +38,46 @@
     "./markdown": {
       "types": "./dist/markdown.d.ts",
       "import": "./dist/markdown.js"
+    },
+    "./preferences": {
+      "types": "./dist/preferences.d.ts",
+      "import": "./dist/preferences.js"
+    },
+    "./progress": {
+      "types": "./dist/progress.d.ts",
+      "import": "./dist/progress.js"
+    },
+    "./progress-overview": {
+      "types": "./dist/progress-overview.d.ts",
+      "import": "./dist/progress-overview.js"
+    },
+    "./progress-catalog": {
+      "types": "./dist/progress-catalog.d.ts",
+      "import": "./dist/progress-catalog.js"
+    },
+    "./passage-range": {
+      "types": "./dist/passage-range.d.ts",
+      "import": "./dist/passage-range.js"
+    },
+    "./bookmarks": {
+      "types": "./dist/bookmarks.d.ts",
+      "import": "./dist/bookmarks.js"
+    },
+    "./sync": {
+      "types": "./dist/sync.d.ts",
+      "import": "./dist/sync.js"
+    },
+    "./search": {
+      "types": "./dist/search.d.ts",
+      "import": "./dist/search.js"
+    },
+    "./narration": {
+      "types": "./dist/narration.d.ts",
+      "import": "./dist/narration.js"
+    },
+    "./offline": {
+      "types": "./dist/offline.d.ts",
+      "import": "./dist/offline.js"
     }
   },
   "scripts": {

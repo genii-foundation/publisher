@@ -465,12 +465,70 @@ test("declared content compiles without canonical path assumptions", async () =>
     [
       "/",
       "/dispatch-log",
+      "/dispatch-log/literary",
       "/dispatch/signal-lantern",
       "/dispatch/platform-bell",
       "/sequences/after-dark",
     ],
   );
   assertValid(validateContentEnvelopeShape(envelope));
+});
+
+test("named Updates views compile as stable Reader route authority", async () => {
+  const input = await loadCompilationInput("declared-night-dispatch");
+  const configured = replacePublication(input, (publication) => {
+    publication.routes.updates = [
+      {
+        id: "all",
+        path: "/dispatch-log",
+        pagination: {
+          path: "/dispatch-log/{page}",
+          pageSize: 5,
+        },
+      },
+      {
+        id: "literary",
+        path: "/dispatch-log/literary",
+        pagination: {
+          path: "/dispatch-log/literary/{page}",
+          pageSize: 5,
+        },
+      },
+    ];
+    return publication;
+  });
+  const envelope = compile(configured);
+  assert.deepEqual(
+    envelope.routes.active
+      .filter(({ target }) => target.kind === "updates")
+      .map(({ path, target }) => ({ path, target })),
+    [
+      {
+        path: "/dispatch-log",
+        target: {
+          kind: "updates",
+          viewId: "all",
+          pagination: {
+            path: "/dispatch-log/{page}",
+            pageSize: 5,
+          },
+        },
+      },
+      {
+        path: "/dispatch-log/literary",
+        target: {
+          kind: "updates",
+          viewId: "literary",
+          pagination: {
+            path: "/dispatch-log/literary/{page}",
+            pageSize: 5,
+          },
+        },
+      },
+    ],
+  );
+  assertValid(validateContentEnvelopeShape(envelope));
+  assertValid(validatePublicationContentEnvelope(envelope));
 });
 
 test("source and work input ordering do not affect deterministic output", async () => {
@@ -1781,49 +1839,54 @@ test("envelope validation rejects aggregate collection membership before relatio
   ]);
 });
 
-test("compiler rejects reserved host configuration in asset and extension source roles", async () => {
-  const reservedPath = "publisher.config.ts";
-  for (const role of ["asset", "extension"]) {
-    const input = await loadCompilationInput(
-      "canonical-field-notes",
-    );
-    const reservedSource = {
-      path: reservedPath,
-      role,
-      ...(role === "asset"
-        ? { entityId: "rain-gauge" }
-        : { entityId: "station-index" }),
-      mediaType: "application/json",
-      contents: "{}",
-      rawBytes: textBytes("{}"),
-    };
-    const result = compilePublicationContent({
-      ...input,
-      sources: [...input.sources, reservedSource],
-      ...(role === "extension"
-        ? {
-            payloads: [
-              {
-                id: "reserved-host-config",
-                extensionId: "station-index",
-                schema:
-                  "https://example.invalid/schemas/reserved.json",
-                sourcePaths: [reservedPath],
-                data: {},
-              },
-            ],
-          }
-        : {}),
-    });
-    assert.equal(result.valid, false, role);
-    assert.ok(
-      result.diagnostics.some(
-        ({ code, params }) =>
-          code === "content.source.path_reserved" &&
-          params.role === role,
-      ),
-      `${role}: ${validationMessage(result)}`,
-    );
+test("compiler rejects reserved host integration code in asset and extension source roles", async () => {
+  for (const reservedPath of [
+    "publisher.config.ts",
+    "publisher.extensions.mjs",
+    "publisher.theme.mjs",
+  ]) {
+    for (const role of ["asset", "extension"]) {
+      const input = await loadCompilationInput(
+        "canonical-field-notes",
+      );
+      const reservedSource = {
+        path: reservedPath,
+        role,
+        ...(role === "asset"
+          ? { entityId: "rain-gauge" }
+          : { entityId: "station-index" }),
+        mediaType: "application/json",
+        contents: "{}",
+        rawBytes: textBytes("{}"),
+      };
+      const result = compilePublicationContent({
+        ...input,
+        sources: [...input.sources, reservedSource],
+        ...(role === "extension"
+          ? {
+              payloads: [
+                {
+                  id: "reserved-host-config",
+                  extensionId: "station-index",
+                  schema:
+                    "https://example.invalid/schemas/reserved.json",
+                  sourcePaths: [reservedPath],
+                  data: {},
+                },
+              ],
+            }
+          : {}),
+      });
+      assert.equal(result.valid, false, role);
+      assert.ok(
+        result.diagnostics.some(
+          ({ code, params }) =>
+            code === "content.source.path_reserved" &&
+            params.role === role,
+        ),
+        `${role}: ${validationMessage(result)}`,
+      );
+    }
   }
 });
 

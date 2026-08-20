@@ -101,7 +101,7 @@ test("the written envelope carries the reader artifact's build identity", (t) =>
   assert.equal(envelope.publicationId, reader.publicationId);
 });
 
-test("a publication with no narration writes only the reader artifact", (t) => {
+test("a publication with no narration writes Reader and search but no audio", (t) => {
   const hostRoot = host(t);
   const built = build(hostRoot, silent);
   assert.equal(built.status, 0, built.stderr);
@@ -165,9 +165,9 @@ test("check reports both artifacts separately in JSON", (t) => {
   assert.equal(parsed.audio.hostRelativePath, audioDataPath);
 });
 
-test("a publication with no narration keeps the single-artifact JSON shape", (t) => {
-  // Adding a second artifact must not reshape the output for publications that
-  // have only one. A consumer reading `outcome` should keep working.
+test("a publication with no narration keeps audio absent from the additive JSON shape", (t) => {
+  // Adding optional audio must not reshape the base output for publications
+  // that omit it. A consumer reading `outcome` should keep working.
   const hostRoot = host(t);
   assert.equal(build(hostRoot, silent).status, 0);
   const checked = build(hostRoot, silent, ["--check", "--json"]);
@@ -178,15 +178,15 @@ test("a publication with no narration keeps the single-artifact JSON shape", (t)
 
 // ------------------------------------------------------------------- refusals
 
-test("a renderer declaring no data artifacts is refused by name", (t) => {
-  // Absent support and declared support are different claims. This host would
-  // otherwise get a file written to a path of the engine's invention.
+test("a renderer declaring search but no narration support is refused by name", (t) => {
+  // Required search is supported so this isolates the optional narration claim.
   const hostRoot = authorHost(t, {
     renderers: [rendererName],
     rendererOptions: {
       [rendererName]: {
         capabilities: {
           routeKinds: ["collection", "home", "section", "updates", "work"],
+          dataArtifacts: ["progress", "public-identity", "search"],
         },
       },
     },

@@ -18,8 +18,16 @@ import test from "node:test";
 
 import {
   PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+  PUBLISHER_NEXT_HOST_CAPABILITIES,
+  PUBLISHER_NEXT_HOST_MIGRATIONS,
   PUBLISHER_NEXT_HOST_RENDERER,
+  PUBLISHER_NEXT_EXTENSION_DATA_PATH,
+  PUBLISHER_NEXT_OFFLINE_CATALOG_HREF,
+  PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH,
   PUBLISHER_NEXT_READER_DATA_PATH,
+  PUBLISHER_NEXT_PROGRESS_DATA_PATH,
+  PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH,
+  PUBLISHER_NEXT_SEARCH_DATA_PATH,
   PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY,
   createPublisherNextHostTemplate,
 } from "../packages/next/dist/host.js";
@@ -35,13 +43,10 @@ const input = Object.freeze({
   hostPackageName: "probe-host",
   dependencies: Object.freeze({
     "@genii-foundation/publisher-next": "0.1.0-alpha.0",
-    next: "16.2.12",
+    next: "16.3.1",
   }),
   devDependencies: Object.freeze({ typescript: "5.9.4" }),
   overrides: Object.freeze({ postcss: "8.5.24" }),
-  errorIdentity: Object.freeze({
-    publication: Object.freeze({ language: "en" }),
-  }),
 });
 
 function template(overrides = {}) {
@@ -65,11 +70,18 @@ test("the host contract declares exactly the author host file set", () => {
     result.files.map(({ path }) => path),
     [
       `app/${PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY}/page.tsx`,
+      "app/api/account/route.ts",
+      "app/api/auth/start/route.ts",
+      "app/api/auth/verify/route.ts",
+      "app/api/session/route.ts",
+      "app/api/sync/route.ts",
+      "app/auth/callback/route.ts",
       "app/error.tsx",
       "app/global-error.tsx",
       "app/layout.tsx",
       "app/not-found.tsx",
       "app/page.tsx",
+      "app/publication-reader-offline.json/route.ts",
       "next-env.d.ts",
       "next.config.mjs",
       "package.json",
@@ -79,8 +91,16 @@ test("the host contract declares exactly the author host file set", () => {
       "pages/_document.tsx",
       "pages/_error.tsx",
       "proxy.ts",
+      "public/offline-sw.js",
       "publisher-application.js",
+      "publisher-config.d.ts",
+      "publisher-default-config.js",
+      "publisher-default-extensions.js",
+      "publisher-default-theme.js",
       "publisher-error-identity.ts",
+      "publisher-extensions.d.ts",
+      "publisher-sync-routes.js",
+      "publisher-theme.d.ts",
       "tsconfig.json",
     ],
   );
@@ -94,6 +114,217 @@ test("the host contract declares exactly the author host file set", () => {
     result.readerDataPath,
     PUBLISHER_NEXT_READER_DATA_PATH,
   );
+  assert.equal(result.searchDataPath, PUBLISHER_NEXT_SEARCH_DATA_PATH);
+  assert.equal(result.progressDataPath, PUBLISHER_NEXT_PROGRESS_DATA_PATH);
+  assert.equal(
+    result.publicIdentityDataPath,
+    PUBLISHER_NEXT_PUBLIC_IDENTITY_DATA_PATH,
+  );
+  assert.equal(result.extensionDataPath, PUBLISHER_NEXT_EXTENSION_DATA_PATH);
+  assert.equal(result.offlineCatalogHref, PUBLISHER_NEXT_OFFLINE_CATALOG_HREF);
+  assert.equal(PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH, "public/offline-sw.js");
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("offline"));
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("search"));
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("progress"));
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.dataArtifacts.includes("extensions"));
+  assert.ok(PUBLISHER_NEXT_HOST_CAPABILITIES.routeKinds.includes("extension"));
+  assert.deepEqual(PUBLISHER_NEXT_HOST_MIGRATIONS, [
+    {
+      from: "0.1.0",
+      to: "0.2.0",
+      summary:
+        "Add the required lazy search artifact destination to the official host contract.",
+    },
+    {
+      from: "0.2.0",
+      to: "0.3.0",
+      summary:
+        "Add the server-side Updates artifact and connect it to the generated application.",
+    },
+    {
+      from: "0.3.0",
+      to: "0.4.0",
+      summary:
+        "Add dormant fail-closed synchronization route surfaces to every official host.",
+    },
+    {
+      from: "0.4.0",
+      to: "0.5.0",
+      summary:
+        "Bind synchronization routes to optional author-owned host configuration through a server-only provider contract.",
+      manualSteps: [
+        "Regenerate and review package-lock.json so the required Nano ID 3.3.18 override is installed.",
+      ],
+    },
+    {
+      from: "0.5.0",
+      to: "0.6.0",
+      summary:
+        "Add provider-neutral email authentication and session route surfaces for the default reader controls.",
+    },
+    {
+      from: "0.6.0",
+      to: "0.7.0",
+      summary:
+        "Add provider-neutral publication-scoped Reader data transfer routes.",
+    },
+    {
+      from: "0.7.0",
+      to: "0.8.0",
+      summary:
+        "Add the required lazy progress catalog destination to the official host contract.",
+    },
+    {
+      from: "0.8.0",
+      to: "0.9.0",
+      summary:
+        "Add the build-bound offline catalog route and generic service worker to the official host contract.",
+    },
+    {
+      from: "0.9.0",
+      to: "0.10.0",
+      summary:
+        "Connect an explicit author theme module and client-safe public identity artifact to every official host surface.",
+      manualSteps: [
+        "Add publisher.theme.mjs only when selecting a separately installed custom theme package.",
+      ],
+    },
+    {
+      from: "0.10.0",
+      to: "0.11.0",
+      summary:
+        "Connect explicit author extension registration and build-bound server slot data to the official host.",
+      manualSteps: [
+        "Add publisher.extensions.mjs when the publication manifest declares extensions, importing each separately installed extension package explicitly.",
+      ],
+    },
+    {
+      from: "0.11.0",
+      to: "0.12.0",
+      summary:
+        "Declare the device-width viewport required by mobile Reader controls and extension surfaces.",
+    },
+    {
+      from: "0.12.0",
+      to: "0.13.0",
+      summary:
+        "Add build-time declarative extension pages to the official route plan.",
+    },
+    {
+      from: "0.13.0",
+      to: "0.14.0",
+      summary:
+        "Await closed extension request handlers in the official Proxy boundary.",
+    },
+    {
+      from: "0.14.0",
+      to: "0.15.0",
+      summary:
+        "Connect an optional build-bound Reader state bootstrap through the server-only author configuration.",
+      manualSteps: [
+        "Add readerStateBootstrap to publisher.config.ts only while an explicit legacy local-state compatibility window is active.",
+      ],
+    },
+    {
+      from: "0.15.0",
+      to: "0.16.0",
+      summary:
+        "Refresh the checked Next declaration file for the exact Next.js 16.3.1 generated type roots.",
+    },
+    {
+      from: "0.16.0",
+      to: "0.17.0",
+      summary:
+        "Extend the Reader state bootstrap input contract with an optional separately bounded state projection.",
+      manualSteps: [
+        "If readerStateBootstrap is configured, update its implementation apiVersion from 1.0 to 1.1 and review the optional createProjection input before acknowledging this migration.",
+      ],
+    },
+  ]);
+});
+
+test("the checked Next declaration file matches the exact framework generator", () => {
+  assert.equal(
+    contentsOf(template(), "next-env.d.ts"),
+    [
+      '/// <reference types="next" />',
+      '/// <reference types="next/image-types/global" />',
+      '/// <reference types="next/navigation-types/compat/navigation" />',
+      'import "./.next/types/routes.d.ts";',
+      'import "./.next/types/root-params.d.ts";',
+      "",
+      "// NOTE: This file should not be edited",
+      "// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.",
+      "",
+    ].join("\n"),
+  );
+});
+
+test("the Proxy awaits closed request dispatch before falling through", () => {
+  const proxy = contentsOf(template(), "proxy.ts");
+  assert.match(proxy, /export async function proxy\(request: NextRequest\)/u);
+  assert.match(proxy, /await application\.handleRequest\(request\)/u);
+  assert.match(proxy, /\?\? NextResponse\.next\(\)/u);
+});
+
+test("the App Router layout declares the mobile viewport", () => {
+  const layout = contentsOf(template(), "app/layout.tsx");
+  assert.match(layout, /import type \{ Viewport \} from "next";/u);
+  assert.match(layout, /export const viewport: Viewport = \{/u);
+  assert.match(layout, /initialScale: 1/u);
+  assert.match(layout, /width: "device-width"/u);
+});
+
+test("offline host files expose only generic cache and catalog contracts", () => {
+  const result = template();
+  const route = contentsOf(result, "app/publication-reader-offline.json/route.ts");
+  assert.match(route, /createReaderOfflineCatalog/u);
+  assert.match(route, /rendererBuildId/u);
+  assert.doesNotMatch(route, /publisher-application|next\/link|next\/navigation/u);
+  assert.match(route, /reader-offline\+json/u);
+  const worker = contentsOf(result, PUBLISHER_NEXT_OFFLINE_SERVICE_WORKER_PATH);
+  assert.match(worker, /networkFirst/u);
+  assert.match(worker, /searchParams\.has\("_rsc"\)/u);
+  assert.match(worker, /headers\.get\("rsc"\)/u);
+  assert.match(worker, /next-router-state-tree/u);
+  assert.match(worker, /response\.status !== 206/u);
+  assert.match(worker, /if \(request\.headers\.has\("range"\)\) return false;/u);
+  assert.match(worker, /request\.headers\.has\("range"\)/u);
+  assert.match(worker, /matchActivePackage/u);
+  assert.match(worker, /genii-publisher-offline-metadata-v1/u);
+  assert.doesNotMatch(worker, /coherence|manuscripts|audio-clips/ui);
+});
+
+test("synchronization routes delegate through the checked server-only bridge", () => {
+  const result = template();
+  for (const path of [
+    "app/auth/callback/route.ts",
+    "app/api/account/route.ts",
+    "app/api/auth/start/route.ts",
+    "app/api/auth/verify/route.ts",
+    "app/api/session/route.ts",
+    "app/api/sync/route.ts",
+  ]) {
+    const contents = contentsOf(result, path);
+    assert.match(contents, /publisher-sync-routes\.js/u);
+    assert.doesNotMatch(contents, /supabase|credential|environment/ui);
+  }
+  const bridge = contentsOf(result, "publisher-sync-routes.js");
+  assert.match(bridge, /genii-publisher:config/u);
+  assert.match(bridge, /publication-sync\.json/u);
+  assert.match(bridge, /createPublisherNextSyncRoutes/u);
+  const nextConfig = contentsOf(result, "next.config.mjs");
+  assert.match(nextConfig, /publisher\.config\.ts/u);
+  assert.match(nextConfig, /publisher-default-config\.js/u);
+  assert.match(nextConfig, /publisher\.theme\.mjs/u);
+  assert.match(nextConfig, /publisher-default-theme\.js/u);
+  assert.match(nextConfig, /publisher\.extensions\.mjs/u);
+  assert.match(nextConfig, /publisher-default-extensions\.js/u);
+  assert.match(nextConfig, /genii-publisher:extensions/u);
+  assert.match(nextConfig, /genii-publisher:theme/u);
+  assert.match(nextConfig, /publication-public-identity\.json/u);
+  assert.match(nextConfig, /does not match the exact Reader build/u);
+  assert.match(nextConfig, /resolveAlias/u);
 });
 
 test("the file list is sorted, unique, and frozen", () => {
@@ -177,11 +408,30 @@ test("declared inputs reach the files that need them", () => {
   assert.equal(manifest.private, true);
   assert.equal(manifest.type, "module");
 
-  const identity = contentsOf(
-    template(),
-    "publisher-error-identity.ts",
+  const existingManifest = '{"name":"existing-host","private":true,"custom":"kept"}\n';
+  assert.equal(
+    contentsOf(
+      template({ packageJsonText: existingManifest }),
+      "package.json",
+    ),
+    existingManifest,
   );
-  assert.ok(identity.includes('"language": "en"'));
+
+  const application = contentsOf(template(), "publisher-application.js");
+  assert.match(application, /genii-publisher:theme/u);
+  assert.match(application, /genii-publisher:extensions/u);
+  assert.match(application, /genii-publisher:config/u);
+  assert.match(
+    application,
+    /readerStateBootstrap: publisherConfig\.readerStateBootstrap/u,
+  );
+  assert.match(application, /publication-extensions\.json/u);
+  assert.match(application, /extensionData, extensions/u);
+
+  const identity = contentsOf(template(), "publisher-error-identity.ts");
+  assert.match(identity, /publication-public-identity\.json/u);
+  assert.match(identity, /genii-publisher:theme/u);
+  assert.equal(identity.includes("manuscript"), false);
 
   const renamed = template({
     hostPackageName: "another-host",

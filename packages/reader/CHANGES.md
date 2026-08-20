@@ -2,6 +2,35 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher reader is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-20, GENII Foundation
+
+- Allowed source-backed Reader links wholly contained in one emphasis or strong text node when the existing CommonMark syntax tree comparison proves that visible prose and formatting remain unchanged.
+
+## 2026-08-19, GENII Foundation
+
+- Added a strict build-bound offline catalog that plans complete immutable work packages across canonical and historical documents, capability data, assets, narration clips, and timing sidecars without taking browser authority.
+- Added a strict browser-safe narration-envelope projection bound to one publication and Reader build.
+- Added versioned publication-scoped voice and playback-rate preferences without storage or media authority.
+- Added a closed spoken-text profile, strict timing-sidecar parser, derived sidecar URL, and binary media-time lookup.
+- Added a closed publication-bound narration navigation intent parser without event, media, or navigation authority.
+
+## 2026-08-18, GENII Foundation
+
+- Added a bounded Reader-build-bound progress catalog that excludes manuscript text and feeds the pure progress overview.
+- Added a versioned readable bookmark export with inert reader text, live-only canonical ordering, validated destinations, and stable publication filenames.
+- Added a framework-neutral local-first synchronization coordinator with debounce, reconnect, bounded retry, schema-ahead refusal, and in-flight edit reconciliation.
+- Preserved stable Updates view identities and pagination authority through Reader projection and runtime validation.
+
+## 2026-08-13, GENII Foundation
+
+- Added browser-safe preference and progress subpaths for the default Reader application.
+- Added publication-scoped, immutable preferences with bounded typography, appearance, motion, highlighting, and focus controls.
+- Added continuity-aware local progress with revision detection, deterministic monotonic merges, hostile-input sanitization, resource bounds, and word-weighted aggregate percentage.
+- Added exact passage ranges with unique content-hash relocation and explicit ambiguity for moved blocks.
+- Added publication-scoped bookmarks with bounded notes and context, quote reanchoring, deterministic search and serialization, absorbing tombstones, and local and remote byte budgets.
+- Added a Reader-build-bound search artifact with Unicode-aware matching and original-text snippet offsets.
+- Kept time, storage, DOM, network, environment, and randomness authority outside the framework-neutral state core.
+
 ## 2026-07-28, GENII Foundation
 
 - Established the framework-neutral reader projection and runtime package boundary.

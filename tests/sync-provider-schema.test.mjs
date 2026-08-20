@@ -169,6 +169,83 @@ test("every reader table has an ownership policy on both sides", () => {
   }
 });
 
+test("every synchronized row is scoped by publication as well as reader", () => {
+  const scoped = migrations.get("0007_publication_scope.sql") ?? "";
+  for (const table of readerTables) {
+    assert.match(
+      scoped,
+      new RegExp(`alter table public\\.${table}\\s+add column if not exists publication_id text`, "u"),
+      `${table} never gains publication identity`,
+    );
+    assert.match(
+      scoped,
+      new RegExp(`alter table public\\.${table}\\s+alter column publication_id set not null`, "u"),
+      `${table} permits an unscoped new row`,
+    );
+    assert.match(
+      scoped,
+      new RegExp(`add constraint ${table}_publication_id\\b`, "u"),
+      `${table} does not bound publication identity`,
+    );
+  }
+  for (const table of [
+    "reader_sync_consent",
+    "reader_progress",
+    "reader_bookmarks",
+  ]) {
+    assert.match(
+      scoped,
+      new RegExp(`add constraint ${table}_pkey\\s+primary key \\(user_id, publication_id\\)`, "u"),
+      `${table} is not keyed by reader and publication`,
+    );
+  }
+  assert.match(
+    scoped,
+    /unique \(user_id, publication_id, client_event_id\)/u,
+  );
+});
+
+test("legacy unscoped rows are preserved but excluded from new writes", () => {
+  const scoped = migrations.get("0007_publication_scope.sql") ?? "";
+  for (const table of readerTables) {
+    assert.match(
+      scoped,
+      new RegExp(`update public\\.${table}\\s+set publication_id = '__legacy_unscoped__'\\s+where publication_id is null`, "u"),
+      `${table} discards or guesses the owner of a legacy row`,
+    );
+  }
+  assert.match(
+    scoped,
+    /incoming_publication_id = '__legacy_unscoped__'/u,
+    "the live merge accepts the reserved legacy marker",
+  );
+  assert.match(
+    scoped,
+    /drop function if exists public\.merge_reader_bookmarks\(jsonb, integer\)/u,
+    "the old unscoped merge remains callable",
+  );
+});
+
+test("publication scoping can be reviewed and rerun without duplicate keys", () => {
+  const scoped = migrations.get("0007_publication_scope.sql") ?? "";
+  for (const constraint of [
+    "reader_sync_consent_pkey",
+    "reader_progress_pkey",
+    "reader_bookmarks_pkey",
+    "reader_engagement_events_user_publication_event_key",
+  ]) {
+    assert.match(
+      scoped,
+      new RegExp(`drop constraint if exists ${constraint}\\b`, "u"),
+      `${constraint} is recreated without removing its prior reviewed version`,
+    );
+  }
+  assert.match(
+    scoped,
+    /drop index if exists public\.reader_engagement_events_user_publication_event_at_idx/u,
+  );
+});
+
 test("anonymous access is revoked from every reader table", () => {
   // Row level security is not trusted alone. When automatic table exposure is off
   // the API still needs privileges, and an unauthenticated reader is kept out by
@@ -308,10 +385,10 @@ test("the bookmark document's shape is constrained", () => {
   assert.match(allSql, /jsonb_typeof\(bookmarks -> 'bookmarks'\) = 'object'/u);
 });
 
-test("the event log is capped per reader and trimmed on insert", () => {
-  const pruning = migrations.get("0002_reader_engagement.sql") ?? "";
+test("the event log is capped per reader and publication", () => {
+  const pruning = migrations.get("0007_publication_scope.sql") ?? "";
   assert.match(pruning, /max_events constant integer := 5000\b/u);
-  assert.match(pruning, /after insert on public\.reader_engagement_events/u);
+  assert.match(pruning, /publication_id = new\.publication_id/u);
   assert.match(
     pruning,
     /order by event_at desc\s+limit max_events/u,
@@ -324,10 +401,10 @@ test("the event log is capped per reader and trimmed on insert", () => {
 test("the merge takes a row lock", () => {
   // Without the lock this is an upsert with extra steps, and two devices lose one
   // another's bookmarks.
-  const merge = migrations.get("0005_atomic_bookmark_merge.sql") ?? "";
+  const merge = migrations.get("0007_publication_scope.sql") ?? "";
   assert.match(
     merge,
-    /from public\.reader_bookmarks\s+where reader_bookmarks\.user_id = requester\s+for update/u,
+    /from public\.reader_bookmarks\s+where reader_bookmarks\.user_id = requester\s+and reader_bookmarks\.publication_id = incoming_publication_id\s+for update/u,
     "the merge no longer locks the row it is about to rewrite",
   );
 });
@@ -354,7 +431,7 @@ test("a tombstone wins over a timestamp", () => {
   // carrying a deleted identifier cannot be a legitimate resurrection whatever its
   // clock says. Comparing timestamps first would let a skewed device undelete
   // somebody's bookmark.
-  const merge = migrations.get("0005_atomic_bookmark_merge.sql") ?? "";
+  const merge = migrations.get("0007_publication_scope.sql") ?? "";
   const removedAtBranch = merge.indexOf("? 'removedAt') <> (");
   const timestampBranch = merge.indexOf("incoming_updated_at > current_updated_at");
   assert.ok(removedAtBranch > 0, "the tombstone comparison is gone");
@@ -366,7 +443,7 @@ test("a tombstone wins over a timestamp", () => {
 });
 
 test("the merge refuses a document written by a newer client", () => {
-  const merge = migrations.get("0005_atomic_bookmark_merge.sql") ?? "";
+  const merge = migrations.get("0007_publication_scope.sql") ?? "";
   assert.match(merge, /current_schema_version > incoming_schema_version/u);
   assert.match(merge, /is newer than client version/u);
 });
@@ -374,13 +451,13 @@ test("the merge refuses a document written by a newer client", () => {
 test("the merge validates each incoming record against its own key", () => {
   // A record whose id disagrees with its key would be stored under one identity and
   // claim another.
-  const merge = migrations.get("0005_atomic_bookmark_merge.sql") ?? "";
+  const merge = migrations.get("0007_publication_scope.sql") ?? "";
   assert.match(merge, /incoming_record ->> 'id' is distinct from bookmark_id/u);
 });
 
 test("both privileged functions refuse an unauthenticated caller", () => {
   for (const name of [
-    "0005_atomic_bookmark_merge.sql",
+    "0007_publication_scope.sql",
     "0006_reader_data_deletion.sql",
   ]) {
     const sql = migrations.get(name) ?? "";
@@ -405,32 +482,27 @@ test("reader data deletion removes every table a reader owns", () => {
 
 // --------------------------------------------- the package says what it is not
 
-test("the package is private, and says why", () => {
-  // Publishing a provider whose handlers cannot be mounted would ship something
-  // nobody can use. When the route decision lands, this test changes with it.
+test("the package remains private until its complete release gate is closed", () => {
   const manifest = JSON.parse(
     readFileSync(join(packageRoot, "package.json"), "utf8"),
   );
   assert.equal(manifest.private, true);
-  assert.deepEqual(
-    manifest.dependencies,
-    undefined,
-    "a schema-only package should carry no dependencies",
-  );
+  assert.deepEqual(manifest.dependencies, {
+    "@supabase/ssr": "0.12.0",
+    "@supabase/supabase-js": "2.110.0",
+  });
   const readme = readFileSync(join(packageRoot, "README.md"), "utf8");
-  assert.match(readme, /Why this is not published/u);
+  assert.match(readme, /Why this is still private/u);
 });
 
-test("the descriptor states what a host must still supply", () => {
-  // So that a host wiring this provider today does not discover the gap in
-  // production.
-  assert.equal(PUBLISHER_SYNC_PROVIDER.hostMustProvide.length, 2);
-  assert.match(
-    PUBLISHER_SYNC_PROVIDER.hostMustProvide.join(" "),
-    /authentication callback/u,
-  );
-  assert.match(
-    PUBLISHER_SYNC_PROVIDER.hostMustProvide.join(" "),
-    /account deletion/u,
-  );
+test("the descriptor names the complete server-only host integration", () => {
+  assert.deepEqual(PUBLISHER_SYNC_PROVIDER.hostIntegration, {
+    configPath: "publisher.config.ts",
+    serverExport: "@genii-foundation/publisher-sync-supabase/server",
+    environment: [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "SUPABASE_SERVICE_ROLE_KEY",
+    ],
+  });
 });

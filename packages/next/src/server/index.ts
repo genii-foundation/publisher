@@ -17,6 +17,10 @@ export {
   createPublicationNextApplication,
 } from "./application.js";
 export {
+  createPublisherNextSyncRoutes,
+  definePublisherNextHostConfig,
+} from "./sync-routes.js";
+export {
   createPublisherNextConfig,
 } from "../config.js";
 export {
@@ -35,10 +39,43 @@ export type {
   PublisherNextRootLayoutProps,
   PublisherNextRouteParams,
   PublisherNextRouteResolution,
+  PublisherNextReaderStateBootstrap,
+  PublisherNextReaderStateBootstrapContext,
+  PublisherNextReaderStateBootstrapInstance,
+  PublisherNextReaderStateBootstrapProjection,
+  PublisherNextReaderStateBootstrapProjectionDescriptor,
+  PublisherNextReaderStateBootstrapReport,
   PublisherNextUpdates,
   PublisherNextUpdatesEntry,
   PublisherNextUpdatesInstance,
   PublisherNextUpdatesPage,
   PublisherNextUpdatesView,
+  PublisherNextExtensionClientProps,
+  PublisherNextExtensionHost,
+  PublisherNextExtensionHandlerDescriptor,
+  PublisherNextExtensionHandlerInput,
+  PublisherNextExtensionHandlerMethod,
+  PublisherNextExtensionPageContext,
+  PublisherNextExtensionRenderer,
+  PublisherNextExtensionRoutePage,
+  PublisherNextExtensionRouteRenderInput,
+  PublisherNextExtensionRenderInput,
+  PublisherNextExtensionSlot,
   ResolvedPublisherNextUpdates,
+  ResolvedPublisherNextReaderStateBootstrap,
 } from "../types.js";
+export type {
+  CreatePublisherNextSyncRoutesInput,
+  PublisherNextHostConfig,
+  PublisherNextSyncProvider,
+  PublisherNextSyncProviderContext,
+  PublisherNextSyncRoutes,
+  PublisherSyncAccountDeletionResult,
+  PublisherSyncConsentRecord,
+  PublisherSyncEngagementEvent,
+  PublisherSyncRemoteDocument,
+  PublisherSyncRemoteState,
+  PublisherSyncSession,
+  PublisherSyncTransferInput,
+  PublisherSyncTransferResult,
+} from "./sync-routes.js";

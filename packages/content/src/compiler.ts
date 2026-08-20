@@ -4044,16 +4044,35 @@ function compilePublicationContentInternal(
     diagnostics,
   );
   if (input.publication.routes.updates !== undefined) {
-    addActiveRoute(
-      activeRoutes,
-      routeOwnerByPath,
-      {
-        path: input.publication.routes.updates,
-        target: { kind: "updates" },
-      },
-      "/routes/updates",
-      diagnostics,
-    );
+    const updatesRoutes =
+      typeof input.publication.routes.updates === "string"
+        ? [{ id: "updates", path: input.publication.routes.updates }]
+        : input.publication.routes.updates;
+    updatesRoutes.forEach((updatesRoute, index) => {
+      addActiveRoute(
+        activeRoutes,
+        routeOwnerByPath,
+        {
+          path: updatesRoute.path,
+          target: {
+            kind: "updates",
+            viewId: updatesRoute.id,
+            ...(updatesRoute.pagination === undefined
+              ? {}
+              : {
+                  pagination: {
+                    path: updatesRoute.pagination.path,
+                    pageSize: updatesRoute.pagination.pageSize,
+                  },
+                }),
+          },
+        },
+        typeof input.publication.routes.updates === "string"
+          ? "/routes/updates"
+          : `/routes/updates/${index}/path`,
+        diagnostics,
+      );
+    });
   }
 
   const effectiveWordsPerMinute =
@@ -5528,14 +5547,33 @@ function validateEnvelopeActiveRoutes(
   const updateRoutes = envelope.routes.active.filter(
     (route) => route.target.kind === "updates",
   );
-  if (updateRoutes.length > 1) {
+  const updateViewIds = new Set<string>();
+  for (let index = 0; index < updateRoutes.length; index += 1) {
+    const route = updateRoutes[index];
+    if (route === undefined || route.target.kind !== "updates") {
+      continue;
+    }
+    if (updateViewIds.has(route.target.viewId)) {
+      diagnostics.push(
+        diagnostic(
+          "content.envelope.updates_view_id_duplicate",
+          `/routes/active/${index}/target/viewId`,
+          "Updates view ids must be unique.",
+          "uniqueItems",
+          { viewId: route.target.viewId },
+        ),
+      );
+    }
+    updateViewIds.add(route.target.viewId);
+  }
+  if (updateRoutes.length > 32) {
     diagnostics.push(
       diagnostic(
         "content.envelope.updates_route_count",
         "/routes/active",
-        "A content envelope may contain at most one Updates route.",
+        "A content envelope may contain at most 32 Updates routes.",
         "routeCardinality",
-        { actual: updateRoutes.length, maximum: 1 },
+        { actual: updateRoutes.length, maximum: 32 },
       ),
     );
   }
@@ -5544,9 +5582,7 @@ function validateEnvelopeActiveRoutes(
   if (homeRoutes[0] !== undefined) {
     expected.push(homeRoutes[0]);
   }
-  if (updateRoutes[0] !== undefined) {
-    expected.push(updateRoutes[0]);
-  }
+  expected.push(...updateRoutes);
   for (const work of envelope.works) {
     expected.push({
       path: work.route,

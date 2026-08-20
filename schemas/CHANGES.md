@@ -2,6 +2,52 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-20, GENII Foundation
+
+- Corrected the public audio envelope voice declaration to expose `clips`, matching the closed schema and runtime artifact, while preserving `sections` in source audio catalogs.
+
+## 2026-08-19, GENII Foundation
+
+- Added a separately bounded, immutable, Reader-build-bound public state projection for publication-owned legacy translation evidence, with an independent total static HTML transport limit.
+- Advanced the Next application manifest to 1.2 with an exact optional Reader state projection descriptor.
+- Bound projection serialization and bootstrap source generation to trusted renderer intrinsics so adapter callbacks cannot replace counted or executable bytes.
+- Raised the real lifecycle package proof's machine-time allowance above observed clean-install variance without changing its package or integrity assertions.
+- Refreshed Coherence Reader parity through its narrow-phone toolbar correction and hardened the official Reader against 320-pixel page overflow at maximum text size.
+- Added closed extension request handlers with build-bound owned paths, exact methods, bounded detached requests, validated responses, and packed-host proof.
+- Hardened Reader parity with persistent audiobook transport, 15-second jumps, stale playback isolation, and transient interface-free bookmark coordinates and geometry.
+- Reserved author-owned `publisher.extensions.mjs` from every publication source role.
+- Added explicit author extension registration, exact installed extension identity, build-time `content.project` invocation, and Reader-build-bound extension artifacts.
+- Added official Next server extension slots with narrow page context, grant enforcement, deterministic application identity, and an independently packed extension proof.
+- Added one isolated official Next client extension mount with browser projection boundaries, hydrated interaction proof, and engine-owned failure containment.
+- Added declarative extension pages with narrow build projection, explicit compatible host adapters, exact static routing, and engine-owned shell and attribution.
+- Added explicit author-owned theme selection and a separately packaged canonical-host proof across ordinary and framework error surfaces.
+- Added a Reader-build-bound public identity artifact so client error chunks retain exact publication attribution and theme without manuscript data.
+- Added a build-bound browser narration projection and a lazy persistent default player with voice memory, rate, seek, queue, duration, and real packed-host playback proof.
+- Added strict lazy narration timing sidecars and existing-text word highlighting without delaying playback or duplicating manuscript text.
+- Added a vendor-neutral immutable narration checkpoint schema and semantic evidence validator for author promotion and publication guards.
+- Added exact-base selective narration promotion planning that preserves unselected clips and narrators.
+- Added a narration publication guard that requires exact reviewed evidence for every changed spoken unit and public narrator.
+- Added deterministic spoken-input identity shared by narration generation, timing, and publication evidence.
+
+## 2026-08-18, GENII Foundation
+
+- Added atomic reactive progress and bookmark state with same-tab and cross-tab Reader convergence.
+- Connected the default Reader to provider-neutral local-first synchronization and proved its authenticated browser transfer through the packed host.
+- Added the backward-compatible named and paginated Updates route contract as the first part of generated-host Updates integration.
+- Added author-owned Updates catalogs, Reader-build-bound envelopes, generated-host materialization, named view rendering, and static pagination without executing authoring adapters.
+- Added conservative Reader progress sessions with one opening per visit, visible active reading time, return counts, revision status, and explicit completion.
+- Added readable bookmark export plus accessible confirmed removal with synchronization tombstones.
+- Added contextual Reader breadcrumbs, complete bounded settings, and bookmark-aware search.
+- Added canonical passage selection with optional private notes and reactive margin markers outside the manuscript DOM.
+- Added a virtualized Reader bookmark collection that keeps all 1,000 supported saved passages searchable and operable with bounded browser layout work.
+- Added server rendered focus markup that preserves one exact manuscript text occurrence, semantic emphasis, selection ranges, bookmark offsets, and assistive text.
+- Added one browser safe progress overview for weighted completion, section states, recent reading, recommendations, and continuity aware bookmark presence.
+- Added a lazy Reader-build-bound progress catalog plus publication map, recommendations, recent reading, and reactive saved-passage indicators in the default Reader.
+
+## 2026-08-13, GENII Foundation
+
+- Added optional preorder section declarations to work manifests, with durable identities, hierarchy, routes, continuity, and exact Markdown block boundary selectors.
+
 ## 2026-07-27, GENII Foundation
 
 - Established the public repository, product boundary, licensing foundation, and framework-neutral publication protocol.

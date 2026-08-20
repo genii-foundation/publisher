@@ -179,7 +179,14 @@ export type ContentRoute =
     }
   | {
       readonly path: string;
-      readonly target: { readonly kind: "updates" };
+      readonly target: {
+        readonly kind: "updates";
+        readonly viewId: string;
+        readonly pagination?: {
+          readonly path: string;
+          readonly pageSize: number;
+        };
+      };
     }
   | {
       readonly path: string;

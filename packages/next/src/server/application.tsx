@@ -20,20 +20,52 @@ import {
   validatePublicationReaderEnvelope,
 } from "@genii-foundation/publisher-reader";
 import {
+  createReaderOfflineCatalog,
+  serializeReaderOfflineCatalog,
+} from "@genii-foundation/publisher-reader/offline";
+import {
+  createReaderBookmarksStorageKey,
+} from "@genii-foundation/publisher-reader/bookmarks";
+import {
+  createReaderPreferencesStorageKey,
+} from "@genii-foundation/publisher-reader/preferences";
+import {
+  createReaderProgressStorageKey,
+} from "@genii-foundation/publisher-reader/progress";
+import {
+  createReaderEngagementStorageKey,
+  createReaderSyncConsentStorageKey,
+} from "@genii-foundation/publisher-reader/sync";
+import {
+  createReaderNarrationPreferencesStorageKey,
+  parseReaderNarrationEnvelope,
+  type ReaderNarrationEnvelope,
+} from "@genii-foundation/publisher-reader/narration";
+import {
   applyReaderLinksToMarkdown,
   type ReaderBlockMarkdownLink,
 } from "@genii-foundation/publisher-reader/markdown";
 import type {
-  ContentRoute,
   Diagnostic,
+  ExtensionCapability,
   JSONValue,
   PublicationReaderEnvelope,
   ReaderBlock,
   ReaderCollection,
   ReaderSection,
   ReaderWork,
+  Sha256Digest,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
+import {
+  validateAudioEnvelopeShape,
+  validateSyncEnvelopeShape,
+  validateUpdatesEnvelopeShape,
+} from "@genii-foundation/publisher-schema";
+import {
+  inspectCanonicalRoutePath,
+} from "@genii-foundation/publisher-schema/routes";
+import type { SyncEnvelope } from "@genii-foundation/publisher-schema";
 import type { Metadata, NextConfig } from "next";
 import { notFound } from "next/navigation.js";
 import {
@@ -49,6 +81,21 @@ import {
   PublisherNotFoundView,
   PublisherPageView,
 } from "../components/pages.js";
+import {
+  PublisherNextExtensionClientBoundary,
+} from "../client/extension-boundary.js";
+import {
+  PublisherReaderNarrationProvider,
+} from "../client/reader-narration-provider.js";
+import {
+  PublisherReaderOfflineProvider,
+} from "../client/reader-offline-provider.js";
+import {
+  PublisherReaderPrepaint,
+} from "../client/reader-prepaint.js";
+import {
+  createPublisherReaderStateBootstrapSource,
+} from "../reader-state-bootstrap-source.js";
 import type {
   PublisherNextMarkdownForBlock,
 } from "../components/pages.js";
@@ -66,11 +113,13 @@ import type {
 } from "../continuity.js";
 import {
   createPublisherNextRoutePlan,
+  type PublisherNextPlannedRoute,
   type PublisherNextRoutePlan,
 } from "../routes.js";
 import {
   resolveDefaultPublisherNextTheme,
 } from "../theme/default.js";
+import { publisherNextThemeStyle } from "../theme/style.js";
 import {
   validatePublisherNextThemeInstance,
 } from "../theme/validation.js";
@@ -80,6 +129,21 @@ import {
   PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH,
   PUBLISHER_NEXT_APPLICATION_SCHEMA_URL,
   PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
+  PUBLISHER_NEXT_EXTENSION_API_VERSION,
+  PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT,
+  PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION,
+  PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES,
+  PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS,
+  PUBLISHER_NEXT_EXTENSION_SLOTS,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION,
   PUBLISHER_NEXT_THEME_API_VERSION,
   PUBLISHER_NEXT_UPDATES_API_VERSION,
   PUBLISHER_NEXT_VERSION,
@@ -89,8 +153,17 @@ import type {
   PublicationNextApplication,
   PublisherNextApplicationArtifact,
   PublisherNextApplicationManifest,
+  PublisherNextExtensionPageContext,
+  PublisherNextExtensionHandlerDescriptor,
+  PublisherNextExtensionHandlerMethod,
+  PublisherNextExtensionHost,
+  PublisherNextExtensionRenderer,
+  PublisherNextExtensionSlot,
   PublisherNextJsonObject,
   PublisherNextPage,
+  PublisherNextReaderStateBootstrapContext,
+  PublisherNextReaderStateBootstrapInstance,
+  PublisherNextReaderStateBootstrapProjectionDescriptor,
   PublisherNextRouteResolution,
   PublisherNextRootLayoutProps,
   PublisherNextThemeInstance,
@@ -99,6 +172,7 @@ import type {
   PublisherNextUpdatesPage,
   PublisherNextUpdatesView,
   ResolvedPublisherNextTheme,
+  ResolvedPublisherNextReaderStateBootstrap,
   ResolvedPublisherNextUpdates,
 } from "../types.js";
 
@@ -108,6 +182,41 @@ const UPDATE_ID = /^[\p{L}\p{N}][\p{L}\p{N}._:-]{0,127}$/u;
 const UPDATE_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const UPDATE_INSTANT =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
+const READER_STATE_PROJECTION_ARRAY_IS_ARRAY = Array.isArray;
+const READER_STATE_PROJECTION_ARRAY_JOIN = Array.prototype.join;
+const READER_STATE_PROJECTION_ARRAY_PROTOTYPE = Array.prototype;
+const READER_STATE_PROJECTION_ARRAY_SORT = Array.prototype.sort;
+const READER_STATE_PROJECTION_FUNCTION = Function;
+const READER_STATE_PROJECTION_JSON_STRINGIFY = JSON.stringify;
+const READER_STATE_PROJECTION_NUMBER = Number;
+const READER_STATE_PROJECTION_NUMBER_IS_FINITE = Number.isFinite;
+const READER_STATE_PROJECTION_NUMBER_IS_SAFE_INTEGER =
+  Number.isSafeInteger;
+const READER_STATE_PROJECTION_OBJECT_CREATE = Object.create;
+const READER_STATE_PROJECTION_OBJECT_DEFINE_PROPERTY =
+  Object.defineProperty;
+const READER_STATE_PROJECTION_OBJECT_FREEZE = Object.freeze;
+const READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR =
+  Object.getOwnPropertyDescriptor;
+const READER_STATE_PROJECTION_OBJECT_GET_PROTOTYPE_OF =
+  Object.getPrototypeOf;
+const READER_STATE_PROJECTION_OBJECT_PROTOTYPE = Object.prototype;
+const READER_STATE_PROJECTION_REGEXP_EXEC = RegExp.prototype.exec;
+const READER_STATE_PROJECTION_REFLECT_APPLY = Reflect.apply;
+const READER_STATE_PROJECTION_REFLECT_OWN_KEYS = Reflect.ownKeys;
+const READER_STATE_PROJECTION_STRING = String;
+const READER_STATE_PROJECTION_STRING_CHAR_CODE_AT =
+  String.prototype.charCodeAt;
+const READER_STATE_PROJECTION_TEXT_ENCODER = new TextEncoder();
+const READER_STATE_PROJECTION_TEXT_ENCODE =
+  TextEncoder.prototype.encode;
+const READER_STATE_PROJECTION_WEAK_SET = WeakSet;
+const READER_STATE_PROJECTION_WEAK_SET_ADD = WeakSet.prototype.add;
+const READER_STATE_PROJECTION_WEAK_SET_DELETE =
+  WeakSet.prototype.delete;
+const READER_STATE_PROJECTION_WEAK_SET_HAS = WeakSet.prototype.has;
+const READER_STATE_PROJECTION_UNSAFE_SOURCE =
+  /<\/?script|<!--|-->/iu;
 interface InspectedRecord {
   readonly descriptors: Readonly<Record<string, PropertyDescriptor>>;
 }
@@ -135,9 +244,47 @@ interface ConfiguredUpdatesState {
   readonly instance: PublisherNextUpdatesInstance;
 }
 
+interface ResolvedReaderStateBootstrapState {
+  readonly identity: {
+    readonly package: string;
+    readonly version: string;
+    readonly rendererCompatibility: string;
+  };
+  readonly configHash: ReturnType<typeof hashCanonicalJson>;
+  readonly context: PublisherNextReaderStateBootstrapContext;
+  readonly projection: {
+    readonly text: string;
+    readonly descriptor:
+      PublisherNextReaderStateBootstrapProjectionDescriptor;
+  } | null;
+  readonly script: string;
+  readonly scriptBytes: number;
+  readonly source: string;
+  readonly sourceHash: ReturnType<typeof sha256>;
+}
+
 interface ResolvedUpdatesState extends ConfiguredUpdatesState {
-  readonly view: PublisherNextUpdatesView;
+  readonly views: ReadonlyMap<string, PublisherNextUpdatesView>;
   readonly viewHash: ReturnType<typeof hashCanonicalJson>;
+}
+
+interface ResolvedExtensionEntry {
+  readonly id: string;
+  readonly package: string;
+  readonly version: string;
+  readonly capabilities: readonly ExtensionCapability[];
+  readonly projectionHash: Sha256Digest;
+  readonly renderer: PublisherNextExtensionRenderer | null;
+  readonly host: PublisherNextExtensionHost | null;
+  readonly handlers: readonly PublisherNextExtensionHandlerDescriptor[];
+  readonly clientData?: JSONValue;
+  readonly serverData?: JSONValue;
+}
+
+interface ResolvedExtensionsState {
+  readonly schemaVersion: "1.0";
+  readonly buildId: Sha256Digest;
+  readonly entries: readonly ResolvedExtensionEntry[];
 }
 
 function diagnostic(
@@ -147,13 +294,13 @@ function diagnostic(
   keyword: string,
   params: Readonly<Record<string, unknown>> = {},
 ): Diagnostic {
-  return Object.freeze({
+  return READER_STATE_PROJECTION_OBJECT_FREEZE({
     code,
     severity: "error",
     path,
     message,
     keyword,
-    params: Object.freeze({ ...params }),
+    params: READER_STATE_PROJECTION_OBJECT_FREEZE({ ...params }),
   });
 }
 
@@ -164,19 +311,19 @@ function failure<T>(
   keyword: string,
   params: Readonly<Record<string, unknown>> = {},
 ): ValidationResult<T> {
-  return Object.freeze({
+  return READER_STATE_PROJECTION_OBJECT_FREEZE({
     valid: false,
-    diagnostics: Object.freeze([
+    diagnostics: READER_STATE_PROJECTION_OBJECT_FREEZE([
       diagnostic(code, path, message, keyword, params),
     ]),
   });
 }
 
 function success<T>(value: T): ValidationResult<T> {
-  return Object.freeze({
+  return READER_STATE_PROJECTION_OBJECT_FREEZE({
     valid: true,
     value,
-    diagnostics: Object.freeze([]),
+    diagnostics: READER_STATE_PROJECTION_OBJECT_FREEZE([]),
   });
 }
 
@@ -312,37 +459,82 @@ function inspectRecord(
     if (value === null || typeof value !== "object") {
       return null;
     }
-    const prototype = Object.getPrototypeOf(value);
-    if (prototype !== Object.prototype && prototype !== null) {
+    const prototype =
+      READER_STATE_PROJECTION_OBJECT_GET_PROTOTYPE_OF(value);
+    if (
+      prototype !== READER_STATE_PROJECTION_OBJECT_PROTOTYPE &&
+      prototype !== null
+    ) {
       return null;
     }
-    if (Object.getOwnPropertySymbols(value).length > 0) {
-      return null;
-    }
-    const descriptors = Object.getOwnPropertyDescriptors(
-      value,
+    const keys = READER_STATE_PROJECTION_REFLECT_OWN_KEYS(value);
+    const descriptors = READER_STATE_PROJECTION_OBJECT_CREATE(
+      null,
     ) as Record<string, PropertyDescriptor>;
-    const allowed = new Set([...requiredKeys, ...optionalKeys]);
-    for (const key of Object.keys(descriptors)) {
-      const descriptor = descriptors[key];
+    for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+      const key = keys[keyIndex];
+      if (typeof key !== "string") {
+        return null;
+      }
+      let allowed = false;
+      for (
+        let requiredIndex = 0;
+        requiredIndex < requiredKeys.length;
+        requiredIndex += 1
+      ) {
+        if (requiredKeys[requiredIndex] === key) {
+          allowed = true;
+          break;
+        }
+      }
+      if (!allowed) {
+        for (
+          let optionalIndex = 0;
+          optionalIndex < optionalKeys.length;
+          optionalIndex += 1
+        ) {
+          if (optionalKeys[optionalIndex] === key) {
+            allowed = true;
+            break;
+          }
+        }
+      }
+      const descriptor =
+        READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+          value,
+          key,
+        );
       if (
-        !allowed.has(key) ||
+        !allowed ||
         descriptor === undefined ||
         !descriptor.enumerable ||
         !("value" in descriptor)
       ) {
         return null;
       }
+      READER_STATE_PROJECTION_OBJECT_DEFINE_PROPERTY(
+        descriptors,
+        key,
+        {
+          value: descriptor,
+          enumerable: true,
+          configurable: false,
+          writable: false,
+        },
+      );
     }
-    if (
-      requiredKeys.some(
-        (key) => !Object.hasOwn(descriptors, key),
-      )
+    for (
+      let requiredIndex = 0;
+      requiredIndex < requiredKeys.length;
+      requiredIndex += 1
     ) {
-      return null;
+      if (descriptors[requiredKeys[requiredIndex] ?? ""] === undefined) {
+        return null;
+      }
     }
-    return Object.freeze({
-      descriptors: Object.freeze(descriptors),
+    return READER_STATE_PROJECTION_OBJECT_FREEZE({
+      descriptors:
+        READER_STATE_PROJECTION_OBJECT_FREEZE(descriptors),
     });
   } catch {
     return null;
@@ -478,6 +670,822 @@ function snapshotJsonObject(
       "json",
     );
   }
+}
+
+const EXTENSION_ID = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/u;
+const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/u;
+const SUPPORTED_EXTENSION_CAPABILITIES = Object.freeze([
+  "content.project",
+  "renderer.slot",
+  "renderer.client",
+  "host.route",
+  "host.handler",
+] as const);
+
+function extensionHandlers(
+  value: unknown,
+  extensionId: string,
+  path: string,
+  ownedPaths: Set<string>,
+): ValidationResult<readonly PublisherNextExtensionHandlerDescriptor[]> {
+  const handlers = inspectArray(value, 1_000);
+  if (handlers === null) {
+    return failure(
+      "next.extension.handlers_invalid",
+      path,
+      "Extension handlers must be one bounded descriptor array.",
+      "type",
+    );
+  }
+  const result: PublisherNextExtensionHandlerDescriptor[] = [];
+  const ids = new Set<string>();
+  const paths = new Set<string>();
+  const namespace = `/api/extensions/${extensionId}`;
+  for (let index = 0; index < handlers.length; index += 1) {
+    const handlerPath = `${path}/${index}`;
+    const handler = inspectRecord(
+      handlers[index],
+      ["id", "path", "methods"],
+      ["data"],
+    );
+    const id = handler === null ? undefined : valueOf(handler, "id");
+    const publicPath = handler === null
+      ? undefined
+      : valueOf(handler, "path");
+    const methods = handler === null
+      ? null
+      : inspectArray(
+          valueOf(handler, "methods"),
+          PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS.length,
+        );
+    if (
+      handler === null ||
+      typeof id !== "string" ||
+      id.length > 128 ||
+      !EXTENSION_ID.test(id) ||
+      ids.has(id) ||
+      typeof publicPath !== "string" ||
+      !inspectCanonicalRoutePath(publicPath).valid ||
+      (publicPath !== namespace && !publicPath.startsWith(`${namespace}/`)) ||
+      publicPath.endsWith("/") ||
+      methods === null ||
+      methods.length === 0 ||
+      methods.some(
+        (method, methodIndex) =>
+          typeof method !== "string" ||
+          !PUBLISHER_NEXT_EXTENSION_HANDLER_METHODS.includes(
+            method as PublisherNextExtensionHandlerMethod,
+          ) ||
+          methods.indexOf(method) !== methodIndex,
+      ) ||
+      paths.has(publicPath) ||
+      ownedPaths.has(publicPath)
+    ) {
+      return failure(
+        "next.extension.handler_invalid",
+        handlerPath,
+        "Extension handlers require a unique ID, an owned API path, and a nonempty unique method list.",
+        "handler",
+      );
+    }
+    ids.add(id);
+    paths.add(publicPath);
+    ownedPaths.add(publicPath);
+    const data = valueOf(handler, "data");
+    result.push(Object.freeze({
+      id,
+      path: publicPath,
+      methods: Object.freeze(
+        [...methods] as PublisherNextExtensionHandlerMethod[],
+      ),
+      ...(data === undefined ? {} : { data: data as JSONValue }),
+    }));
+  }
+  return success(Object.freeze(result));
+}
+
+function snapshotExtensionData(
+  value: unknown,
+): ValidationResult<Readonly<Record<string, JSONValue>>> {
+  try {
+    const parsed = JSON.parse(
+      canonicalizeJson(value as JSONValue),
+    ) as JSONValue;
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      throw new TypeError("not an object");
+    }
+    return success(
+      freezeJson(parsed) as Readonly<Record<string, JSONValue>>,
+    );
+  } catch {
+    return failure(
+      "next.extension.data_invalid",
+      "/extensionData",
+      "Extension data must be one finite canonical JSON object.",
+      "json",
+    );
+  }
+}
+
+function resolveExtensions(
+  extensionDataInput: unknown,
+  registrationsInput: unknown,
+  reader: PublicationReaderEnvelope,
+): ValidationResult<ResolvedExtensionsState | null> {
+  if (extensionDataInput === undefined) {
+    if (registrationsInput === undefined) {
+      return success(null);
+    }
+    const registrations = inspectArray(registrationsInput, 1_000);
+    return registrations !== null && registrations.length === 0
+      ? success(null)
+      : failure(
+          "next.extension.data_required",
+          "/extensionData",
+          "Explicit extension registrations require the matching build-bound extension artifact.",
+          "required",
+        );
+  }
+  const snapshot = snapshotExtensionData(extensionDataInput);
+  if (!snapshot.valid) {
+    return snapshot;
+  }
+  const data = snapshot.value;
+  const inspected = inspectRecord(
+    data,
+    [
+      "schemaVersion",
+      "publicationId",
+      "engineVersion",
+      "readerBuildId",
+      "extensions",
+      "buildId",
+    ],
+  );
+  if (inspected === null) {
+    return failure(
+      "next.extension.data_shape_invalid",
+      "/extensionData",
+      "The extension artifact must use its closed build-bound shape.",
+      "properties",
+    );
+  }
+  const schemaVersion = valueOf(inspected, "schemaVersion");
+  const publicationId = valueOf(inspected, "publicationId");
+  const engineVersion = valueOf(inspected, "engineVersion");
+  const readerBuildId = valueOf(inspected, "readerBuildId");
+  const buildId = valueOf(inspected, "buildId");
+  if (
+    schemaVersion !== "1.0" ||
+    publicationId !== reader.publicationId ||
+    engineVersion !== reader.engineVersion ||
+    readerBuildId !== reader.buildId ||
+    typeof buildId !== "string" ||
+    !SHA256_DIGEST.test(buildId)
+  ) {
+    return failure(
+      "next.extension.data_identity_mismatch",
+      "/extensionData",
+      "The extension artifact does not belong to this exact Reader build.",
+      "identity",
+    );
+  }
+  const basis = Object.freeze({
+    schemaVersion,
+    publicationId,
+    engineVersion,
+    readerBuildId,
+    extensions: valueOf(inspected, "extensions") as JSONValue,
+  });
+  if (hashCanonicalJson(basis as JSONValue) !== buildId) {
+    return failure(
+      "next.extension.data_hash_mismatch",
+      "/extensionData/buildId",
+      "The extension artifact build identity does not match its canonical data.",
+      "hash",
+    );
+  }
+  const dataEntries = inspectArray(
+    valueOf(inspected, "extensions"),
+    1_000,
+  );
+  const registrations = inspectArray(registrationsInput, 1_000);
+  if (
+    dataEntries === null ||
+    registrations === null ||
+    dataEntries.length === 0 ||
+    registrations.length !== dataEntries.length
+  ) {
+    return failure(
+      "next.extension.registration_set_invalid",
+      "/extensions",
+      "The author registry must match every build-bound extension in declaration order.",
+      "extensionRegistration",
+    );
+  }
+  const entries: ResolvedExtensionEntry[] = [];
+  const extensionIds = new Set<string>();
+  const ownedHandlerPaths = new Set<string>([
+    ...reader.routes.active.map(({ path }) => path),
+    ...reader.routes.redirects.map(({ from }) => from),
+  ]);
+  for (const entryValue of dataEntries) {
+    if (
+      entryValue === null ||
+      typeof entryValue !== "object" ||
+      Array.isArray(entryValue)
+    ) {
+      continue;
+    }
+    const routes = (entryValue as Readonly<Record<string, unknown>>).routes;
+    if (!Array.isArray(routes)) continue;
+    for (const route of routes) {
+      const routePath = route !== null && typeof route === "object"
+        ? (route as Readonly<Record<string, unknown>>).path
+        : undefined;
+      if (
+        route !== null &&
+        typeof route === "object" &&
+        !Array.isArray(route) &&
+        typeof routePath === "string"
+      ) {
+        ownedHandlerPaths.add(routePath);
+      }
+    }
+  }
+  for (let index = 0; index < dataEntries.length; index += 1) {
+    const path = `/extensionData/extensions/${index}`;
+    const entryValue = dataEntries[index];
+    const entry = inspectRecord(
+      entryValue,
+      ["id", "package", "version", "capabilities", "config"],
+      ["serverData", "clientData", "routes", "handlers"],
+    );
+    const registration = inspectRecord(
+      registrations[index],
+      [
+        "id",
+        "package",
+        "version",
+        "engineCompatibility",
+        "capabilities",
+        "implementation",
+      ],
+      ["renderer", "host"],
+    );
+    if (entry === null || registration === null) {
+      return failure(
+        "next.extension.registration_invalid",
+        path,
+        "Extension data and registration must use their closed shapes.",
+        "properties",
+      );
+    }
+    const id = valueOf(entry, "id");
+    const packageName = valueOf(entry, "package");
+    const version = valueOf(entry, "version");
+    const entryCapabilities = inspectArray(
+      valueOf(entry, "capabilities"),
+      5,
+    );
+    const supportedCapabilities = inspectArray(
+      valueOf(registration, "capabilities"),
+      5,
+    );
+    const engineCompatibility = valueOf(
+      registration,
+      "engineCompatibility",
+    );
+    if (
+      typeof id !== "string" ||
+      id.length > 128 ||
+      !EXTENSION_ID.test(id) ||
+      extensionIds.has(id) ||
+      typeof packageName !== "string" ||
+      !PACKAGE_NAME.test(packageName) ||
+      typeof version !== "string" ||
+      valid(version) !== version ||
+      valueOf(registration, "id") !== id ||
+      valueOf(registration, "package") !== packageName ||
+      valueOf(registration, "version") !== version ||
+      typeof engineCompatibility !== "string" ||
+      validRange(engineCompatibility) === null ||
+      !satisfies(reader.engineVersion, engineCompatibility, {
+        includePrerelease: true,
+      }) ||
+      entryCapabilities === null ||
+      supportedCapabilities === null ||
+      entryCapabilities.length === 0 ||
+      entryCapabilities.some(
+        (capability, capabilityIndex) =>
+          typeof capability !== "string" ||
+          entryCapabilities.indexOf(capability) !== capabilityIndex ||
+          !SUPPORTED_EXTENSION_CAPABILITIES.includes(
+            capability as typeof SUPPORTED_EXTENSION_CAPABILITIES[number],
+          ) ||
+          !supportedCapabilities.includes(capability),
+      )
+    ) {
+      return failure(
+        "next.extension.identity_invalid",
+        path,
+        "Extension identity, compatibility, and granted capabilities must match the explicit registry.",
+        "extensionIdentity",
+      );
+    }
+    extensionIds.add(id);
+    const clientData = valueOf(entry, "clientData");
+    const routeData = valueOf(entry, "routes");
+    const handlerData = valueOf(entry, "handlers");
+    if (
+      clientData !== undefined &&
+      !entryCapabilities.includes("renderer.client")
+    ) {
+      return failure(
+        "next.extension.client_data_ungranted",
+        `${path}/clientData`,
+        "Browser data requires the renderer.client grant.",
+        "extensionCapability",
+      );
+    }
+    if (
+      (entryCapabilities.includes("host.handler") &&
+        !Array.isArray(handlerData)) ||
+      (!entryCapabilities.includes("host.handler") &&
+        handlerData !== undefined)
+    ) {
+      return failure(
+        "next.extension.handler_data_ungranted",
+        `${path}/handlers`,
+        "Declarative handler data requires the host.handler grant, and every host.handler grant requires handler data.",
+        "extensionCapability",
+      );
+    }
+    const handlersResult = entryCapabilities.includes("host.handler")
+      ? extensionHandlers(
+          handlerData,
+          id,
+          `${path}/handlers`,
+          ownedHandlerPaths,
+        )
+      : success(Object.freeze([]));
+    if (!handlersResult.valid) {
+      return handlersResult;
+    }
+    if (
+      (entryCapabilities.includes("host.route") &&
+        !Array.isArray(routeData)) ||
+      (!entryCapabilities.includes("host.route") &&
+        routeData !== undefined)
+    ) {
+      return failure(
+        "next.extension.route_data_ungranted",
+        `${path}/routes`,
+        "Declarative route data requires the host.route grant, and every host.route grant requires route data.",
+        "extensionCapability",
+      );
+    }
+    const granted = Object.freeze(
+      [...entryCapabilities] as ExtensionCapability[],
+    );
+    const rendererValue = valueOf(registration, "renderer");
+    let renderer: PublisherNextExtensionRenderer | null = null;
+    if (
+      granted.includes("renderer.slot") ||
+      granted.includes("renderer.client")
+    ) {
+      const inspectedRenderer = inspectRecord(
+        rendererValue,
+        ["kind", "apiVersion", "rendererCompatibility"],
+        ["Client", "renderSlot"],
+      );
+      const rendererCompatibility = inspectedRenderer === null
+        ? undefined
+        : valueOf(inspectedRenderer, "rendererCompatibility");
+      const renderSlot = inspectedRenderer === null
+        ? undefined
+        : valueOf(inspectedRenderer, "renderSlot");
+      const Client = inspectedRenderer === null
+        ? undefined
+        : valueOf(inspectedRenderer, "Client");
+      if (
+        inspectedRenderer === null ||
+        valueOf(inspectedRenderer, "kind") !==
+          "genii.publisher.next-extension" ||
+        valueOf(inspectedRenderer, "apiVersion") !==
+          PUBLISHER_NEXT_EXTENSION_API_VERSION ||
+        typeof rendererCompatibility !== "string" ||
+        validRange(rendererCompatibility) === null ||
+        !satisfies(PUBLISHER_NEXT_VERSION, rendererCompatibility, {
+          includePrerelease: true,
+        }) ||
+        (granted.includes("renderer.slot") &&
+          typeof renderSlot !== "function") ||
+        (granted.includes("renderer.client") &&
+          typeof Client !== "function")
+      ) {
+        return failure(
+          "next.extension.renderer_invalid",
+          `/extensions/${index}/renderer`,
+          "Renderer grants require one compatible official Next adapter with every granted entry point.",
+          "extensionRenderer",
+        );
+      }
+      renderer = Object.freeze({
+        kind: "genii.publisher.next-extension" as const,
+        apiVersion: PUBLISHER_NEXT_EXTENSION_API_VERSION,
+        rendererCompatibility,
+        ...(granted.includes("renderer.slot")
+          ? {
+              renderSlot: renderSlot as NonNullable<
+                PublisherNextExtensionRenderer["renderSlot"]
+              >,
+            }
+          : {}),
+        ...(granted.includes("renderer.client")
+          ? {
+              Client: Client as NonNullable<
+                PublisherNextExtensionRenderer["Client"]
+              >,
+            }
+          : {}),
+      });
+    }
+    const hostValue = valueOf(registration, "host");
+    let host: PublisherNextExtensionHost | null = null;
+    if (
+      granted.includes("host.route") ||
+      granted.includes("host.handler")
+    ) {
+      const inspectedHost = inspectRecord(
+        hostValue,
+        ["kind", "apiVersion", "rendererCompatibility"],
+        ["renderRoute", "handleRequest"],
+      );
+      const hostCompatibility = inspectedHost === null
+        ? undefined
+        : valueOf(inspectedHost, "rendererCompatibility");
+      const renderRoute = inspectedHost === null
+        ? undefined
+        : valueOf(inspectedHost, "renderRoute");
+      const handleRequest = inspectedHost === null
+        ? undefined
+        : valueOf(inspectedHost, "handleRequest");
+      if (
+        inspectedHost === null ||
+        valueOf(inspectedHost, "kind") !==
+          "genii.publisher.next-host-extension" ||
+        valueOf(inspectedHost, "apiVersion") !==
+          PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION ||
+        typeof hostCompatibility !== "string" ||
+        validRange(hostCompatibility) === null ||
+        !satisfies(PUBLISHER_NEXT_VERSION, hostCompatibility, {
+          includePrerelease: true,
+        }) ||
+        (granted.includes("host.route") &&
+          typeof renderRoute !== "function") ||
+        (granted.includes("host.handler") &&
+          typeof handleRequest !== "function")
+      ) {
+        return failure(
+          "next.extension.host_invalid",
+          `/extensions/${index}/host`,
+          "Host grants require one compatible official Next host adapter with every granted entry point.",
+          "extensionHost",
+        );
+      }
+      host = Object.freeze({
+        kind: "genii.publisher.next-host-extension" as const,
+        apiVersion: PUBLISHER_NEXT_EXTENSION_HOST_API_VERSION,
+        rendererCompatibility: hostCompatibility,
+        ...(granted.includes("host.route")
+          ? {
+              renderRoute: renderRoute as NonNullable<
+                PublisherNextExtensionHost["renderRoute"]
+              >,
+            }
+          : {}),
+        ...(granted.includes("host.handler")
+          ? {
+              handleRequest: handleRequest as NonNullable<
+                PublisherNextExtensionHost["handleRequest"]
+              >,
+            }
+          : {}),
+      });
+    }
+    entries.push(Object.freeze({
+      id,
+      package: packageName,
+      version,
+      capabilities: granted,
+      projectionHash: hashCanonicalJson(entryValue as JSONValue),
+      renderer,
+      host,
+      handlers: handlersResult.value,
+      ...(clientData === undefined
+        ? {}
+        : { clientData: clientData as JSONValue }),
+      ...(valueOf(entry, "serverData") === undefined
+        ? {}
+        : { serverData: valueOf(entry, "serverData") as JSONValue }),
+    }));
+  }
+  return success(Object.freeze({
+    schemaVersion: "1.0" as const,
+    buildId: buildId as Sha256Digest,
+    entries: Object.freeze(entries),
+  }));
+}
+
+const EXTENSION_HANDLER_FORBIDDEN_RESPONSE_HEADER_PREFIXES =
+  Object.freeze([
+    "x-middleware-",
+    "x-nextjs-",
+  ] as const);
+
+function extensionHandlerErrorResponse(
+  status: number,
+  message: string,
+  headers?: HeadersInit,
+): Response {
+  return new Response(`${message}\n`, {
+    status,
+    headers: {
+      "content-type": "text/plain; charset=utf-8",
+      "cache-control": "no-store",
+      ...Object.fromEntries(new Headers(headers)),
+    },
+  });
+}
+
+async function boundedExtensionHandlerRequest(
+  request: Request,
+): Promise<Request | Response> {
+  const contentLength = request.headers.get("content-length");
+  if (
+    contentLength !== null &&
+    /^\d+$/u.test(contentLength) &&
+    Number(contentLength) >
+      PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES
+  ) {
+    return extensionHandlerErrorResponse(
+      413,
+      "Extension request body is too large.",
+    );
+  }
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  if (
+    request.body !== null &&
+    request.method !== "GET" &&
+    request.method !== "HEAD"
+  ) {
+    const reader = request.body.getReader();
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      totalBytes += chunk.value.byteLength;
+      if (
+        totalBytes >
+          PUBLISHER_NEXT_EXTENSION_HANDLER_MAXIMUM_BODY_BYTES
+      ) {
+        await reader.cancel().catch(() => undefined);
+        return extensionHandlerErrorResponse(
+          413,
+          "Extension request body is too large.",
+        );
+      }
+      chunks.push(chunk.value);
+    }
+  }
+  const body = totalBytes === 0
+    ? undefined
+    : (() => {
+        const snapshot = new Uint8Array(totalBytes);
+        let offset = 0;
+        for (const chunk of chunks) {
+          snapshot.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        return snapshot;
+      })();
+  const init: RequestInit & { duplex?: "half" } = {
+    method: request.method,
+    headers: new Headers(request.headers),
+    redirect: "manual",
+    ...(body === undefined ? {} : { body, duplex: "half" as const }),
+  };
+  return new Request(request.url, init);
+}
+
+function createExtensionRequestHandler(
+  extensions: ResolvedExtensionsState | null,
+): (request: Request) => Promise<Response | undefined> {
+  const handlers = new Map<string, {
+    readonly extension: ResolvedExtensionEntry;
+    readonly handler: PublisherNextExtensionHandlerDescriptor;
+  }>();
+  for (const extension of extensions?.entries ?? []) {
+    for (const handler of extension.handlers) {
+      handlers.set(handler.path, Object.freeze({ extension, handler }));
+    }
+  }
+  return async (request: Request): Promise<Response | undefined> => {
+    let pathname: string;
+    try {
+      pathname = new URL(request.url).pathname;
+    } catch {
+      return undefined;
+    }
+    const target = handlers.get(pathname);
+    if (target === undefined) return undefined;
+    if (
+      !target.handler.methods.includes(
+        request.method as PublisherNextExtensionHandlerMethod,
+      )
+    ) {
+      return extensionHandlerErrorResponse(
+        405,
+        "Method not allowed.",
+        { allow: target.handler.methods.join(", ") },
+      );
+    }
+    try {
+      const detached = await boundedExtensionHandlerRequest(request);
+      if (detached instanceof Response) return detached;
+      const response = await target.extension.host?.handleRequest?.(
+        Object.freeze({
+          handler: target.handler,
+          request: detached,
+          ...(target.extension.serverData === undefined
+            ? {}
+            : { serverData: target.extension.serverData }),
+        }),
+      );
+      if (!(response instanceof Response)) {
+        throw new TypeError("invalid extension handler response");
+      }
+      for (const [name] of response.headers) {
+        if (
+          EXTENSION_HANDLER_FORBIDDEN_RESPONSE_HEADER_PREFIXES.some(
+            (prefix) => name.startsWith(prefix),
+          )
+        ) {
+          throw new TypeError("forbidden extension handler response header");
+        }
+      }
+      return response;
+    } catch {
+      return extensionHandlerErrorResponse(
+        500,
+        "Extension request failed.",
+      );
+    }
+  };
+}
+
+function extensionPageContext(
+  page: PublisherNextPage,
+): PublisherNextExtensionPageContext {
+  const work = page.kind === "work" || page.kind === "section"
+    ? Object.freeze({ id: page.work.id, title: page.work.title })
+    : undefined;
+  const section = page.kind === "section"
+    ? Object.freeze({ id: page.section.id, title: page.section.title })
+    : undefined;
+  const extension = page.kind === "extension"
+    ? Object.freeze({ id: page.extensionId, routeId: page.routeId })
+    : undefined;
+  return Object.freeze({
+    kind: page.kind,
+    path: page.path,
+    publication: Object.freeze({
+      id: page.publication.id,
+      title: page.publication.title,
+      language: page.publication.language,
+    }),
+    ...(work === undefined ? {} : { work }),
+    ...(section === undefined ? {} : { section }),
+    ...(extension === undefined ? {} : { extension }),
+  });
+}
+
+async function renderExtensionRoute(
+  extensions: ResolvedExtensionsState | null,
+  page: Extract<PublisherNextPage, { readonly kind: "extension" }>,
+) {
+  const extension = extensions?.entries.find(
+    ({ id }) => id === page.extensionId,
+  );
+  const renderRoute = extension?.host?.renderRoute;
+  if (
+    extension === undefined ||
+    !extension.capabilities.includes("host.route") ||
+    renderRoute === undefined
+  ) {
+    throw new TypeError(
+      `Extension route ${JSON.stringify(page.routeId)} has no compatible host adapter.`,
+    );
+  }
+  try {
+    return await renderRoute(Object.freeze({
+      page,
+      ...(extension.serverData === undefined
+        ? {}
+        : { serverData: extension.serverData }),
+    }));
+  } catch {
+    throw new TypeError(
+      `Extension ${JSON.stringify(extension.id)} threw while rendering route ${JSON.stringify(page.routeId)}.`,
+    );
+  }
+}
+
+async function renderExtensionSlot(
+  extensions: ResolvedExtensionsState | null,
+  slot: PublisherNextExtensionSlot,
+  page: PublisherNextPage,
+): Promise<ReactElement[]> {
+  if (!PUBLISHER_NEXT_EXTENSION_SLOTS.includes(slot)) {
+    throw new TypeError("Unknown Publisher extension slot.");
+  }
+  const context = extensionPageContext(page);
+  const rendered: ReactElement[] = [];
+  for (const extension of extensions?.entries ?? []) {
+    const renderSlot = extension.renderer?.renderSlot;
+    if (
+      !extension.capabilities.includes("renderer.slot") ||
+      renderSlot === undefined
+    ) {
+      continue;
+    }
+    let body;
+    try {
+      body = await renderSlot(Object.freeze({
+        slot,
+        page: context,
+        ...(extension.serverData === undefined
+          ? {}
+          : { serverData: extension.serverData }),
+      }));
+    } catch {
+      throw new TypeError(
+        `Extension ${JSON.stringify(extension.id)} threw while rendering ${slot}.`,
+      );
+    }
+    rendered.push(
+      <aside
+        data-publisher-extension={extension.id}
+        data-publisher-slot={slot}
+        key={`${slot}:${extension.id}`}
+      >
+        {body}
+      </aside>,
+    );
+  }
+  return rendered;
+}
+
+function renderExtensionClients(
+  extensions: ResolvedExtensionsState | null,
+  page: PublisherNextPage,
+): ReactElement[] {
+  const context = extensionPageContext(page);
+  const rendered: ReactElement[] = [];
+  for (const extension of extensions?.entries ?? []) {
+    const Client = extension.renderer?.Client;
+    if (
+      !extension.capabilities.includes("renderer.client") ||
+      Client === undefined
+    ) {
+      continue;
+    }
+    rendered.push(
+      <div
+        data-publisher-client={PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT}
+        data-publisher-extension={extension.id}
+        key={`${PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT}:${extension.id}`}
+      >
+        <PublisherNextExtensionClientBoundary
+          extensionId={extension.id}
+        >
+          <Client
+            mount={PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT}
+            page={context}
+            {...(extension.clientData === undefined
+              ? {}
+              : { clientData: extension.clientData })}
+          />
+        </PublisherNextExtensionClientBoundary>
+      </div>,
+    );
+  }
+  return rendered;
 }
 
 function updateText(
@@ -911,6 +1919,831 @@ function configuredValue(
   return success(valueOf(inspected, "value"));
 }
 
+function createReaderStateBootstrapContext(
+  publicationId: string,
+): PublisherNextReaderStateBootstrapContext {
+  return Object.freeze({
+    publicationId,
+    reportStorageKey:
+      `genii.publisher.reader-state-bootstrap.v1.${publicationId}`,
+    targetStorageKeys: Object.freeze({
+      bookmarks: createReaderBookmarksStorageKey(publicationId),
+      engagement: createReaderEngagementStorageKey(publicationId),
+      narrationPreferences:
+        createReaderNarrationPreferencesStorageKey(publicationId),
+      preferences: createReaderPreferencesStorageKey(publicationId),
+      progress: createReaderProgressStorageKey(publicationId),
+      syncConsent: createReaderSyncConsentStorageKey(publicationId),
+    }),
+  });
+}
+
+function readerStateBootstrapSourceValue(
+  result: unknown,
+): ValidationResult<string> {
+  const inspected = inspectRecord(
+    result,
+    ["diagnostics", "valid"],
+    ["value"],
+  );
+  if (inspected === null) {
+    return failure(
+      "next.reader_state_bootstrap.source_result_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap returned an invalid source result.",
+      "type",
+    );
+  }
+  if (valueOf(inspected, "valid") === false) {
+    return failure(
+      "next.reader_state_bootstrap.source_rejected",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap refused to create browser source.",
+      "adapter",
+    );
+  }
+  const source = valueOf(inspected, "value");
+  if (
+    valueOf(inspected, "valid") !== true ||
+    typeof source !== "string" ||
+    source.length === 0
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.source_result_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap must return one nonempty JavaScript function body.",
+      "type",
+    );
+  }
+  return success(source);
+}
+
+type ReaderStateBootstrapProjectionFailure =
+  | "bytes"
+  | "containers"
+  | "depth"
+  | "entries"
+  | "json";
+
+class ReaderStateBootstrapProjectionError extends Error {
+  readonly kind: ReaderStateBootstrapProjectionFailure;
+  readonly actual: number | null;
+  readonly maximum: number | null;
+
+  constructor(
+    kind: ReaderStateBootstrapProjectionFailure,
+    actual: number | null = null,
+    maximum: number | null = null,
+  ) {
+    super(kind);
+    this.kind = kind;
+    this.actual = actual;
+    this.maximum = maximum;
+  }
+}
+
+interface ReaderStateBootstrapProjectionSnapshot {
+  readonly text: string;
+  readonly descriptor:
+    PublisherNextReaderStateBootstrapProjectionDescriptor;
+}
+
+function canonicalJsonStringByteSize(
+  value: string,
+  initialByteSize: number,
+): number {
+  let byteSize = initialByteSize + 2;
+  if (
+    byteSize >
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES
+  ) {
+    throw new ReaderStateBootstrapProjectionError(
+      "bytes",
+      byteSize,
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+    );
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const unit = READER_STATE_PROJECTION_REFLECT_APPLY(
+      READER_STATE_PROJECTION_STRING_CHAR_CODE_AT,
+      value,
+      [index],
+    );
+    if (unit >= 0xd800 && unit <= 0xdbff) {
+      const next = READER_STATE_PROJECTION_REFLECT_APPLY(
+        READER_STATE_PROJECTION_STRING_CHAR_CODE_AT,
+        value,
+        [index + 1],
+      );
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
+        throw new ReaderStateBootstrapProjectionError("json");
+      }
+      byteSize += 4;
+      index += 1;
+    } else if (unit >= 0xdc00 && unit <= 0xdfff) {
+      throw new ReaderStateBootstrapProjectionError("json");
+    } else if (unit === 0x22 || unit === 0x5c) {
+      byteSize += 2;
+    } else if (unit < 0x20) {
+      byteSize +=
+        unit === 0x08 ||
+        unit === 0x09 ||
+        unit === 0x0a ||
+        unit === 0x0c ||
+        unit === 0x0d
+          ? 2
+          : 6;
+    } else if (unit < 0x80) {
+      byteSize += 1;
+    } else if (unit < 0x800) {
+      byteSize += 2;
+    } else {
+      byteSize += 3;
+    }
+    if (
+      byteSize >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "bytes",
+        byteSize,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+      );
+    }
+  }
+  return byteSize;
+}
+
+function snapshotReaderStateBootstrapProjection(
+  data: unknown,
+  reader: PublicationReaderEnvelope,
+): ReaderStateBootstrapProjectionSnapshot {
+  if (
+    data === null ||
+    typeof data !== "object" ||
+    READER_STATE_PROJECTION_ARRAY_IS_ARRAY(data)
+  ) {
+    throw new ReaderStateBootstrapProjectionError("json");
+  }
+
+  const output: string[] = [];
+  let outputLength = 0;
+  const active = new READER_STATE_PROJECTION_WEAK_SET<object>();
+  let byteSize = 0;
+  let containerCount = 0;
+  let entryCount = 0;
+
+  const appendOutput = (value: string): void => {
+    READER_STATE_PROJECTION_OBJECT_DEFINE_PROPERTY(
+      output,
+      READER_STATE_PROJECTION_STRING(outputLength),
+      {
+        value,
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      },
+    );
+    outputLength += 1;
+  };
+
+  const appendAscii = (value: string): void => {
+    byteSize += value.length;
+    if (
+      byteSize >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "bytes",
+        byteSize,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+      );
+    }
+    appendOutput(value);
+  };
+  const appendString = (value: string): void => {
+    byteSize = canonicalJsonStringByteSize(value, byteSize);
+    const serialized = READER_STATE_PROJECTION_JSON_STRINGIFY(value);
+    if (typeof serialized !== "string") {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+    appendOutput(serialized);
+  };
+  const enterEntries = (count: number): void => {
+    entryCount += count;
+    if (
+      entryCount >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "entries",
+        entryCount,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+      );
+    }
+  };
+
+  const writeValue = (value: unknown, depth: number): void => {
+    if (value === null) {
+      appendAscii("null");
+      return;
+    }
+    if (typeof value === "string") {
+      appendString(value);
+      return;
+    }
+    if (typeof value === "boolean") {
+      appendAscii(value ? "true" : "false");
+      return;
+    }
+    if (typeof value === "number") {
+      if (!READER_STATE_PROJECTION_NUMBER_IS_FINITE(value)) {
+        throw new ReaderStateBootstrapProjectionError("json");
+      }
+      const serialized = READER_STATE_PROJECTION_JSON_STRINGIFY(value);
+      if (typeof serialized !== "string") {
+        throw new ReaderStateBootstrapProjectionError("json");
+      }
+      appendAscii(serialized);
+      return;
+    }
+    if (typeof value !== "object") {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+    if (
+      depth >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "depth",
+        depth,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+      );
+    }
+    containerCount += 1;
+    if (
+      containerCount >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS
+    ) {
+      throw new ReaderStateBootstrapProjectionError(
+        "containers",
+        containerCount,
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS,
+      );
+    }
+    if (
+      READER_STATE_PROJECTION_REFLECT_APPLY(
+        READER_STATE_PROJECTION_WEAK_SET_HAS,
+        active,
+        [value],
+      )
+    ) {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+
+    const array = READER_STATE_PROJECTION_ARRAY_IS_ARRAY(value);
+    let prototype: object | null;
+    try {
+      prototype = READER_STATE_PROJECTION_OBJECT_GET_PROTOTYPE_OF(
+        value,
+      );
+    } catch {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+    if (
+      (!array &&
+        prototype !== READER_STATE_PROJECTION_OBJECT_PROTOTYPE &&
+        prototype !== null) ||
+      (array &&
+        prototype !== READER_STATE_PROJECTION_ARRAY_PROTOTYPE)
+    ) {
+      throw new ReaderStateBootstrapProjectionError("json");
+    }
+
+    READER_STATE_PROJECTION_REFLECT_APPLY(
+      READER_STATE_PROJECTION_WEAK_SET_ADD,
+      active,
+      [value],
+    );
+    try {
+      if (array) {
+        let lengthDescriptor: PropertyDescriptor | undefined;
+        try {
+          lengthDescriptor =
+            READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+            value,
+            "length",
+          );
+        } catch {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        const length =
+          lengthDescriptor !== undefined &&
+          "value" in lengthDescriptor
+            ? lengthDescriptor.value
+            : undefined;
+        if (
+          typeof length !== "number" ||
+          !READER_STATE_PROJECTION_NUMBER_IS_SAFE_INTEGER(length) ||
+          length < 0
+        ) {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        enterEntries(length);
+        let keys: readonly PropertyKey[];
+        try {
+          keys = READER_STATE_PROJECTION_REFLECT_OWN_KEYS(value);
+        } catch {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        if (keys.length !== length + 1) {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+          const key = keys[keyIndex];
+          if (key === "length") continue;
+          if (
+            typeof key !== "string" ||
+            READER_STATE_PROJECTION_STRING(
+              READER_STATE_PROJECTION_NUMBER(key),
+            ) !== key ||
+            READER_STATE_PROJECTION_NUMBER(key) >= length
+          ) {
+            throw new ReaderStateBootstrapProjectionError("json");
+          }
+        }
+        appendAscii("[");
+        for (let index = 0; index < length; index += 1) {
+          let descriptor: PropertyDescriptor | undefined;
+          try {
+            descriptor =
+              READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+              value,
+              READER_STATE_PROJECTION_STRING(index),
+            );
+          } catch {
+            throw new ReaderStateBootstrapProjectionError("json");
+          }
+          if (
+            descriptor === undefined ||
+            !descriptor.enumerable ||
+            !("value" in descriptor)
+          ) {
+            throw new ReaderStateBootstrapProjectionError("json");
+          }
+          if (index > 0) appendAscii(",");
+          writeValue(descriptor.value, depth + 1);
+        }
+        appendAscii("]");
+        return;
+      }
+
+      let keys: PropertyKey[];
+      try {
+        keys = READER_STATE_PROJECTION_REFLECT_OWN_KEYS(value);
+      } catch {
+        throw new ReaderStateBootstrapProjectionError("json");
+      }
+      enterEntries(keys.length);
+      for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
+        if (typeof keys[keyIndex] !== "string") {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+      }
+      const stringKeys = keys as string[];
+      READER_STATE_PROJECTION_REFLECT_APPLY(
+        READER_STATE_PROJECTION_ARRAY_SORT,
+        stringKeys,
+        [],
+      );
+      appendAscii("{");
+      for (let index = 0; index < stringKeys.length; index += 1) {
+        const key = stringKeys[index];
+        if (key === undefined) continue;
+        let descriptor: PropertyDescriptor | undefined;
+        try {
+          descriptor =
+            READER_STATE_PROJECTION_OBJECT_GET_OWN_PROPERTY_DESCRIPTOR(
+              value,
+              key,
+            );
+        } catch {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        if (
+          descriptor === undefined ||
+          !descriptor.enumerable ||
+          !("value" in descriptor)
+        ) {
+          throw new ReaderStateBootstrapProjectionError("json");
+        }
+        if (index > 0) appendAscii(",");
+        appendString(key);
+        appendAscii(":");
+        writeValue(descriptor.value, depth + 1);
+      }
+      appendAscii("}");
+    } finally {
+      READER_STATE_PROJECTION_REFLECT_APPLY(
+        READER_STATE_PROJECTION_WEAK_SET_DELETE,
+        active,
+        [value],
+      );
+    }
+  };
+
+  appendAscii("{");
+  appendString("buildId");
+  appendAscii(":");
+  appendString(reader.buildId);
+  appendAscii(",");
+  appendString("data");
+  appendAscii(":");
+  writeValue(data, 1);
+  appendAscii(",");
+  appendString("engineVersion");
+  appendAscii(":");
+  appendString(reader.engineVersion);
+  appendAscii(",");
+  appendString("publicationId");
+  appendAscii(":");
+  appendString(reader.publicationId);
+  appendAscii(",");
+  appendString("schemaVersion");
+  appendAscii(":");
+  appendString(
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION,
+  );
+  appendAscii("}");
+
+  const text = READER_STATE_PROJECTION_REFLECT_APPLY(
+    READER_STATE_PROJECTION_ARRAY_JOIN,
+    output,
+    [""],
+  );
+  return READER_STATE_PROJECTION_OBJECT_FREEZE({
+    text,
+    descriptor: READER_STATE_PROJECTION_OBJECT_FREEZE({
+      schemaVersion:
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION,
+      byteSize,
+      hash: sha256(text),
+    }),
+  });
+}
+
+function readerStateBootstrapProjectionValue(
+  result: unknown,
+  reader: PublicationReaderEnvelope,
+): ValidationResult<ReaderStateBootstrapProjectionSnapshot> {
+  const inspected = inspectRecord(
+    result,
+    ["diagnostics", "valid"],
+    ["value"],
+  );
+  if (inspected === null) {
+    return failure(
+      "next.reader_state_bootstrap.projection_result_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap returned an invalid projection result.",
+      "type",
+    );
+  }
+  if (valueOf(inspected, "valid") === false) {
+    return failure(
+      "next.reader_state_bootstrap.projection_rejected",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap refused to create a state projection.",
+      "adapter",
+    );
+  }
+  if (
+    valueOf(inspected, "valid") !== true ||
+    !Object.hasOwn(inspected.descriptors, "value")
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.projection_result_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap returned an invalid projection result.",
+      "type",
+    );
+  }
+  const value = valueOf(inspected, "value");
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    READER_STATE_PROJECTION_ARRAY_IS_ARRAY(value)
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.projection_root_invalid",
+      "/readerStateBootstrap",
+      "Reader state projection data must be one plain JSON object.",
+      "type",
+    );
+  }
+  try {
+    return success(
+      snapshotReaderStateBootstrapProjection(value, reader),
+    );
+  } catch (error) {
+    const kind =
+      error instanceof ReaderStateBootstrapProjectionError
+        ? error.kind
+        : "json";
+    const details = {
+      bytes: [
+        "next.reader_state_bootstrap.projection_too_large",
+        "Reader state projection exceeds the renderer byte limit.",
+        "maxLength",
+      ],
+      containers: [
+        "next.reader_state_bootstrap.projection_too_many_containers",
+        "Reader state projection exceeds the renderer container limit.",
+        "maxItems",
+      ],
+      depth: [
+        "next.reader_state_bootstrap.projection_too_deep",
+        "Reader state projection exceeds the renderer depth limit.",
+        "maxDepth",
+      ],
+      entries: [
+        "next.reader_state_bootstrap.projection_too_many_entries",
+        "Reader state projection exceeds the renderer entry limit.",
+        "maxItems",
+      ],
+      json: [
+        "next.reader_state_bootstrap.projection_json_invalid",
+        "Reader state projection must be finite, acyclic plain JSON data.",
+        "json",
+      ],
+    } as const;
+    const detail = details[kind];
+    const code = detail[0];
+    const message = detail[1];
+    const rule = detail[2];
+    const params =
+      error instanceof ReaderStateBootstrapProjectionError &&
+      error.actual !== null &&
+      error.maximum !== null
+        ? kind === "bytes"
+          ? {
+              actualBytes: error.actual,
+              maximumBytes: error.maximum,
+            }
+          : kind === "depth"
+            ? {
+                actualDepth: error.actual,
+                maximumDepth: error.maximum,
+              }
+            : {
+                actualItems: error.actual,
+                maximumItems: error.maximum,
+              }
+        : {};
+    return failure(
+      code,
+      "/readerStateBootstrap",
+      message,
+      rule,
+      params,
+    );
+  }
+}
+
+function resolveReaderStateBootstrap(
+  resolved: ResolvedPublisherNextReaderStateBootstrap,
+  reader: PublicationReaderEnvelope,
+): ValidationResult<ResolvedReaderStateBootstrapState> {
+  const inspected = inspectRecord(resolved, [
+    "config",
+    "implementation",
+    "package",
+    "rendererCompatibility",
+    "version",
+  ]);
+  if (inspected === null) {
+    return failure(
+      "next.reader_state_bootstrap.resolution_invalid",
+      "/readerStateBootstrap",
+      "The resolved Reader state bootstrap must use the complete closed adapter shape.",
+      "properties",
+    );
+  }
+  const identity = inspectIdentity(
+    valueOf(inspected, "package"),
+    valueOf(inspected, "version"),
+    valueOf(inspected, "rendererCompatibility"),
+    "/readerStateBootstrap",
+  );
+  if (!identity.valid) return identity;
+  const config = snapshotJsonObject(
+    valueOf(inspected, "config"),
+    "/readerStateBootstrap/config",
+  );
+  if (!config.valid) return config;
+  const configHash = hashCanonicalJson(config.value);
+  const context = createReaderStateBootstrapContext(
+    reader.publicationId,
+  );
+  const implementation = inspectRecord(
+    valueOf(inspected, "implementation"),
+    ["apiVersion", "configure", "kind"],
+  );
+  if (
+    implementation === null ||
+    valueOf(implementation, "kind") !==
+      "genii.publisher.next-reader-state-bootstrap" ||
+    valueOf(implementation, "apiVersion") !==
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION ||
+    typeof valueOf(implementation, "configure") !== "function"
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.implementation_invalid",
+      "/readerStateBootstrap/implementation",
+      "The Reader state bootstrap does not match the renderer bootstrap API.",
+      "apiVersion",
+    );
+  }
+  let configured: unknown;
+  try {
+    configured = READER_STATE_PROJECTION_REFLECT_APPLY(
+      valueOf(implementation, "configure") as (
+        config: PublisherNextJsonObject,
+      ) => unknown,
+      valueOf(inspected, "implementation"),
+      [config.value],
+    );
+  } catch {
+    return failure(
+      "next.reader_state_bootstrap.configuration_threw",
+      "/readerStateBootstrap/config",
+      "The Reader state bootstrap threw while configuring.",
+      "adapter",
+    );
+  }
+  const configuredBootstrap = configuredValue(
+    configured,
+    "/readerStateBootstrap/config",
+  );
+  if (!configuredBootstrap.valid) return configuredBootstrap;
+  const instance = inspectRecord(
+    configuredBootstrap.value,
+    ["createSource"],
+    ["createProjection"],
+  );
+  const createProjection =
+    instance === null
+      ? undefined
+      : valueOf(instance, "createProjection");
+  if (
+    instance === null ||
+    typeof valueOf(instance, "createSource") !== "function" ||
+    (createProjection !== undefined &&
+      typeof createProjection !== "function")
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.instance_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap must return createSource and may return createProjection.",
+      "properties",
+    );
+  }
+  let projection: ReaderStateBootstrapProjectionSnapshot | null = null;
+  if (typeof createProjection === "function") {
+    let projectionResult: unknown;
+    try {
+      projectionResult = READER_STATE_PROJECTION_REFLECT_APPLY(
+        createProjection as
+          NonNullable<
+            PublisherNextReaderStateBootstrapInstance["createProjection"]
+          >,
+        configuredBootstrap.value,
+        [context],
+      );
+    } catch {
+      return failure(
+        "next.reader_state_bootstrap.projection_threw",
+        "/readerStateBootstrap",
+        "The Reader state bootstrap threw while creating a state projection.",
+        "adapter",
+      );
+    }
+    const projectionValue = readerStateBootstrapProjectionValue(
+      projectionResult,
+      reader,
+    );
+    if (!projectionValue.valid) return projectionValue;
+    projection = projectionValue.value;
+  }
+  let sourceResult: unknown;
+  try {
+    sourceResult = READER_STATE_PROJECTION_REFLECT_APPLY(
+      valueOf(instance, "createSource") as
+        PublisherNextReaderStateBootstrapInstance["createSource"],
+      configuredBootstrap.value,
+      [context],
+    );
+  } catch {
+    return failure(
+      "next.reader_state_bootstrap.source_threw",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap threw while creating browser source.",
+      "adapter",
+    );
+  }
+  const source = readerStateBootstrapSourceValue(sourceResult);
+  if (!source.valid) return source;
+  const sourceBytes = READER_STATE_PROJECTION_REFLECT_APPLY(
+    READER_STATE_PROJECTION_TEXT_ENCODE,
+    READER_STATE_PROJECTION_TEXT_ENCODER,
+    [source.value],
+  ).length;
+  if (
+    sourceBytes >
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.source_too_large",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap source exceeds the renderer byte limit.",
+      "maxLength",
+      {
+        actualBytes: sourceBytes,
+        maximumBytes:
+          PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES,
+      },
+    );
+  }
+  if (
+    READER_STATE_PROJECTION_REFLECT_APPLY(
+      READER_STATE_PROJECTION_REGEXP_EXEC,
+      READER_STATE_PROJECTION_UNSAFE_SOURCE,
+      [source.value],
+    ) !== null
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.source_unsafe",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap source contains an unsafe HTML script sequence.",
+      "content",
+    );
+  }
+  try {
+    READER_STATE_PROJECTION_FUNCTION(
+      "context",
+      "projection",
+      `"use strict";\n${source.value}`,
+    );
+  } catch {
+    return failure(
+      "next.reader_state_bootstrap.source_invalid",
+      "/readerStateBootstrap",
+      "The Reader state bootstrap source is not a valid synchronous JavaScript function body.",
+      "syntax",
+    );
+  }
+  const sourceHash = sha256(source.value);
+  const script = createPublisherReaderStateBootstrapSource({
+    package: identity.value.package,
+    version: identity.value.version,
+    sourceHash,
+    source: source.value,
+    context,
+    projectionText: projection?.text ?? null,
+  });
+  const scriptBytes = READER_STATE_PROJECTION_REFLECT_APPLY(
+    READER_STATE_PROJECTION_TEXT_ENCODE,
+    READER_STATE_PROJECTION_TEXT_ENCODER,
+    [script],
+  ).length;
+  if (
+    scriptBytes >
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES
+  ) {
+    return failure(
+      "next.reader_state_bootstrap.script_too_large",
+      "/readerStateBootstrap",
+      "The generated Reader state bootstrap script exceeds the renderer byte limit.",
+      "maxLength",
+      {
+        actualBytes: scriptBytes,
+        maximumBytes:
+          PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+      },
+    );
+  }
+  return success(READER_STATE_PROJECTION_OBJECT_FREEZE({
+    identity: identity.value,
+    configHash,
+    context,
+    projection,
+    script,
+    scriptBytes,
+    source: source.value,
+    sourceHash,
+  }));
+}
+
 function resolveTheme(
   resolved: ResolvedPublisherNextTheme,
 ): ValidationResult<ResolvedThemeState> {
@@ -1114,6 +2947,61 @@ function resolveUpdates(
   );
 }
 
+function resolveUpdatesData(
+  value: unknown,
+  reader: PublicationReaderEnvelope,
+): ValidationResult<ConfiguredUpdatesState> {
+  const validated = validateUpdatesEnvelopeShape(value);
+  if (!validated.valid) {
+    return validated;
+  }
+  const envelope = validated.value;
+  if (
+    envelope.publicationId !== reader.publicationId ||
+    envelope.buildId !== reader.buildId
+  ) {
+    return failure(
+      "next.updates.data_stale",
+      "/updatesData",
+      "The Updates artifact is not bound to this Reader build.",
+      "identity",
+    );
+  }
+  const views = new Map(
+    envelope.views.map(({ id, ...view }) => [
+      id,
+      Object.freeze(view),
+    ] as const),
+  );
+  const config = Object.freeze({
+    buildId: envelope.buildId,
+    catalogSha256: envelope.source.catalogSha256,
+  });
+  const instance: PublisherNextUpdatesInstance = Object.freeze({
+    load(page: PublisherNextUpdatesPage) {
+      const view = views.get(page.viewId);
+      if (view === undefined) {
+        throw new TypeError(
+          `No Updates view is bound to route "${page.viewId}".`,
+        );
+      }
+      return view;
+    },
+  });
+  return success(
+    Object.freeze({
+      identity: Object.freeze({
+        package: "@genii-foundation/publisher-next",
+        version: PUBLISHER_NEXT_VERSION,
+        rendererCompatibility: PUBLISHER_NEXT_VERSION,
+      }),
+      config,
+      configHash: hashCanonicalJson(config),
+      instance,
+    }),
+  );
+}
+
 function pageResolver(
   reader: PublicationReaderEnvelope,
   routePlan: PublisherNextRoutePlan,
@@ -1162,7 +3050,7 @@ function pageResolver(
     );
 
   const toPage = (
-    route: ContentRoute,
+    route: PublisherNextPlannedRoute,
   ): PublisherNextPage | null => {
     const base = {
       path: route.path,
@@ -1189,7 +3077,40 @@ function pageResolver(
         });
         break;
       case "updates":
-        page = Object.freeze({ ...base, kind: "updates" });
+        page = Object.freeze({
+          ...base,
+          kind: "updates",
+          viewId: route.target.viewId,
+          pageNumber: "pageNumber" in route.target
+            ? route.target.pageNumber
+            : 1,
+          ...(route.target.pagination === undefined
+            ? {}
+            : { pageSize: route.target.pagination.pageSize }),
+          ...(!("previousPath" in route.target) ||
+              route.target.previousPath === undefined
+            ? {}
+            : { previousPath: route.target.previousPath }),
+          ...(!("nextPath" in route.target) ||
+              route.target.nextPath === undefined
+            ? {}
+            : { nextPath: route.target.nextPath }),
+        });
+        break;
+      case "extension":
+        page = Object.freeze({
+          ...base,
+          kind: "extension",
+          extensionId: route.target.extensionId,
+          routeId: route.target.routeId,
+          title: route.target.title,
+          ...(route.target.description === undefined
+            ? {}
+            : { description: route.target.description }),
+          ...(route.target.data === undefined
+            ? {}
+            : { data: route.target.data }),
+        });
         break;
       case "work": {
         const work = workById.get(route.target.workId);
@@ -1308,7 +3229,10 @@ function pageResolver(
   });
 }
 
-function metadataForPage(page: PublisherNextPage): Metadata {
+function metadataForPage(
+  page: PublisherNextPage,
+  updatesView?: PublisherNextUpdatesView,
+): Metadata {
   let title: string;
   let description: string | undefined;
   switch (page.kind) {
@@ -1330,8 +3254,15 @@ function metadataForPage(page: PublisherNextPage): Metadata {
       description = page.work.summary ?? page.publication.description;
       break;
     case "updates":
-      title = `Updates | ${page.publication.title}`;
-      description = page.publication.description;
+      title = `${updatesView?.title ?? "Updates"}${
+        page.pageNumber === 1 ? "" : `, page ${page.pageNumber}`
+      } | ${page.publication.title}`;
+      description =
+        updatesView?.description ?? page.publication.description;
+      break;
+    case "extension":
+      title = `${page.title} | ${page.publication.title}`;
+      description = page.description ?? page.publication.description;
       break;
   }
   const canonical =
@@ -1354,6 +3285,9 @@ function createApplicationArtifact(
   reader: PublicationReaderEnvelope,
   theme: ResolvedThemeState,
   updates: ResolvedUpdatesState | null,
+  readerStateBootstrap: ResolvedReaderStateBootstrapState | null,
+  extensions: ResolvedExtensionsState | null,
+  sync: SyncEnvelope | null,
   continuity: PublisherNextContinuityHandler,
 ): PublisherNextApplicationArtifact {
   const artifactDescriptor = Object.freeze({
@@ -1381,12 +3315,55 @@ function createApplicationArtifact(
           configHash: updates.configHash,
           viewHash: updates.viewHash,
         });
+  const readerStateBootstrapIdentity =
+    readerStateBootstrap === null
+      ? null
+      : Object.freeze({
+          ...readerStateBootstrap.identity,
+          apiVersion:
+            PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_API_VERSION,
+          configHash: readerStateBootstrap.configHash,
+          sourceHash: readerStateBootstrap.sourceHash,
+          projection:
+            readerStateBootstrap.projection?.descriptor ?? null,
+        });
   const continuityIdentity = Object.freeze({
     mode: "proxy" as const,
     explicitRedirectCount: continuity.explicitRedirectCount,
     canonicalSlashRedirectCount:
       continuity.canonicalSlashRedirectCount,
   });
+  const syncIdentity = sync === null
+    ? null
+    : Object.freeze({
+        schemaVersion: sync.schemaVersion,
+        buildId: reader.buildId,
+        providerPackage: sync.provider.package,
+        consent: sync.consent,
+        localFallback: sync.localFallback,
+        capabilities: Object.freeze([...sync.capabilities]),
+      });
+  const extensionIdentity = extensions === null
+    ? null
+    : Object.freeze({
+        schemaVersion: extensions.schemaVersion,
+        buildId: extensions.buildId,
+        entries: Object.freeze(
+          extensions.entries.map((extension) => Object.freeze({
+            id: extension.id,
+            package: extension.package,
+            version: extension.version,
+            capabilities: Object.freeze([...extension.capabilities]),
+            projectionHash: extension.projectionHash,
+            rendererApiVersion: extension.renderer?.apiVersion ?? null,
+            rendererCompatibility:
+              extension.renderer?.rendererCompatibility ?? null,
+            hostApiVersion: extension.host?.apiVersion ?? null,
+            hostCompatibility:
+              extension.host?.rendererCompatibility ?? null,
+          })),
+        ),
+      });
   const basis = Object.freeze({
     schemaVersion: PUBLISHER_NEXT_APPLICATION_SCHEMA_VERSION,
     publicationId: reader.publicationId,
@@ -1396,6 +3373,9 @@ function createApplicationArtifact(
     source,
     theme: themeIdentity,
     updates: updatesIdentity,
+    readerStateBootstrap: readerStateBootstrapIdentity,
+    extensions: extensionIdentity,
+    sync: syncIdentity,
     continuity: continuityIdentity,
   });
   const buildId = hashCanonicalJson(
@@ -1425,7 +3405,16 @@ export async function createPublicationNextApplication(
     const inspectedOptions = inspectRecord(
       options,
       ["reader"],
-      ["theme", "updates"],
+      [
+        "audioData",
+        "extensionData",
+        "extensions",
+        "readerStateBootstrap",
+        "syncData",
+        "theme",
+        "updates",
+        "updatesData",
+      ],
     );
     if (inspectedOptions === null) {
       return failure(
@@ -1442,21 +3431,140 @@ export async function createPublicationNextApplication(
       return readerResult;
     }
     const reader = readerResult.value;
+    const suppliedReaderStateBootstrap = valueOf(
+      inspectedOptions,
+      "readerStateBootstrap",
+    );
+    let readerStateBootstrap:
+      ResolvedReaderStateBootstrapState | null = null;
+    if (suppliedReaderStateBootstrap !== undefined) {
+      const bootstrapResult = resolveReaderStateBootstrap(
+        suppliedReaderStateBootstrap as
+          ResolvedPublisherNextReaderStateBootstrap,
+        reader,
+      );
+      if (!bootstrapResult.valid) return bootstrapResult;
+      readerStateBootstrap = bootstrapResult.value;
+    }
+    const extensionsResult = resolveExtensions(
+      valueOf(inspectedOptions, "extensionData"),
+      valueOf(inspectedOptions, "extensions"),
+      reader,
+    );
+    if (!extensionsResult.valid) {
+      return extensionsResult;
+    }
+    const extensions = extensionsResult.value;
+    const suppliedAudioData = valueOf(inspectedOptions, "audioData");
+    let narration: ReaderNarrationEnvelope | null = null;
+    let narrationCatalogHash: Sha256Digest | null = null;
+    if (suppliedAudioData !== undefined) {
+      const audioResult = validateAudioEnvelopeShape(suppliedAudioData);
+      if (!audioResult.valid) return audioResult;
+      if (
+        audioResult.value.publicationId !== reader.publicationId ||
+        audioResult.value.buildId !== reader.buildId
+      ) {
+        return failure(
+          "next.audio.identity_mismatch",
+          "/audioData",
+          "The narration artifact does not belong to this Reader build.",
+          "identity",
+        );
+      }
+      narration = parseReaderNarrationEnvelope(JSON.stringify(audioResult.value), {
+        publicationId: reader.publicationId,
+        readerBuildId: reader.buildId,
+      });
+      if (narration === null) {
+        return failure(
+          "next.audio.projection_invalid",
+          "/audioData",
+          "The narration artifact cannot be projected into the browser Reader contract.",
+          "format",
+        );
+      }
+      narrationCatalogHash = audioResult.value.source.catalogSha256 as Sha256Digest;
+    }
+    const suppliedSyncData = valueOf(inspectedOptions, "syncData");
+    let sync: SyncEnvelope | null = null;
+    if (suppliedSyncData !== undefined) {
+      const syncResult = validateSyncEnvelopeShape(suppliedSyncData);
+      if (!syncResult.valid) return syncResult;
+      if (
+        syncResult.value.publicationId !== reader.publicationId ||
+        syncResult.value.buildId !== reader.buildId
+      ) {
+        return failure(
+          "next.sync.identity_mismatch",
+          "/syncData",
+          "The synchronization artifact does not belong to this Reader build.",
+          "identity",
+        );
+      }
+      sync = syncResult.value;
+    }
     const markdownResult = prepareReaderMarkdown(reader);
     if (!markdownResult.valid) {
       return markdownResult;
     }
     const markdownForBlock = markdownResult.value;
-    const routePlanResult = createPublisherNextRoutePlan(reader);
+    const suppliedUpdatesData = valueOf(
+      inspectedOptions,
+      "updatesData",
+    );
+    const routePlanResult = createPublisherNextRoutePlan(
+      reader,
+      suppliedUpdatesData,
+      valueOf(inspectedOptions, "extensionData"),
+    );
     if (!routePlanResult.valid) {
       return routePlanResult;
     }
     const routePlan = routePlanResult.value;
+    if (readerStateBootstrap !== null) {
+      const documentCount = routePlan.staticParams.length;
+      const totalScriptBytes =
+        readerStateBootstrap.scriptBytes * documentCount;
+      if (
+        totalScriptBytes >
+        PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES
+      ) {
+        return failure(
+          "next.reader_state_bootstrap.static_script_too_large",
+          "/readerStateBootstrap",
+          "The Reader state bootstrap would exceed the renderer total static HTML byte limit.",
+          "maxLength",
+          {
+            actualBytes: totalScriptBytes,
+            documentCount,
+            maximumBytes:
+              PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
+            scriptBytes: readerStateBootstrap.scriptBytes,
+          },
+        );
+      }
+    }
     const hasUpdatesRoute = reader.routes.active.some(
       ({ target }) => target.kind === "updates",
     );
     const suppliedUpdates = valueOf(inspectedOptions, "updates");
-    if (hasUpdatesRoute && suppliedUpdates === undefined) {
+    if (
+      suppliedUpdates !== undefined &&
+      suppliedUpdatesData !== undefined
+    ) {
+      return failure(
+        "next.updates.ambiguous",
+        "/updates",
+        "Supply either an Updates adapter or a materialized Updates artifact, not both.",
+        "oneOf",
+      );
+    }
+    if (
+      hasUpdatesRoute &&
+      suppliedUpdates === undefined &&
+      suppliedUpdatesData === undefined
+    ) {
       return failure(
         "next.updates.required",
         "/updates",
@@ -1464,7 +3572,11 @@ export async function createPublicationNextApplication(
         "required",
       );
     }
-    if (!hasUpdatesRoute && suppliedUpdates !== undefined) {
+    if (
+      !hasUpdatesRoute &&
+      (suppliedUpdates !== undefined ||
+        suppliedUpdatesData !== undefined)
+    ) {
       return failure(
         "next.updates.unexpected",
         "/updates",
@@ -1488,6 +3600,15 @@ export async function createPublicationNextApplication(
         return updatesResult;
       }
       configuredUpdates = updatesResult.value;
+    } else if (suppliedUpdatesData !== undefined) {
+      const updatesResult = resolveUpdatesData(
+        suppliedUpdatesData,
+        reader,
+      );
+      if (!updatesResult.valid) {
+        return updatesResult;
+      }
+      configuredUpdates = updatesResult.value;
     }
     const resolver = pageResolver(reader, routePlan);
     const errorIdentityResult =
@@ -1501,42 +3622,45 @@ export async function createPublicationNextApplication(
     }
     let updatesState: ResolvedUpdatesState | null = null;
     if (configuredUpdates !== null) {
-      const updatesRouteIndex = reader.routes.active.findIndex(
-        ({ target }) => target.kind === "updates",
-      );
-      const updatesParams =
-        routePlan.staticParams[updatesRouteIndex];
-      const updatesPage =
-        updatesParams === undefined
-          ? Object.freeze({
-              status: "invalid" as const,
-              issue: "updates-route",
-            })
-          : resolver.resolve(updatesParams.segments);
-      if (
-        updatesPage.status !== "resolved" ||
-        updatesPage.page.kind !== "updates"
-      ) {
-        return failure(
-          "next.updates.route_invalid",
-          "/routes/active",
-          "The declared Updates route could not resolve to its closed page model.",
-          "route",
+      const views = new Map<string, PublisherNextUpdatesView>();
+      for (const route of reader.routes.active) {
+        if (route.target.kind !== "updates") {
+          continue;
+        }
+        const updatesPage = resolver.resolve(
+          route.path === "/"
+            ? undefined
+            : route.path
+                .slice(1, route.path.endsWith("/") ? -1 : undefined)
+                .split("/")
+                .map(decodeURIComponent),
         );
-      }
-      const loaded = await loadUpdatesView(
-        configuredUpdates.instance,
-        updatesPage.page,
-        updatesInternalHrefs(reader),
-      );
-      if (!loaded.valid) {
-        return loaded;
+        if (
+          updatesPage.status !== "resolved" ||
+          updatesPage.page.kind !== "updates"
+        ) {
+          return failure(
+            "next.updates.route_invalid",
+            "/routes/active",
+            "A declared Updates route could not resolve to its closed page model.",
+            "route",
+          );
+        }
+        const loaded = await loadUpdatesView(
+          configuredUpdates.instance,
+          updatesPage.page,
+          updatesInternalHrefs(reader),
+        );
+        if (!loaded.valid) {
+          return loaded;
+        }
+        views.set(updatesPage.page.viewId, loaded.value);
       }
       updatesState = Object.freeze({
         ...configuredUpdates,
-        view: loaded.value,
+        views,
         viewHash: hashCanonicalJson(
-          loaded.value as unknown as JSONValue,
+          Object.fromEntries(views) as unknown as JSONValue,
         ),
       });
     }
@@ -1544,12 +3668,48 @@ export async function createPublicationNextApplication(
       reader,
       routePlan,
     );
+    const extensionRequestHandler = createExtensionRequestHandler(
+      extensions,
+    );
     const artifact = createApplicationArtifact(
       reader,
       themeResult.value,
       updatesState,
+      readerStateBootstrap,
+      extensions,
+      sync,
       continuity,
     );
+    const offlineCatalog = createReaderOfflineCatalog({
+      reader,
+      rendererBuildId: artifact.manifest.buildId,
+      catalogHref: `/publication-reader-offline.json?rendererBuildId=${encodeURIComponent(artifact.manifest.buildId)}`,
+      sharedResources: Object.freeze([
+        Object.freeze({
+          href: "/publication-reader-search.json",
+          kind: "data" as const,
+        }),
+        Object.freeze({
+          href: "/publication-reader-progress.json",
+          kind: "data" as const,
+        }),
+        ...(narration === null
+          ? []
+          : [Object.freeze({
+              href: "/publication-audio.json",
+              kind: "data" as const,
+            })]),
+      ]),
+      ...(narration === null || narrationCatalogHash === null
+        ? {}
+        : {
+            narration: {
+              catalogHash: narrationCatalogHash,
+              envelope: narration,
+            },
+          }),
+    });
+    const offlineCatalogText = serializeReaderOfflineCatalog(offlineCatalog);
 
     const renderPage = async (
       page: PublisherNextPage,
@@ -1561,12 +3721,52 @@ export async function createPublicationNextApplication(
       }
       const updatesView =
         page.kind === "updates"
-          ? (updatesState?.view ?? null)
+          ? (() => {
+              const view = updatesState?.views.get(page.viewId);
+              if (view === undefined) {
+                return null;
+              }
+              if (page.pageSize === undefined) {
+                return view;
+              }
+              const start = (page.pageNumber - 1) * page.pageSize;
+              return Object.freeze({
+                ...view,
+                entries: Object.freeze(
+                  view.entries.slice(start, start + page.pageSize),
+                ),
+              });
+            })()
           : null;
+      const beforeMain = await renderExtensionSlot(
+        extensions,
+        "page.before-main",
+        page,
+      );
+      const afterMain = await renderExtensionSlot(
+        extensions,
+        "page.after-main",
+        page,
+      );
+      const clientExtensions = renderExtensionClients(
+        extensions,
+        page,
+      );
+      const extensionRouteBody = page.kind === "extension"
+        ? await renderExtensionRoute(extensions, page)
+        : undefined;
       return PublisherPageView({
+        afterMain,
+        beforeMain,
+        clientExtensions,
+        ...(extensionRouteBody === undefined
+          ? {}
+          : { extensionRouteBody }),
         homePath: resolver.homePath,
         markdownForBlock,
         page,
+        readerBuildId: reader.buildId,
+        sync,
         theme: themeResult.value.instance,
         updates: updatesView,
       });
@@ -1603,7 +3803,12 @@ export async function createPublicationNextApplication(
       if (resolved.status !== "resolved") {
         notFound();
       }
-      return metadataForPage(resolved.page);
+      return metadataForPage(
+        resolved.page,
+        resolved.page.kind === "updates"
+          ? updatesState?.views.get(resolved.page.viewId)
+          : undefined,
+      );
     };
     const rootProps = Object.freeze({
       params: Promise.resolve(Object.freeze({})),
@@ -1618,6 +3823,8 @@ export async function createPublicationNextApplication(
       reader,
       manifest: artifact.manifest,
       artifact,
+      offlineCatalog,
+      offlineCatalogText,
       theme: themeResult.value.instance,
       errorIdentity: errorIdentityResult.value,
       slashPolicy: routePlan.slashPolicy,
@@ -1636,8 +3843,43 @@ export async function createPublicationNextApplication(
         children,
       }: PublisherNextRootLayoutProps): ReactElement {
         return (
-          <html lang={reader.publication.language}>
-            <body>{children}</body>
+          <html
+            lang={reader.publication.language}
+            suppressHydrationWarning
+          >
+            <head>
+              <PublisherReaderPrepaint
+                publicationId={reader.publicationId}
+                {...(readerStateBootstrap === null
+                  ? {}
+                  : {
+                      readerStateBootstrapSource:
+                        readerStateBootstrap.script,
+                    })}
+                readerFontFamilies={
+                  themeResult.value.instance.tokens.typography
+                    .readerFontFamilies
+                }
+              />
+            </head>
+            <body>
+              <PublisherReaderOfflineProvider
+                catalogPath={offlineCatalog.catalogHref}
+                publicationId={reader.publicationId}
+                readerBuildId={reader.buildId}
+                rendererBuildId={artifact.manifest.buildId}
+              >
+                <PublisherReaderNarrationProvider
+                  audioPath="/publication-audio.json"
+                  progressPath="/publication-reader-progress.json"
+                  publicationId={reader.publicationId}
+                  readerBuildId={reader.buildId}
+                  themeStyle={publisherNextThemeStyle(themeResult.value.instance)}
+                >
+                  {children}
+                </PublisherReaderNarrationProvider>
+              </PublisherReaderOfflineProvider>
+            </body>
           </html>
         );
       },
@@ -1649,7 +3891,9 @@ export async function createPublicationNextApplication(
         ),
       generateRootMetadata: () => generateMetadata(rootProps),
       generateMetadata,
-      handleRequest: continuity.handleRequest,
+      handleRequest: async (request: Request) =>
+        continuity.handleRequest(request) ??
+        extensionRequestHandler(request),
       createNextConfig: (baseConfig?: NextConfig) =>
         createPublisherNextConfig(routePlan, baseConfig),
     });

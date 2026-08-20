@@ -218,10 +218,10 @@ test("every digest the guide prints is one the engine produces", async () => {
   //
   // So every sha256 the guide prints in full is checked against what the engine
   // actually produces for the publication the guide tells authors to copy.
-  const { buildPublicationReader } = await import(
-    "../packages/publisher/dist/node.js"
+  const { buildFixturePublicationReader } = await import(
+    "./extension-fixture.mjs"
   );
-  const built = await buildPublicationReader({
+  const built = await buildFixturePublicationReader({
     publicationRoot: realpathSync(
       fileURLToPath(
         new URL("../fixtures/canonical-tide-tables", import.meta.url),

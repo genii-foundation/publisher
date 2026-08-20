@@ -15,21 +15,32 @@ import type {
   ReaderBlock,
   ReaderPublicationIdentity,
   ReaderSection,
+  SyncEnvelope,
   ReaderWork,
+  Sha256Digest,
 } from "@genii-foundation/publisher-schema";
+import {
+  createReaderNarrationSectionTextProfile,
+} from "@genii-foundation/publisher-reader/narration";
 import {
   createElement,
   type ReactElement,
   type ReactNode,
 } from "react";
 
+import {
+  PublisherReaderRail,
+  type PublisherReaderOutlineEntry,
+} from "../client/reader-rail.js";
 import type {
   PublisherNextPage,
   PublisherNextThemeInstance,
+  PublisherNextUpdatesPage,
   PublisherNextUpdatesView,
 } from "../types.js";
 import { PublisherAttribution } from "./attribution.js";
 import {
+  PublisherLinkableHeading,
   PublisherMarkdownBlock,
   PublisherMarkdownInline,
 } from "./markdown.js";
@@ -100,6 +111,67 @@ function owningHeading(
     : null;
 }
 
+function sectionHref(
+  workRoute: string,
+  section: ReaderSection,
+): string {
+  if (section.readerAddress === null) {
+    return workRoute;
+  }
+  return `${section.readerAddress.path}${
+    section.readerAddress.anchor === undefined
+      ? ""
+      : `#${section.readerAddress.anchor}`
+  }`;
+}
+
+function readerOutline(page: PublisherNextPage): readonly PublisherReaderOutlineEntry[] {
+  const work = page.kind === "work" || page.kind === "section"
+    ? page.work
+    : null;
+  if (work === null) return Object.freeze([]);
+  return Object.freeze(
+    work.sections
+      .filter((section) => section.navigable)
+      .map((section) => Object.freeze({
+        id: section.id,
+        title: section.title,
+        href: sectionHref(work.route, section),
+        depth: section.depth,
+      })),
+  );
+}
+
+function readerSectionTrail(
+  work: ReaderWork,
+  section: ReaderSection,
+): readonly ReaderSection[] {
+  const byId = new Map(work.sections.map((candidate) => [candidate.id, candidate]));
+  const reversed: ReaderSection[] = [];
+  const seen = new Set<string>();
+  let current: ReaderSection | undefined = section;
+  while (current !== undefined && !seen.has(current.id)) {
+    reversed.push(current);
+    seen.add(current.id);
+    current = current.parentId === null
+      ? undefined
+      : byId.get(current.parentId);
+  }
+  return Object.freeze(reversed.reverse());
+}
+
+function readerBreadcrumbs(page: PublisherNextPage): readonly PublisherReaderOutlineEntry[] {
+  if (page.kind !== "section") return Object.freeze([]);
+  return Object.freeze(readerSectionTrail(page.work, page.section).map((section) =>
+    Object.freeze({
+      id: section.id,
+      title: section.title,
+      href: sectionHref(page.work.route, section),
+      depth: section.depth,
+    })
+  ));
+}
+
 function SectionContent({
   assetHrefs,
   headingLevel,
@@ -128,39 +200,43 @@ function SectionContent({
       ? headingBlock.domId
       : null;
   const omittedBlockId = skipBlockId ?? headingBlock?.id;
+  const narrationProfile = createReaderNarrationSectionTextProfile(section);
   return (
     <section
       className="publisher-manuscript-section"
       data-publisher-section={section.id}
+      data-publisher-narration-body-words={narrationProfile.bodyWordCount}
+      data-publisher-narration-text-characters={narrationProfile.textCharacters}
+      data-publisher-narration-title-words={narrationProfile.titleWordCount}
       {...(ownedDomId === null ? {} : { id: ownedDomId })}
     >
       {headingLevel === undefined
         ? null
-        : createElement(
-            `h${Math.min(6, Math.max(2, headingLevel))}`,
-            {
-              className: "publisher-section-title",
-              ...(headingBlock === null
+        : (
+            <PublisherLinkableHeading
+              block={headingBlock}
+              className="publisher-section-title"
+              level={
+                Math.min(6, Math.max(2, headingLevel)) as
+                  2 | 3 | 4 | 5 | 6
+              }
+              {...(headingBlockDomId === null
                 ? {}
-                : {
-                    "data-publisher-block": headingBlock.id,
-                  }),
-              ...(headingBlockDomId === null
-                ? {}
-                : { id: headingBlockDomId }),
-            },
-            headingBlock === null ? (
-              section.title
-            ) : (
-              <PublisherMarkdownInline
-                assetHrefs={assetHrefs}
-                markdown={markdownForBlock(
-                  workId,
-                  section.id,
-                  headingBlock,
-                )}
-              />
-            ),
+                : { id: headingBlockDomId })}
+            >
+              {headingBlock === null ? (
+                section.title
+              ) : (
+                <PublisherMarkdownInline
+                  assetHrefs={assetHrefs}
+                  markdown={markdownForBlock(
+                    workId,
+                    section.id,
+                    headingBlock,
+                  )}
+                />
+              )}
+            </PublisherLinkableHeading>
           )}
       {section.blocks.flatMap((block) =>
         block.id === omittedBlockId
@@ -175,6 +251,7 @@ function SectionContent({
                   section.id,
                   block,
                 )}
+                narrationWords
                 renderedPath={renderedPath}
               />,
             ],
@@ -267,10 +344,9 @@ function WorkPage({
       lang={page.work.language}
     >
       <header>
-        <h1
-          {...(titleBlock === null
-            ? {}
-            : { "data-publisher-block": titleBlock.id })}
+        <PublisherLinkableHeading
+          block={titleBlock}
+          level={1}
           {...(titleBlockDomId === null
             ? {}
             : { id: titleBlockDomId })}
@@ -287,7 +363,7 @@ function WorkPage({
               )}
             />
           )}
-        </h1>
+        </PublisherLinkableHeading>
         {page.work.subtitle === undefined ? null : (
           <p className="publisher-work-subtitle">{page.work.subtitle}</p>
         )}
@@ -352,19 +428,11 @@ function SectionPage({
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: Extract<PublisherNextPage, { kind: "section" }>;
 }): ReactElement {
-  const sectionHref = (section: ReaderSection): string | null => {
-    if (section.readerAddress === null) {
-      return null;
-    }
-    return `${section.readerAddress.path}${
-      section.readerAddress.anchor === undefined
-        ? ""
-        : `#${section.readerAddress.anchor}`
-    }`;
-  };
   const previousHref =
-    page.previous === null ? null : sectionHref(page.previous);
-  const nextHref = page.next === null ? null : sectionHref(page.next);
+    page.previous === null ? null : sectionHref(page.work.route, page.previous);
+  const nextHref = page.next === null
+    ? null
+    : sectionHref(page.work.route, page.next);
   const headingBlock = owningHeading(page.section);
   const headingDomId =
     headingBlock?.readerAddress?.path === page.path
@@ -381,13 +449,23 @@ function SectionPage({
       lang={page.work.language}
     >
       <header>
-        <p>
-          <a href={page.work.route}>{page.work.title}</a>
-        </p>
-        <h1
-          {...(headingBlock === null
-            ? {}
-            : { "data-publisher-block": headingBlock.id })}
+        <nav className="publisher-breadcrumbs" aria-label="Breadcrumb">
+          <ol>
+            <li><a href={page.work.route}>{page.work.title}</a></li>
+            {readerSectionTrail(page.work, page.section).map((section) => (
+              <li key={section.id}>
+                {section.id === page.section.id ? (
+                  <span aria-current="page">{section.title}</span>
+                ) : (
+                  <a href={sectionHref(page.work.route, section)}>{section.title}</a>
+                )}
+              </li>
+            ))}
+          </ol>
+        </nav>
+        <PublisherLinkableHeading
+          block={headingBlock}
+          level={1}
           {...(headingDomId === null
             ? {}
             : { id: headingDomId })}
@@ -404,7 +482,7 @@ function SectionPage({
               )}
             />
           )}
-        </h1>
+        </PublisherLinkableHeading>
       </header>
       <div className="publisher-manuscript">
         <SectionContent
@@ -448,8 +526,10 @@ function SectionPage({
 
 function UpdatesPage({
   updates,
+  page,
 }: {
   readonly updates: PublisherNextUpdatesView;
+  readonly page: PublisherNextUpdatesPage;
 }): ReactElement {
   return (
     <section className="publisher-updates">
@@ -492,15 +572,27 @@ function UpdatesPage({
           ))}
         </ol>
       )}
+      {page.previousPath === undefined && page.nextPath === undefined ? null : (
+        <nav aria-label="Updates pagination">
+          {page.previousPath === undefined ? null : (
+            <a href={page.previousPath}>Previous updates</a>
+          )}
+          {page.nextPath === undefined ? null : (
+            <a href={page.nextPath}>Next updates</a>
+          )}
+        </nav>
+      )}
     </section>
   );
 }
 
 async function PageBody({
+  extensionRouteBody,
   markdownForBlock,
   page,
   updates,
 }: {
+  readonly extensionRouteBody?: ReactNode;
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: PublisherNextPage;
   readonly updates: PublisherNextUpdatesView | null;
@@ -530,30 +622,66 @@ async function PageBody({
           "The Updates route has no configured renderer.",
         );
       }
-      return <UpdatesPage updates={updates} />;
+      return <UpdatesPage updates={updates} page={page} />;
+    case "extension":
+      if (extensionRouteBody === undefined) {
+        throw new TypeError(
+          "The extension route has no configured host renderer.",
+        );
+      }
+      return (
+        <section data-publisher-extension-route={page.routeId}>
+          <h1>{page.title}</h1>
+          {page.description === undefined ? null : (
+            <p>{page.description}</p>
+          )}
+          {extensionRouteBody}
+        </section>
+      );
   }
 }
 
 export interface PublisherPageViewProps {
+  readonly afterMain?: ReactNode;
+  readonly beforeMain?: ReactNode;
+  readonly clientExtensions?: ReactNode;
+  readonly extensionRouteBody?: ReactNode;
   readonly homePath: string;
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: PublisherNextPage;
+  readonly readerBuildId: Sha256Digest;
+  readonly sync: SyncEnvelope | null;
   readonly theme: PublisherNextThemeInstance;
   readonly updates: PublisherNextUpdatesView | null;
 }
 
 interface PublisherPageShellProps {
+  readonly afterMain?: ReactNode;
+  readonly beforeMain?: ReactNode;
+  readonly clientExtensions?: ReactNode;
   readonly body: ReactNode;
   readonly homePath: string;
   readonly pageKind: PublisherNextPage["kind"] | "not-found";
+  readonly reader?: {
+    readonly buildId: Sha256Digest;
+    readonly breadcrumbs: readonly PublisherReaderOutlineEntry[];
+    readonly currentSection?: ReaderSection;
+    readonly currentWorkId?: string;
+    readonly outline: readonly PublisherReaderOutlineEntry[];
+    readonly sync: SyncEnvelope | null;
+  };
   readonly publication: ReaderPublicationIdentity;
   readonly theme: PublisherNextThemeInstance;
 }
 
 function PublisherPageShell({
+  afterMain,
+  beforeMain,
+  clientExtensions,
   body,
   homePath,
   pageKind,
+  reader,
   publication,
   theme,
 }: PublisherPageShellProps): ReactElement {
@@ -574,7 +702,37 @@ function PublisherPageShell({
         homePath={homePath}
         title={publication.title}
       />
-      <main id="publisher:main">{body}</main>
+      {reader === undefined ? null : (
+        <PublisherReaderRail
+          {...(reader.currentSection === undefined
+            ? {}
+            : {
+                currentSection: reader.currentSection,
+                currentWorkId: reader.currentWorkId,
+              })}
+          outline={reader.outline}
+          breadcrumbs={reader.breadcrumbs}
+          publicationId={publication.id}
+          publicationTitle={publication.title}
+          readerBuildId={reader.buildId}
+          defaultReaderFontFamilyId={
+            theme.tokens.typography.defaultReaderFontFamilyId
+          }
+          readerFontFamilies={
+            theme.tokens.typography.readerFontFamilies
+          }
+          audioPath="/publication-audio.json"
+          progressPath="/publication-reader-progress.json"
+          searchPath="/publication-reader-search.json"
+          sync={reader.sync}
+        />
+      )}
+      <main id="publisher:main">
+        {beforeMain}
+        {body}
+        {afterMain}
+        {clientExtensions}
+      </main>
       <PublisherAttribution
         sourceCodeUrl={publication.attribution.sourceCodeUrl}
       />
@@ -583,23 +741,42 @@ function PublisherPageShell({
 }
 
 export async function PublisherPageView({
+  afterMain,
+  beforeMain,
+  clientExtensions,
+  extensionRouteBody,
   homePath,
   markdownForBlock,
   page,
+  readerBuildId,
+  sync,
   theme,
   updates,
 }: PublisherPageViewProps): Promise<ReactElement> {
   const body = await PageBody({
+    extensionRouteBody,
     markdownForBlock,
     page,
     updates,
   });
   return (
     <PublisherPageShell
+      afterMain={afterMain}
+      beforeMain={beforeMain}
+      clientExtensions={clientExtensions}
       body={body}
       homePath={homePath}
       pageKind={page.kind}
       publication={page.publication}
+      reader={{
+        buildId: readerBuildId,
+        ...(page.kind === "section"
+          ? { currentSection: page.section, currentWorkId: page.work.id }
+          : {}),
+        outline: readerOutline(page),
+        breadcrumbs: readerBreadcrumbs(page),
+        sync,
+      }}
       theme={theme}
     />
   );

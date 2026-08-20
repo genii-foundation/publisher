@@ -8,7 +8,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 
 The renderer owns:
 
-- the publication shell, safe Markdown renderer, and ordinary HTML anchors
+- the publication shell, safe Markdown renderer, ordinary HTML anchors, adjacent heading actions, and accessible table regions
 - home, work, collection, section, and optional Updates page resolution
 - the persistent linked GENII Publisher footer and publication source link
 - one closed theme-token API
@@ -16,7 +16,65 @@ The renderer owns:
 - canonical trailing-slash redirects
 - deterministic application-manifest identity
 
-A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. This first renderer release does not execute extensions, ship client state, play audio, synchronize data, or claim static-export support.
+A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state, lazy default narration playback, optional provider-neutral synchronization, two engine-owned server extension slots, one isolated client extension mount, declarative extension pages, and closed extension request handlers. It does not claim static export support.
+
+Progress and complete bookmark documents share one publication-scoped reactive
+store. Its atomic updater always sees the latest in-memory snapshot. Same-tab
+writers notify each other directly, native storage events converge separate
+tabs, and canonically equal replacements cause no write or render churn. A
+stable empty server snapshot preserves hydration, while unavailable browser
+persistence leaves the current tab's in-memory reading state usable.
+
+On phones, the Reader rail stays fixed to the viewport and scrolls its native
+action buttons internally. At 320 pixels, maximum Reader text size cannot widen
+the page or reduce the controls below 44 pixels. Listen remains directly visible,
+and keyboard focus brings every secondary action into view.
+
+The root layout applies one bounded, publication-scoped preference document
+before body paint. It accepts only the complete Reader preference schema and
+the renderer's closed value policy. Invalid or unavailable storage leaves the
+server defaults untouched. The hydrated Reader then parses the same document
+through the framework-neutral contract and owns every later change. See
+[ADR 0055](../../docs/architecture/0055-reader-preference-prepaint.md).
+
+Passage selection and bookmark markers share one renderer text coordinate
+system. It excludes adjacent controls and status text from canonical manuscript
+offsets and measured rectangles, while leaving those controls available to
+assistive technology. Marker geometry therefore remains stable as transient
+Reader interface text changes.
+
+The default Listen panel fetches the build-bound narration envelope only when a
+reader opens it. One persistent media element supplies play, pause, seek, bounded
+speed, remembered voice choice, 15-second back and forward jumps, previous and
+next movement, and automatic queue continuation. Playback attempt identity keeps
+an older rejected play promise from changing a newer clip's state. It joins
+section identities to the lazy progress catalog for human
+titles and canonical destinations, while exact duration and coverage remain
+honest when clips omit duration. Closing the panel does not destroy playback.
+When a clip declares timings, playback starts before one bounded sidecar request.
+The result must match the exact clip and spoken-text profile before it can mark
+an existing server-rendered word. No duplicate manuscript text is introduced,
+and timing failure cannot stop audio or reading. The client export offers a
+cancelable, publication-bound section playback request. The player consumes it
+only after the requested section and destination exactly match the selected
+voice and lazy build-bound progress catalog. A root-layout provider owns the
+media element and open panel while each routed rail controls that persistent
+state. Playback therefore survives current-section and cross-route Next.js
+navigation. Ordinary link behavior wins when the player cannot consume the
+request.
+
+The Offline panel downloads one complete immutable package per work. Each
+package includes its publication documents, lazy Reader data, assets, discovered
+Next.js dependencies, and every declared narration clip and timing sidecar. The
+browser stages and verifies a replacement before switching one active metadata
+record, so failure leaves the previous complete version usable. A work without
+narration remains a complete text package. The service worker is registered only
+after an explicit download. It leaves API, authentication, and framework flight
+requests alone, uses network-first document and asset delivery, and falls back
+to the active package before the runtime cache. Disconnected links request full
+documents. Public search is limited to installed works, local bookmarks remain
+available, and cached audio uses temporary revoked blob URLs for reliable media
+playback. See [ADR 0046](../../docs/architecture/0046-atomic-offline-publication-packages.md).
 
 ## Supported toolchain
 
@@ -32,14 +90,15 @@ The reference author host pins the complete renderer toolchain. Do not use versi
   },
   "packageManager": "npm@10.9.0",
   "overrides": {
-    "next@16.2.12": {
+    "next@16.3.1": {
+      "nanoid": "3.3.18",
       "postcss": "8.5.24",
       "sharp": "0.35.3"
     }
   },
   "dependencies": {
     "@genii-foundation/publisher-next": "0.1.0-alpha.0",
-    "next": "16.2.12",
+    "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -54,7 +113,7 @@ The reference author host pins the complete renderer toolchain. Do not use versi
 
 The package also accepts Node.js 24 and 26 through its declared engine range, and CI verifies those major lines. Node.js 22.12.0 and npm 10.9.0 are the exact reference-host pins.
 
-The `overrides` object is mandatory. Package-manager overrides declared by a dependency do not propagate into the consuming root. Copy `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` from the installed renderer into the root `package.json`, regenerate the root lockfile, inspect the diff, and commit it. The clean-host proof generates that lockfile from one clean resolution, reinstalls it offline with `npm ci`, resolves PostCSS 8.5.24 and sharp 0.35.3 beneath Next.js 16.2.12, produces a real WebP through Next Image Optimization, and reports zero production vulnerabilities. An engine upgrade that changes this exported object is a host migration, not a casual dependency bump.
+The `overrides` object is mandatory. Package-manager overrides declared by a dependency do not propagate into the consuming root. Copy `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` from the installed renderer into the root `package.json`, regenerate the root lockfile, inspect the diff, and commit it. The clean-host proof generates that lockfile from one clean resolution, reinstalls it offline with `npm ci`, resolves Nano ID 3.3.18, PostCSS 8.5.24, and Sharp 0.35.3 beneath Next.js 16.3.1, produces a real WebP through Next Image Optimization, and reports zero production vulnerabilities. An engine upgrade that changes this exported object is a host migration, not a casual dependency bump.
 
 ## Thin host
 
@@ -116,8 +175,14 @@ Use the engine layout and structural stylesheet.
 ```tsx
 // app/layout.tsx
 import "@genii-foundation/publisher-next/styles.css";
+import type { Viewport } from "next";
 
 import { publisher } from "../publisher.mjs";
+
+export const viewport: Viewport = {
+  initialScale: 1,
+  width: "device-width",
+};
 
 export default publisher.RootLayout;
 ```
@@ -131,44 +196,26 @@ import { publisher } from "../publisher.mjs";
 export default publisher.NotFoundPage;
 ```
 
-Supply one public, manuscript-free identity for every framework error surface. It must contain only the publication identity, home route, attribution fields, and configured theme tokens needed to render the error page. It must not import `publisher.mjs`, the reader artifact, manuscript data, or the server entry.
+Supply one public, manuscript-free identity for every framework error surface. The generated host reads publication identity from `publication-public-identity.json` and configures the same explicit theme module as the server application. It never imports the Reader artifact, manuscript data, provider configuration, or the server entry into a client error boundary.
 
 ```ts
 // publisher-error-identity.ts
 import {
   createPublisherNextErrorIdentity,
 } from "@genii-foundation/publisher-next/client";
-import {
-  defaultPublisherNextTheme,
-} from "@genii-foundation/publisher-next/theme/default";
+import theme from "genii-publisher:theme";
+import publicIdentity from "./publication-public-identity.json" with { type: "json" };
 
-const theme = defaultPublisherNextTheme.configure({});
+const configuredTheme = theme.implementation.configure(theme.config);
 
-if (!theme.valid) {
-  throw new Error(JSON.stringify(theme.diagnostics));
+if (!configuredTheme.valid) {
+  throw new Error(JSON.stringify(configuredTheme.diagnostics));
 }
 
 const identity = createPublisherNextErrorIdentity({
-  homePath: "/",
-  publication: {
-    id: "example-publication",
-    title: "Example Publication",
-    description: "An example publication.",
-    language: "en",
-    canonicalUrl: "https://publication.example",
-    publisher: {
-      name: "Example Press",
-      url: "https://press.example"
-    },
-    attribution: {
-      placement: "footer",
-      copyright: "Copyright 2026 GENII Foundation",
-      text: "Published with GENII Publisher",
-      url: "https://publisher.genii.foundation",
-      sourceCodeUrl: "https://github.com/example/publication"
-    }
-  },
-  theme: theme.value
+  homePath: publicIdentity.homePath,
+  publication: publicIdentity.publication,
+  theme: configuredTheme.value
 });
 
 if (!identity.valid) {
@@ -178,7 +225,7 @@ if (!identity.valid) {
 export const publisherErrorIdentity = identity.value;
 ```
 
-Generate those public values from `publisher.errorIdentity`, which is derived from the validated reader and resolved theme. The client-safe factory rejects changed attribution, missing or unsafe source URLs, malformed home routes, and invalid theme tokens. Author tooling may serialize the already configured identity into this module, then pass the serialized data through the factory without shipping manuscript data or server configuration into the browser boundary.
+`genii-publisher build` derives the versioned public identity artifact from the validated Reader. Its build ID is the exact Reader build ID. The client-safe factory rejects changed attribution, missing or unsafe source URLs, malformed home routes, and invalid theme tokens. Build and status track this artifact separately, so a publication cannot update its Reader while quietly retaining an old error identity.
 
 Expose the client-safe App Router error boundaries:
 
@@ -340,8 +387,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { publisher } from "./publisher.mjs";
 
-export function proxy(request: NextRequest) {
-  return publisher.handleRequest(request) ?? NextResponse.next();
+export async function proxy(request: NextRequest) {
+  return (await publisher.handleRequest(request)) ?? NextResponse.next();
 }
 ```
 
@@ -408,6 +455,7 @@ Check in the corresponding Next declaration file:
 /// <reference types="next/image-types/global" />
 /// <reference types="next/navigation-types/compat/navigation" />
 import "./.next/types/routes.d.ts";
+import "./.next/types/root-params.d.ts";
 
 // NOTE: This file should not be edited
 // see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
@@ -426,6 +474,19 @@ The renderer dispatches only from validated reader route targets. It does not in
 The home catalog lists published works and collections. Unlisted and archived works remain available at their declared direct routes. Preview reader envelopes may also render draft routes, but public reader envelopes omit drafts before this package receives them.
 
 Every work route contains the server-rendered manuscript. Section routes render focused sections with ordinary DOM IDs and adjacent-section navigation. Reader text remains available without client JavaScript.
+
+Addressable manuscript headings keep their exact server-rendered level, text,
+block identity, and DOM anchor. After hydration, one adjacent button copies the
+canonical absolute heading URL and reports success or failure without becoming
+part of the heading text. The button remains hidden without JavaScript.
+
+An adapter-classified `table` block with bounded pipe syntax, one header row,
+and one delimiter row renders as a named, keyboard-focusable horizontal region.
+Column headers retain `scope="col"`, cell alignment follows the delimiter, and
+inline content uses the same safe Markdown, focus, narration, link, image, and
+HTML refusal behavior as other blocks. Malformed or unequal rows remain ordinary
+manuscript text. The author adapter owns the plain block text used by search and
+narration. See [ADR 0047](../../docs/architecture/0047-accessible-manuscript-extensions.md).
 
 Validated `block-markdown` source links become ordinary anchors in manuscript blocks and normalized heading content. Semantic relationships remain reader data and do not become visible links. Application creation fails when a source range crosses Markdown structure or otherwise cannot be represented without changing the manuscript.
 
@@ -446,6 +507,10 @@ const theme = resolveDefaultPublisherNextTheme({
 
 Custom theme packages return the complete closed token shape. The renderer rejects extra fields, accessors, mutable aliases, invalid CSS values, unreadable contrast, incompatible version ranges, and dimensions that could collapse the publication surface.
 
+Theme API 2.0 requires the theme to declare the ordered Reader font choices and
+their default. Themes written for API 1.0 must add this policy and update their
+adapter version before use.
+
 A separately published theme package can expose this complete adapter:
 
 ```ts
@@ -457,7 +522,7 @@ import {
 
 const implementation: PublisherNextTheme = {
   kind: "genii.publisher.next-theme",
-  apiVersion: "1.0",
+  apiVersion: "2.0",
   configure() {
     return validatePublisherNextThemeInstance({
       tokens: {
@@ -475,7 +540,20 @@ const implementation: PublisherNextTheme = {
           headingFamily: "Avenir Next, Segoe UI, sans-serif",
           monoFamily: "SFMono-Regular, Consolas, monospace",
           baseSize: "1.0625rem",
-          lineHeight: 1.72
+          lineHeight: 1.72,
+          defaultReaderFontFamilyId: "serif",
+          readerFontFamilies: [
+            {
+              id: "serif",
+              label: "Serif",
+              family: "Charter, Cambria, serif"
+            },
+            {
+              id: "field-sans",
+              label: "Field sans",
+              family: "Avenir Next, Segoe UI, sans-serif"
+            }
+          ]
         },
         layout: {
           readingMeasure: "68ch",
@@ -499,11 +577,158 @@ export const theme: ResolvedPublisherNextTheme = {
 
 The host imports that package explicitly and passes `theme` to `createPublicationNextApplication`. Manifest package strings remain identity data, never import authority.
 
+The generated host provides the bundled theme by default. Select the separately
+installed package in author-owned host code:
+
+```js
+// publisher.theme.mjs
+export { theme as default } from "@example/publisher-theme";
+```
+
+The lifecycle never creates or rewrites this file. Next resolves it through the
+closed `genii-publisher:theme` host alias, and both the server application and
+client-safe error identity use the same adapter. A custom theme package must be
+browser safe because its configuration function also runs in client error
+chunks.
+
+## Extensions
+
+The official renderer implements `renderer.slot` through two fixed server
+slots, `page.before-main` and `page.after-main`. It implements
+`renderer.client` through one fixed `page.client` mount after both server slots.
+All three sit inside the engine-owned `main` element and before the required
+attribution footer. The not-found and framework error surfaces do not invoke
+extensions.
+
+Install an extension package explicitly and register it in author-owned host
+code:
+
+```js
+// publisher.extensions.mjs
+import extension from "@example/publication-extension";
+
+export default Object.freeze([extension]);
+```
+
+The manifest package string is provenance, never import authority. The generated
+host loads `publication-extensions.json`, imports the author registry through
+`genii-publisher:extensions`, and passes both to
+`createPublicationNextApplication`. The renderer verifies exact publication,
+Reader build, registry order, package, version, grants, artifact hash, adapter
+API, and compatibility before rendering.
+
+A slot adapter receives only its slot name, page kind and path, public
+publication identity, optional work and section identity, and its own
+build-projected `serverData`. It never receives manuscript blocks, the Reader
+envelope, source evidence, another extension's data, provider configuration, or
+shell authority. The renderer wraps output in an engine-owned `aside` naming the
+extension and slot.
+
+A client adapter is an explicitly imported Client Component reference on the
+same renderer object:
+
+```js
+// client.js
+"use client";
+
+export function Client({ clientData, mount, page }) {
+  return <button type="button">{clientData.label}</button>;
+}
+```
+
+The engine mounts it only with a `renderer.client` grant. It receives
+`page.client`, the same narrow page context as server slots, and only its own
+build-projected `clientData`. It never receives `serverData`, manuscript blocks,
+the Reader envelope, another extension's data, provider configuration, or shell
+authority. An engine-owned wrapper names the extension and mount. An engine-owned
+client error boundary replaces a failed extension with a small unavailable
+message while preserving the manuscript and attribution.
+
+Browser projection data is public data. It may be serialized into server HTML
+and the React transport, but it is not compiled into the extension package.
+The packed proof requires the client module in browser chunks, keeps both
+projection sentinels out of those static chunks, hydrates a real interaction,
+and contains a deliberate client failure.
+
+With a `host.route` grant, the extension implementation may project an ordered
+list of canonical public page descriptors during the Publisher build. The
+official Next registration must also provide a compatible `host` adapter:
+
+```js
+host: {
+  kind: "genii.publisher.next-host-extension",
+  apiVersion: "1.0",
+  rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+  renderRoute({ page, serverData }) {
+    return <StationIndex data={page.data} station={serverData} />;
+  },
+}
+```
+
+The route projector receives only public publication identity, its own config
+and payloads, and its own server projection when separately granted. The host
+adapter receives only the issued immutable extension page and its own optional
+server data. Publisher owns the canonical path, metadata, static parameters,
+slash continuity, heading, shell, error surfaces, slots, client mount, and
+required attribution. Route data is server data and is not sent to client
+extension props.
+
+With a `host.handler` grant, the build implementation projects exact request
+descriptors inside `/api/extensions/<extension-id>`:
+
+```js
+implementation: {
+  kind: "genii.publisher.extension",
+  apiVersion: "1.0",
+  handlers() {
+    return {
+      valid: true,
+      diagnostics: [],
+      value: [{
+        id: "callback",
+        path: "/api/extensions/station-index/callback",
+        methods: ["POST"],
+        data: { operation: "refresh" },
+      }],
+    };
+  },
+}
+```
+
+The compatible official host adapter supplies `handleRequest`:
+
+```js
+host: {
+  kind: "genii.publisher.next-host-extension",
+  apiVersion: "1.0",
+  rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+  async handleRequest({ handler, request, serverData }) {
+    const payload = await request.json();
+    return Response.json({
+      operation: handler.data.operation,
+      publicationId: serverData.publicationId,
+      received: payload,
+    });
+  },
+}
+```
+
+Publisher matches the pathname exactly, enforces the declared methods, and
+reads at most 1,048,576 request body bytes before invoking the adapter. The
+adapter receives a detached standard Request, its immutable descriptor, and
+only its own optional server projection. It must return a standard Response.
+Thrown values, invalid responses, and framework control headers become a generic
+`500` without exposing the private failure. Unmatched paths fall through to the
+host.
+
+Capability grants decide which documented interface Publisher invokes, but
+they do not sandbox explicitly imported JavaScript.
+
 ## Updates
 
-If the reader declares an Updates route, the host must supply one compatible Updates adapter. If it does not declare that route, supplying an adapter is an error. GENII Publisher never fabricates publication history.
+If the reader declares an Updates route, the host must supply either one compatible Updates adapter or a validated Updates envelope bound to that Reader build. Supplying both is an error. The generated host uses the envelope written by the Publisher build, so no authoring adapter executes inside Next. GENII Publisher never fabricates publication history.
 
-The adapter loads a closed plain-data view once while the application is created. GENII Publisher validates and deeply freezes the result, hashes it into `manifest.updates.viewHash` and the application build identity, then renders every element itself. Repeated page renders reuse that snapshot. Adapters cannot return React nodes, metadata, scripts, styles, HTML, event handlers, or arbitrary element properties. Text that resembles markup remains escaped text.
+Each named view is loaded once while the application is created. GENII Publisher validates and freezes the result, hashes all views into `manifest.updates.viewHash` and the application build identity, then renders every element itself. A declared pagination template expands into static pages from page two onward, while the canonical route owns page one. Repeated page renders reuse the snapshot. Adapters cannot return React nodes, metadata, scripts, styles, HTML, event handlers, or arbitrary element properties. Text that resembles markup remains escaped text.
 
 ```ts
 import type {
@@ -558,6 +783,9 @@ const result = await createPublicationNextApplication({
 });
 ```
 
+Generated hosts instead pass the materialized envelope as `updatesData`. Its
+publication and Reader build identities must match exactly.
+
 ## Continuity
 
 `publisher.handleRequest` performs three exact operations before route rendering:
@@ -602,13 +830,92 @@ Canonical source: `https://github.com/genii-foundation/publisher`
 
 ## Dependency override and release evidence
 
-Next.js 16.2.12 otherwise resolves versions affected by three high-severity advisories:
+The verified Next.js 16.3.1 host graph still requires exact consuming-root
+overrides for three transitive packages covered by four high-severity advisories:
 
+- Nano ID 3.3.16 is affected by [GHSA-2v37-7h3g-55p8](https://github.com/advisories/GHSA-2v37-7h3g-55p8), patched in 3.3.18.
 - PostCSS 8.4.31 is affected by [GHSA-6g55-p6wh-862q](https://github.com/advisories/GHSA-6g55-p6wh-862q), patched in 8.5.12, and [GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849), patched in 8.5.18.
 - Optional sharp 0.34.5 is affected by [GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj), patched in 0.35.0.
 
-`PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` pins PostCSS 8.5.24 and sharp 0.35.3 inside the consuming root. The clean packed-host proof resolves once, performs a frozen offline reinstall from the generated lockfile, asserts those exact transitive versions and a loaded libvips version, reports zero production vulnerabilities, and requests an actual optimized WebP. This evidence closes the renderer's former transitive-dependency release gate while the exact override remains in force.
+`PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` pins Nano ID 3.3.18, PostCSS 8.5.24, and Sharp 0.35.3 inside the consuming root. The clean packed-host proof resolves once, performs a frozen offline reinstall from the generated lockfile, asserts those exact transitive versions and a loaded libvips version, reports zero production vulnerabilities, and requests an actual optimized WebP. This evidence closes the renderer's former transitive-dependency release gate while the exact override remains in force.
 
 The attributed framework-error gate is also closed. The package supplies separate client-safe error components, the complete host contract wires every required framework surface, and the automated proof checks static, runtime, and hydrated browser behavior.
+
+## Legacy Reader state
+
+An existing publication may register one temporary Reader state bootstrap in
+`publisher.config.ts`. The adapter is trusted author code. It configures on the
+server and returns a synchronous JavaScript function body for the document head.
+Publisher supplies a frozen publication ID, a report key, and target keys derived
+by the framework-neutral Reader contracts. The body runs before preference
+prepaint and before hydrated stores read local state.
+
+Bootstrap API 1.1 may also return a public projection from
+`createProjection(context)`. Publisher wraps that plain JSON object with its
+schema, publication ID, engine version, and exact Reader build ID, then passes
+the deeply frozen envelope to the browser function body as `projection`. The
+canonical envelope is limited to 8,388,608 UTF-8 bytes, depth 64, 100,000
+containers, and 1,000,000 entries. The final inline script has a separate
+16,777,216 byte limit. Its exact size multiplied by the static route count may
+not exceed 134,217,728 bytes. Projection data may contain only committed
+publication metadata and translation tables. Credentials,
+tokens, user identifiers, private Reader state, local storage values, cookies,
+request data, session data, and provider configuration are forbidden.
+
+The body must return a version 1.0 report with unique bounded `copied` and
+`refused` labels. It must preserve every legacy key, refuse lossy translations,
+leave an existing Publisher value unchanged, and be safe to run again. Publisher
+contains throws, rejects script escape sequences, limits source to 32,768 UTF-8
+bytes, and records a deterministic report without private values. The adapter
+identity, configuration hash, exact source hash, and optional projection
+descriptor contribute to application manifest 1.2 and its build ID.
+
+```ts
+import {
+  definePublisherNextHostConfig,
+} from "@genii-foundation/publisher-next/server/sync";
+import legacyState from "@example/publication-state-bootstrap";
+
+export default definePublisherNextHostConfig({
+  readerStateBootstrap: legacyState,
+});
+```
+
+Remove the adapter after the publication's declared compatibility and rollback
+window. Do not delete old browser keys as part of removal. See
+[ADR 0057](../../docs/architecture/0057-explicit-reader-state-bootstrap.md)
+and [ADR 0059](../../docs/architecture/0059-bounded-reader-state-projection.md).
+
+The generated host reserves `/api/auth/start`, `/api/auth/verify`,
+`/api/session`, `/api/sync`, `/auth/callback`, and `/api/account` for optional
+synchronization. Every route returns the same opaque 404 when the publication has
+no synchronization artifact. An author may select a matching provider through
+`publisher.config.ts`. The renderer validates provider identity and capabilities,
+owns input bounds, callback redirects, session and deletion responses, and rejects
+cross-origin state changes before provider code executes. Provider configuration
+and credentials remain server only.
+
+`GET /api/sync` reads the authenticated reader's state for the validated
+publication. `POST /api/sync` transfers bounded progress, bookmarks, consent,
+and engagement values for declared capabilities. The browser supplies neither a
+user ID nor a publication ID. Provider output is validated before it becomes a
+response, and provider failures collapse to one opaque unavailable result.
+
+When synchronization is declared, the default Reader adds an account panel. It
+records explicit versioned consent before requesting an email link, accepts a
+one-time code, reads the session, signs out, and requires separate confirmation
+for account deletion. After sign-in, it debounces local revisions, pauses while
+offline, retries bounded failures, reconciles progress and bookmark tombstones,
+and acknowledges bounded engagement batches through `/api/sync`. A newer remote
+schema freezes only its affected capability. Local progress and bookmarks remain
+available throughout.
+
+```ts
+import { definePublisherNextHostConfig } from "@genii-foundation/publisher-next/server/sync";
+
+export default definePublisherNextHostConfig({
+  syncProvider: yourProvider,
+});
+```
 
 These renderer-specific gates do not supersede the repository-level public release gates in the root README.

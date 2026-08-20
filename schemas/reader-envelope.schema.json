@@ -776,11 +776,35 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "kind"
+            "kind",
+            "viewId"
           ],
           "properties": {
             "kind": {
               "const": "updates"
+            },
+            "viewId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "pagination": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "pageSize"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 2,
+                  "maxLength": 2048
+                },
+                "pageSize": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              }
             }
           }
         },

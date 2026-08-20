@@ -17,7 +17,7 @@ scripts, what they require, and which gate currently stops them.
 - The engine lives in this repository. A publication lives in a separate, thin host repository.
 - The default layout is canonical and deliberately opinionated.
 - A declared-layout mode is a fully supported escape hatch for established repositories.
-- Publications can inject validated themes now. They can declare extension packages and explicit capability grants, while extension invocation remains 1.0 work.
+- Publications can inject validated themes and explicitly registered extensions. Build-time content, route, and handler projection, official Next server slots, isolated client mounts, declarative pages, and closed request handlers are implemented.
 - Works and collections are first-class protocol concepts.
 - The initial renderer uses Next.js. The content protocol remains framework neutral.
 - Audio and Supabase synchronization belong to the 1.0 scope as optional capabilities.
@@ -27,7 +27,7 @@ scripts, what they require, and which gate currently stops them.
 
 ## Ownership boundary
 
-GENII Publisher owns the generic schema, compiler, reader, renderer, optional adapters, migration framework, and validation contracts. The schema, compiler, reader, and initial renderer exist now. Optional adapters and the migration framework remain 1.0 work.
+GENII Publisher owns the generic schema, compiler, reader, renderer, optional adapters, migration framework, and validation contracts. Those package boundaries and their neutral proofs exist now. Public release infrastructure and reviewed Coherence adoption remain 1.0 work.
 
 Each publication repository owns its manuscripts, editorial evidence, assets, configuration, route continuity, deployment history, credentials, and provider state. A build or preview may read publication sources, but it must not modify them.
 
@@ -46,7 +46,7 @@ Migration and extraction decisions are recorded in the machine-validated [proven
 | `@genii-foundation/publisher-sync-supabase` | Optional Supabase synchronization adapter |
 | `@genii-foundation/publisher-updates` | Author-repository history and Updates generation |
 
-The implemented package boundaries are proven against two invented neutral fixtures. A separate canonical host with its own packaged theme or extension remains a release gate before code moves from an existing publication.
+The implemented package boundaries are proven against two invented neutral fixtures. The packed canonical host installs independent theme and extension packages, performs a frozen offline reinstall, renders extension server slots, an interactive client mount, a declarative extension page, and an exact namespaced request handler, preserves the theme across framework error surfaces, and keeps manuscript plus extension server data out of client chunks.
 
 ## Attribution and source
 

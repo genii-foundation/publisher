@@ -441,18 +441,13 @@ test("both fixture publications project into deterministic public reader artifac
       publicationId: "rain-gauge-journal",
       workIds: ["rain-gauge"],
       collectionIds: ["weather-observations"],
-      // The build identity moved when this fixture stopped declaring an audio
-      // adapter it never used, because identity covers the source manifest.
-      //
-      // byteLength deliberately did not move, and that is worth keeping in view:
-      // removing narration configuration changed the build identity and not one
-      // byte of the serialized reader envelope. Narration never enters the reader
-      // artifact, and this is that claim measured rather than asserted.
+      // Route targets now carry the stable Updates view identity. That changes
+      // the Reader bytes and every identity derived from them, deliberately.
       buildId:
-        "sha256:0664cc455e6f1f3526d1a495f0b1ab565dca8c1e575ca99f42a99f8e3a63cc80",
-      byteLength: 5991,
+        "sha256:29fad0fa1eb40471da8cdb8b901c804d02ef9002374c81476dd1306f00d625ff",
+      byteLength: 6010,
       artifactHash:
-        "sha256:91d733b9f7023059a811cddb9831a7f7a532eeb7593ffdd22b99d23191079e3a",
+        "sha256:e204a5dbd5ede30a88b58c6f9ffec221b3b7f52e329b454a8fcfa1332b458817",
     },
     {
       directory: "declared-night-dispatch",
@@ -460,10 +455,10 @@ test("both fixture publications project into deterministic public reader artifac
       workIds: ["signal-lantern", "platform-bell"],
       collectionIds: ["after-dark"],
       buildId:
-        "sha256:f074086d1034b3d1a0bcf113fb00e9bbd7b383b314e2e801a2195db89d990e39",
-      byteLength: 8727,
+        "sha256:dc0947466e0d23fca185c43b577ed9848b969254d9c132aaf7cee8410ae2b6a8",
+      byteLength: 8949,
       artifactHash:
-        "sha256:0d5b335db97cf33df1f0115b1d7f0751bcf8e61fc619cfe11ca09493caa188cc",
+        "sha256:4a702ddd3defac32ebf7fad8b051f09ea5118e00301ce9b470f991d75f30c7d6",
     },
   ];
 
@@ -1085,7 +1080,7 @@ test("an all-draft publication has a valid empty public content result", async (
   assert.deepEqual(reader.routes.redirects, []);
   assert.deepEqual(
     reader.routes.active.map(({ target }) => target.kind),
-    ["home", "updates"],
+    ["home", "updates", "updates"],
   );
   assert.deepEqual(reader.statistics, {
     workCount: 0,

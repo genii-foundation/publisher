@@ -54,6 +54,16 @@ export interface HostCapabilities {
 
 /** The data artifact identifier narration is published under. */
 export const AUDIO_DATA_ARTIFACT = "audio";
+/** The data artifact identifier lazy full-text search is published under. */
+export const SEARCH_DATA_ARTIFACT = "search";
+/** The data artifact identifier lazy publication progress is published under. */
+export const PROGRESS_DATA_ARTIFACT = "progress";
+/** The client-safe publication identity used by framework error surfaces. */
+export const PUBLIC_IDENTITY_DATA_ARTIFACT = "public-identity";
+/** Build-bound projections produced by explicitly registered extensions. */
+export const EXTENSION_DATA_ARTIFACT = "extensions";
+/** The data artifact identifier Updates is published under. */
+export const UPDATES_DATA_ARTIFACT = "updates";
 
 export interface UnsupportedHostFeature {
   /** What the artifact contains that the host cannot serve. */

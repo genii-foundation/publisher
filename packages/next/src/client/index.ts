@@ -19,6 +19,13 @@ export {
   PublisherNextFrameworkErrorPage,
   PublisherNextGlobalErrorPage,
 } from "./error.js";
+export {
+  PublisherReaderRail,
+} from "./reader-rail.js";
+export {
+  PUBLISHER_READER_NARRATION_NAVIGATION_EVENT,
+  requestPublisherReaderNarrationNavigation,
+} from "./reader-narration-navigation.js";
 export type {
   CreatePublisherNextErrorIdentityInput,
   PublisherNextErrorIdentity,
@@ -28,3 +35,10 @@ export type {
   PublisherNextErrorPageProps,
   PublisherNextFrameworkErrorPageProps,
 } from "./error.js";
+export type {
+  PublisherReaderOutlineEntry,
+  PublisherReaderRailProps,
+} from "./reader-rail.js";
+export type {
+  ReaderNarrationNavigationIntent,
+} from "./reader-narration-navigation.js";

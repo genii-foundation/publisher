@@ -93,7 +93,21 @@ function cloneRoute(route: ContentRoute): ContentRoute {
     case "home":
       return { path: route.path, target: { kind: "home" } };
     case "updates":
-      return { path: route.path, target: { kind: "updates" } };
+      return {
+        path: route.path,
+        target: {
+          kind: "updates",
+          viewId: route.target.viewId,
+          ...(route.target.pagination === undefined
+            ? {}
+            : {
+                pagination: {
+                  path: route.target.pagination.path,
+                  pageSize: route.target.pagination.pageSize,
+                },
+              }),
+        },
+      };
     case "work":
       return {
         path: route.path,

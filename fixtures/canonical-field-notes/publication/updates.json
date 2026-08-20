@@ -1,0 +1,21 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/updates-catalog.schema.json",
+  "schemaVersion": "1.0",
+  "publicationId": "rain-gauge-journal",
+  "views": [
+    {
+      "id": "updates",
+      "title": "Station updates",
+      "description": "Changes published from the field station.",
+      "entries": [
+        {
+          "id": "morning-reading-published",
+          "title": "Morning reading published",
+          "summary": "The first rain gauge observation is now available.",
+          "publishedAt": "2026-01-15T08:00:00Z",
+          "href": "/works/rain-gauge"
+        }
+      ]
+    }
+  ]
+}

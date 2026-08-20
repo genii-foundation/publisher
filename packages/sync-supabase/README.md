@@ -3,21 +3,33 @@
 The database half of reader synchronization: tables, row level security, bounds,
 retention, grants, and one function that takes a lock.
 
-## Why this is not published
+## Why this is still private
 
-A provider needs two server routes, an authentication callback and an account
-deletion endpoint, and how a host acquires them is an open decision recorded in
-ADR 0014 and tracked in issue #19. `init` deliberately does not know the
-publication, so the host contract cannot generate routes conditioned on whether a
-publication declares synchronization.
+The official host now owns stable email authentication, session, callback, and
+account deletion routes. The server export supplies a provider for those routes
+using exact Supabase dependencies and server-only environment configuration.
 
-Publishing a provider whose handlers cannot be mounted would ship something nobody
-can use. So this package is private, carries no dependencies, and contains only the
-part that is already correct and already valuable: the schema.
+The package remains private until its remote data synchronization client, legal
+bundle, packed-consumer proof, provenance evidence, and release lifecycle are
+complete. Route mounting is no longer the blocker.
 
-Promoting it is mechanical once the route question is answered. It then gains
-`@supabase/supabase-js` and `@supabase/ssr` as peer dependencies, the clients, the
-handlers, and the publishing ceremony every other package here carries.
+## Server configuration
+
+An author selects the provider in `publisher.config.ts`:
+
+```ts
+import { definePublisherNextHostConfig } from "@genii-foundation/publisher-next/server/sync";
+import { createPublisherSupabaseSyncProvider } from "@genii-foundation/publisher-sync-supabase/server";
+
+export default definePublisherNextHostConfig({
+  syncProvider: createPublisherSupabaseSyncProvider(),
+});
+```
+
+The server reads `NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. The service role
+key is used only after the route contract has accepted a same-origin deletion
+request and the anonymous server client has authenticated the current reader.
 
 ## What the migrations encode, and why each part matters
 
@@ -43,8 +55,14 @@ reaches these tables with the public anonymous key, so the client's own limits a
 not a security boundary. The bounds are generous against measured real data and
 finite against an attacker.
 
-**Retention on the append-only event log.** Events are capped per reader and the
-oldest trimmed on insert, so one account cannot grow the table without bound.
+**Publication scope on every reader row.** Progress, bookmarks, consent, event
+identity, and retention are keyed by both authenticated reader and validated
+publication ID. One provider project can serve several publications without one
+publication replacing or evicting another's state.
+
+**Retention on the append-only event log.** Events are capped per reader and
+publication and the oldest are trimmed on insert, so one account cannot grow one
+publication's history without bound.
 
 **A merge function that takes a lock.** Bookmarks are one row per reader holding a
 document. A whole-row upsert loses changes when two devices read the same row and
@@ -64,8 +82,8 @@ gets the table that serves it:
 
 | Capability | Table | Shape |
 | --- | --- | --- |
-| `progress` | `reader_progress` | one row per reader, a document |
-| `bookmarks` | `reader_bookmarks` | one row per reader, a document with tombstones, merged under a lock |
+| `progress` | `reader_progress` | one row per reader and publication, a document |
+| `bookmarks` | `reader_bookmarks` | one row per reader and publication, a document with tombstones, merged under a lock |
 | `engagement` | `reader_engagement_events` | append only, per-reader retention |
 | `account-deletion` | none | a function that removes every row a reader owns |
 
@@ -80,3 +98,17 @@ supabase db push
 ```
 
 Migrations are ordered by filename and are written to be re-runnable.
+
+Migration `0007_publication_scope.sql` preserves rows created by earlier private
+package versions under `__legacy_unscoped__`. That marker is not a valid
+publication ID and current operations reject it. Before enabling a current data
+client against an upgraded project, review those rows and explicitly assign each
+one to its real publication. Do not infer the mapping when a project has served
+more than one publication.
+
+The server export implements the provider-neutral `/api/sync` contract. It reads
+the authenticated user from the cookie-scoped Supabase client, takes publication
+identity only from Publisher's validated provider context, and never accepts
+either identity from browser data. Progress and consent use publication-scoped
+upserts, bookmarks use the locked merge function, and engagement retries use the
+publication-scoped client event identity.

@@ -11,8 +11,9 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-// Every narration and synchronization capability a working publication has, and
-// where each one lives after this engine takes over.
+// Every generic Reader, narration, and synchronization capability observed in
+// the migration publication, and where each one lives after this engine takes
+// over.
 //
 // This exists because "no functionality is lost" is a claim, and a claim about
 // dozens of features is worth nothing unless something enumerates them. The
@@ -28,11 +29,12 @@ If you wish to allow use of your version of this file only under the terms of th
 // evidence inside this one, and the test beside this file checks that the evidence
 // is real.
 //
-// `home` says who owns the capability now:
+// `home` says who owns the capability in the target architecture:
 //
 //   engine    this engine implements it
+//   renderer  the official renderer implements the default interface
 //   provider  the reference provider package implements it
-//   host      the author's own application keeps it, unchanged
+//   host      publication-specific application code owns it
 //   author    an author's own tooling, outside any published package
 //
 // `status` says what happened to it:
@@ -40,18 +42,468 @@ If you wish to allow use of your version of this file only under the terms of th
 //   preserved  works as before, wherever it now lives
 //   upgraded   works better than before, and `why` says how
 //   added      did not exist before
+//   planned    is accepted scope but is not implemented yet
 //   blocked    cannot work yet, and `blockedBy` names the decision it waits on
 //
-// A `host` home is not a euphemism for lost. Playback, word highlighting, and
-// offline caching are client code an author owns, and moving them into the engine
-// would take control away from the author for no benefit. What matters is that the
-// engine supplies what that code needs, which is what the `engineProvides` field
-// records.
+// A `planned` status is deliberately uncomfortable. It prevents an accepted
+// product responsibility from being described as preserved merely because the
+// migration publication still has an older implementation.
 
-/** @typedef {"engine" | "provider" | "host" | "author"} ParityHome */
-/** @typedef {"preserved" | "upgraded" | "added" | "blocked"} ParityStatus */
+/** @typedef {"engine" | "renderer" | "provider" | "host" | "author"} ParityHome */
+/** @typedef {"preserved" | "upgraded" | "added" | "planned" | "blocked"} ParityStatus */
+
+export const COHERENCE_PARITY_SOURCE = Object.freeze({
+  repository: "https://github.com/genii-foundation/coherence-thesis",
+  ref: "d250a760b51a071037af0c18ac73cc3131312f09",
+  observedThrough: "2026-08-19",
+});
+
+export const READER_PARITY = Object.freeze([
+  {
+    id: "reader.text.server_rendering",
+    capability: "Complete manuscript text readable without client JavaScript",
+    home: "renderer",
+    status: "preserved",
+    evidence: { file: "packages/next/src/components/pages.tsx" },
+    sourcePaths: ["src/app/manuscripts/[volumeId]/[[...route]]/page.tsx"],
+  },
+  {
+    id: "reader.catalog.navigation",
+    capability: "Publication, collection, work, and section navigation",
+    home: "renderer",
+    status: "preserved",
+    evidence: { file: "packages/next/src/components/pages.tsx" },
+    sourcePaths: ["src/components/ManuscriptsPage.tsx", "src/components/ChapterReader.tsx"],
+  },
+  {
+    id: "reader.routes.continuity",
+    capability: "Canonical Reader addresses and historical redirect continuity",
+    home: "engine",
+    status: "upgraded",
+    why: "Routes and redirects are validated as exact protocol data and dispatched by one runtime instead of being reconstructed independently by pages.",
+    evidence: { file: "packages/reader/src/runtime.ts" },
+    sourcePaths: ["src/lib/manuscript-data.ts", "src/lib/legacy-route.ts"],
+  },
+  {
+    id: "reader.sections.compilation",
+    capability: "All declared manuscript sections and hierarchy reaching the Reader artifact",
+    home: "engine",
+    status: "added",
+    why: "Work manifests now own durable section identities, hierarchy, routes, continuity, and exact source boundaries, so heading edits cannot silently change public identity.",
+    evidence: { file: "packages/publisher/src/node/build.ts" },
+    sourcePaths: ["src/lib/manuscript-data.ts", "scripts/manuscripts/import-markdown.ts"],
+  },
+  {
+    id: "reader.hierarchy.breadcrumbs",
+    capability: "Part and chapter hierarchy with contextual breadcrumbs",
+    home: "renderer",
+    status: "upgraded",
+    why: "Server-rendered work and section ancestry follows validated parent identities and canonical Reader destinations, while the hydrated contents surface presents the same current path and active outline identity.",
+    evidence: {
+      decision: "docs/architecture/0030-contextual-reader-breadcrumbs.md",
+      renderer: "packages/next/src/components/pages.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/ChapterReader.tsx", "src/lib/manuscript-labels.ts"],
+  },
+  {
+    id: "reader.progress.local",
+    capability: "Publication-scoped local reading progress without an account",
+    home: "engine",
+    status: "added",
+    why: "The pure state contract makes the local privacy default portable across renderers without granting storage authority to the protocol layer.",
+    evidence: { file: "packages/reader/src/progress.ts" },
+    sourcePaths: ["src/lib/reader-state.ts"],
+  },
+  {
+    id: "reader.progress.continuity",
+    capability: "Progress following declared continuity identities across section changes",
+    home: "engine",
+    status: "preserved",
+    evidence: { file: "packages/reader/src/progress.ts" },
+    sourcePaths: ["src/lib/reader-state.ts"],
+  },
+  {
+    id: "reader.progress.canonical_percent",
+    capability: "One word-weighted progress percentage shared by every surface",
+    home: "engine",
+    status: "preserved",
+    evidence: { file: "packages/reader/src/progress.ts" },
+    sourcePaths: ["src/lib/reader-state.ts", "src/lib/section-progress.ts"],
+  },
+  {
+    id: "reader.progress.revision_status",
+    capability: "Read sections marked updated when their content revision changes",
+    home: "engine",
+    status: "preserved",
+    evidence: { file: "packages/reader/src/progress.ts" },
+    sourcePaths: ["src/lib/reader-state.ts", "src/lib/section-progress.ts"],
+  },
+  {
+    id: "reader.progress.engagement_metrics",
+    capability: "Bounded open, scroll, reading time, return, and audio progress metrics",
+    home: "engine",
+    status: "preserved",
+    evidence: { file: "packages/reader/src/progress.ts" },
+    sourcePaths: ["src/lib/reader-state.ts"],
+  },
+  {
+    id: "reader.state.reactive_store",
+    capability: "Atomic local updates and cross-tab notification for private Reader state",
+    home: "renderer",
+    status: "upgraded",
+    why: "One generic renderer store supplies stable server snapshots, atomic canonical updates, same-tab notification, native cross-tab convergence, injected test authority, and in-memory continuity when persistence is unavailable. Progress and full bookmark documents consume the same primitive.",
+    evidence: {
+      store: "packages/next/src/client/reader-store.ts",
+      consumer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/lib/reader-store.ts", "src/lib/reader-progress-store.ts"],
+  },
+  {
+    id: "reader.progress.default_interface",
+    capability: "Default progress controls, section states, and unified percentage display",
+    home: "renderer",
+    status: "upgraded",
+    why: "The official Reader separates one opening from scroll samples, conservatively accumulates visible active reading time, exposes canonical section status, progress, visits, and returns, and supports explicit completion of the current revision through one reactive local document.",
+    evidence: {
+      decision: "docs/architecture/0027-default-reader-progress-session.md",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/ToolbarProgressIsland.tsx", "src/components/SectionCardGrid.tsx"],
+  },
+  {
+    id: "reader.progress.map_and_recommendations",
+    capability: "Reading heatmap, recent sections, and next section recommendations",
+    home: "renderer",
+    status: "upgraded",
+    why: "One lazy Reader-build-bound catalog now feeds a word-weighted publication map, updated-first recommendations, recent reading, current revision status, and a mobile-contained default interface.",
+    evidence: {
+      decision: "docs/architecture/0038-lazy-reader-progress-catalog.md",
+      engine: "packages/reader/src/progress-catalog.ts",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/ReaderProgressHeatmapIsland.tsx", "src/lib/reader-state.ts"],
+  },
+  {
+    id: "reader.bookmarks.local",
+    capability: "Publication-scoped local bookmarks, passage capture, and notes",
+    home: "engine",
+    status: "added",
+    why: "The generic local document is publication scoped, immutable, bounded, canonical, and independent of storage or network authority. The official renderer refuses DOM text that differs from canonical Reader blocks before translating a same-section selection into portable offsets, then captures an optional private note without losing the validated range.",
+    evidence: {
+      engine: "packages/reader/src/bookmarks.ts",
+      selection: "packages/next/src/client/reader-selection.ts",
+      decision: "docs/architecture/0033-optional-bookmark-capture-note.md",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/lib/reader-bookmarks.ts"],
+  },
+  {
+    id: "reader.bookmarks.passage_ranges",
+    capability: "Bookmarks spanning exact offsets across one or more rendered passages",
+    home: "engine",
+    status: "added",
+    why: "Portable ranges bind exact UTF-16 offsets, block hashes, work identity, and reviewed section continuity across adjacent blocks.",
+    evidence: { file: "packages/reader/src/passage-range.ts" },
+    sourcePaths: ["src/lib/reader-passage-range.ts", "src/lib/reader-bookmarks.ts"],
+  },
+  {
+    id: "reader.bookmarks.revision_relocation",
+    capability: "Bookmark relocation by content and surrounding text after passage revisions",
+    home: "engine",
+    status: "upgraded",
+    why: "Relocation preserves exact ranges, accepts only unique content-hash renames, and uses bounded quote plus context reanchoring without guessing through ambiguity.",
+    evidence: { file: "packages/reader/src/bookmarks.ts" },
+    sourcePaths: ["src/lib/reader-passage-range.ts", "src/lib/reader-bookmarks.ts"],
+  },
+  {
+    id: "reader.bookmarks.merge_and_tombstones",
+    capability: "Deterministic bookmark merge with absorbing deletion tombstones",
+    home: "engine",
+    status: "added",
+    why: "The merge is commutative and idempotent, resolves equal timestamps deterministically, and prevents either clock skew or later edits from reviving a tombstone.",
+    evidence: { file: "packages/reader/src/bookmarks.ts" },
+    sourcePaths: ["src/lib/reader-bookmarks.ts", "src/lib/reader-sync.ts"],
+  },
+  {
+    id: "reader.bookmarks.large_collections",
+    capability: "Bounded thousand-item bookmark collections with saved-text search and virtualization",
+    home: "renderer",
+    status: "upgraded",
+    why: "The official Reader queries the complete bounded document while mounting only a fixed, overscanned viewport, preserves full collection operations, exposes logical position and size to assistive technology, and contains the scroll surface on mobile.",
+    evidence: {
+      decision: "docs/architecture/0035-virtualized-bookmark-collection.md",
+      renderer: "packages/next/src/client/reader-bookmark-list.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/ToolbarBookmarksIsland.tsx", "src/lib/reader-bookmarks.ts"],
+  },
+  {
+    id: "reader.bookmarks.margin_markers",
+    capability: "Stable margin markers instead of prose-obscuring bookmark highlights",
+    home: "renderer",
+    status: "upgraded",
+    why: "The official renderer accepts only exact or uniquely relocated canonical ranges, excludes transient renderer controls from canonical text offsets and geometry, keeps every marker outside the manuscript subtree, measures immediately in background tabs, anchors against document scroll, and routes the accessible marker into the existing bookmark surface.",
+    evidence: {
+      decision: "docs/architecture/0034-bookmark-margin-markers.md",
+      hardeningDecision: "docs/architecture/0053-reader-transport-and-bookmark-geometry.md",
+      renderer: "packages/next/src/client/reader-bookmark-markers.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/ReaderBookmarkHighlightIsland.tsx", "src/app/globals.css"],
+  },
+  {
+    id: "reader.bookmarks.safe_deletion",
+    capability: "Accessible single and bulk bookmark deletion confirmation",
+    home: "renderer",
+    status: "upgraded",
+    why: "Single and bulk removal use labeled modal confirmation, deliberate focus movement and return, Escape cancellation, one atomic reactive update, and the engine's absorbing synchronization tombstones.",
+    evidence: {
+      decision: "docs/architecture/0029-confirmed-bookmark-deletion.md",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/ToolbarBookmarksIsland.tsx"],
+  },
+  {
+    id: "reader.bookmarks.export",
+    capability: "Readable bookmark export that preserves selected text, notes, and destinations",
+    home: "engine",
+    status: "upgraded",
+    why: "A versioned plain-text export indents all reader-controlled lines, omits tombstones, preserves complete live quotes, notes, saved times, and destinations, and requires no account or provider.",
+    evidence: {
+      decision: "docs/architecture/0028-readable-bookmark-export.md",
+      engine: "packages/reader/src/bookmarks.ts",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/lib/reader-export.ts", "src/lib/reader-bookmarks.ts"],
+  },
+  {
+    id: "reader.bookmarks.secondary_surfaces",
+    capability: "Bookmark presence in progress, section, and search surfaces",
+    home: "renderer",
+    status: "upgraded",
+    why: "Reactive private bookmark state now appears in publication progress, current-section margin markers, and search results while preserving reviewed continuity aliases.",
+    evidence: {
+      decision: "docs/architecture/0038-lazy-reader-progress-catalog.md",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      markers: "packages/next/src/client/reader-bookmark-markers.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/ReaderProgressHeatmapIsland.tsx", "src/components/SectionCardGrid.tsx", "src/components/SearchMenuIsland.tsx"],
+  },
+  {
+    id: "reader.preferences.state",
+    capability: "Publication-scoped font, color, motion, highlight, and focus preferences",
+    home: "engine",
+    status: "added",
+    why: "The generic state contract keeps publication defaults and user choices separate while rejecting malformed or newer storage documents.",
+    evidence: { file: "packages/reader/src/preferences.ts" },
+    sourcePaths: ["src/lib/reader-preferences.ts"],
+  },
+  {
+    id: "reader.preferences.default_interface",
+    capability: "Accessible default settings interface for every Reader preference",
+    home: "renderer",
+    status: "upgraded",
+    why: "The default settings panel exposes every bounded preference, restricts fonts to publication policy, applies changes immediately, and persists them under the publication-scoped key.",
+    evidence: {
+      decision: "docs/architecture/0031-default-settings-and-bookmark-search.md",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/ReaderSettingsIsland.tsx"],
+  },
+  {
+    id: "reader.focus.adjustable",
+    capability: "Adjustable focus treatment from none through strong",
+    home: "renderer",
+    status: "added",
+    why: "The official Reader rail persists the closed focus vocabulary and applies progressively narrower reading measures without duplicating or replacing manuscript text.",
+    evidence: { file: "packages/next/src/client/reader-rail.tsx" },
+    sourcePaths: ["src/components/MarkdownBody.tsx", "src/components/ReaderSettingsIsland.tsx"],
+  },
+  {
+    id: "reader.focus.text_ownership",
+    capability: "Focus markup preserving one accessible text occurrence and narration offsets",
+    home: "renderer",
+    status: "upgraded",
+    why: "The official renderer transforms eligible Markdown words during server rendering, keeps one exact text occurrence, excludes strong and code content, and proves that focus changes preserve selection, bookmark offsets, and marker resolution.",
+    evidence: {
+      decision: "docs/architecture/0036-focus-text-ownership.md",
+      renderer: "packages/next/src/components/focus-markup.ts",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/MarkdownBody.tsx"],
+  },
+  {
+    id: "reader.artifacts.capability_slices",
+    capability: "Small capability-specific Reader artifacts loaded only when their interface opens",
+    home: "engine",
+    status: "upgraded",
+    why: "Search, publication progress, and narration are separate bounded artifacts bound to one Reader build and fetched only when their respective interfaces open.",
+    evidence: {
+      decision: "docs/architecture/0038-lazy-reader-progress-catalog.md",
+      narrationDecision: "docs/architecture/0039-lazy-default-narration-player.md",
+      narration: "packages/reader/src/narration.ts",
+      progress: "packages/reader/src/progress-catalog.ts",
+      search: "packages/reader/src/search.ts",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/lib/reader-data.ts", "scripts/manuscripts/compile.ts"],
+  },
+  {
+    id: "reader.search.index",
+    capability: "Deterministic full-text search over public Reader content",
+    home: "engine",
+    status: "upgraded",
+    why: "The build-bound client artifact omits unrelated Reader data, validates fetched identity and folds, supports Unicode and diacritics, and maps matches back to exact original-text snippet offsets.",
+    evidence: { file: "packages/reader/src/search.ts" },
+    sourcePaths: ["src/lib/reader-text-search.ts"],
+  },
+  {
+    id: "reader.search.default_interface",
+    capability: "Keyboard-accessible search with useful empty and bookmark states",
+    home: "renderer",
+    status: "upgraded",
+    why: "The lazy build-bound publication search and latest private bookmark document remain separate, while one labeled interface combines their bounded results and reports an empty state only when neither matches.",
+    evidence: {
+      decision: "docs/architecture/0031-default-settings-and-bookmark-search.md",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/SearchMenuIsland.tsx"],
+  },
+  {
+    id: "reader.offline.atomic_packages",
+    capability: "Staged immutable publication packages activated atomically for offline reading",
+    home: "engine",
+    status: "upgraded",
+    why: "The pure per-work catalog binds Reader, renderer, work, and optional narration identity. The browser stages and verifies every declared and discovered resource before switching one active metadata pointer, and a failed replacement retains the prior complete cache.",
+    evidence: {
+      decision: "docs/architecture/0046-atomic-offline-publication-packages.md",
+      core: "packages/reader/src/offline.ts",
+      adapter: "packages/next/src/client/reader-offline-cache.ts",
+      tests: "tests/next-reader-offline-cache.test.mjs",
+    },
+    sourcePaths: ["src/lib/audio-offline-cache.ts"],
+  },
+  {
+    id: "reader.offline.complete_manuscript",
+    capability: "Downloaded works including HTML, Reader data, static assets, and discovered dependencies",
+    home: "renderer",
+    status: "upgraded",
+    why: "Each work package includes canonical and historical documents, shared Reader artifacts, publication and work assets, every matching voice clip and timing sidecar, plus same-origin Next.js dependencies discovered from downloaded HTML and CSS. Text-only works remain complete.",
+    evidence: {
+      decision: "docs/architecture/0046-atomic-offline-publication-packages.md",
+      planner: "packages/reader/src/offline.ts",
+      renderer: "packages/next/src/client/reader-offline-provider.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/lib/audio-offline-cache.ts", "public/offline-sw.js"],
+  },
+  {
+    id: "reader.offline.network_fallback",
+    capability: "Network-first reading with active package and runtime cache fallbacks",
+    home: "renderer",
+    status: "upgraded",
+    why: "The generic worker leaves private and framework traffic alone, serves ordinary requests network first, then checks active immutable packages and its runtime cache. Offline links force full document navigation instead of depending on a framework flight response.",
+    evidence: {
+      decision: "docs/architecture/0046-atomic-offline-publication-packages.md",
+      host: "packages/next/src/host.ts",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["public/offline-sw.js"],
+  },
+  {
+    id: "reader.toolbar.viewport_access",
+    capability: "Toolbar menus that remain reachable and stable in supported viewports",
+    home: "renderer",
+    status: "added",
+    why: "The official rail uses a bounded desktop panel and a viewport-bounded mobile sheet above fixed bottom controls. At 320 pixels, maximum Reader text size cannot widen the document, Listen remains directly visible, and every native action button stays at least 44 pixels tall and keyboard reachable through the internally scrolling rail.",
+    evidence: { file: "packages/next/styles.css" },
+    sourcePaths: [
+      "src/app/globals.css",
+      "src/components/SiteShell.tsx",
+      "src/components/ToolbarOverflowIsland.tsx",
+      "tests/e2e/bookmarks.spec.ts",
+      "tests/e2e/settings.spec.ts",
+      "tests/e2e/toolbar.spec.ts",
+    ],
+  },
+  {
+    id: "reader.accessibility.content",
+    capability: "Accessible tables, focus states, confirmations, contrast, and reduced motion",
+    home: "renderer",
+    status: "upgraded",
+    why: "The official renderer now combines its existing focus, confirmation, contrast, and reduced-motion behavior with named keyboard-focusable table regions, scoped column headers, declared alignment, and contained horizontal scrolling.",
+    evidence: {
+      decision: "docs/architecture/0047-accessible-manuscript-extensions.md",
+      renderer: "packages/next/src/components/markdown.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/MarkdownBody.tsx", "src/app/globals.css"],
+  },
+  {
+    id: "reader.markdown.extension_slots",
+    capability: "Accessible heading actions and table regions without surrendering manuscript text ownership",
+    home: "renderer",
+    status: "upgraded",
+    why: "Server components retain exact heading and cell text while narrow extensions add only one adjacent hydrated copy action or one accessibility and scrolling wrapper. Malformed tables remain ordinary Markdown.",
+    evidence: {
+      decision: "docs/architecture/0047-accessible-manuscript-extensions.md",
+      headingAction: "packages/next/src/client/reader-heading-action.tsx",
+      renderer: "packages/next/src/components/markdown.tsx",
+    },
+    sourcePaths: ["src/components/MarkdownBody.tsx"],
+  },
+  {
+    id: "reader.preview.candidate_identity",
+    capability: "A local preview proving its exact worktree, branch, commit, and candidate bytes",
+    home: "engine",
+    status: "upgraded",
+    why: "Publisher replaces a digest over Git presentation with a versioned, inspectable byte inventory, no-follow symbolic-link evidence, repeated descriptor reads, concurrent Git checks, strict saved-evidence parsing, and explicit stale verification.",
+    evidence: {
+      decision: "docs/architecture/0048-exact-local-preview-candidate-identity.md",
+      export: "capturePreviewCandidateIdentity",
+      file: "tests/preview-candidate-identity.test.mjs",
+    },
+    sourcePaths: ["scripts/dev/preview.mjs"],
+  },
+  {
+    id: "reader.updates.multiple_views",
+    capability: "Paginated publication Updates and a derived literary view",
+    home: "renderer",
+    status: "upgraded",
+    why: "Author-owned catalogs now supply stable named views, Publisher binds them to the Reader build, and the generated host expands bounded pagination without importing publication history rules.",
+    evidence: { file: "packages/next/src/routes.ts" },
+    sourcePaths: ["src/app/updates/page.tsx", "src/app/updates/literary/page.tsx"],
+  },
+]);
 
 export const AUDIO_PARITY = Object.freeze([
+  {
+    id: "audio.identity.spoken_input",
+    capability: "Narration identity derived from spoken title and normalized spoken body",
+    home: "engine",
+    status: "upgraded",
+    why: "The engine derives full SHA-256 identity from the exact renderer-compatible spoken text while keeping provider audioVersionId values opaque. It rejects unsafe Unicode and exposes canonical text for author generation evidence.",
+    evidence: {
+      decision: "docs/architecture/0044-spoken-input-identity.md",
+      implementation: "packages/content/src/spoken-input.ts",
+      tests: "tests/spoken-input.test.mjs",
+    },
+    sourcePaths: [
+      "scripts/manuscripts/shared.ts",
+      "scripts/manuscripts/io.ts",
+      "src/lib/audio-text.ts",
+      "scripts/audio/verify-manuscript-audio.ts",
+    ],
+  },
   {
     id: "audio.catalog.contract",
     capability: "A clip catalog naming voices and per-section recordings",
@@ -95,12 +547,17 @@ export const AUDIO_PARITY = Object.freeze([
   {
     id: "audio.timings.sidecar",
     capability: "Per-word timings fetched only when a clip plays",
-    home: "host",
-    status: "preserved",
+    home: "renderer",
+    status: "upgraded",
     engineProvides:
       "the presence and byte size of each sidecar, with its URL derived from the clip href rather than carried",
-    why: "Carrying a sidecar URL per clip measured about 88 KB on a document every page fetches. The published design avoided that and the engine keeps the avoidance.",
-    evidence: { schemaProperty: "timingsByteSize" },
+    why: "Playback starts from the trusted gesture before one bounded sidecar request. The browser parser requires exact declared bytes, clip and voice identity, spoken-text length, monotonic ranges, summary counts, alignment quality, and bounded interpolation before the renderer can consume it.",
+    evidence: {
+      decision: "docs/architecture/0040-lazy-narration-timings.md",
+      core: "packages/reader/src/narration.ts",
+      renderer: "packages/next/src/client/reader-narration.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
   },
   {
     id: "audio.timings.alignment",
@@ -112,49 +569,84 @@ export const AUDIO_PARITY = Object.freeze([
   {
     id: "audio.anchors.words",
     capability: "Deriving word anchors from rendered text",
-    home: "host",
-    status: "preserved",
+    home: "renderer",
+    status: "upgraded",
     engineProvides: "the rendered section text the anchors are computed over",
-    why: "Computed on the client, so no per-word data is transmitted at all. Nothing about that needs the engine.",
+    why: "The server renderer marks words in the existing manuscript text occurrence, publishes only bounded section counts, and requires the accepted timing word sequence to match the rendered body anchors before applying a transient visual class.",
+    evidence: {
+      decision: "docs/architecture/0040-lazy-narration-timings.md",
+      markup: "packages/next/src/components/focus-markup.ts",
+      renderer: "packages/next/src/client/reader-narration.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
   },
   {
     id: "audio.playback.engine",
     capability: "Play, pause, seek, rate, and queue across sections",
-    home: "host",
-    status: "preserved",
+    home: "renderer",
+    status: "upgraded",
     engineProvides: "the resolved clip list per voice, in reader order",
-    why: "Client behaviour an author owns. Moving it into the engine would take control away for no benefit.",
+    why: "The official renderer supplies a lazy build-bound player with play, pause, 15-second jumps, seek, rate, ordered previous and next controls, automatic queue continuation, one persistent user-authorized media element across clips and routes, and stale-playback failure isolation that leaves reading available.",
+    evidence: {
+      decision: "docs/architecture/0039-lazy-default-narration-player.md",
+      hardeningDecision: "docs/architecture/0053-reader-transport-and-bookmark-geometry.md",
+      renderer: "packages/next/src/client/reader-narration.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+    sourcePaths: ["src/components/AudioPlayerIsland.tsx", "src/lib/audio-playback.ts"],
   },
   {
     id: "audio.voices.selection",
     capability: "Choosing a voice and remembering the choice",
-    home: "host",
-    status: "preserved",
+    home: "renderer",
+    status: "upgraded",
     engineProvides: "voices in declared order, each with a label, provider, and model",
-    why: "A preference stored locally. The engine supplies the list and takes no view on which a reader wants.",
+    why: "The renderer preserves declared voice order, remembers one publication-scoped voice and bounded speed preference, and retains the current section when the selected voice covers it.",
+    evidence: {
+      core: "packages/reader/src/narration.ts",
+      renderer: "packages/next/src/client/reader-narration.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
   },
   {
     id: "audio.offline.cache",
     capability: "Caching clips for offline listening",
-    home: "host",
-    status: "preserved",
+    home: "renderer",
+    status: "upgraded",
     engineProvides: "stable clip URLs and byte sizes, so a cache can budget before fetching",
-    why: "A client storage concern. The engine's contribution is that the sizes are in the catalog.",
+    why: "Every matching voice clip and timing sidecar joins the same atomic work package as documents and Reader data. Offline playback reads the verified cache directly and uses revoked blob URLs for same-origin and external media without weakening package activation.",
+    evidence: {
+      decision: "docs/architecture/0046-atomic-offline-publication-packages.md",
+      renderer: "packages/next/src/client/reader-narration.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
   },
   {
     id: "audio.statistics.duration",
     capability: "Total and per-section recorded duration",
-    home: "host",
-    status: "preserved",
+    home: "renderer",
+    status: "upgraded",
     engineProvides: "durationSeconds per clip, plus narrated and unnarrated section counts per voice",
-    why: "Aggregation over the catalog. The engine now also reports coverage at build time, which the publication had to compute for itself.",
+    why: "The default player presents exact current-clip time, summed declared recorded duration, timed-clip coverage, queue position, and the selected voice's unnarrated section count without inventing estimates for missing duration.",
+    evidence: {
+      renderer: "packages/next/src/client/reader-narration.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
   },
   {
     id: "audio.navigation.event",
     capability: "Navigating to a section and starting playback there",
-    home: "host",
-    status: "preserved",
-    why: "A cross-component event inside the author's own client code. The engine has no part in it.",
+    home: "renderer",
+    status: "upgraded",
+    why: "A closed publication-bound intent is consumed only when its section and destination exactly match the selected voice and build-bound progress catalog. The persistent player starts or resumes before current-section or cross-route framework navigation, while unhandled requests retain ordinary link fallback.",
+    evidence: {
+      decision: "docs/architecture/0045-route-preserving-narration-intent.md",
+      core: "packages/reader/src/narration.ts",
+      event: "packages/next/src/client/reader-narration-navigation.ts",
+      persistence: "packages/next/src/client/reader-narration-provider.tsx",
+      renderer: "packages/next/src/client/reader-narration.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
   },
   {
     id: "audio.generation.pipeline",
@@ -163,9 +655,71 @@ export const AUDIO_PARITY = Object.freeze([
     status: "preserved",
     why: "Author tooling. The engine ingests what it produces and never runs it, which is why the adapter is recorded rather than executed.",
   },
+  {
+    id: "audio.checkpoint.evidence",
+    capability: "Immutable narration checkpoints with exact object, timing, model, source, and hash evidence",
+    home: "engine",
+    status: "upgraded",
+    why: "The closed checkpoint schema and semantic validator bind the exact Reader build, source revision, catalog, settings, adapter, run, provider, model, narrator, spoken text, remote audio and timing objects, canonical aggregate statistics, and ordered unit fingerprint without contacting storage.",
+    evidence: {
+      decision: "docs/architecture/0041-immutable-audio-checkpoints.md",
+      schema: "audio-checkpoint.schema.json",
+      validation: "packages/content/src/audio-checkpoint.ts",
+      tests: "tests/audio-checkpoint.test.mjs",
+    },
+  },
+  {
+    id: "audio.promotion.selected_unit",
+    capability: "Dry-run selective promotion that preserves every unselected publication unit and narrator",
+    home: "engine",
+    status: "upgraded",
+    why: "The pure planner validates one immutable checkpoint, requires the caller's exact base catalog hash and exact selected-unit coverage, preserves every unselected clip and narrator, validates the candidate, and returns both catalog hashes without storage or write authority.",
+    evidence: {
+      decision: "docs/architecture/0042-exact-base-audio-promotion-planning.md",
+      implementation: "packages/content/src/audio-promotion.ts",
+      tests: "tests/audio-promotion.test.mjs",
+    },
+    sourcePaths: [
+      "scripts/audio/promote-audio-sections.ts",
+      "scripts/audio/promote-audio-volume.ts",
+    ],
+  },
+  {
+    id: "audio.publication.guard",
+    capability: "Refusal to publish changed spoken content without matching reviewed narration evidence",
+    home: "engine",
+    status: "upgraded",
+    why: "The pure guard binds the publication, Reader build, exact base and candidate catalog hashes, changed audio and spoken-text identities, every public narrator, and the exact checkpoint object URL, format, sizes, and duration. Git comparison and storage stay outside the engine.",
+    evidence: {
+      decision: "docs/architecture/0043-narration-publication-guard.md",
+      implementation: "packages/content/src/audio-publication.ts",
+      tests: "tests/audio-publication.test.mjs",
+    },
+    sourcePaths: ["scripts/audio/verify-manuscript-audio.ts"],
+  },
 ]);
 
 export const SYNC_PARITY = Object.freeze([
+  {
+    id: "sync.client.coordination",
+    capability: "Provider-neutral debounce, reconnect, reconciliation, and edits during an in-flight sync",
+    home: "engine",
+    status: "upgraded",
+    why: "The framework-neutral coordinator owns debounce, offline recovery, bounded retry, schema-ahead refusal, and latest-local reconciliation. The default Reader connects it to the provider-neutral route behind copy-bound consent and keeps storage, time, connectivity, and randomness in the browser adapter.",
+    evidence: {
+      coordinator: "packages/reader/src/sync.ts",
+      renderer: "packages/next/src/client/reader-rail.tsx",
+      browserProof: "packages/next/scripts/packaged-host-proof.mjs",
+    },
+  },
+  {
+    id: "sync.publication_isolation",
+    capability: "Remote Reader data isolated by both publication and user identity",
+    home: "provider",
+    status: "upgraded",
+    why: "Every reference provider row, key, lock, deduplication rule, and retention query is scoped by validated publication identity as well as authenticated reader. Unscoped legacy rows are preserved under a reserved marker rather than guessed into a live publication.",
+    evidence: { migration: "0007_publication_scope.sql" },
+  },
   {
     id: "sync.progress",
     capability: "Reading position synchronized across devices",
@@ -270,33 +824,39 @@ export const SYNC_PARITY = Object.freeze([
   {
     id: "sync.auth.session",
     capability: "Signing in by emailed link or code, and holding a session",
-    home: "host",
-    status: "blocked",
-    blockedBy: "#19",
-    why: "Needs an authentication callback route. That determines a public URL, so it is the engine's to own, and how a host acquires it is undecided because init deliberately does not know the publication.",
+    home: "renderer",
+    status: "upgraded",
+    why: "The official Reader now records explicit versioned consent before starting sign-in, supports email links and bounded code entry through provider-neutral routes, reads the cookie-scoped session, signs out without removing local data, and keeps every public response under renderer control.",
+    evidence: { file: "packages/next/src/client/reader-rail.tsx" },
   },
   {
     id: "sync.account_deletion",
     capability: "Deleting the authentication account itself",
-    home: "host",
-    status: "blocked",
-    blockedBy: "#19",
-    why: "Needs a route holding a privileged key. The database half is done and a reader can remove every row they own; removing the account is the part that waits.",
+    home: "renderer",
+    status: "upgraded",
+    why: "The renderer rejects cross-origin requests before provider execution, authenticates the current reader before privileged deletion, fixes every public response, and keeps the service-role key server only.",
+    evidence: { file: "packages/sync-supabase/server.mjs" },
   },
 ]);
 
-export const PARITY_LEDGER = Object.freeze([...AUDIO_PARITY, ...SYNC_PARITY]);
+export const PARITY_LEDGER = Object.freeze([
+  ...READER_PARITY,
+  ...AUDIO_PARITY,
+  ...SYNC_PARITY,
+]);
 
 export const PARITY_HOMES = Object.freeze([
   "author",
   "engine",
   "host",
   "provider",
+  "renderer",
 ]);
 
 export const PARITY_STATUSES = Object.freeze([
   "added",
   "blocked",
+  "planned",
   "preserved",
   "upgraded",
 ]);

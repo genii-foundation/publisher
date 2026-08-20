@@ -61,6 +61,9 @@
     "audio": {
       "$ref": "#/$defs/audio"
     },
+    "updates": {
+      "$ref": "#/$defs/updates"
+    },
     "sync": {
       "$ref": "#/$defs/sync"
     },
@@ -141,6 +144,17 @@
         {
           "type": "string",
           "pattern": "^(?=[^{}]*\\{collectionId\\}[^{}]*$)"
+        }
+      ]
+    },
+    "updatesPageRouteTemplate": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/nonRootRouteTemplatePath"
+        },
+        {
+          "type": "string",
+          "pattern": "^(?=[^{}]*\\{page\\}[^{}]*$)"
         }
       ]
     },
@@ -431,6 +445,23 @@
         }
       }
     },
+    "updates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter",
+        "catalog"
+      ],
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/packageReference"
+        },
+        "catalog": {
+          "$ref": "#/$defs/relativePath"
+        }
+      },
+      "description": "An authoring pipeline and its plain Updates catalog. The adapter is recorded for provenance and never executed by the engine."
+    },
     "sync": {
       "type": "object",
       "additionalProperties": false,
@@ -470,6 +501,43 @@
       ],
       "description": "Consent is deliberately absent. It is a precondition rather than a feature: the consent field above is pinned to opt-in, so every synchronizing publication requires it and none may offer it as a choice."
     },
+    "updatesPagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "pageSize"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/updatesPageRouteTemplate"
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "updatesRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "path": {
+          "$ref": "#/$defs/routePath"
+        },
+        "pagination": {
+          "$ref": "#/$defs/updatesPagination"
+        }
+      }
+    },
     "routes": {
       "type": "object",
       "additionalProperties": false,
@@ -488,7 +556,19 @@
           "$ref": "#/$defs/collectionRouteTemplate"
         },
         "updates": {
-          "$ref": "#/$defs/routePath"
+          "oneOf": [
+            {
+              "$ref": "#/$defs/routePath"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "$ref": "#/$defs/updatesRoute"
+              }
+            }
+          ]
         }
       }
     },

@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  canonicalizeJson,
   hashCanonicalJson,
   sha256,
 } from "@genii-foundation/publisher-content";
@@ -24,14 +25,35 @@ import {
 import {
   renderToStaticMarkup,
 } from "react-dom/server";
+import {
+  createReaderBookmarksStorageKey,
+} from "../packages/reader/dist/bookmarks.js";
+import {
+  createReaderNarrationPreferencesStorageKey,
+} from "../packages/reader/dist/narration.js";
+import {
+  createReaderPreferencesStorageKey,
+} from "../packages/reader/dist/preferences.js";
+import {
+  createReaderProgressStorageKey,
+} from "../packages/reader/dist/progress.js";
+import {
+  createReaderEngagementStorageKey,
+  createReaderSyncConsentStorageKey,
+} from "../packages/reader/dist/sync.js";
 
 import {
   createPublicationNextApplication,
 } from "../packages/next/dist/server/application.js";
 import {
+  createPublisherReaderStateBootstrapSource,
+} from "../packages/next/dist/client/reader-prepaint.js";
+import {
   resolveDefaultPublisherNextTheme,
 } from "../packages/next/dist/theme/default.js";
 import {
+  PublisherMarkdownBlock,
+  PublisherMarkdownInline,
   publisherMarkdownUrlTransform,
 } from "../packages/next/dist/components/markdown.js";
 import {
@@ -42,6 +64,14 @@ import {
 import {
   createPublisherNextErrorIdentity,
 } from "../packages/next/dist/error-identity.js";
+import {
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+  PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
+} from "../packages/next/dist/index.js";
 
 import {
   createFixtureReader,
@@ -97,6 +127,52 @@ function createUpdates(config = {}, loadOverride) {
   };
 }
 
+function createReaderStateBootstrap({
+  config = {},
+  createProjection,
+  createSource = () =>
+    'return { schemaVersion: "1.0", copied: [], refused: [] };',
+  implementation = {},
+} = {}) {
+  return {
+    package: "@example/reader-state-bootstrap",
+    version: "1.2.3",
+    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+    config,
+    implementation: {
+      kind: "genii.publisher.next-reader-state-bootstrap",
+      apiVersion: "1.1",
+      configure(snapshot) {
+        return {
+          valid: true,
+          value: {
+            ...(createProjection === undefined
+              ? {}
+              : {
+                  createProjection(context) {
+                    return {
+                      valid: true,
+                      value: createProjection(context, snapshot),
+                      diagnostics: [],
+                    };
+                  },
+                }),
+            createSource(context) {
+              return {
+                valid: true,
+                value: createSource(context, snapshot),
+                diagnostics: [],
+              };
+            },
+          },
+          diagnostics: [],
+        };
+      },
+      ...implementation,
+    },
+  };
+}
+
 async function createApplication(options = {}) {
   const reader =
     options.reader ??
@@ -109,6 +185,13 @@ async function createApplication(options = {}) {
   return assertValid(
     await createPublicationNextApplication({
       reader,
+      ...(options.readerStateBootstrap === undefined
+        ? {}
+        : {
+            readerStateBootstrap:
+              options.readerStateBootstrap,
+          }),
+      ...(options.syncData === undefined ? {} : { syncData: options.syncData }),
       theme:
         options.theme ?? resolveDefaultPublisherNextTheme(),
       ...(options.omitUpdates || !includeUpdates
@@ -139,6 +222,19 @@ function headingOutline(html) {
   );
 }
 
+function withoutFocusMarkup(html) {
+  let normalized = html;
+  let previous;
+  do {
+    previous = normalized;
+    normalized = normalized.replace(
+      /<span(?=[^>]*class="[^"]*publisher-(?:focus|narration)-)[^>]*>([^<]*)<\/span>/gu,
+      "$1",
+    );
+  } while (normalized !== previous);
+  return normalized;
+}
+
 test("home catalogs expose only published works and collections", async () => {
   const application = await createApplication();
   const resolution = application.resolveRoute(undefined);
@@ -156,6 +252,13 @@ test("home catalogs expose only published works and collections", async () => {
   const html = await renderResolved(application, undefined);
   assert.match(html, /Café \+ Field Notes/);
   assert.match(html, /Field Notes/);
+  assert.match(html, /class="publisher-reader-rail"/u);
+  assert.match(html, /aria-label="Reader tools"/u);
+  assert.match(html, />Contents</u);
+  assert.match(html, />Search</u);
+  assert.match(html, />Bookmarks</u);
+  assert.match(html, />Settings</u);
+  assert.doesNotMatch(html, />Sync</u);
   assert.doesNotMatch(html, /Quiet Draft/);
   assert.doesNotMatch(html, /Old Record/);
   assert.doesNotMatch(html, /Retired Notes/);
@@ -166,6 +269,42 @@ test("home catalogs expose only published works and collections", async () => {
     { level: 2, text: "Collections" },
     { level: 3, text: "Field Notes" },
   ]);
+});
+
+test("a matching synchronization artifact enables only the progressive account surface", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const syncData = {
+    $schema: "https://publisher.genii.foundation/schemas/sync-envelope.schema.json",
+    schemaVersion: "1.0",
+    publicationId: reader.publicationId,
+    engineVersion: reader.engineVersion,
+    buildId: reader.buildId,
+    provider: { package: "@example/provider" },
+    consent: "opt-in",
+    localFallback: true,
+    capabilities: ["account-deletion", "progress"],
+  };
+  const application = await createApplication({ reader, syncData });
+  const html = await renderResolved(application, undefined);
+  assert.match(html, />Sync</u);
+  assert.doesNotMatch(html, /provider|supabase|service-role/ui);
+  assert.deepEqual(application.manifest.sync, {
+    schemaVersion: "1.0",
+    buildId: reader.buildId,
+    providerPackage: "@example/provider",
+    consent: "opt-in",
+    localFallback: true,
+    capabilities: ["account-deletion", "progress"],
+  });
+  const localOnly = await createApplication({ reader });
+  assert.notEqual(application.manifest.buildId, localOnly.manifest.buildId);
+
+  const mismatched = await createPublicationNextApplication({
+    reader,
+    syncData: { ...syncData, buildId: `sha256:${"b".repeat(64)}` },
+  });
+  assert.equal(mismatched.valid, false);
+  assert.equal(mismatched.diagnostics[0].code, "next.sync.identity_mismatch");
 });
 
 test("unlisted and archived works remain directly readable", async () => {
@@ -203,7 +342,7 @@ test("unlisted and archived works remain directly readable", async () => {
     const html = renderToStaticMarkup(
       await application.renderPage(resolution.page),
     );
-    assert.match(html, new RegExp(item.title));
+    assert.match(withoutFocusMarkup(html), new RegExp(item.title));
     if (resolution.page.kind === "work") {
       assert.deepEqual(headingOutline(html), [
         { level: 1, text: item.title },
@@ -246,13 +385,14 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
     "works",
     "café+notes",
   ]);
+  const semanticWorkHtml = withoutFocusMarkup(workHtml);
   assert.deepEqual(headingOutline(workHtml), [
     { level: 1, text: "Café + Field Notes" },
     { level: 2, text: "Opening" },
     { level: 2, text: "Next" },
   ]);
   assert.match(
-    workHtml,
+    semanticWorkHtml,
     /<a href="\/readings\/plus\+two">First<\/a>/u,
   );
   assert.doesNotMatch(workHtml, /Semantic navigation only/u);
@@ -268,17 +408,23 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
   const firstHtml = renderToStaticMarkup(
     await application.renderPage(first.page),
   );
+  const semanticFirstHtml = withoutFocusMarkup(firstHtml);
   assert.deepEqual(headingOutline(firstHtml), [
     { level: 1, text: "Opening" },
   ]);
-  assert.match(firstHtml, /<em>safe<\/em>/);
+  assert.match(firstHtml, /class="publisher-breadcrumbs"/u);
+  assert.match(firstHtml, /aria-label="Breadcrumb"/u);
+  assert.match(firstHtml, /aria-current="page">Opening<\/span>/u);
+  assert.match(firstHtml, /aria-label="Copy link to Opening"/u);
+  assert.match(firstHtml, /class="publisher-heading-action"[^>]*hidden=""/u);
+  assert.match(semanticFirstHtml, /<em>safe<\/em>/);
   assert.match(
-    firstHtml,
+    semanticFirstHtml,
     /<a href="\/readings\/plus\+two">First<\/a>/u,
   );
   assert.doesNotMatch(firstHtml, /Semantic navigation only/u);
   assert.match(
-    firstHtml,
+    semanticFirstHtml,
     /href="https:\/\/example\.com">good link<\/a>/u,
   );
   for (const block of first.page.section.blocks) {
@@ -318,6 +464,12 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
   assert.doesNotMatch(secondHtml, /href="javascript:/iu);
   assert.doesNotMatch(secondHtml, /<a[^>]*>unsafe link<\/a>/iu);
   assert.doesNotMatch(secondHtml, /onerror=/iu);
+  assert.match(secondHtml, /class="publisher-table-region"/u);
+  assert.match(secondHtml, /role="region"/u);
+  assert.match(secondHtml, /tabindex="0"/u);
+  assert.match(secondHtml, /Reading window/u);
+  assert.match(secondHtml, /Tide height/u);
+  assert.equal(secondHtml.match(/scope="col"/gu)?.length, 2);
   assert.match(
     secondHtml,
     new RegExp(
@@ -342,8 +494,24 @@ test("paragraph-first sections retain normalized section headings", async () => 
     { level: 2, text: "Next" },
   ]);
   assert.match(
-    html,
+    withoutFocusMarkup(html),
     /<a href="\/readings\/plus\+two">First<\/a> <em>safe<\/em> line/u,
+  );
+});
+
+test("source-backed links inside emphasis retain their formatting", async () => {
+  const application = await createApplication({
+    reader: await createFixtureReader({
+      formattedReaderLink: true,
+    }),
+  });
+  const html = await renderResolved(application, [
+    "works",
+    "café+notes",
+  ]);
+  assert.match(
+    withoutFocusMarkup(html),
+    /First <em><a href="\/readings\/plus\+two">safe<\/a><\/em> line/u,
   );
 });
 
@@ -358,7 +526,7 @@ test("source-backed heading links survive normalized work and section outlines",
     "café+notes",
   ]);
   assert.match(
-    workHtml,
+    withoutFocusMarkup(workHtml),
     /<h2[^>]*><a href="\/readings\/plus\+two">Opening<\/a><\/h2>/u,
   );
   assert.deepEqual(headingOutline(workHtml), [
@@ -372,7 +540,7 @@ test("source-backed heading links survive normalized work and section outlines",
     "café+one",
   ]);
   assert.match(
-    sectionHtml,
+    withoutFocusMarkup(sectionHtml),
     /<h1[^>]*><a href="\/readings\/plus\+two">Opening<\/a><\/h1>/u,
   );
   assert.deepEqual(headingOutline(sectionHtml), [
@@ -394,6 +562,15 @@ test("authored work languages and English renderer chrome are scoped", async () 
     }),
   );
   assert.match(root, /<html lang="fr">/u);
+  assert.match(root, /data-publisher-reader-prepaint=""/u);
+  assert.match(
+    root,
+    /genii\.publisher\.reader\.preferences\.v1\.renderer-proof/u,
+  );
+  assert.ok(
+    root.indexOf("data-publisher-reader-prepaint") <
+      root.indexOf("<body>"),
+  );
   assert.match(root, /<h2 id="publisher-works-heading" lang="en">/u);
   assert.match(root, /class="publisher-skip-link"[^>]*lang="en"/u);
 
@@ -412,6 +589,710 @@ test("authored work languages and English renderer chrome are scoped", async () 
     work,
     /class="publisher-reading-stat" lang="en"/u,
   );
+});
+
+test("Reader state bootstrap is ordered, frozen, and bound to application identity", async () => {
+  let receivedContext;
+  let receivedConfig;
+  const source = [
+    'const legacy = localStorage.getItem("legacy.preferences");',
+    "if (legacy !== null && localStorage.getItem(context.targetStorageKeys.preferences) === null) {",
+    "  localStorage.setItem(context.targetStorageKeys.preferences, legacy);",
+    '  return { schemaVersion: "1.0", copied: ["preferences"], refused: [] };',
+    "}",
+    'return { schemaVersion: "1.0", copied: [], refused: [] };',
+  ].join("\n");
+  const application = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      config: { legacyPrefix: "legacy" },
+      createSource(context, config) {
+        receivedContext = context;
+        receivedConfig = config;
+        return source;
+      },
+    }),
+  });
+
+  assert.equal(Object.isFrozen(receivedContext), true);
+  assert.equal(Object.isFrozen(receivedContext.targetStorageKeys), true);
+  assert.equal(Object.isFrozen(receivedConfig), true);
+  assert.equal(receivedContext.publicationId, "renderer-proof");
+  assert.equal(
+    receivedContext.targetStorageKeys.preferences,
+    "genii.publisher.reader.preferences.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.progress,
+    "genii.publisher.reader.progress.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.bookmarks,
+    "genii.publisher.reader.bookmarks.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.syncConsent,
+    "genii.publisher.reader.sync-consent.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.engagement,
+    "genii.publisher.reader.engagement.v1.renderer-proof",
+  );
+  assert.equal(
+    receivedContext.targetStorageKeys.narrationPreferences,
+    "genii.publisher.reader.renderer-proof.narration",
+  );
+  assert.deepEqual(application.manifest.readerStateBootstrap, {
+    package: "@example/reader-state-bootstrap",
+    version: "1.2.3",
+    rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+    apiVersion: "1.1",
+    configHash: hashCanonicalJson({ legacyPrefix: "legacy" }),
+    sourceHash: sha256(source),
+    projection: null,
+  });
+  assert.equal(application.manifest.schemaVersion, "1.2");
+
+  const root = renderToStaticMarkup(
+    application.RootLayout({ children: "proof" }),
+  );
+  assert.match(root, /data-publisher-reader-state-bootstrap=""/u);
+  assert.ok(
+    root.indexOf("data-publisher-reader-state-bootstrap") <
+      root.indexOf("data-publisher-reader-prepaint"),
+  );
+  assert.ok(
+    root.indexOf("data-publisher-reader-prepaint") <
+      root.indexOf("<body>"),
+  );
+  assert.match(
+    root,
+    /genii\.publisher\.reader-state-bootstrap\.v1\.renderer-proof/u,
+  );
+
+  const changed = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      config: { legacyPrefix: "changed" },
+      createSource: () => source,
+    }),
+  });
+  assert.notEqual(
+    changed.manifest.readerStateBootstrap.configHash,
+    application.manifest.readerStateBootstrap.configHash,
+  );
+  assert.notEqual(
+    changed.manifest.buildId,
+    application.manifest.buildId,
+  );
+});
+
+test("Reader state bootstrap snapshots a public projection and binds its exact envelope", async () => {
+  let projectionCalls = 0;
+  let sourceCalls = 0;
+  const invocationOrder = [];
+  let projectionContext;
+  let sourceContext;
+  const projectionData = JSON.parse(
+    '{"zeta":[{"value":"proof"}],"__proto__":{"safe":true},"alpha":1}',
+  );
+  projectionData.special = 'line\n"\\💡';
+  const source = [
+    "if (projection === null || !Object.isFrozen(projection) || !Object.isFrozen(projection.data) || !Object.isFrozen(projection.data.zeta[0])) throw new Error(\"projection not frozen\");",
+    'return { schemaVersion: "1.0", copied: [], refused: [] };',
+  ].join("\n");
+  const application = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection(context) {
+        projectionCalls += 1;
+        invocationOrder.push("projection");
+        projectionContext = context;
+        return projectionData;
+      },
+      createSource(context) {
+        sourceCalls += 1;
+        invocationOrder.push("source");
+        sourceContext = context;
+        return source;
+      },
+    }),
+  });
+  const expectedEnvelope = {
+    buildId: application.reader.buildId,
+    data: projectionData,
+    engineVersion: application.reader.engineVersion,
+    publicationId: "renderer-proof",
+    schemaVersion: "1.0",
+  };
+  const expectedText = canonicalizeJson(expectedEnvelope);
+  assert.equal(projectionCalls, 1);
+  assert.equal(sourceCalls, 1);
+  assert.deepEqual(invocationOrder, ["projection", "source"]);
+  assert.equal(projectionContext, sourceContext);
+  assert.equal(Object.isFrozen(projectionContext), true);
+  assert.deepEqual(application.manifest.readerStateBootstrap.projection, {
+    schemaVersion: "1.0",
+    byteSize: new TextEncoder().encode(expectedText).length,
+    hash: sha256(expectedText),
+  });
+
+  projectionData.alpha = 99;
+  projectionData.zeta[0].value = "mutated";
+  const root = renderToStaticMarkup(
+    application.RootLayout({ children: "proof" }),
+  );
+  const expectedScript = createPublisherReaderStateBootstrapSource({
+    package: "@example/reader-state-bootstrap",
+    version: "1.2.3",
+    sourceHash: sha256(source),
+    source,
+    context: sourceContext,
+    projectionText: expectedText,
+  });
+  assert.match(root, /projectionText/u);
+  assert.equal(root.includes(expectedScript), true);
+  assert.doesNotMatch(root, /mutated/u);
+
+  const reordered = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection: () => JSON.parse(
+        '{"special":"line\\n\\"\\\\💡","alpha":1,"__proto__":{"safe":true},"zeta":[{"value":"proof"}]}',
+      ),
+      createSource: () => source,
+    }),
+  });
+  assert.deepEqual(
+    reordered.manifest.readerStateBootstrap.projection,
+    application.manifest.readerStateBootstrap.projection,
+  );
+  assert.equal(reordered.manifest.buildId, application.manifest.buildId);
+
+  const changed = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection: () => ({ alpha: 2 }),
+      createSource: () => source,
+    }),
+  });
+  assert.notEqual(
+    changed.manifest.readerStateBootstrap.projection.hash,
+    application.manifest.readerStateBootstrap.projection.hash,
+  );
+  assert.notEqual(changed.manifest.buildId, application.manifest.buildId);
+});
+
+test("Reader state bootstrap projection callbacks cannot replace trusted serialization", async () => {
+  const originalStringify = JSON.stringify;
+  const marker = "publisherProjectionSerializerWasReplaced";
+  const projectionData = new Proxy({ proof: "stable" }, {
+    getPrototypeOf(target) {
+      JSON.stringify = (value, ...args) => {
+        if (
+          value !== null &&
+          typeof value === "object" &&
+          Object.hasOwn(value, "projectionText") &&
+          Object.hasOwn(value, "reportSchemaVersion")
+        ) {
+          return `(()=>{globalThis.${marker}=true;return ${originalStringify(value, ...args)}})()`;
+        }
+        return originalStringify(value, ...args);
+      };
+      return Object.getPrototypeOf(target);
+    },
+  });
+  try {
+    const application = await createApplication({
+      readerStateBootstrap: createReaderStateBootstrap({
+        createProjection: () => projectionData,
+      }),
+    });
+    const expectedText = canonicalizeJson({
+      buildId: application.reader.buildId,
+      data: { proof: "stable" },
+      engineVersion: application.reader.engineVersion,
+      publicationId: application.reader.publicationId,
+      schemaVersion: "1.0",
+    });
+    assert.deepEqual(
+      application.manifest.readerStateBootstrap.projection,
+      {
+        schemaVersion: "1.0",
+        byteSize: new TextEncoder().encode(expectedText).length,
+        hash: sha256(expectedText),
+      },
+    );
+    const root = renderToStaticMarkup(
+      application.RootLayout({ children: "proof" }),
+    );
+    assert.doesNotMatch(root, new RegExp(marker, "u"));
+  } finally {
+    JSON.stringify = originalStringify;
+  }
+});
+
+test("Reader state bootstrap projection enforces exact independent resource limits", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const createResult = (data) =>
+    createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        createProjection: () => data,
+      }),
+    });
+  const nested = (depth) => {
+    let value = {};
+    for (let index = 1; index < depth; index += 1) {
+      value = { child: value };
+    }
+    return value;
+  };
+
+  assert.equal((await createResult(
+    nested(PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH),
+  )).valid, true);
+  let result = await createResult(
+    nested(PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH + 1),
+  );
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_deep");
+  assert.deepEqual(result.diagnostics[0].params, {
+    actualDepth:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH + 1,
+    maximumDepth:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+  });
+
+  const acceptedContainers = {
+    values: Array(
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS - 2,
+    ).fill(Object.freeze({})),
+  };
+  assert.equal((await createResult(acceptedContainers)).valid, true);
+  acceptedContainers.values.push({});
+  result = await createResult(acceptedContainers);
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_many_containers");
+
+  const acceptedEntries = {
+    values: Array.from(
+      {
+        length:
+          PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES - 1,
+      },
+      () => 0,
+    ),
+  };
+  assert.equal((await createResult(acceptedEntries)).valid, true);
+  acceptedEntries.values.push(0);
+  result = await createResult(acceptedEntries);
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_many_entries");
+  assert.deepEqual(result.diagnostics[0].params, {
+    actualItems:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES + 1,
+    maximumItems:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+  });
+
+  let overLimitArrayOwnKeysCalled = false;
+  const overLimitArray = new Proxy(
+    Array(
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+    ),
+    {
+      ownKeys() {
+        overLimitArrayOwnKeysCalled = true;
+        throw new Error("private ownKeys trap");
+      },
+    },
+  );
+  result = await createResult({ values: overLimitArray });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_many_entries");
+  assert.equal(overLimitArrayOwnKeysCalled, false);
+
+  let overDepthPrototypeCalled = false;
+  let overDepthValue = new Proxy({}, {
+    getPrototypeOf() {
+      overDepthPrototypeCalled = true;
+      throw new Error("private prototype trap");
+    },
+  });
+  for (
+    let index = 0;
+    index < PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH;
+    index += 1
+  ) {
+    overDepthValue = { child: overDepthValue };
+  }
+  result = await createResult(overDepthValue);
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_deep");
+  assert.equal(overDepthPrototypeCalled, false);
+
+  const emptyEnvelopeBytes = new TextEncoder().encode(
+    canonicalizeJson({
+      buildId: reader.buildId,
+      data: { payload: "" },
+      engineVersion: reader.engineVersion,
+      publicationId: "renderer-proof",
+      schemaVersion: "1.0",
+    }),
+  ).length;
+  const acceptedBytes = {
+    payload: "x".repeat(
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES -
+        emptyEnvelopeBytes,
+    ),
+  };
+  result = await createResult(acceptedBytes);
+  assert.equal(result.valid, true,
+    JSON.stringify(result.diagnostics, null, 2));
+  assert.equal(
+    result.value.manifest.readerStateBootstrap.projection.byteSize,
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  );
+  acceptedBytes.payload += "x";
+  result = await createResult(acceptedBytes);
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_large");
+  assert.equal(
+    result.diagnostics[0].params.maximumBytes,
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  );
+
+  result = await createResult({
+    prefix: "p".repeat(1_000_000),
+    value: "v".repeat(7_500_000),
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_too_large");
+  assert.deepEqual(result.diagnostics[0].params, {
+    actualBytes:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES + 1,
+    maximumBytes:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+  });
+
+  result = await createResult({ payload: "<".repeat(3_000_000) });
+  assert.equal(result.valid, false);
+  assert.equal(result.diagnostics[0].code,
+    "next.reader_state_bootstrap.script_too_large");
+  assert.equal(
+    result.diagnostics[0].params.maximumBytes,
+    16_777_216,
+  );
+
+  const staticTransport = await createPublicationNextApplication({
+    reader: await createFixtureReader({ includeUpdates: true }),
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection: () => ({ payload: "<".repeat(2_600_000) }),
+    }),
+    theme: resolveDefaultPublisherNextTheme(),
+    updates: createUpdates(),
+  });
+  assert.equal(staticTransport.valid, false);
+  assert.equal(
+    staticTransport.diagnostics[0].code,
+    "next.reader_state_bootstrap.static_script_too_large",
+  );
+  assert.equal(
+    staticTransport.diagnostics[0].params.maximumBytes,
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
+  );
+  assert.equal(staticTransport.diagnostics[0].params.documentCount, 9);
+
+  const boundarySource =
+    'return { schemaVersion: "1.0", copied: [], refused: [] };';
+  const boundaryContext = Object.freeze({
+    publicationId: reader.publicationId,
+    reportStorageKey:
+      `genii.publisher.reader-state-bootstrap.v1.${reader.publicationId}`,
+    targetStorageKeys: Object.freeze({
+      bookmarks: createReaderBookmarksStorageKey(reader.publicationId),
+      engagement: createReaderEngagementStorageKey(reader.publicationId),
+      narrationPreferences:
+        createReaderNarrationPreferencesStorageKey(reader.publicationId),
+      preferences: createReaderPreferencesStorageKey(reader.publicationId),
+      progress: createReaderProgressStorageKey(reader.publicationId),
+      syncConsent: createReaderSyncConsentStorageKey(reader.publicationId),
+    }),
+  });
+  const scriptBytesFor = (data) => {
+    const projectionText = canonicalizeJson({
+      buildId: reader.buildId,
+      data,
+      engineVersion: reader.engineVersion,
+      publicationId: reader.publicationId,
+      schemaVersion: "1.0",
+    });
+    return new TextEncoder().encode(
+      createPublisherReaderStateBootstrapSource({
+        package: "@example/reader-state-bootstrap",
+        version: "1.2.3",
+        sourceHash: sha256(boundarySource),
+        source: boundarySource,
+        context: boundaryContext,
+        projectionText,
+      }),
+    ).length;
+  };
+  const boundaryBase = { escaped: "", filler: "" };
+  const remainingScriptBytes =
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES -
+    scriptBytesFor(boundaryBase);
+  const boundaryData = {
+    escaped: "<".repeat(Math.floor(remainingScriptBytes / 6)),
+    filler: "x".repeat(remainingScriptBytes % 6),
+  };
+  assert.equal(
+    scriptBytesFor(boundaryData),
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+  );
+  result = await createResult(boundaryData);
+  assert.equal(result.valid, true,
+    JSON.stringify(result.diagnostics, null, 2));
+  boundaryData.filler += "x";
+  assert.equal(
+    scriptBytesFor(boundaryData),
+    PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES + 1,
+  );
+  result = await createResult(boundaryData);
+  assert.equal(result.valid, false);
+  assert.equal(
+    result.diagnostics[0].code,
+    "next.reader_state_bootstrap.script_too_large",
+  );
+  assert.deepEqual(result.diagnostics[0].params, {
+    actualBytes:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES + 1,
+    maximumBytes:
+      PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+  });
+});
+
+test("Reader state bootstrap projection rejects hostile values and private failures", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const accessor = {};
+  Object.defineProperty(accessor, "private", {
+    enumerable: true,
+    get() {
+      return "private projection value";
+    },
+  });
+  const cyclic = {};
+  cyclic.self = cyclic;
+  const sparse = [];
+  sparse.length = 1;
+  const candidates = [
+    accessor,
+    cyclic,
+    { sparse },
+    { custom: Object.create({ inherited: true }) },
+    { invalid: Number.POSITIVE_INFINITY },
+    { invalid: "\ud800" },
+    new Proxy({}, {
+      ownKeys() {
+        throw new Error("private projection proxy trap");
+      },
+    }),
+  ];
+  for (const data of candidates) {
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        createProjection: () => data,
+      }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      result.diagnostics[0].code,
+      "next.reader_state_bootstrap.projection_json_invalid",
+    );
+    assert.doesNotMatch(
+      JSON.stringify(result.diagnostics),
+      /private projection value/u,
+    );
+  }
+
+  for (const data of [null, [], "not an object"]) {
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        createProjection: () => data,
+      }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      result.diagnostics[0].code,
+      "next.reader_state_bootstrap.projection_root_invalid",
+    );
+  }
+
+  let thrownSourceCalls = 0;
+  const thrown = await createPublicationNextApplication({
+    reader,
+    readerStateBootstrap: createReaderStateBootstrap({
+      createProjection() {
+        throw new Error("private projection throw");
+      },
+      createSource() {
+        thrownSourceCalls += 1;
+        return 'return { schemaVersion: "1.0", copied: [], refused: [] };';
+      },
+    }),
+  });
+  assert.equal(thrown.valid, false);
+  assert.equal(
+    thrown.diagnostics[0].code,
+    "next.reader_state_bootstrap.projection_threw",
+  );
+  assert.doesNotMatch(JSON.stringify(thrown.diagnostics), /private/u);
+  assert.equal(thrownSourceCalls, 0);
+
+  for (const [projectionResult, code] of [
+    [
+      { valid: false, diagnostics: [{ private: "private rejection" }] },
+      "next.reader_state_bootstrap.projection_rejected",
+    ],
+    [
+      { valid: true, diagnostics: [] },
+      "next.reader_state_bootstrap.projection_result_invalid",
+    ],
+  ]) {
+    let invalidSourceCalls = 0;
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        implementation: {
+          configure() {
+            return {
+              valid: true,
+              diagnostics: [],
+              value: {
+                createProjection() {
+                  return projectionResult;
+                },
+                createSource() {
+                  invalidSourceCalls += 1;
+                  return {
+                    valid: true,
+                    diagnostics: [],
+                    value:
+                      'return { schemaVersion: "1.0", copied: [], refused: [] };',
+                  };
+                },
+              },
+            };
+          },
+        },
+      }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.diagnostics[0].code, code);
+    assert.doesNotMatch(JSON.stringify(result.diagnostics), /private/u);
+    assert.equal(invalidSourceCalls, 0);
+  }
+
+  let accessorCalls = 0;
+  const invalidInstances = [
+    {
+      createProjection: "not a function",
+      createSource() {},
+    },
+    (() => {
+      const instance = { createSource() {} };
+      Object.defineProperty(instance, "createProjection", {
+        enumerable: true,
+        get() {
+          accessorCalls += 1;
+          throw new Error("private projection accessor");
+        },
+      });
+      return instance;
+    })(),
+  ];
+  for (const instance of invalidInstances) {
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: createReaderStateBootstrap({
+        implementation: {
+          configure() {
+            return {
+              valid: true,
+              diagnostics: [],
+              value: instance,
+            };
+          },
+        },
+      }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      result.diagnostics[0].code,
+      "next.reader_state_bootstrap.instance_invalid",
+    );
+    assert.doesNotMatch(JSON.stringify(result.diagnostics), /private/u);
+  }
+  assert.equal(accessorCalls, 0);
+});
+
+test("Reader state bootstrap rejects incompatible, unsafe, invalid, and oversized source", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const candidates = [
+    {
+      adapter: createReaderStateBootstrap({
+        implementation: { apiVersion: "2.0" },
+      }),
+      code: "next.reader_state_bootstrap.implementation_invalid",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => 'return "</script>";',
+      }),
+      code: "next.reader_state_bootstrap.source_unsafe",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => 'return "<ſcript>";',
+      }),
+      code: "next.reader_state_bootstrap.source_unsafe",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => 'return "-->";',
+      }),
+      code: "next.reader_state_bootstrap.source_unsafe",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => "return {",
+      }),
+      code: "next.reader_state_bootstrap.source_invalid",
+    },
+    {
+      adapter: createReaderStateBootstrap({
+        createSource: () => "x".repeat(32_769),
+      }),
+      code: "next.reader_state_bootstrap.source_too_large",
+    },
+  ];
+  for (const { adapter, code } of candidates) {
+    const result = await createPublicationNextApplication({
+      reader,
+      readerStateBootstrap: adapter,
+    });
+    assert.equal(result.valid, false);
+    assert.equal(
+      result.diagnostics.some((diagnostic) => diagnostic.code === code),
+      true,
+      JSON.stringify(result.diagnostics, null, 2),
+    );
+  }
 });
 
 test("every page carries fixed linked attribution and source credit", async () => {
@@ -605,6 +1486,28 @@ test("Updates configuration is required exactly when its route exists", async ()
   );
 });
 
+test("the renderer refuses a theme written for API 1.0", async () => {
+  const reader = await createFixtureReader({ includeUpdates: false });
+  const current = resolveDefaultPublisherNextTheme();
+  const result = await createPublicationNextApplication({
+    reader,
+    theme: {
+      ...current,
+      implementation: {
+        ...current.implementation,
+        apiVersion: "1.0",
+      },
+    },
+  });
+  assert.equal(result.valid, false);
+  assert.equal(
+    result.diagnostics.some(
+      ({ code }) => code === "next.theme.implementation_invalid",
+    ),
+    true,
+  );
+});
+
 test("Updates content stays inside the engine owned page shell", async () => {
   const application = await createApplication({
     updates: createUpdates({ label: "Recorded releases" }),
@@ -621,7 +1524,7 @@ test("Updates content stays inside the engine owned page shell", async () => {
   const metadata = await application.generateMetadata({
     params: Promise.resolve({ segments: ["updates"] }),
   });
-  assert.equal(metadata.title, "Updates | Renderer Proof");
+  assert.equal(metadata.title, "Publication Updates | Renderer Proof");
 });
 
 test("Updates load once and bind their snapshot to application identity", async () => {
@@ -881,7 +1784,7 @@ test("origin root helpers do not assume the declared home route", async () => {
   const rootHtml = renderToStaticMarkup(
     await application.RootPage(),
   );
-  assert.match(rootHtml, /Old Record/);
+  assert.match(withoutFocusMarkup(rootHtml), /Old Record/);
   assert.doesNotMatch(rootHtml, /data-publisher-page="home"/);
   assert.equal(
     (await application.generateRootMetadata()).title,
@@ -918,6 +1821,7 @@ test("application identity is deterministic, immutable, and content bound", asyn
   assert.equal(Object.isFrozen(first.manifest.source), true);
   assert.equal(Object.isFrozen(first.manifest.theme), true);
   assert.equal(Object.isFrozen(first.artifact), true);
+  assert.equal(Object.isFrozen(first.offlineCatalog), true);
   assert.equal(Object.isFrozen(first.reader), true);
   assert.equal(
     first.manifest.source.readerBuildId,
@@ -941,6 +1845,18 @@ test("application identity is deterministic, immutable, and content bound", asyn
     first.manifest,
   );
   assert.equal(first.artifact.hash, sha256(first.artifact.text));
+  assert.deepEqual(
+    JSON.parse(first.offlineCatalogText),
+    first.offlineCatalog,
+  );
+  assert.equal(
+    first.offlineCatalog.rendererBuildId,
+    first.manifest.buildId,
+  );
+  assert.equal(
+    first.offlineCatalog.catalogHref,
+    `/publication-reader-offline.json?rendererBuildId=${encodeURIComponent(first.manifest.buildId)}`,
+  );
   assert.equal(
     first.artifact.relativePath,
     "renderers/next/application.json",
@@ -965,7 +1881,7 @@ test("application identity is deterministic, immutable, and content bound", asyn
 
 test("request continuity preserves exact paths and query boundaries", async () => {
   const application = await createApplication();
-  const internal = application.handleRequest(
+  const internal = await application.handleRequest(
     new Request(
       "https://reader.example/legacy/(cafe)+story?edition=morning&view=wide",
     ),
@@ -977,7 +1893,7 @@ test("request continuity preserves exact paths and query boundaries", async () =
     "https://reader.example/works/caf%C3%A9+notes?edition=morning&view=wide",
   );
 
-  const external = application.handleRequest(
+  const external = await application.handleRequest(
     new Request(
       "https://reader.example/depart?private=do-not-leak",
     ),
@@ -989,7 +1905,7 @@ test("request continuity preserves exact paths and query boundaries", async () =
     "https://continuity.example/new-home?source=archive",
   );
 
-  const slash = application.handleRequest(
+  const slash = await application.handleRequest(
     new Request(
       "https://reader.example/works/caf%C3%A9+notes/?from=alias",
     ),
@@ -1002,7 +1918,7 @@ test("request continuity preserves exact paths and query boundaries", async () =
   );
 
   assert.equal(
-    application.handleRequest(
+    await application.handleRequest(
       new Request(
         "https://reader.example/legacy/%28cafe%29%2Bstory",
       ),
@@ -1014,7 +1930,7 @@ test("request continuity preserves exact paths and query boundaries", async () =
     "/works/caf%c3%a9+notes",
     "/works/%63af%C3%A9+notes",
   ]) {
-    const rejected = application.handleRequest(
+    const rejected = await application.handleRequest(
       new Request(`https://reader.example${alias}`),
     );
     assert.ok(rejected instanceof Response);
@@ -1025,12 +1941,12 @@ test("request continuity preserves exact paths and query boundaries", async () =
     );
   }
   assert.equal(
-    application.handleRequest(
+    await application.handleRequest(
       new Request("https://reader.example/unknown"),
     ),
     undefined,
   );
-  assert.equal(application.handleRequest({}), undefined);
+  assert.equal(await application.handleRequest({}), undefined);
 });
 
 test("invalid and hostile application inputs return diagnostics", async () => {
@@ -1147,7 +2063,150 @@ test("Markdown URLs reject malformed UTF-8 percent escapes", () => {
   );
 });
 
-test("static route functions remain server rendered without client state", async () => {
+test("Markdown focus markup preserves one text occurrence and existing emphasis", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownInline, {
+      assetHrefs: new Set(),
+      markdown: "Alpha, beta 123 and **strong words** with `code words`.",
+    }),
+  );
+  assert.match(html, /publisher-focus-emphasis-light/);
+  assert.match(html, /publisher-focus-emphasis-normal/);
+  assert.match(html, /publisher-focus-emphasis-strong/);
+  assert.doesNotMatch(html, /<strong>[^<]*publisher-focus/u);
+  assert.doesNotMatch(html, /<code>[^<]*publisher-focus/u);
+  assert.equal(
+    html.replace(/<[^>]+>/gu, ""),
+    "Alpha, beta 123 and strong words with code words.",
+  );
+});
+
+test("Markdown headings add a copy action beside owned manuscript text", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: {
+        id: "low-water-heading",
+        kind: "heading",
+        text: "Low water",
+        readerAddress: {
+          path: "/works/first-light/",
+          anchor: "low-water",
+        },
+        domId: "low-water",
+      },
+      markdown: "## Low water",
+      renderedPath: "/works/first-light/",
+    }),
+  );
+  const semanticHtml = withoutFocusMarkup(html);
+  assert.match(html, /class="publisher-linkable-heading"/u);
+  assert.match(semanticHtml, /<h2>Low water<\/h2>/u);
+  assert.match(html, /aria-label="Copy link to Low water"/u);
+  assert.match(
+    html,
+    /data-publisher-heading-href="\/works\/first-light\/#low-water"/u,
+  );
+  assert.match(html, /hidden=""/u);
+  assert.equal(html.replace(/<[^>]+>/gu, ""), "Low water");
+});
+
+test("Markdown tables become labeled keyboard regions without changing cells", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: {
+        id: "tide-table",
+        kind: "table",
+        text: "Reading window Tide height First light 1.4 m",
+        readerAddress: {
+          path: "/works/first-light/",
+          anchor: "tide-table",
+        },
+        domId: "tide-table",
+      },
+      markdown: [
+        "| Reading window | Tide height |",
+        "| :--- | ---: |",
+        "| First *light* | 1.4 m |",
+      ].join("\n"),
+      narrationWords: true,
+      renderedPath: "/works/first-light/",
+    }),
+  );
+  assert.match(html, /class="publisher-table-region"/u);
+  assert.match(html, /role="region"/u);
+  assert.match(html, /tabindex="0"/u);
+  assert.match(
+    html,
+    /aria-labelledby="publisher-table-tide-table"/u,
+  );
+  assert.match(html, /<caption id="publisher-table-tide-table">/u);
+  assert.equal(html.match(/scope="col"/gu)?.length, 2);
+  assert.match(html, /text-align:left/u);
+  assert.match(html, /text-align:right/u);
+  assert.match(withoutFocusMarkup(html), /<em>light<\/em>/u);
+  assert.ok(
+    (html.match(/data-publisher-narration-word="true"/gu)?.length ?? 0) > 0,
+  );
+});
+
+test("malformed table syntax remains ordinary manuscript text", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: {
+        id: "not-a-table",
+        kind: "table",
+        text: "A B C",
+        readerAddress: null,
+        domId: null,
+      },
+      markdown: "| A | B |\n| --- |\n| C | D |",
+      renderedPath: "/",
+    }),
+  );
+  assert.doesNotMatch(html, /publisher-table-region/u);
+  assert.match(withoutFocusMarkup(html), /\| A \| B \|/u);
+});
+
+test("pipe syntax requires an adapter-classified table block", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: {
+        id: "unclassified-table",
+        kind: "paragraph",
+        text: "A B C D",
+        readerAddress: null,
+        domId: null,
+      },
+      markdown: "| A | B |\n| --- | --- |\n| C | D |",
+      renderedPath: "/",
+    }),
+  );
+  assert.doesNotMatch(html, /publisher-table-region/u);
+  assert.match(withoutFocusMarkup(html), /\| --- \| --- \|/u);
+});
+
+test("narration anchors share the spoken word profile", () => {
+  const html = renderToStaticMarkup(
+    createElement(PublisherMarkdownBlock, {
+      assetHrefs: new Set(),
+      block: { id: "pronunciation", kind: "paragraph", text: "ka·ra ˈtone" },
+      markdown: "ka·ra ˈtone",
+      narrationWords: true,
+      renderedPath: "/works/pronunciation/",
+    }),
+  );
+  assert.equal(
+    html.match(/data-publisher-narration-word="true"/gu)?.length,
+    2,
+  );
+  assert.equal(html.replace(/<[^>]+>/gu, ""), "ka·ra ˈtone");
+});
+
+test("static routes preserve server-rendered manuscript around client tools", async () => {
   const application = await createApplication();
   const generated = application.generateStaticParams();
   assert.deepEqual(generated, application.staticParams);

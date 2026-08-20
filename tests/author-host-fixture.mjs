@@ -97,22 +97,44 @@ export function installRenderer(
     contractVersion = "0.1.0",
     version = "1.0.0",
     readerDataPath,
+    searchDataPath,
+    omitSearchDataPath = false,
+    progressDataPath,
+    omitProgressDataPath = false,
+    publicIdentityDataPath,
+    omitPublicIdentityDataPath = false,
+    extensionDataPath,
+    omitExtensionDataPath = false,
     audioDataPath,
     omitAudioDataPath = false,
     syncDataPath,
     omitSyncDataPath = false,
+    updatesDataPath,
+    omitUpdatesDataPath = false,
     files,
     migrations = [],
     omitMigrations = false,
     capabilities = {
       routeKinds: ["collection", "home", "section", "updates", "work"],
-      dataArtifacts: ["audio", "sync"],
+      dataArtifacts: ["audio", "extensions", "progress", "public-identity", "search", "sync", "updates"],
     },
     omitCapabilities = false,
   } = {},
 ) {
   const short = name.split("/").pop();
   const artifactPath = readerDataPath ?? `${short}-reader.json`;
+  const searchPath = omitSearchDataPath
+    ? undefined
+    : (searchDataPath ?? `public/${short}-search.json`);
+  const progressPath = omitProgressDataPath
+    ? undefined
+    : (progressDataPath ?? `public/${short}-progress.json`);
+  const publicIdentityPath = omitPublicIdentityDataPath
+    ? undefined
+    : (publicIdentityDataPath ?? `${short}-public-identity.json`);
+  const extensionPath = omitExtensionDataPath
+    ? undefined
+    : (extensionDataPath ?? `${short}-extensions.json`);
   // A stub renderer claims support for narration by default, so it needs a place
   // to put it. Declaring the capability without a path is a renderer defect the
   // engine refuses, and omitAudioDataPath exists so that case stays testable.
@@ -122,6 +144,9 @@ export function installRenderer(
   const syncPath = omitSyncDataPath
     ? undefined
     : (syncDataPath ?? `public/${short}-sync.json`);
+  const updatesPath = omitUpdatesDataPath
+    ? undefined
+    : (updatesDataPath ?? `${short}-updates.json`);
   const declared =
     files ??
     [
@@ -166,6 +191,18 @@ export function installRenderer(
       `    renderer: ${JSON.stringify(name)},`,
       `    rendererVersion: ${JSON.stringify(version)},`,
       `    readerDataPath: ${JSON.stringify(artifactPath)},`,
+      ...(searchPath === undefined
+        ? []
+        : [`    searchDataPath: ${JSON.stringify(searchPath)},`]),
+      ...(progressPath === undefined
+        ? []
+        : [`    progressDataPath: ${JSON.stringify(progressPath)},`]),
+      ...(publicIdentityPath === undefined
+        ? []
+        : [`    publicIdentityDataPath: ${JSON.stringify(publicIdentityPath)},`]),
+      ...(extensionPath === undefined
+        ? []
+        : [`    extensionDataPath: ${JSON.stringify(extensionPath)},`]),
       // Omitted entirely when the caller gives none, so a renderer with no place
       // for narration is expressible. Declaring it as undefined would be a
       // different claim from not declaring it at all.
@@ -175,6 +212,9 @@ export function installRenderer(
       ...(syncPath === undefined
         ? []
         : [`    syncDataPath: ${JSON.stringify(syncPath)},`]),
+      ...(updatesPath === undefined
+        ? []
+        : [`    updatesDataPath: ${JSON.stringify(updatesPath)},`]),
       "    files: [",
       '      { path: "package.json", contents: JSON.stringify({ name: input.hostPackageName }, null, 2) + "\\n" },',
       `      ...${JSON.stringify(declared)},`,
@@ -187,8 +227,13 @@ export function installRenderer(
   );
   return {
     artifactPath,
+    searchDataPath: searchPath,
+    progressDataPath: progressPath,
+    publicIdentityDataPath: publicIdentityPath,
+    extensionDataPath: extensionPath,
     audioDataPath: audioPath,
     syncDataPath: syncPath,
+    updatesDataPath: updatesPath,
     generatedPath: `${short}-app.js`,
   };
 }
@@ -249,6 +294,38 @@ export function authorHost(
   writeFileSync(
     join(hostRoot, ".gitignore"),
     "node_modules/\n.publisher/\n",
+    "utf8",
+  );
+  writeFileSync(
+    join(hostRoot, "publisher.extensions.mjs"),
+    [
+      "const registration = (id, packageName, capabilities) => Object.freeze({",
+      "  id,",
+      "  package: packageName,",
+      '  version: "1.0.0",',
+      '  engineCompatibility: ">=0.1.0-alpha.0 <0.2.0",',
+      "  capabilities: Object.freeze(capabilities),",
+      "  implementation: Object.freeze({",
+      '    kind: "genii.publisher.extension",',
+      '    apiVersion: "1.0",',
+      "    project({ content, config }) {",
+      "      return Object.freeze({",
+      "        valid: true,",
+      "        value: Object.freeze({",
+      "          serverData: Object.freeze({ extensionId: id, publicationId: content.publicationId, config }),",
+      "        }),",
+      "        diagnostics: Object.freeze([]),",
+      "      });",
+      "    },",
+      "  }),",
+      "});",
+      "",
+      "export default Object.freeze([",
+      '  registration("station-index", "@example/station-index-extension", ["content.project"]),',
+      '  registration("margin-notes", "@example/margin-notes-extension", ["content.project", "renderer.slot"]),',
+      "]);",
+      "",
+    ].join("\n"),
     "utf8",
   );
   if (publication !== null) {

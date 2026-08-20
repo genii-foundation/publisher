@@ -71,11 +71,37 @@
       "bookmarks"
     ]
   },
+  "updates": {
+    "adapter": {
+      "package": "@example/night-dispatch-history",
+      "config": {
+        "literaryRoots": ["archive/texts"]
+      }
+    },
+    "catalog": "publishing/updates.json"
+  },
   "routes": {
     "home": "/",
     "work": "/dispatch/{workId}",
     "collection": "/sequences/{collectionId}",
-    "updates": "/dispatch-log"
+    "updates": [
+      {
+        "id": "all",
+        "path": "/dispatch-log",
+        "pagination": {
+          "path": "/dispatch-log/{page}",
+          "pageSize": 1
+        }
+      },
+      {
+        "id": "literary",
+        "path": "/dispatch-log/literary",
+        "pagination": {
+          "path": "/dispatch-log/literary/{page}",
+          "pageSize": 1
+        }
+      }
+    ]
   },
   "continuity": {
     "redirects": [

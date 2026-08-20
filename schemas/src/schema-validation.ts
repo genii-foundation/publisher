@@ -19,12 +19,15 @@ import {
 } from "./envelope-resource-limits.js";
 import {
   audioCatalogValidator,
+  audioCheckpointValidator,
   audioEnvelopeValidator,
   collectionValidator,
   contentEnvelopeValidator,
   publicationValidator,
   readerEnvelopeValidator,
   syncEnvelopeValidator,
+  updatesCatalogValidator,
+  updatesEnvelopeValidator,
   workValidator,
 } from "./generated-validators.js";
 import type {
@@ -33,6 +36,7 @@ import type {
 } from "./generated-validators.js";
 import type {
   AudioClipCatalog,
+  AudioCheckpoint,
   AudioEnvelope,
   CollectionManifest,
   Diagnostic,
@@ -40,6 +44,8 @@ import type {
   ManifestKind,
   PublicationManifest,
   SyncEnvelope,
+  UpdatesCatalog,
+  UpdatesEnvelope,
   ValidationResult,
   WorkManifest,
 } from "./types.js";
@@ -691,6 +697,13 @@ export function validateAudioCatalogShape(
   return validateShape(audioCatalogValidator, input);
 }
 
+/** Validates immutable author lifecycle evidence for one narration checkpoint. */
+export function validateAudioCheckpointShape(
+  input: unknown,
+): ValidationResult<AudioCheckpoint> {
+  return validateShape(audioCheckpointValidator, input);
+}
+
 /**
  * Validates a materialized audio envelope.
  *
@@ -714,6 +727,18 @@ export function validateSyncEnvelopeShape(
   input: unknown,
 ): ValidationResult<SyncEnvelope> {
   return validateShape(syncEnvelopeValidator, input);
+}
+
+export function validateUpdatesCatalogShape(
+  input: unknown,
+): ValidationResult<UpdatesCatalog> {
+  return validateShape(updatesCatalogValidator, input);
+}
+
+export function validateUpdatesEnvelopeShape(
+  input: unknown,
+): ValidationResult<UpdatesEnvelope> {
+  return validateShape(updatesEnvelopeValidator, input);
 }
 
 export function validateManifestShape<K extends ManifestKind>(

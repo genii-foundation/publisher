@@ -43,6 +43,12 @@
       ]
     }
   ],
+  "updates": {
+    "adapter": {
+      "package": "@example/field-notes-updates"
+    },
+    "catalog": "publication/updates.json"
+  },
   "routes": {
     "home": "/",
     "work": "/works/{workId}",

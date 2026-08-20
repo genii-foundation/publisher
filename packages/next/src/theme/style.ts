@@ -23,6 +23,12 @@ export function publisherNextThemeStyle(
   theme: PublisherNextThemeInstance,
 ): PublisherNextThemeStyle {
   const { color, typography, layout } = theme.tokens;
+  const defaultReaderFont = typography.readerFontFamilies.find(
+    ({ id }) => id === typography.defaultReaderFontFamilyId,
+  );
+  if (defaultReaderFont === undefined) {
+    throw new TypeError("The validated theme omitted its default Reader font.");
+  }
   return Object.freeze({
     "--publisher-color-canvas": color.canvas,
     "--publisher-color-surface": color.surface,
@@ -34,6 +40,7 @@ export function publisherNextThemeStyle(
     "--publisher-font-body": typography.bodyFamily,
     "--publisher-font-heading": typography.headingFamily,
     "--publisher-font-mono": typography.monoFamily,
+    "--publisher-reader-default-font-family": defaultReaderFont.family,
     "--publisher-font-size": typography.baseSize,
     "--publisher-line-height": String(typography.lineHeight),
     "--publisher-reading-measure": layout.readingMeasure,

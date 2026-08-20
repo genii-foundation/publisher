@@ -10,6 +10,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 - `parseJsonWithUniqueObjectKeys` parses raw manifest text before shape validation. It rejects malformed JSON, duplicate object member names after escape decoding, unpaired UTF-16 surrogates, non-finite numeric conversion, and documents that exceed the fixed size, nesting, or token limits in `STRICT_JSON_LIMITS`.
 - `validateContentEnvelopeShape` validates a compiled publication envelope before a renderer or other consumer accepts it.
 - `validateReaderEnvelopeShape` validates the strict, public reader projection shape. Full projection identity and relationship validation belongs to the reader package.
+- `validateAudioCheckpointShape` validates the closed immutable evidence shape used by narration author workflows. Exact aggregates and fingerprints are checked by `validateAudioCheckpoint` in the content package.
 - `EXTENSION_CAPABILITIES` and `ExtensionCapability` define the closed initial extension grant vocabulary.
 - `inspectCanonicalRoutePath` reports whether a concrete public route has the one canonical serialized form and returns a stable failure reason. `isCanonicalRoutePath` is its type-guard form.
 - `inspectCanonicalUrlFragment` validates a well-formed Unicode-scalar fragment and decodes it exactly once. Its successful result carries both the serialized value and the decoded browser ownership key. `isCanonicalUrlFragment` is its type-guard form.
@@ -69,7 +70,22 @@ The raw schemas are also exported:
 @genii-foundation/publisher-schema/collection.schema.json
 @genii-foundation/publisher-schema/content-envelope.schema.json
 @genii-foundation/publisher-schema/reader-envelope.schema.json
+@genii-foundation/publisher-schema/audio-catalog.schema.json
+@genii-foundation/publisher-schema/audio-checkpoint.schema.json
+@genii-foundation/publisher-schema/audio-envelope.schema.json
 ```
+
+### Declared manuscript structure
+
+A work may declare `sections` in preorder. Each declaration owns its durable ID,
+title, hierarchy, route, continuity, and navigability. Its `start` selector only
+locates a boundary in the neutral Markdown block stream. The selector never
+derives identity or public routing from a heading.
+
+The first declaration must start at the document or first block. Later
+navigable sections require explicit routes. A missing, repeated, or out-of-order
+boundary is a build error naming the manuscript and declaration pointer. This
+keeps ordinary heading edits from silently minting or retiring public addresses.
 
 ## Release safety
 

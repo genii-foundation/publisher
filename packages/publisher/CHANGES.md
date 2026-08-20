@@ -2,6 +2,33 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. The GENII Publisher application package is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-19, GENII Foundation
+
+- Added build-time extension handler projection with independent grants, owned canonical API paths, closed methods, collision refusal, and frozen build-bound data.
+- Added build-time declarative extension route projection with independent grants, narrow frozen input, canonical validation, collision refusal, and build-bound output.
+- Added explicit author extension registration with exact semantic identity and compatible capability support.
+- Invoked granted content projectors over frozen validated inputs and emitted canonical Reader-build-bound extension artifacts.
+- Reserved author extension code from source loading and lifecycle mutation, then materialized and checked extension artifacts through build and status.
+- Added a versioned public identity projection bound to each exact Reader build and materialized it as a required renderer data artifact.
+- Preserved exact installed host package metadata while generating the renderer contract.
+- Added versioned, inspectable local preview candidate identity for exact worktree, branch, commit, state, and source bytes.
+- Added fail-closed capture and verification for unstable files, symbolic links, special paths, unresolved indexes, submodules, and concurrent Git changes.
+- Exposed read-only preview identity and verification commands with packed-package consumer proof.
+
+## 2026-08-18, GENII Foundation
+
+- Projected, materialized, checked, and reported the required progress catalog beside each Reader artifact.
+- Loaded and validated declared Updates catalogs and emitted canonical envelopes bound to the exact Reader build.
+- Materialized and checked Updates alongside Reader, search, narration, and synchronization artifacts.
+
+## 2026-08-13, GENII Foundation
+
+- Added deterministic search artifact projection to every publication build.
+- Required renderer-declared search capability and destination before any build output is written.
+- Materialized and checked the search artifact atomically beside the Reader, narration, and synchronization artifacts.
+- Compiled author-declared Markdown section structure into durable Reader hierarchy, routes, continuity, and section-local block ranges.
+- Refused stale, orphaned, out-of-order, and route-less navigable section declarations with manuscript-aware diagnostics.
+
 ## 2026-07-28, GENII Foundation
 
 - Established the browser-safe application package and separate Node.js orchestration entry point.

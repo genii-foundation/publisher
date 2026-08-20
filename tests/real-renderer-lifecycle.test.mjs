@@ -118,7 +118,71 @@ function realHost(t, { publication = servableFixture } = {}) {
     "node_modules/\n.publisher/\n",
     "utf8",
   );
+  writeFileSync(
+    join(hostRoot, "package.json"),
+    `${JSON.stringify(
+      {
+        name: "real-renderer-lifecycle-host",
+        private: true,
+        type: "module",
+        scripts: {
+          build: "next build",
+          start: "next start",
+        },
+        dependencies: {
+          [realRenderer]: "0.1.0-alpha.0",
+        },
+        devDependencies: {
+          typescript: "7.0.2",
+        },
+        overrides: {
+          postcss: "8.5.24",
+        },
+      },
+      null,
+      2,
+    )}\n`,
+    "utf8",
+  );
   cpSync(publication, hostRoot, { recursive: true });
+  const manifest = JSON.parse(
+    readFileSync(join(hostRoot, "publication.json"), "utf8"),
+  );
+  if ((manifest.extensions ?? []).length > 0) {
+    writeFileSync(
+      join(hostRoot, "publisher.extensions.mjs"),
+      `${(manifest.extensions ?? []).map((extension) => `
+const ${extension.id.replaceAll("-", "_")} = Object.freeze({
+  id: ${JSON.stringify(extension.id)},
+  package: ${JSON.stringify(extension.package)},
+  version: "1.0.0",
+  engineCompatibility: ">=0.1.0-alpha.0 <0.2.0",
+  capabilities: Object.freeze(${JSON.stringify(extension.capabilities)}),
+  implementation: Object.freeze({
+    kind: "genii.publisher.extension",
+    apiVersion: "1.0",
+    project({ content, config }) {
+      return Object.freeze({
+        valid: true,
+        value: Object.freeze({
+          serverData: Object.freeze({
+            extensionId: ${JSON.stringify(extension.id)},
+            publicationId: content.publicationId,
+            config,
+          }),
+        }),
+        diagnostics: Object.freeze([]),
+      });
+    },
+  }),
+});`).join("\n")}\n\nexport default Object.freeze([${
+        (manifest.extensions ?? [])
+          .map((extension) => extension.id.replaceAll("-", "_"))
+          .join(", ")
+      }]);\n`,
+      "utf8",
+    );
+  }
   mkdirSync(join(hostRoot, "node_modules", "@genii-foundation"), {
     recursive: true,
   });
@@ -199,7 +263,13 @@ test("the real renderer takes a publication from nothing to a current artifact",
     readFileSync(join(hostRoot, "publisher.host.json"), "utf8"),
   );
   assert.equal(state.renderer, realRenderer);
-  assert.equal(state.hostContractVersion, "0.1.0");
+  assert.equal(state.hostContractVersion, "0.17.0");
+  const hostManifest = JSON.parse(
+    readFileSync(join(hostRoot, "package.json"), "utf8"),
+  );
+  assert.equal(hostManifest.dependencies[realRenderer], "0.1.0-alpha.0");
+  assert.equal(hostManifest.devDependencies.typescript, "7.0.2");
+  assert.equal(hostManifest.overrides.postcss, "8.5.24");
 
   // Status now wants an artifact.
   const middle = run(hostRoot, ["status"]);
@@ -300,7 +370,7 @@ test("rolling back an initialization of the real contract removes all of it", (t
   );
 });
 
-test("the real renderer refuses a publication it cannot serve", (t) => {
+test("the real renderer serves a publication with materialized Updates", (t) => {
   const hostRoot = realHost(t, {
     publication: join(repositoryRoot, "fixtures", "canonical-field-notes"),
   });
@@ -313,14 +383,11 @@ test("the real renderer refuses a publication it cannot serve", (t) => {
   commitAll(hostRoot, "initialize");
 
   const built = run(hostRoot, ["build"]);
-  assert.equal(built.status, 1, `must refuse:\n${built.stdout}`);
-  assert.match(built.stderr, /cannot serve/u);
-  assert.match(built.stderr, /updates route/u);
-  // Nothing written, so the host is still whatever it was.
-  assert.equal(
-    existsSync(join(hostRoot, "publication-reader.json")),
-    false,
-  );
+  assert.equal(built.status, 0, built.stderr);
+  assert.ok(existsSync(join(hostRoot, "publication-reader.json")));
+  assert.ok(existsSync(join(hostRoot, "publication-public-identity.json")));
+  assert.ok(existsSync(join(hostRoot, "publication-extensions.json")));
+  assert.ok(existsSync(join(hostRoot, "publication-updates.json")));
 });
 
 // ------------------------------------------- the stubs must match reality

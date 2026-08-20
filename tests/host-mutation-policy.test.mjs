@@ -16,6 +16,8 @@ import test from "node:test";
 
 import {
   RESERVED_HOST_CONFIG_PATH,
+  RESERVED_HOST_EXTENSIONS_PATH,
+  RESERVED_HOST_THEME_PATH,
   assertHostMutationsPermitted,
   createHostMutationAuthority,
 } from "../packages/publisher/dist/node/lifecycle/policy.js";
@@ -88,6 +90,8 @@ test("declaring a hard-denied path does not buy authority over it", () => {
       ".publisher/plans/current.json",
       "editorial/sources/volumes/one/manuscript.md",
       RESERVED_HOST_CONFIG_PATH,
+      RESERVED_HOST_EXTENSIONS_PATH,
+      RESERVED_HOST_THEME_PATH,
     ],
   });
   for (const path of [
@@ -98,6 +102,8 @@ test("declaring a hard-denied path does not buy authority over it", () => {
     ".publisher/plans/current.json",
     "editorial/sources/volumes/one/manuscript.md",
     RESERVED_HOST_CONFIG_PATH,
+    RESERVED_HOST_EXTENSIONS_PATH,
+    RESERVED_HOST_THEME_PATH,
   ]) {
     const decision = policy.authorize(path, "rendererManaged");
     assert.equal(

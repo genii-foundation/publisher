@@ -47,7 +47,7 @@
   },
   "auditedSource": {
     "repository": "https://github.com/genii-foundation/coherence-thesis",
-    "ref": "d000fe50882c4664f96dccdea38b4b370dfb368d",
+    "ref": "c60aa2bca5aa3cc7abf0d9bd661538a247315f59",
     "evidence": [
       {
         "path": "NOTICE",
@@ -78,7 +78,7 @@
       },
       {
         "path": "scripts/manuscripts/io.ts",
-        "sha256": "sha256:3ba438982c829ee036fbdca93c71963fc5dddb71f103bd7d98a608f8084c85e7",
+        "sha256": "sha256:8674b62290186b22486438da4fa8fa67db62907cc8d8ec5969ba135fe9b3f01e",
         "role": "source-code",
         "license": "Apache-2.0",
         "lineStart": 20,
@@ -96,7 +96,7 @@
       },
       {
         "path": "scripts/repository/layout.ts",
-        "sha256": "sha256:a8d32dceb012a22b7576fdc86199be5322b3280abba01418076d8e91b992a39d",
+        "sha256": "sha256:a6051d9b604de432010f011f07d582b9dfbc0b34d267955cc8d9a36969b23a99",
         "role": "source-code",
         "license": "Apache-2.0",
         "lineStart": 86,
@@ -105,12 +105,57 @@
       },
       {
         "path": "scripts/repository/layout.test.ts",
-        "sha256": "sha256:b4c5c560eb16d903c8f5c1f143e8792c7af436fcb95d2a6a4dd195813713f4db",
+        "sha256": "sha256:4d21daae12dd239c7c3cc6078f8e9eeed8c09a8030e5ae05bcdee2c5c692c947",
         "role": "test",
         "license": "Apache-2.0",
         "lineStart": 198,
         "lineEnd": 243,
         "description": "Shows Coherence symlink and duplicate filesystem identity expectations that were observed without copying its tests."
+      },
+      {
+        "path": "src/lib/reader-state.ts",
+        "sha256": "sha256:9b6ba59e364274af1f6e804c873159bd66dcba17aac8c79d1e4d91cf4235343b",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 7,
+        "lineEnd": 86,
+        "description": "Shows current Coherence progress identity, continuity groups, revision hashes, interaction metrics, navigation sources, and persisted schema boundaries inspected before writing the neutral Reader progress model."
+      },
+      {
+        "path": "src/lib/reader-bookmarks.ts",
+        "sha256": "sha256:b9e7dfcba7dba94e0041f879a30107262e70783e7fbc91c75121bae2270a40fe",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 14,
+        "lineEnd": 102,
+        "description": "Shows current Coherence bookmark schema independence, bounded state, tombstones, continuity identity, passage ranges, and hostile-key handling inspected before writing neutral bookmark primitives."
+      },
+      {
+        "path": "src/lib/reader-passage-range.ts",
+        "sha256": "sha256:9b9781bc8b7435d920ddd01e77d5b0eee400d3bc174689784a5948933f056ab5",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 3,
+        "lineEnd": 35,
+        "description": "Shows current Coherence visible-text passage coordinates and content-hash reanchoring behavior inspected before writing the neutral passage range contract."
+      },
+      {
+        "path": "src/lib/reader-preferences.ts",
+        "sha256": "sha256:a8881804eaf91de1eba88888b9dbd522fb8c2a0c1a9e811b0136cbce402c9c50",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 94,
+        "description": "Shows current Coherence preference dimensions, closed option vocabularies, font size bounds, and default values inspected before writing the neutral preference model."
+      },
+      {
+        "path": "src/components/SearchMenuIsland.tsx",
+        "sha256": "sha256:4a0c525ecca8675d779fbf30f9e1f673e85966d6c0fd28d57222eeebd2d72370",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 276,
+        "lineEnd": 363,
+        "description": "Shows current Coherence lazy search loading, offline scope, bookmark integration, deterministic scoring, and result limits inspected before writing the neutral search artifact and query engine."
       }
     ]
   },

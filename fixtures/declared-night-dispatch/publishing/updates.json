@@ -1,0 +1,45 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/updates-catalog.schema.json",
+  "schemaVersion": "1.0",
+  "publicationId": "night-dispatch",
+  "views": [
+    {
+      "id": "all",
+      "title": "Dispatch log",
+      "description": "Every published change, interpreted by the archive's authoring pipeline.",
+      "entries": [
+        {
+          "id": "platform-bell-published",
+          "title": "Platform Bell published",
+          "publishedAt": "2026-02-02T19:30:00Z",
+          "href": "/dispatch/platform-bell"
+        },
+        {
+          "id": "signal-lantern-published",
+          "title": "Signal Lantern published",
+          "publishedAt": "2026-02-01T19:30:00Z",
+          "href": "/dispatch/signal-lantern"
+        }
+      ]
+    },
+    {
+      "id": "literary",
+      "title": "Literary dispatches",
+      "description": "Changes to the stories themselves.",
+      "entries": [
+        {
+          "id": "platform-bell-published",
+          "title": "Platform Bell published",
+          "publishedAt": "2026-02-02T19:30:00Z",
+          "href": "/dispatch/platform-bell"
+        },
+        {
+          "id": "signal-lantern-published",
+          "title": "Signal Lantern published",
+          "publishedAt": "2026-02-01T19:30:00Z",
+          "href": "/dispatch/signal-lantern"
+        }
+      ]
+    }
+  ]
+}

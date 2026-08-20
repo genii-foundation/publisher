@@ -16,6 +16,7 @@ import type {
   PublicationManifest,
   ResolvedPublicationSourceGraph,
   ValidationResult,
+  UpdatesCatalog,
 } from "@genii-foundation/publisher-schema";
 import {
   PUBLICATION_PROTOCOL_LIMITS,
@@ -35,6 +36,12 @@ export interface LoadedAudioCatalog {
    * Exact text as loaded, so a downstream artifact can bind this catalog by
    * hash rather than by trusting that the parsed value round-trips.
    */
+  readonly text: string;
+}
+
+export interface LoadedUpdatesCatalog {
+  readonly path: string;
+  readonly catalog: UpdatesCatalog;
   readonly text: string;
 }
 
@@ -61,6 +68,7 @@ export interface LoadedPublicationCompilationSources {
    * so that the artifact that does depend on it can bind it by hash.
    */
   readonly audioCatalog?: LoadedAudioCatalog;
+  readonly updatesCatalog?: LoadedUpdatesCatalog;
 }
 
 export interface PublicationSourceLoaderLimits {
@@ -72,6 +80,7 @@ export interface PublicationSourceLoaderLimits {
   readonly maximumDirectoryPathBytesTotal: number;
   readonly maximumDirectorySnapshots: number;
   readonly maximumAudioCatalogBytes: number;
+  readonly maximumUpdatesCatalogBytes: number;
   readonly maximumManifestBytes: number;
   readonly maximumManuscriptBytes: number;
   readonly maximumSourceFiles: number;
@@ -94,6 +103,7 @@ export const PUBLISHER_SOURCE_LOADER_LIMITS =
     // 16,000 clips. The total snapshot ceiling binds before the structural cap in
     // the schema does, which is the same ordering every other source has.
     maximumAudioCatalogBytes: 8 * 1024 * 1024,
+    maximumUpdatesCatalogBytes: 8 * 1024 * 1024,
     maximumManifestBytes: 1024 * 1024,
     maximumManuscriptBytes: 16 * 1024 * 1024,
     maximumSourceFiles:

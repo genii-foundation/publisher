@@ -36,6 +36,16 @@ export {
   buildSyncEnvelope,
   resolvePublicationSync,
 } from "./node/sync.js";
+export {
+  buildUpdatesEnvelope,
+  resolvePublicationUpdates,
+} from "./node/updates.js";
+export type {
+  BuildUpdatesEnvelopeInput,
+  BuiltUpdatesEnvelope,
+  ResolvedPublicationUpdates,
+  ResolvePublicationUpdatesInput,
+} from "./node/updates.js";
 export type {
   BuildSyncEnvelopeInput,
   BuiltSyncEnvelope,
@@ -46,11 +56,37 @@ export {
 } from "./node/compile.js";
 export {
   AUDIO_DATA_ARTIFACT,
+  EXTENSION_DATA_ARTIFACT,
+  PROGRESS_DATA_ARTIFACT,
+  PUBLIC_IDENTITY_DATA_ARTIFACT,
+  SEARCH_DATA_ARTIFACT,
+  UPDATES_DATA_ARTIFACT,
   assertHostCanCarryDataArtifact,
   assertHostCanServe,
   findUnsupportedHostFeatures,
   readHostCapabilities,
 } from "./node/host-capabilities.js";
+export {
+  PUBLISHER_EXTENSION_API_VERSION,
+  PUBLISHER_EXTENSION_DATA_SCHEMA_VERSION,
+  PUBLISHER_EXTENSION_HANDLER_METHODS,
+  projectPublisherExtensions,
+  resolvePublisherExtensions,
+} from "./node/extensions.js";
+export type {
+  PublisherExtensionDataEntry,
+  PublisherExtensionDataEnvelope,
+  PublisherExtensionImplementation,
+  PublisherExtensionHandlerMethod,
+  PublisherExtensionHandlerProjectInput,
+  PublisherExtensionHandlerProjection,
+  PublisherExtensionProjectInput,
+  PublisherExtensionProjection,
+  PublisherExtensionRouteProjectInput,
+  PublisherExtensionRouteProjection,
+  PublisherExtensionRegistration,
+  ResolvedPublisherExtensions,
+} from "./node/extensions.js";
 export type {
   HostCapabilities,
   UnsupportedHostFeature,
@@ -85,7 +121,25 @@ export type {
 } from "./node/compile.js";
 export type {
   LoadedPublicationCompilationSources,
+  LoadedUpdatesCatalog,
   LoadPublicationCompilationSourcesInput,
   LoadPublicationCompilationSourcesResult,
   PublicationSourceLoaderLimits,
 } from "./node/types.js";
+export {
+  PREVIEW_CANDIDATE_IDENTITY_VERSION,
+  PREVIEW_CANDIDATE_LIMITS,
+  PreviewCandidateIdentityError,
+  capturePreviewCandidateIdentity,
+  parsePreviewCandidateIdentity,
+  verifyPreviewCandidateIdentity,
+} from "./node/preview-candidate.js";
+export type {
+  CapturePreviewCandidateIdentityInput,
+  PreviewCandidateEntry,
+  PreviewCandidateEntryKind,
+  PreviewCandidateIdentity,
+  PreviewCandidateMismatch,
+  PreviewCandidateVerification,
+  VerifyPreviewCandidateIdentityInput,
+} from "./node/preview-candidate.js";
