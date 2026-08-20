@@ -135,6 +135,56 @@ test("complete formatting containers and complete character references remain re
   }
 });
 
+test("a source-backed link may select part of one emphasis text node", () => {
+  const markdown = "one *two* three";
+  const result = applyReaderLinksToMarkdown(block(markdown), [
+    link(...rangeOf(markdown, "two")),
+  ]);
+
+  assert.equal(result.valid, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.value, "one *[two](</target>)* three");
+});
+
+test("a source-backed link may leave punctuation inside one strong container", () => {
+  const markdown = "The **Cardinal Scale.** remains.";
+  const result = applyReaderLinksToMarkdown(block(markdown), [
+    link(...rangeOf(markdown, "Cardinal Scale")),
+  ]);
+
+  assert.equal(result.valid, true, JSON.stringify(result.diagnostics));
+  assert.equal(
+    result.value,
+    "The **[Cardinal Scale](</target>).** remains.",
+  );
+});
+
+test("two disjoint source-backed links may share one emphasis container", () => {
+  const markdown = "*First soil, then flower.*";
+  const soilLink = link(...rangeOf(markdown, "soil"), {
+    id: "soil",
+    href: "/soil",
+  });
+  const flowerLink = link(...rangeOf(markdown, "flower"), {
+    id: "flower",
+    href: "/flower",
+  });
+  const forward = applyReaderLinksToMarkdown(
+    block(markdown),
+    [soilLink, flowerLink],
+  );
+  const reverse = applyReaderLinksToMarkdown(
+    block(markdown),
+    [flowerLink, soilLink],
+  );
+
+  const expected =
+    "*First [soil](</soil>), then [flower](</flower>).*";
+  assert.equal(forward.valid, true, JSON.stringify(forward.diagnostics));
+  assert.equal(reverse.valid, true, JSON.stringify(reverse.diagnostics));
+  assert.equal(forward.value, expected);
+  assert.equal(reverse.value, expected);
+});
+
 test("an empty source-backed link list preserves exact Markdown bytes", () => {
   const markdown = "Literal [unfinished source and 🌀.";
   const result = applyReaderLinksToMarkdown(block(markdown), []);
@@ -210,17 +260,12 @@ test("duplicate and overlapping source ranges are rejected deterministically", (
   assertInvalid(overlapping, "reader.markdown.link_range_overlap");
 });
 
-test("ranges cannot cross inline nodes or select part of formatting", () => {
+test("ranges still cannot cross inline nodes", () => {
   const markdown = "one *two* three";
   const crossing = applyReaderLinksToMarkdown(block(markdown), [
     link(...rangeOf(markdown, "one *two*")),
   ]);
   assertInvalid(crossing, "reader.markdown.link_range_crosses_nodes");
-
-  const partial = applyReaderLinksToMarkdown(block(markdown), [
-    link(...rangeOf(markdown, "two")),
-  ]);
-  assertInvalid(partial, "reader.markdown.link_formatting_partial");
 });
 
 test("existing link, code, image, and HTML contexts reject attachment", () => {

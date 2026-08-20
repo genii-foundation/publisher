@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher reader is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-20, GENII Foundation
+
+- Allowed source-backed Reader links wholly contained in one emphasis or strong text node when the existing CommonMark syntax tree comparison proves that visible prose and formatting remain unchanged.
+
 ## 2026-08-19, GENII Foundation
 
 - Added a strict build-bound offline catalog that plans complete immutable work packages across canonical and historical documents, capability data, assets, narration clips, and timing sidecars without taking browser authority.

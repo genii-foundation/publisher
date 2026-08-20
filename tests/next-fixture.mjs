@@ -333,6 +333,7 @@ function createWorkRouteSection(compiledWork) {
 function createReaderLinkFixtures(
   works,
   headingReaderLink,
+  formattedReaderLink,
   unrepresentableReaderLink,
 ) {
   const work = works.find(
@@ -351,9 +352,11 @@ function createReaderLinkFixtures(
   assert.ok(block);
   const selected = headingReaderLink
     ? "Opening"
-    : unrepresentableReaderLink
-      ? "good link"
-      : "First";
+    : formattedReaderLink
+      ? "safe"
+      : unrepresentableReaderLink
+        ? "good link"
+        : "First";
   const start = block.markdown.indexOf(selected);
   assert.notEqual(start, -1);
 
@@ -517,6 +520,7 @@ export async function createFixtureReader(options = {}) {
           : createReaderLinkFixtures(
               works,
               options.headingReaderLink ?? false,
+              options.formattedReaderLink ?? false,
               options.unrepresentableReaderLink ?? false,
             ),
     }),

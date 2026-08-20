@@ -499,6 +499,22 @@ test("paragraph-first sections retain normalized section headings", async () => 
   );
 });
 
+test("source-backed links inside emphasis retain their formatting", async () => {
+  const application = await createApplication({
+    reader: await createFixtureReader({
+      formattedReaderLink: true,
+    }),
+  });
+  const html = await renderResolved(application, [
+    "works",
+    "café+notes",
+  ]);
+  assert.match(
+    withoutFocusMarkup(html),
+    /First <em><a href="\/readings\/plus\+two">safe<\/a><\/em> line/u,
+  );
+});
+
 test("source-backed heading links survive normalized work and section outlines", async () => {
   const application = await createApplication({
     reader: await createFixtureReader({

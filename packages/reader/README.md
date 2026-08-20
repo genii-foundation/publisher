@@ -51,13 +51,14 @@ returns a `ValidationResult<string>` and never mutates either input.
 
 The helper parses the exact block with the bundled, lockfile-pinned CommonMark
 parser, checks each UTF-16 range against the syntax tree, inserts links from
-the end of the block toward the beginning, then reparses the result. It
-accepts a range inside one text node or around one complete emphasis or
-strong container. It rejects duplicate and overlapping ranges, partial
-formatting, node-crossing ranges, malformed Unicode boundaries, existing
-link, code, or image contexts, and every attempted application in a block
-containing raw HTML. The final parse must preserve the original prose and
-formatting after the introduced link wrappers are removed.
+the end of the block toward the beginning, then reparses the result. It accepts
+a range wholly inside one text node, including a partial selection inside
+emphasis or strong formatting, or a range around one complete emphasis or
+strong container. It rejects duplicate and overlapping ranges, node-crossing
+ranges, malformed Unicode boundaries, existing link, code, or image contexts,
+and every attempted application in a block containing raw HTML. The final parse
+must preserve the original prose and formatting after the introduced link
+wrappers are removed.
 
 The helper uses each validated `link.href` as the destination. Semantic
 ReaderLinks carry navigation meaning without a source span, so callers must
