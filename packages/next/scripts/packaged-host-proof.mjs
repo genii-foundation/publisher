@@ -1793,12 +1793,15 @@ async function assertHydratedReaderTools({
           '  const bookmarks = read("reader.bookmarks");',
           '  const consent = read("reader.sync-consent");',
           '  const engagement = read("reader.engagement");',
+          "  const events = engagement?.events ?? [];",
           "  return {",
           '    message: document.querySelector(".publisher-reader-sync [role=status]")?.textContent ?? "",',
           "    progressEntries: progress === null ? 0 : Object.keys(progress.entries ?? {}).length,",
           "    bookmarksSchemaVersion: bookmarks?.schemaVersion ?? null,",
           "    consentGranted: consent?.granted === true,",
-          "    acknowledgedEvents: engagement?.events?.filter((event) => Number.isSafeInteger(event.syncedAt)).length ?? 0,",
+          "    eventCount: events.length,",
+          "    acknowledgedEvents: events.filter((event) => Number.isSafeInteger(event.syncedAt)).length,",
+          "    pendingEvents: events.filter((event) => !Number.isSafeInteger(event.syncedAt)).length,",
           "  };",
           "})()",
         ].join("\n"),
@@ -1807,20 +1810,42 @@ async function assertHydratedReaderTools({
       synchronizedState = evaluated.result?.value;
       if (
         synchronizedState?.message === "Reading data synced." &&
-        synchronizedState.acknowledgedEvents > 0
+        synchronizedState.acknowledgedEvents >= 3 &&
+        synchronizedState.acknowledgedEvents ===
+          synchronizedState.eventCount &&
+        synchronizedState.pendingEvents === 0
       ) break;
       await wait(100);
     }
     assert.deepEqual(
-      synchronizedState,
+      {
+        message: synchronizedState?.message,
+        progressEntries: synchronizedState?.progressEntries,
+        bookmarksSchemaVersion:
+          synchronizedState?.bookmarksSchemaVersion,
+        consentGranted: synchronizedState?.consentGranted,
+      },
       {
         message: "Reading data synced.",
         progressEntries: 2,
         bookmarksSchemaVersion: null,
         consentGranted: true,
-        acknowledgedEvents: 3,
       },
       "The default Reader did not complete and acknowledge its routed local-first synchronization transfer.",
+    );
+    assert.ok(
+      synchronizedState.acknowledgedEvents >= 3,
+      "The default Reader did not synchronize the required engagement evidence.",
+    );
+    assert.equal(
+      synchronizedState.acknowledgedEvents,
+      synchronizedState.eventCount,
+      "The default Reader left an engagement event unacknowledged.",
+    );
+    assert.equal(
+      synchronizedState.pendingEvents,
+      0,
+      "The default Reader left an engagement event pending.",
     );
     const peerPage = await openDevToolsPage(browser);
     try {
