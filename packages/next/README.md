@@ -473,7 +473,7 @@ The renderer dispatches only from validated reader route targets. It does not in
 
 The home catalog lists published works and collections. Unlisted and archived works remain available at their declared direct routes. Preview reader envelopes may also render draft routes, but public reader envelopes omit drafts before this package receives them.
 
-Every work route contains the server-rendered manuscript. Section routes render focused sections with ordinary DOM IDs and adjacent-section navigation. Reader text remains available without client JavaScript.
+Every work route contains the server-rendered manuscript. Section routes render their route owner plus descendant sections in the same work that explicitly select that exact page path through their reader address. Each composed descendant retains its own ordinary section and block DOM IDs. Descendants addressed elsewhere and unrelated sections remain excluded. The route owner continues to control breadcrumbs and adjacent-section navigation. Reader text remains available without client JavaScript.
 
 Addressable manuscript headings keep their exact server-rendered level, text,
 block identity, and DOM anchor. After hydration, one adjacent button copies the

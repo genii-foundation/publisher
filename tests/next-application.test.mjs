@@ -402,6 +402,10 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
   ]);
   assert.equal(first.status, "resolved");
   assert.equal(first.page.kind, "section");
+  assert.deepEqual(
+    first.page.sections.map(({ id }) => id),
+    ["published-opening"],
+  );
   assert.equal(first.page.previous, null);
   assert.equal(first.page.next?.id, "published-closing");
 
@@ -455,6 +459,10 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
   ]);
   assert.equal(second.status, "resolved");
   assert.equal(second.page.kind, "section");
+  assert.deepEqual(
+    second.page.sections.map(({ id }) => id),
+    ["published-closing"],
+  );
   assert.equal(second.page.previous?.id, "published-opening");
   assert.equal(second.page.next, null);
   const secondHtml = renderToStaticMarkup(
@@ -476,6 +484,84 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
       `href="${FIXTURE_ROUTES.sectionOne.replaceAll("+", "\\+")}"`,
     ),
   );
+});
+
+test("section pages compose explicitly addressed descendants", async () => {
+  const application = await createApplication({
+    reader: await createFixtureReader({
+      composedPublishedSectionPage: true,
+    }),
+  });
+  const resolution = application.resolveRoute([
+    "readings",
+    "café+one",
+  ]);
+  assert.equal(resolution.status, "resolved");
+  assert.equal(resolution.page.kind, "section");
+  assert.equal(resolution.page.section.id, "published-opening");
+  assert.deepEqual(
+    resolution.page.sections.map(({ id }) => id),
+    ["published-opening", "published-closing"],
+  );
+  assert.equal(Object.isFrozen(resolution.page.sections), true);
+
+  const html = renderToStaticMarkup(
+    await application.renderPage(resolution.page),
+  );
+  assert.deepEqual(headingOutline(html), [
+    { level: 1, text: "Opening" },
+    { level: 2, text: "Next" },
+  ]);
+  assert.equal(
+    html.match(/data-publisher-section="published-opening"/gu)?.length,
+    1,
+  );
+  assert.equal(
+    html.match(/data-publisher-section="published-closing"/gu)?.length,
+    1,
+  );
+  assert.equal(html.match(/id="published-opening"/gu)?.length, 1);
+  assert.equal(html.match(/id="published-closing"/gu)?.length, 1);
+  for (const section of resolution.page.sections) {
+    for (const block of section.blocks) {
+      assert.notEqual(block.domId, null);
+      assert.equal(
+        html.match(new RegExp(`id="${block.domId}"`, "gu"))?.length,
+        1,
+      );
+    }
+  }
+});
+
+test("section pages do not compose unrelated sections on the same path", async () => {
+  const application = await createApplication({
+    reader: await createFixtureReader({
+      composedPublishedSectionPage: true,
+      composedPublishedSectionSibling: true,
+    }),
+  });
+  const resolution = application.resolveRoute([
+    "readings",
+    "café+one",
+  ]);
+  assert.equal(resolution.status, "resolved");
+  assert.equal(resolution.page.kind, "section");
+  assert.deepEqual(
+    resolution.page.sections.map(({ id }) => id),
+    ["published-opening"],
+  );
+
+  const html = renderToStaticMarkup(
+    await application.renderPage(resolution.page),
+  );
+  assert.doesNotMatch(
+    html,
+    /data-publisher-section="published-closing"/u,
+  );
+  assert.doesNotMatch(html, /id="published-closing"/u);
+  assert.deepEqual(headingOutline(html), [
+    { level: 1, text: "Opening" },
+  ]);
 });
 
 test("paragraph-first sections retain normalized section headings", async () => {

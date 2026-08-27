@@ -243,6 +243,8 @@ function markdownFor(workId) {
 function createTwoSectionWork(
   compiledWork,
   paragraphFirstSection,
+  composedSectionPage,
+  composedSectionSibling,
 ) {
   const root = compiledWork.sections[0];
   assert.ok(root);
@@ -266,11 +268,19 @@ function createTwoSectionWork(
           reader: {
             path: FIXTURE_ROUTES.sectionOne,
           },
+          ...(composedSectionPage
+            ? {
+                fragment: {
+                  path: FIXTURE_ROUTES.sectionOne,
+                  anchor: "published-opening",
+                },
+              }
+            : {}),
         },
         activeRouteNames: ["reader"],
         readerLocation: {
           kind: "route",
-          routeName: "reader",
+          routeName: composedSectionPage ? "fragment" : "reader",
         },
         continuity: {
           id: "published-opening",
@@ -287,15 +297,24 @@ function createTwoSectionWork(
         id: "published-closing",
         role: "section",
         title: "Next",
+        ...(composedSectionPage && !composedSectionSibling
+          ? { parentId: "published-opening" }
+          : {}),
         routes: {
-          reader: {
-            path: FIXTURE_ROUTES.sectionTwo,
-          },
+          [composedSectionPage ? "fragment" : "reader"]:
+            composedSectionPage
+              ? {
+                  path: FIXTURE_ROUTES.sectionOne,
+                  anchor: "published-closing",
+                }
+              : {
+                  path: FIXTURE_ROUTES.sectionTwo,
+                },
         },
-        activeRouteNames: ["reader"],
+        activeRouteNames: composedSectionPage ? [] : ["reader"],
         readerLocation: {
           kind: "route",
-          routeName: "reader",
+          routeName: composedSectionPage ? "fragment" : "reader",
         },
         continuity: {
           id: "published-closing",
@@ -502,6 +521,8 @@ export async function createFixtureReader(options = {}) {
         ? createTwoSectionWork(
             compiled.work,
             options.paragraphFirstPublishedSection ?? false,
+            options.composedPublishedSectionPage ?? false,
+            options.composedPublishedSectionSibling ?? false,
           )
         : createWorkRouteSection(compiled.work),
     );
@@ -515,7 +536,8 @@ export async function createFixtureReader(options = {}) {
       sources,
       works,
       links:
-        options.includeReaderLinks === false
+        options.includeReaderLinks === false ||
+          options.composedPublishedSectionPage === true
           ? []
           : createReaderLinkFixtures(
               works,

@@ -342,6 +342,7 @@ export interface PublisherNextSectionPage
   readonly kind: "section";
   readonly work: ReaderWork;
   readonly section: ReaderSection;
+  readonly sections: readonly ReaderSection[];
   readonly assets: readonly ReaderAsset[];
   readonly links: readonly ReaderLink[];
   readonly previous: ReaderSection | null;

@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher Next.js renderer is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-27, GENII Foundation
+
+- Composed section pages from the route owner and same-work descendants that explicitly select the exact page path, preserving each descendant section and block fragment without admitting unrelated sections.
+
 ## 2026-08-20, GENII Foundation
 
 - Refused Range requests before service worker interception so an offline fallback cannot substitute a cached full response for a partial-content request.

@@ -485,16 +485,25 @@ function SectionPage({
         </PublisherLinkableHeading>
       </header>
       <div className="publisher-manuscript">
-        <SectionContent
-          assetHrefs={assetHrefs}
-          markdownForBlock={markdownForBlock}
-          renderedPath={page.path}
-          section={page.section}
-          {...(headingBlock === null
-            ? {}
-            : { skipBlockId: headingBlock.id })}
-          workId={page.work.id}
-        />
+        {page.sections.map((section) => (
+          <SectionContent
+            assetHrefs={assetHrefs}
+            {...(section.id === page.section.id
+              ? {}
+              : {
+                  headingLevel:
+                    section.depth - page.section.depth + 1,
+                })}
+            key={section.id}
+            markdownForBlock={markdownForBlock}
+            renderedPath={page.path}
+            section={section}
+            {...(section.id !== page.section.id || headingBlock === null
+              ? {}
+              : { skipBlockId: headingBlock.id })}
+            workId={page.work.id}
+          />
+        ))}
       </div>
       {previousHref === null && nextHref === null ? null : (
         <nav

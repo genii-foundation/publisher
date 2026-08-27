@@ -3022,14 +3022,21 @@ function pageResolver(
     ]),
   );
   const sectionByLocation = new Map<string, ReaderSection>();
+  const sectionByWorkAndId = new Map<
+    string,
+    ReadonlyMap<string, ReaderSection>
+  >();
   const issuedPages = new WeakSet<object>();
   for (const work of reader.works) {
+    const sectionsById = new Map<string, ReaderSection>();
     for (const section of work.sections) {
+      sectionsById.set(section.id, section);
       sectionByLocation.set(
         JSON.stringify([work.id, section.id]),
         section,
       );
     }
+    sectionByWorkAndId.set(work.id, sectionsById);
   }
   const homePath =
     reader.routes.active.find(
@@ -3158,6 +3165,31 @@ function pageResolver(
         if (work === undefined || section === undefined) {
           return null;
         }
+        const sectionsById = sectionByWorkAndId.get(work.id);
+        if (sectionsById === undefined) {
+          return null;
+        }
+        const descendsFromRouteOwner = (
+          candidate: ReaderSection,
+        ): boolean => {
+          const seen = new Set<string>();
+          let parentId = candidate.parentId;
+          while (parentId !== null && !seen.has(parentId)) {
+            if (parentId === section.id) return true;
+            seen.add(parentId);
+            parentId = sectionsById.get(parentId)?.parentId ?? null;
+          }
+          return false;
+        };
+        const sections = Object.freeze(
+          work.sections.filter(
+            (candidate) =>
+              candidate.id === section.id ||
+              (candidate.readerAddress?.path === route.path &&
+                descendsFromRouteOwner(candidate)),
+          ),
+        );
+        const sectionIds = new Set(sections.map(({ id }) => id));
         const previous =
           section.previousId === null
             ? null
@@ -3182,11 +3214,12 @@ function pageResolver(
           kind: "section",
           work,
           section,
+          sections,
           assets: assetsForWork(work.id),
           links: Object.freeze(
             linksForWork(work.id).filter(
               ({ source }) =>
-                source.sectionId === section.id,
+                sectionIds.has(source.sectionId),
             ),
           ),
           previous,
