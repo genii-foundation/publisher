@@ -368,11 +368,11 @@ function prepareLinks(
       left.end - right.end ||
       left.index - right.index,
   );
-  for (let index = 1; index < ordered.length; index += 1) {
-    const previous = ordered[index - 1];
-    const current = ordered[index];
-    if (previous === undefined || current === undefined) {
-      continue;
+  let rightmost = ordered[0];
+  ordered.slice(1).forEach((current, offset) => {
+    const previous = ordered[offset];
+    if (previous === undefined || rightmost === undefined) {
+      return;
     }
     if (
       previous.start === current.start &&
@@ -387,18 +387,21 @@ function prepareLinks(
           { firstLinkIndex: previous.index },
         ),
       );
-    } else if (current.start < previous.end) {
+    } else if (current.start < rightmost.end) {
       diagnostics.push(
         diagnostic(
           "reader.markdown.link_range_overlap",
           `/links/${current.index}/source/range`,
           "ReaderLink Markdown source ranges cannot overlap.",
           "disjointBlockMarkdownRanges",
-          { overlappingLinkIndex: previous.index },
+          { overlappingLinkIndex: rightmost.index },
         ),
       );
     }
-  }
+    if (current.end > rightmost.end) {
+      rightmost = current;
+    }
+  });
   return ordered;
 }
 

@@ -258,6 +258,27 @@ test("duplicate and overlapping source ranges are rejected deterministically", (
     link(4, 10, { id: "second", href: "/second" }),
   ]);
   assertInvalid(overlapping, "reader.markdown.link_range_overlap");
+
+  const nestedThenCrossing = applyReaderLinksToMarkdown(
+    block("alpha beta gamma"),
+    [
+      link(0, 10, { id: "outer" }),
+      link(1, 3, { id: "nested", href: "/nested" }),
+      link(9, 16, { id: "crossing", href: "/crossing" }),
+    ],
+  );
+  assertInvalid(
+    nestedThenCrossing,
+    "reader.markdown.link_range_overlap",
+  );
+  assert.ok(
+    nestedThenCrossing.diagnostics.some(
+      (item) =>
+        item.path === "/links/2/source/range" &&
+        item.params.overlappingLinkIndex === 0,
+    ),
+    JSON.stringify(nestedThenCrossing.diagnostics, null, 2),
+  );
 });
 
 test("ranges still cannot cross inline nodes", () => {
