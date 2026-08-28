@@ -247,7 +247,7 @@ test("release mode requires exact candidates, rejects every package-affecting dr
       );
       assert.match(
         error.message,
-        /2026-07-28-foundation-extraction\.json:.*found draft historical record/u,
+        /2026-07-28-foundation-extraction\.json:.*found draft working-tree record/u,
       );
       assert.match(
         error.message,

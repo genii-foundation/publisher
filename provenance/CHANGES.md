@@ -11,6 +11,7 @@ This file records changes to the migration provenance system.
 - Reworked offline cache enumeration, response copying, rollback, and its browser test double, then centralized bookmark range geometry and layout observation, eliminating every remaining significant-token match.
 - Reworked the remaining generic framework, release, site, Reader, provider, and test expressions, leaving exactly 53 normalized-line matches confined to the six Supabase migrations.
 - Rebuilt the remaining Supabase schema and bookmark merge expression around independently named constraints, role-scoped policies, explicit grants, and one internal record decision primitive, leaving every deterministic source scan clear.
+- Converted the original foundation draft into a live working-tree audit, separated its fresh package scope from the preserved Unicode boundary, and produced clear retained-archive scan evidence for Content, Reader, and Next.
 
 ## 2026-08-27, GENII Foundation
 

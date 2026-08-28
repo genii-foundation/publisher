@@ -96,11 +96,13 @@ node provenance/scripts/prepare-release.mjs --output "$PWD/release-out" --tag ne
 ```
 Provenance validation failed:
 2026-07-28-foundation-extraction.json: release mode requires every package-affecting
-  provenance record to be accepted, found draft historical record
+  provenance record to be accepted, found draft working-tree record
 2026-07-28-publisher-source-loader.json: release mode requires every package-affecting
   provenance record to be accepted, found draft working-tree record
 2026-07-28-unicode-portability-preservation.json: release mode requires every
   package-affecting provenance record to be accepted, found draft working-tree record
+2026-08-28-supabase-provider-package.json: release mode requires every package-affecting
+  provenance record to be accepted, found draft working-tree record
 ```
 
 This is the gate working, not a failure. Every provenance record touching a package
