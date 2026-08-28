@@ -77,6 +77,7 @@ export type {
   PublisherExtensionDataEntry,
   PublisherExtensionDataEnvelope,
   PublisherExtensionImplementation,
+  PublisherExtensionOfflineResource,
   PublisherExtensionHandlerMethod,
   PublisherExtensionHandlerProjectInput,
   PublisherExtensionHandlerProjection,

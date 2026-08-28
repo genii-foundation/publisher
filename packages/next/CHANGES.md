@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-28, GENII Foundation
 
+- Included validated extension browser resources in generated and in-memory offline work packages, and advanced the host contract to 0.18.0.
 - Exported the generic reactive Reader store through the package root and public client entry so authorized client extensions can write validated local state and notify the built-in Reader without importing private renderer modules.
 - Added an explicit default root export condition for standards-compliant CommonJS-aware TypeScript loaders.
 - Made offline resource discovery explicit across link and source attributes, separated cache opening from lookup, and scoped Reader activity listeners to abortable lifecycles.

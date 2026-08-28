@@ -76,6 +76,13 @@ export interface PublisherExtensionProjectInput {
 export interface PublisherExtensionProjection {
   readonly serverData?: JSONValue;
   readonly clientData?: JSONValue;
+  readonly offlineResources?: readonly PublisherExtensionOfflineResource[];
+}
+
+export interface PublisherExtensionOfflineResource {
+  readonly href: string;
+  readonly kind: "asset" | "data";
+  readonly byteSize?: number;
 }
 
 export interface PublisherExtensionRouteProjectInput {
@@ -147,6 +154,7 @@ export interface PublisherExtensionDataEntry {
   readonly config: Readonly<Record<string, JSONValue>>;
   readonly serverData?: JSONValue;
   readonly clientData?: JSONValue;
+  readonly offlineResources?: readonly PublisherExtensionOfflineResource[];
   readonly routes?: readonly PublisherExtensionRouteProjection[];
   readonly handlers?: readonly PublisherExtensionHandlerProjection[];
 }
@@ -339,6 +347,76 @@ function snapshotJson(
     );
     return undefined;
   }
+}
+
+function snapshotOfflineResources(
+  value: unknown,
+  path: string,
+  diagnostics: Diagnostic[],
+): readonly PublisherExtensionOfflineResource[] | undefined {
+  if (value === undefined) return undefined;
+  const inspected = inspectArray(value, 1_000);
+  if (inspected === null || inspected.length === 0) {
+    diagnostics.push(diagnostic(
+      "publisher.extension.offline_resources_invalid",
+      path,
+      "Extension offline resources must be one nonempty bounded array.",
+      "type",
+    ));
+    return undefined;
+  }
+  const resources: PublisherExtensionOfflineResource[] = [];
+  const hrefs = new Set<string>();
+  inspected.forEach((resource, index) => {
+    const resourcePath = `${path}/${index}`;
+    const record = inspectRecord(resource, ["href", "kind"], ["byteSize"]);
+    const href = record?.href;
+    const kind = record?.kind;
+    const byteSize = record?.byteSize;
+    let canonicalHref = false;
+    if (
+      typeof href === "string" &&
+      href.length >= 1 &&
+      href.length <= 8_192 &&
+      href.startsWith("/") &&
+      !href.startsWith("//") &&
+      !/[\\\u0000-\u0020\u007f]/u.test(href) &&
+      !href.includes("#")
+    ) {
+      try {
+        const parsed = new URL(href, "https://publisher.invalid");
+        canonicalHref = parsed.origin === "https://publisher.invalid" &&
+          `${parsed.pathname}${parsed.search}` === href;
+      } catch {
+        canonicalHref = false;
+      }
+    }
+    if (
+      record === null ||
+      !canonicalHref ||
+      hrefs.has(href as string) ||
+      (kind !== "asset" && kind !== "data") ||
+      (byteSize !== undefined &&
+        (!Number.isSafeInteger(byteSize) ||
+          typeof byteSize !== "number" ||
+          byteSize < 0))
+    ) {
+      diagnostics.push(diagnostic(
+        "publisher.extension.offline_resource_invalid",
+        resourcePath,
+        "Extension offline resources require a unique same-origin href, an asset or data kind, and an optional safe byte size.",
+        "offlineResource",
+      ));
+      return;
+    }
+    hrefs.add(href as string);
+    resources.push(Object.freeze({
+      href: href as string,
+      kind,
+      ...(byteSize === undefined ? {} : { byteSize }),
+    }));
+  });
+  return Object.freeze(resources);
 }
 
 function freezeJson(value: JSONValue): JSONValue {
@@ -844,6 +922,7 @@ export async function projectPublisherExtensions(input: {
 }>> {
   const diagnostics: Diagnostic[] = [];
   const entries: PublisherExtensionDataEntry[] = [];
+  const offlineResourceHrefs = new Set<string>();
   const ownedRoutePaths = new Map<string, string>();
   for (const route of input.reader.routes.active) {
     ownedRoutePaths.set(route.path, "an active publication route");
@@ -924,14 +1003,14 @@ export async function projectPublisherExtensions(input: {
       const inspected = inspectRecord(
         resultRecord.value,
         [],
-        ["serverData", "clientData"],
+        ["serverData", "clientData", "offlineResources"],
       );
       if (inspected === null) {
         diagnostics.push(
           diagnostic(
             "publisher.extension.projection_invalid",
             `/extensions/${index}`,
-            "Extension projections use the closed serverData and clientData shape.",
+            "Extension projections use the closed serverData, clientData, and offlineResources shape.",
             "properties",
           ),
         );
@@ -951,6 +1030,11 @@ export async function projectPublisherExtensions(input: {
             `/extensions/${index}/clientData`,
             diagnostics,
           );
+      const offlineResources = snapshotOfflineResources(
+        inspected.offlineResources,
+        `/extensions/${index}/offlineResources`,
+        diagnostics,
+      );
       if (
         clientData !== undefined &&
         !compiled.capabilities.includes("renderer.client")
@@ -965,6 +1049,42 @@ export async function projectPublisherExtensions(input: {
         );
         continue;
       }
+      if (
+        offlineResources !== undefined &&
+        !compiled.capabilities.includes("renderer.client")
+      ) {
+        diagnostics.push(
+          diagnostic(
+            "publisher.extension.offline_resources_ungranted",
+            `/extensions/${index}/offlineResources`,
+            "An extension cannot declare offline browser resources without renderer.client authority.",
+            "extensionCapability",
+          ),
+        );
+        continue;
+      }
+      if (offlineResources !== undefined) {
+        const duplicate = offlineResources.find(
+          ({ href }) => offlineResourceHrefs.has(href),
+        );
+        if (
+          duplicate !== undefined ||
+          offlineResourceHrefs.size + offlineResources.length > 1_000
+        ) {
+          diagnostics.push(
+            diagnostic(
+              "publisher.extension.offline_resources_invalid",
+              `/extensions/${index}/offlineResources`,
+              "Extension offline resources must be globally unique and bounded across the build.",
+              "offlineResource",
+            ),
+          );
+          continue;
+        }
+        for (const { href } of offlineResources) {
+          offlineResourceHrefs.add(href);
+        }
+      }
       projection = Object.freeze({
         ...(serverData === undefined
           ? {}
@@ -972,6 +1092,7 @@ export async function projectPublisherExtensions(input: {
         ...(clientData === undefined
           ? {}
           : { clientData: freezeJson(clientData) }),
+        ...(offlineResources === undefined ? {} : { offlineResources }),
       });
     }
     let routes: readonly PublisherExtensionRouteProjection[] | undefined;

@@ -112,6 +112,7 @@ import type {
   PublisherNextContinuityHandler,
 } from "../continuity.js";
 import {
+  createPublisherNextExtensionOfflineResources,
   createPublisherNextRoutePlan,
   type PublisherNextPlannedRoute,
   type PublisherNextRoutePlan,
@@ -923,7 +924,7 @@ function resolveExtensions(
     const entry = inspectRecord(
       entryValue,
       ["id", "package", "version", "capabilities", "config"],
-      ["serverData", "clientData", "routes", "handlers"],
+      ["serverData", "clientData", "offlineResources", "routes", "handlers"],
     );
     const registration = inspectRecord(
       registrations[index],
@@ -3542,8 +3543,9 @@ export async function createPublicationNextApplication(
       if (!bootstrapResult.valid) return bootstrapResult;
       readerStateBootstrap = bootstrapResult.value;
     }
+    const suppliedExtensionData = valueOf(inspectedOptions, "extensionData");
     const extensionsResult = resolveExtensions(
-      valueOf(inspectedOptions, "extensionData"),
+      suppliedExtensionData,
       valueOf(inspectedOptions, "extensions"),
       reader,
     );
@@ -3612,7 +3614,7 @@ export async function createPublicationNextApplication(
     const routePlanResult = createPublisherNextRoutePlan(
       reader,
       suppliedUpdatesData,
-      valueOf(inspectedOptions, "extensionData"),
+      suppliedExtensionData,
     );
     if (!routePlanResult.valid) {
       return routePlanResult;
@@ -3776,6 +3778,14 @@ export async function createPublicationNextApplication(
       sync,
       continuity,
     );
+    const extensionOfflineResources =
+      createPublisherNextExtensionOfflineResources(
+        reader,
+        suppliedExtensionData,
+      );
+    if (!extensionOfflineResources.valid) {
+      return extensionOfflineResources;
+    }
     const offlineCatalog = createReaderOfflineCatalog({
       reader,
       rendererBuildId: artifact.manifest.buildId,
@@ -3789,6 +3799,7 @@ export async function createPublicationNextApplication(
           href: "/publication-reader-progress.json",
           kind: "data" as const,
         }),
+        ...extensionOfflineResources.value,
         ...(narration === null
           ? []
           : [Object.freeze({

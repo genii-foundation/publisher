@@ -26,7 +26,7 @@ If you wish to allow use of your version of this file only under the terms of th
 // throws on demand. A file the proof writes that this template does not declare
 // is therefore proof scaffolding by construction.
 
-import { PUBLISHER_NEXT_VERSION } from "./index.js";
+import { PUBLISHER_NEXT_VERSION } from "./types.js";
 
 /**
  * The host contract version.
@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./index.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.17.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.18.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -290,12 +290,18 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.16.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.17.0",
       summary:
         "Extend the Reader state bootstrap input contract with an optional separately bounded state projection.",
       manualSteps: Object.freeze([
         "If readerStateBootstrap is configured, update its implementation apiVersion from 1.0 to 1.1 and review the optional createProjection input before acknowledging this migration.",
       ]),
+    }),
+    Object.freeze({
+      from: "0.17.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Include build-bound extension browser resources in every generated offline work package.",
     }),
   ]);
 
@@ -751,6 +757,7 @@ export function createPublisherNextHostTemplate(
         'import type { ReaderOfflineResourceInput } from "@genii-foundation/publisher-reader/offline";',
         'import { createReaderOfflineCatalog, parseReaderOfflineCatalog, serializeReaderOfflineCatalog } from "@genii-foundation/publisher-reader/offline";',
         'import { parseReaderNarrationEnvelope } from "@genii-foundation/publisher-reader/narration";',
+        'import { createPublisherNextExtensionOfflineResources } from "@genii-foundation/publisher-next/config";',
         "",
         'export const dynamic = "force-dynamic";',
         "",
@@ -767,6 +774,12 @@ export function createPublisherNextHostTemplate(
         "    }",
         "    const acceptedRendererBuildId = rendererBuildId as Sha256Digest;",
         "    const acceptedReader = reader as unknown as PublicationReaderEnvelope;",
+        `    const extensionPath = join(process.cwd(), "${PUBLISHER_NEXT_EXTENSION_DATA_PATH}");`,
+        '    const extensionData = existsSync(extensionPath) ? JSON.parse(readFileSync(extensionPath, "utf8")) : undefined;',
+        "    const extensionResources = createPublisherNextExtensionOfflineResources(acceptedReader, extensionData);",
+        "    if (!extensionResources.valid) {",
+        '      return new Response("Invalid extension offline resources.\\n", { status: 500 });',
+        "    }",
         `    const audioPath = join(process.cwd(), "${PUBLISHER_NEXT_AUDIO_DATA_PATH}");`,
         '    const audioData = existsSync(audioPath) ? JSON.parse(readFileSync(audioPath, "utf8")) : undefined;',
         "    const narration = audioData === undefined",
@@ -789,6 +802,7 @@ export function createPublisherNextHostTemplate(
         "    const sharedResources: ReaderOfflineResourceInput[] = [",
         `      { href: "${publicHref(PUBLISHER_NEXT_SEARCH_DATA_PATH)}", kind: "data" },`,
         `      { href: "${publicHref(PUBLISHER_NEXT_PROGRESS_DATA_PATH)}", kind: "data" },`,
+        "      ...extensionResources.value,",
         `      ...(narration === null ? [] : [{ href: "${publicHref(PUBLISHER_NEXT_AUDIO_DATA_PATH)}", kind: "data" as const }]),`,
         "    ];",
         "    const catalog = createReaderOfflineCatalog({",

@@ -187,6 +187,127 @@ test("explicit registration supplies exact identity and build-bound projection",
   assert.ok(Object.isFrozen(received.payloads));
 });
 
+test("browser extensions declare detached build-bound offline resources", async () => {
+  const built = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+    extensions: [registration()],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const content = structuredClone(built.value.content);
+  content.extensions[0].capabilities = [
+    "content.project",
+    "renderer.client",
+  ];
+  const source = [{
+    href: "/extension-data.json",
+    kind: "data",
+    byteSize: 123,
+  }];
+  const selected = registration({
+    capabilities: ["content.project", "renderer.client"],
+    implementation: {
+      kind: "genii.publisher.extension",
+      apiVersion: "1.0",
+      project() {
+        return {
+          valid: true,
+          value: {
+            clientData: { marker: "BROWSER" },
+            offlineResources: source,
+          },
+          diagnostics: [],
+        };
+      },
+    },
+  });
+  const result = await projectPublisherExtensions({
+    content,
+    reader: built.value.reader,
+    registrations: [selected],
+  });
+  assert.ok(result.valid, JSON.stringify(result.diagnostics, null, 2));
+  const resources = result.value.envelope.extensions[0].offlineResources;
+  assert.deepEqual(resources, [{
+    href: "/extension-data.json",
+    kind: "data",
+    byteSize: 123,
+  }]);
+  assert.ok(Object.isFrozen(resources));
+  assert.ok(Object.isFrozen(resources[0]));
+  source[0].href = "/mutated.json";
+  assert.equal(resources[0].href, "/extension-data.json");
+});
+
+test("extension offline resources fail closed outside their browser authority", async () => {
+  const built = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+    extensions: [registration()],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const base = {
+    content: built.value.content,
+    reader: built.value.reader,
+  };
+  const cases = [
+    {
+      resources: [{ href: "/extension-data.json", kind: "data" }],
+      code: "publisher.extension.offline_resources_ungranted",
+    },
+    {
+      resources: [],
+      code: "publisher.extension.offline_resources_invalid",
+    },
+    {
+      resources: [{ href: "https://example.test/data.json", kind: "data" }],
+      code: "publisher.extension.offline_resource_invalid",
+    },
+    {
+      resources: [{ href: "/data.json#fragment", kind: "data" }],
+      code: "publisher.extension.offline_resource_invalid",
+    },
+    {
+      resources: [
+        { href: "/data.json", kind: "data" },
+        { href: "/data.json", kind: "data" },
+      ],
+      code: "publisher.extension.offline_resource_invalid",
+    },
+    {
+      resources: [{ href: "/data.json", kind: "document" }],
+      code: "publisher.extension.offline_resource_invalid",
+    },
+    {
+      resources: [{ href: "/data.json", kind: "data", byteSize: -1 }],
+      code: "publisher.extension.offline_resource_invalid",
+    },
+    {
+      resources: [{ href: "/data.json", kind: "data", surprise: true }],
+      code: "publisher.extension.offline_resource_invalid",
+    },
+  ];
+  for (const { resources, code } of cases) {
+    const selected = registration({
+      implementation: {
+        kind: "genii.publisher.extension",
+        apiVersion: "1.0",
+        project() {
+          return {
+            valid: true,
+            value: { offlineResources: resources },
+            diagnostics: [],
+          };
+        },
+      },
+    });
+    assertDiagnostic(
+      await projectPublisherExtensions({ ...base, registrations: [selected] }),
+      code,
+    );
+  }
+});
+
 test("registration shape, compatibility, grants, and projectors are closed", () => {
   const cases = [
     {

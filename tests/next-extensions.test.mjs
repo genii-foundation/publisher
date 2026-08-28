@@ -57,6 +57,7 @@ function extensionRegistration({
   handlerPath,
   handlerMethods = ["POST"],
   handlerResponse,
+  offlineResources,
   routePath = "/field-station",
 }) {
   const resolvedHandlerPath = handlerPath ?? `/api/extensions/${id}/echo`;
@@ -84,6 +85,9 @@ function extensionRegistration({
                     marker: clientMarker,
                     publicationId: content.publicationId,
                   },
+                  ...(offlineResources === undefined
+                    ? {}
+                    : { offlineResources }),
                 }
               : {}),
           },
@@ -405,6 +409,35 @@ test("granted client code receives only its browser projection at one fixed moun
     ),
     true,
   );
+});
+
+test("extension browser resources join every offline work package", async (t) => {
+  const resource = Object.freeze({
+    href: "/extension-data.json",
+    kind: "data",
+    byteSize: 123,
+  });
+  const registration = extensionRegistration({
+    id: "station-index",
+    packageName: "@example/station-index-extension",
+    capabilities: ["content.project", "renderer.client"],
+    offlineResources: [resource],
+  });
+  const built = await buildPublicationReader({
+    publicationRoot: clientFixture(t),
+    audience: "public",
+    extensions: [registration],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const created = await createFromBuild(built.value, [registration]);
+  assert.ok(created.valid, JSON.stringify(created.diagnostics, null, 2));
+  assert.ok(created.value.offlineCatalog.packages.length > 0);
+  for (const offlinePackage of created.value.offlineCatalog.packages) {
+    assert.deepEqual(
+      offlinePackage.resources.find(({ href }) => href === resource.href),
+      resource,
+    );
+  }
 });
 
 test("host.route adds a static attributed page through a narrow compatible adapter", async (t) => {
@@ -752,6 +785,29 @@ test("artifact identity, registry identity, grants, and adapters fail closed", a
       updatesData: built.updates.envelope,
     }),
     "next.extension.client_data_ungranted",
+  );
+  const ungrantedOfflineResources = structuredClone(
+    built.extensions.envelope,
+  );
+  ungrantedOfflineResources.extensions[0].offlineResources = [{
+    href: "/extension-data.json",
+    kind: "data",
+  }];
+  ungrantedOfflineResources.buildId = hashCanonicalJson({
+    schemaVersion: ungrantedOfflineResources.schemaVersion,
+    publicationId: ungrantedOfflineResources.publicationId,
+    engineVersion: ungrantedOfflineResources.engineVersion,
+    readerBuildId: ungrantedOfflineResources.readerBuildId,
+    extensions: ungrantedOfflineResources.extensions,
+  });
+  assertDiagnostic(
+    await createPublicationNextApplication({
+      reader: built.reader,
+      extensionData: ungrantedOfflineResources,
+      extensions: [registration],
+      updatesData: built.updates.envelope,
+    }),
+    "next.extension.offline_resources_ungranted",
   );
   assertDiagnostic(
     await createFromBuild(built, []),

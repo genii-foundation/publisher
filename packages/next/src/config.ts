@@ -14,6 +14,7 @@ If you wish to allow use of your version of this file only under the terms of th
 import type { NextConfig } from "next";
 
 import {
+  createPublisherNextExtensionOfflineResources,
   createPublisherNextRoutePlan,
 } from "./routes.js";
 import type {
@@ -21,6 +22,7 @@ import type {
 } from "./routes.js";
 
 export {
+  createPublisherNextExtensionOfflineResources,
   createPublisherNextRoutePlan,
 };
 export type {

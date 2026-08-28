@@ -30,6 +30,9 @@ import type {
   PublicationReaderEnvelope,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
+import type {
+  ReaderOfflineResourceInput,
+} from "@genii-foundation/publisher-reader/offline";
 
 export type PublisherNextPlannedRoute = ContentRoute | {
   readonly path: string;
@@ -195,7 +198,7 @@ function extensionRoutesFor(
     const entry = exactJsonObject(
       value,
       ["id", "package", "version", "capabilities", "config"],
-      ["serverData", "clientData", "routes", "handlers"],
+      ["serverData", "clientData", "offlineResources", "routes", "handlers"],
     );
     if (
       entry === null ||
@@ -217,7 +220,7 @@ function extensionRoutesFor(
       });
     }
     seenExtensionIds.add(entry.id);
-    const capabilities = entry.capabilities;
+    const capabilities = entry?.capabilities;
     const routes = entry.routes;
     const granted = Array.isArray(capabilities) &&
       capabilities.length > 0 &&
@@ -317,6 +320,124 @@ function extensionRoutesFor(
   return Object.freeze({
     valid: true,
     value: Object.freeze(planned),
+    diagnostics: Object.freeze([]),
+  });
+}
+
+export function createPublisherNextExtensionOfflineResources(
+  reader: PublicationReaderEnvelope,
+  extensionData: unknown,
+): ValidationResult<readonly ReaderOfflineResourceInput[]> {
+  const routeValidation = extensionRoutesFor(reader, extensionData);
+  if (!routeValidation.valid) return routeValidation;
+  if (extensionData === undefined) {
+    return Object.freeze({
+      valid: true,
+      value: Object.freeze([]),
+      diagnostics: Object.freeze([]),
+    });
+  }
+  const data = JSON.parse(
+    canonicalizeJson(extensionData as JSONValue),
+  ) as Readonly<Record<string, JSONValue>>;
+  const entries = data.extensions as readonly JSONValue[];
+  const result: ReaderOfflineResourceInput[] = [];
+  const hrefs = new Set<string>();
+  for (const [extensionIndex, entryValue] of entries.entries()) {
+    const entry = exactJsonObject(
+      entryValue,
+      ["id", "package", "version", "capabilities", "config"],
+      ["serverData", "clientData", "offlineResources", "routes", "handlers"],
+    );
+    const resources = entry?.offlineResources;
+    if (resources === undefined) continue;
+    const capabilities = entry?.capabilities;
+    if (!Array.isArray(resources) || resources.length === 0 || resources.length > 1_000) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([diagnostic(
+          "next.extension.offline_resources_invalid",
+          `/extensionData/extensions/${extensionIndex}/offlineResources`,
+          "Extension offline resources must be one nonempty bounded array.",
+          "offlineResource",
+          {},
+        )]),
+      });
+    }
+    if (
+      !Array.isArray(capabilities) ||
+      !capabilities.includes("renderer.client")
+    ) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([diagnostic(
+          "next.extension.offline_resources_ungranted",
+          `/extensionData/extensions/${extensionIndex}/offlineResources`,
+          "Extension offline resources require renderer.client authority.",
+          "extensionCapability",
+          {},
+        )]),
+      });
+    }
+    if (result.length + resources.length > 1_000) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([diagnostic(
+          "next.extension.offline_resources_invalid",
+          `/extensionData/extensions/${extensionIndex}/offlineResources`,
+          "Extension offline resources exceed the build-wide resource limit.",
+          "offlineResource",
+          {},
+        )]),
+      });
+    }
+    for (const [resourceIndex, value] of resources.entries()) {
+      const resource = exactJsonObject(value, ["href", "kind"], ["byteSize"]);
+      const href = resource?.href;
+      const kind = resource?.kind;
+      const byteSize = resource?.byteSize;
+      let canonicalHref = false;
+      if (
+        typeof href === "string" && href.length >= 1 && href.length <= 8_192 &&
+        href.startsWith("/") && !href.startsWith("//") &&
+        !/[\\\u0000-\u0020\u007f]/u.test(href) && !href.includes("#")
+      ) {
+        try {
+          const parsed = new URL(href, "https://publisher.invalid");
+          canonicalHref = parsed.origin === "https://publisher.invalid" &&
+            `${parsed.pathname}${parsed.search}` === href;
+        } catch {
+          canonicalHref = false;
+        }
+      }
+      if (
+        resource === null || !canonicalHref || hrefs.has(href as string) ||
+        (kind !== "asset" && kind !== "data") ||
+        (byteSize !== undefined &&
+          (typeof byteSize !== "number" || !Number.isSafeInteger(byteSize) || byteSize < 0))
+      ) {
+        return Object.freeze({
+          valid: false,
+          diagnostics: Object.freeze([diagnostic(
+            "next.extension.offline_resource_invalid",
+            `/extensionData/extensions/${extensionIndex}/offlineResources/${resourceIndex}`,
+            "Extension offline resources require a unique same-origin href, an asset or data kind, and an optional safe byte size.",
+            "offlineResource",
+            {},
+          )]),
+        });
+      }
+      hrefs.add(href as string);
+      result.push(Object.freeze({
+        href: href as string,
+        kind,
+        ...(byteSize === undefined ? {} : { byteSize }),
+      }));
+    }
+  }
+  return Object.freeze({
+    valid: true,
+    value: Object.freeze(result),
     diagnostics: Object.freeze([]),
   });
 }

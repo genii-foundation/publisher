@@ -240,6 +240,12 @@ test("the host contract declares exactly the author host file set", () => {
         "If readerStateBootstrap is configured, update its implementation apiVersion from 1.0 to 1.1 and review the optional createProjection input before acknowledging this migration.",
       ],
     },
+    {
+      from: "0.17.0",
+      to: "0.18.0",
+      summary:
+        "Include build-bound extension browser resources in every generated offline work package.",
+    },
   ]);
 });
 
@@ -279,6 +285,9 @@ test("offline host files expose only generic cache and catalog contracts", () =>
   const result = template();
   const route = contentsOf(result, "app/publication-reader-offline.json/route.ts");
   assert.match(route, /createReaderOfflineCatalog/u);
+  assert.match(route, /createPublisherNextExtensionOfflineResources/u);
+  assert.match(route, /publication-extensions\.json/u);
+  assert.match(route, /\.\.\.extensionResources\.value/u);
   assert.match(route, /rendererBuildId/u);
   assert.doesNotMatch(route, /publisher-application|next\/link|next\/navigation/u);
   assert.match(route, /reader-offline\+json/u);
