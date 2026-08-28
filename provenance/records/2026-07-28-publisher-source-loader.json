@@ -273,9 +273,9 @@
     },
     "tokenShingle": {
       "outcome": "expected-match",
-      "matchCount": 50,
+      "matchCount": 45,
       "method": "Compare significant contiguous 16-token code windows after removing comments and literal bodies, normalizing numbers, and requiring at least six distinct nonnumeric identifiers.",
-      "evidence": "The stricter ReaderLink interval-boundary algorithm removed the Markdown overlap-loop matches, and the review receipt records 50 remaining significant-token matches in Reader bookmark, offline cache, selection, synchronization, and their tests."
+      "evidence": "The stricter ReaderLink interval-boundary algorithm and immutable selection quote projection removed the Markdown and selection matches, and the review receipt records 45 remaining significant-token matches in Reader bookmark, offline cache, synchronization, and its tests."
     },
     "ccPhrase": {
       "outcome": "clear",

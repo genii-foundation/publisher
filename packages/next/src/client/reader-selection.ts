@@ -42,6 +42,20 @@ function bookmarkHref(block: ReaderBlock, fallbackPath: string): string {
   }`;
 }
 
+function joinSelectionQuote(
+  parts: readonly string[],
+  first: number,
+  last: number,
+): string {
+  const selected = parts.slice(first, last + 1);
+  return selected.map((part, index) => {
+    let value = part;
+    if (index === 0) value = value.trimStart();
+    if (index === selected.length - 1) value = value.trimEnd();
+    return value;
+  }).join("\n");
+}
+
 export function readPublisherReaderSelection(
   selection: Selection | null,
   workId: string,
@@ -117,11 +131,7 @@ export function readPublisherReaderSelection(
       ? rawEnd
       : endBlock.text.length
   ) - trailing;
-  const quoteParts = parts.slice(first, last + 1);
-  quoteParts[0] = quoteParts[0]?.trimStart() ?? "";
-  quoteParts[quoteParts.length - 1] =
-    quoteParts[quoteParts.length - 1]?.trimEnd() ?? "";
-  const quote = quoteParts.join("\n");
+  const quote = joinSelectionQuote(parts, first, last);
   if (quote.length < 1 || quote.length > 2_000) return null;
   const bounds = range.getBoundingClientRect();
   const unclampedTop = bounds.top + window.scrollY + bounds.height + 8;
