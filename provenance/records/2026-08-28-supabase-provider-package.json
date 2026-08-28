@@ -8,7 +8,7 @@
   "batch": {
     "batchId": "2026-08-28-supabase-provider-package",
     "destinationRepository": "https://github.com/genii-foundation/publisher",
-    "destinationBaseRef": "266967e21cd7fc1de14e72ded42ee057a98b8962",
+    "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
     "destinationPaths": [
       "docs/architecture/0011-trusted-package-archive-boundary.md",
       "docs/guides/rehearsing-a-release.md",
@@ -216,9 +216,9 @@
     },
     "normalizedLine": {
       "outcome": "expected-match",
-      "matchCount": 139,
+      "matchCount": 136,
       "method": "Compare whitespace-normalized significant lines.",
-      "evidence": "The 139 matches are 136 registry resolution or integrity lines shared by the two npm lockfiles and three generic Node filesystem import lines in repository tests. No provider source or migration line matched."
+      "evidence": "All 136 matches are registry resolution or integrity lines shared by the two npm lockfiles. No provider source, migration, or repository test line matched."
     },
     "tokenShingle": {
       "outcome": "clear",
