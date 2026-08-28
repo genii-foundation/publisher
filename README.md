@@ -12,6 +12,10 @@ author path, with real command output. Start there.
 [Rehearsing a release](docs/guides/rehearsing-a-release.md) covers the release
 scripts, what they require, and which gate currently stops them.
 
+[Governance](GOVERNANCE.md) defines project roles, decisions, and release
+authority. [Security](SECURITY.md) defines the supported-version boundary,
+private reporting requirement, and security-sensitive project surfaces.
+
 ## Product contract
 
 - The engine lives in this repository. A publication lives in a separate, thin host repository.
@@ -71,7 +75,7 @@ GENII Publisher source code is available at [github.com/genii-foundation/publish
 
 ## First release gates
 
-The first public package release remains blocked until `publisher.genii.foundation` serves the attribution landing page and stable schema URLs, each npm package trusts `.github/workflows/publish.yml` with environment `npm-publish`, the protected environment is configured, every package-affecting provenance record is accepted, and the exact prerelease tag is verified. `npm run site:build` creates the exact provider-neutral landing page and schema artifact under `dist/public-site`. `npm run release:verify-public-surface` checks a deployed copy against those repository bytes. It is a separate network gate. The manual tagged workflow prepares, retains, and reverifies exact archives with Node 22.12 and npm 10.9, then switches to Node 24 and token-free npm 11.5.1 solely to upload those same paths through OIDC. Direct package-directory publication is forbidden. A source package passing local tests is not a public release. Metaphysics has tried this trick before.
+The first public package release remains blocked until `publisher.genii.foundation` serves the attribution landing page and stable schema URLs, private vulnerability reporting and the reviewed repository security controls are enabled, each npm package trusts `.github/workflows/publish.yml` with environment `npm-publish`, the protected environment is configured, every package-affecting provenance record is accepted, and the exact prerelease tag is verified. `npm run site:build` creates the exact provider-neutral landing page and schema artifact under `dist/public-site`. `npm run release:verify-public-surface` checks a deployed copy against those repository bytes. It is a separate network gate. The manual tagged workflow prepares, retains, and reverifies exact archives with Node 22.12 and npm 10.9, then switches to Node 24 and token-free npm 11.5.1 solely to upload those same paths through OIDC. Direct package-directory publication is forbidden. A source package passing local tests is not a public release. Metaphysics has tried this trick before.
 
 ## Coherence migration gate
 

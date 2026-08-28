@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-28, GENII Foundation
 
+- Added repository governance and security policies, including the truthful pre-release support boundary and the missing private reporting and GitHub security controls as first-release blockers.
 - Recorded the dated public DNS, GitHub workflow, and repository environment blockers without treating checked-in release machinery as configured external state.
 - Refreshed the generic Reader parity census through the current Coherence source authority and classified the only newer application change as author-owned editorial workbench behavior.
 - Bound the migration readiness record to the refreshed status-only Coherence candidate and its exact local preview while retaining the prior executable proof checkpoint.
