@@ -23,13 +23,56 @@ places secondary actions behind one named surface at 340 pixels and below. It
 changes no Reader state schema, narration engine, synchronization contract,
 offline behavior, route, or manuscript behavior.
 
-The Publisher implementation baseline assessed by this focused parity refresh is
-`31255c268a03571fe61e52a85f8542de16b0a694` on
-`feat/reader-parity-refresh`.
+The current executable refresh starts from Coherence `origin/main` at
+`20740657f5cc8fbec934c1df609d7e7e0d95fc32` and is preserved at Coherence
+checkpoint `b75c6c9362c6502f9a7cac543ebef97a4177d734`. It consumes Publisher
+package candidate `580f5c548802df09fc9bb814286b205ba08acdb5`. The surrounding Publisher
+release and public-site checkpoint is
+`cd874ff969ac82f06398cf0dda10cbdd6a0f4e0c`.
 
 The audit was read only with respect to Coherence. It did not modify manuscripts,
 publishing records, generated output, deployment state, or the current production
 application.
+
+## 2026-08-27 executable refresh
+
+The refreshed proof compiles all 9 works, 525 current sections, 3,486 blocks,
+206,448 Publisher words, and 535 raw Reader routes. The raw Reader identity is
+`sha256:7453a8bab44d734451ad6e5a92a54487181538eccc533f1fe68d9e19d845e54d`.
+The known catalog and Publisher text difference remains 4,311 words and is
+reported as a gap, not parity.
+
+The Coherence-owned adapter produces 583 active route plans and preserves all 21
+approved semantic links across 17 block groups. Its evidence identity is
+`sha256:aba6853f41d81838f7d1e82edc47c6601e36703f31cc032e396744a0638a07f6`,
+with Reader identity
+`sha256:461e4843f18b82ae6d7e7dbc1df8fcf5e6998a15dca06fd8165205d85b0a2ed4`
+and application identity
+`sha256:13602c7e3a5fd8b8a25277eac8cab60209f0ea8c7c36c2466bb9a5e428d03932`.
+The adapter closes 142 reviewed route issues. It does not assign the remaining
+107 nested fragment addresses. The raw audit therefore remains at 7,247 known
+issues and the adapted comparison remains at 7,105.
+
+The audio constructor binds 19 immutable checkpoints and 574 historical units.
+It retains 122 clips whose spoken text is exact and withholds 403 incompatible
+clips. It constructs its catalog in memory only. It does not publish audio,
+change the live manifest, contact storage, or claim complete narration parity.
+
+The exact Coherence checkpoint passes all 1,063 repository tests, the 6,411-page
+production build, and the application browser suite with 230 passes and 40
+intentional skips. The isolated real Chromium proof validates explicit offline
+installation, worker lifecycle, atomic replacement and rollback, preserved
+Coherence caches, cold reading, text visibility, search, navigation, exclusions,
+range requests, and cleanup. Two clean runs produced the same cross-run semantic
+identity,
+`sha256:f06e5ed22f0fe3b76bcb050507888a8b94749483776e46e08af22d68bab9e82c`,
+while retaining distinct exact per-run transport receipts as intended.
+
+This evidence leaves current Coherence routes untouched and asserts neither full
+content parity nor route parity. The final host wiring, complete fragment census,
+legacy state acceptance, existing-project preview, and explicit author approval
+remain open. No second Vercel project, database mutation, package publication,
+deployment, or production merge is authorized by this refresh.
 
 ## Headline
 

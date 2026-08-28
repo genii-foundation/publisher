@@ -1,15 +1,23 @@
 # Coherence adoption plan
 
-- Status: prepared implementation plan, pending review
-- Publisher implementation baseline: `31255c268a03571fe61e52a85f8542de16b0a694`
-- Coherence acceptance baseline: `d250a760b51a071037af0c18ac73cc3131312f09`
-- Coherence branch authority: committed `origin/main`
+- Status: executable migration proof refreshed, local preview approval pending
+- Publisher repository checkpoint: `cd874ff969ac82f06398cf0dda10cbdd6a0f4e0c`
+- Publisher package candidate: `580f5c548802df09fc9bb814286b205ba08acdb5`
+- Coherence source baseline: `20740657f5cc8fbec934c1df609d7e7e0d95fc32`
+- Coherence migration evidence checkpoint: `b75c6c9362c6502f9a7cac543ebef97a4177d734`
+- Coherence branch authority: committed `origin/main` at the source baseline
 - Production authority: unchanged
 
 This plan turns the readiness audit into a reversible sequence for adopting GENII
 Publisher in The Coherence Thesis. It authorizes no package publication, database
 change, credential change, pull request merge, production deployment, or production
 alias change.
+
+The refreshed Coherence checkpoint is still proof-only. It validates the exact
+Publisher package archives, compiles the author-owned corpus through declared
+adapters, exercises the official renderer and offline browser host, and leaves
+the current Coherence application routes untouched. It is not the final host
+migration, a package release, a preview approval, or production authorization.
 
 The two repositories may live anywhere. Every migration command that needs both
 must receive the absolute Publisher path and the absolute clean Coherence worktree
