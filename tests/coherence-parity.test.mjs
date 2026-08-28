@@ -369,7 +369,11 @@ test("the Coherence adoption plan pins authority and rollback boundaries", () =>
   );
   assert.match(
     plan,
-    /Coherence migration evidence checkpoint: `20980d155909850710ad95253e3eaf83a14e4c98`/u,
+    /Coherence migration candidate: `b2bbe1320593fbd1b3aec25f8253f9c7c41d55a9`/u,
+  );
+  assert.match(
+    plan,
+    /Coherence executable proof checkpoint: `20980d155909850710ad95253e3eaf83a14e4c98`/u,
   );
   assert.match(
     plan,

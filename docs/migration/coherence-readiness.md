@@ -24,9 +24,11 @@ changes no Reader state schema, narration engine, synchronization contract,
 offline behavior, route, or manuscript behavior.
 
 The current executable refresh starts from Coherence `origin/main` at
-`20740657f5cc8fbec934c1df609d7e7e0d95fc32` and is preserved at Coherence
-checkpoint `20980d155909850710ad95253e3eaf83a14e4c98`. It consumes exact Publisher
-package candidate `55efeee334848b714d52dbedce933de73aa7c6e1`.
+`20740657f5cc8fbec934c1df609d7e7e0d95fc32` and is preserved at executable proof
+checkpoint `20980d155909850710ad95253e3eaf83a14e4c98`. The current committed migration
+candidate is `b2bbe1320593fbd1b3aec25f8253f9c7c41d55a9`; its only later change refreshes
+the factual admin task record. It consumes exact Publisher package candidate
+`55efeee334848b714d52dbedce933de73aa7c6e1`.
 
 The audit was read only with respect to Coherence. It did not modify manuscripts,
 publishing records, generated output, deployment state, or the current production
@@ -59,8 +61,8 @@ cross-run semantic identity,
 while retaining distinct exact transport receipts as intended.
 
 The managed local preview is bound to Coherence commit
-`20980d155909850710ad95253e3eaf83a14e4c98` and candidate digest
-`8b9f73cf6350b5504521e8a8338e0229490637188f82b7e1149d2ff287e73cbb`.
+`b2bbe1320593fbd1b3aec25f8253f9c7c41d55a9` and candidate digest
+`58de50daebe62132993d5245cd0e7fcec271a53ba28d314aeb445b7237a2df59`.
 It is evidence awaiting author review. It is not approval to push, merge, publish,
 change provider state, or deploy.
 

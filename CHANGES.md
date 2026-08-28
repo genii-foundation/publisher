@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-28, GENII Foundation
 
+- Bound the migration readiness record to the refreshed status-only Coherence candidate and its exact local preview while retaining the prior executable proof checkpoint.
 - Refreshed the reversible Coherence migration authority against the exact state migration extension, immutable offline resource, two clean semantic browser proofs, full repository validation, and managed local preview candidate without authorizing publication, merge, provider mutation, or deployment.
 - Corrected the public package map so narration and Updates are documented as capability boundaries across the implemented packages rather than nonexistent wrapper packages.
 - Replaced publication-specific prose and provider labels in the neutral audio catalog schema fixture, eliminating every creative-content provenance match while retaining the unresolved source-code review boundary.

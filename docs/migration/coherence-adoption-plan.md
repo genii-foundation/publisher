@@ -4,8 +4,9 @@
 - Publisher repository checkpoint: `55efeee334848b714d52dbedce933de73aa7c6e1`
 - Publisher package candidate: `55efeee334848b714d52dbedce933de73aa7c6e1`
 - Coherence source baseline: `20740657f5cc8fbec934c1df609d7e7e0d95fc32`
-- Coherence migration evidence checkpoint: `20980d155909850710ad95253e3eaf83a14e4c98`
-- Coherence branch authority: committed candidate branch at the migration evidence checkpoint
+- Coherence migration candidate: `b2bbe1320593fbd1b3aec25f8253f9c7c41d55a9`
+- Coherence executable proof checkpoint: `20980d155909850710ad95253e3eaf83a14e4c98`
+- Coherence branch authority: committed candidate branch at the migration candidate checkpoint
 - Production authority: unchanged
 
 This plan turns the readiness audit into a reversible sequence for adopting GENII
