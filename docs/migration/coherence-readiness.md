@@ -12,8 +12,8 @@ The original complete Coherence inventory was pinned to commit
 direct Reader precursor changes from 2026-07-27 because those changes created the
 state, bookmark, audio, and synchronization substrate modified during the audit
 window. Focused Reader parity evidence was refreshed read only through current
-Coherence `origin/main` at `d250a760b51a071037af0c18ac73cc3131312f09`,
-dated 2026-08-19. The actionable delta came from bookmark anchoring at
+Coherence `origin/main` at `20740657f5cc8fbec934c1df609d7e7e0d95fc32`,
+dated 2026-08-26. The actionable Reader delta came from bookmark anchoring at
 `6ed21e5bc48f747989d3cd580d5bcd24daec686f`, mobile Safari playback isolation at
 `7cc32c1dd7421678e01f2df213df75c7e0a3656f`, and dedicated audiobook transport
 controls at `b001d42e50a95c6a2f6a4d67bd6b0879bed9cf89`. The latest narrow-toolbar
@@ -22,6 +22,14 @@ preferences from enlarging phone controls, retains direct playback access, and
 places secondary actions behind one named surface at 340 pixels and below. It
 changes no Reader state schema, narration engine, synchronization contract,
 offline behavior, route, or manuscript behavior.
+
+The four later Coherence commits through `20740657f5cc8fbec934c1df609d7e7e0d95fc32`
+change agent guidance, validation scheduling, publication evidence, manuscript
+content, and the localhost editorial revision page. The one application change
+renders author working variants through Coherence's existing Markdown component.
+That surface remains part of the author-owned localhost workbench. It introduces
+no new generic Reader, narration, offline, synchronization, renderer, or lifecycle
+contract for Publisher to absorb.
 
 The current executable refresh starts from Coherence `origin/main` at
 `20740657f5cc8fbec934c1df609d7e7e0d95fc32` and is preserved at executable proof

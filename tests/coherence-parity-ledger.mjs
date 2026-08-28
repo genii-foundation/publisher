@@ -54,8 +54,8 @@ If you wish to allow use of your version of this file only under the terms of th
 
 export const COHERENCE_PARITY_SOURCE = Object.freeze({
   repository: "https://github.com/genii-foundation/coherence-thesis",
-  ref: "d250a760b51a071037af0c18ac73cc3131312f09",
-  observedThrough: "2026-08-19",
+  ref: "20740657f5cc8fbec934c1df609d7e7e0d95fc32",
+  observedThrough: "2026-08-26",
 });
 
 export const READER_PARITY = Object.freeze([
