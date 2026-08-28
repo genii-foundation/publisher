@@ -297,6 +297,10 @@ test("release mode requires exact candidates, rejects every package-affecting dr
     workspaceManifest.scripts["release:verify"],
     "node provenance/scripts/verify-release.mjs",
   );
+  assert.equal(
+    workspaceManifest.scripts["release:verify-public-surface"],
+    "node provenance/scripts/verify-public-surface.mjs",
+  );
 });
 
 test("npm refuses direct package-directory publication before it can rebuild", () => {

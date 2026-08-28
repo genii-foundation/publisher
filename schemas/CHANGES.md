@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-27, GENII Foundation
+
+- Added a bounded, read-only public release surface verifier that binds the attributed landing page and every reviewed public schema URL to exact repository bytes without weakening offline archive preparation or reverification.
+
 ## 2026-08-20, GENII Foundation
 
 - Corrected the public audio envelope voice declaration to expose `clips`, matching the closed schema and runtime artifact, while preserving `sections` in source audio catalogs.

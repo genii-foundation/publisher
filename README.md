@@ -64,7 +64,7 @@ GENII Publisher source code is available at [github.com/genii-foundation/publish
 
 ## First release gates
 
-The first public package release remains blocked until `publisher.genii.foundation` serves the attribution landing page and stable schema URLs, npm trusted publishing is bound to the release workflow, and the exact prerelease tag is verified. The release workflow must build, attest, retain, and reverify one exact tarball per package, then upload those same paths without rebuilding. Direct package-directory publication is forbidden. A source package passing local tests is not a public release. Metaphysics has tried this trick before.
+The first public package release remains blocked until `publisher.genii.foundation` serves the attribution landing page and stable schema URLs, npm trusted publishing is bound to the release workflow, and the exact prerelease tag is verified. `npm run release:verify-public-surface` checks the attributed landing page and every reviewed public schema against the repository's exact bytes. It is a separate network gate. Release preparation and archive reverification remain offline. The release workflow must build, attest, retain, and reverify one exact tarball per package, then upload those same paths without rebuilding. Direct package-directory publication is forbidden. A source package passing local tests is not a public release. Metaphysics has tried this trick before.
 
 ## Coherence migration gate
 

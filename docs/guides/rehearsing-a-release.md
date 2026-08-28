@@ -112,8 +112,15 @@ last honest gate rather than as something to work around.
 
 ## The other gates
 
-Recorded in the README and not enforced by these scripts, because they are about
-the world rather than the repository:
+The public web surface now has its own read-only network gate:
+
+```bash
+npm run release:verify-public-surface
+```
+
+It checks the attributed landing page and every reviewed schema URL against the
+repository's exact schema bytes. It follows no redirects and writes no files.
+Keep it separate from `release:prepare` and `release:verify`, which remain offline.
 
 `publisher.genii.foundation` must serve the attribution landing page and stable
 schema URLs, because published packages reference those URLs and a manifest
