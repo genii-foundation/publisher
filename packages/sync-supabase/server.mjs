@@ -44,6 +44,20 @@ function resolvedEnvironment(environment) {
   return { url, anonKey, serviceRoleKey };
 }
 
+function engagementDatabaseRow(userId, publicationId, event) {
+  return Object.fromEntries([
+    ["user_id", userId],
+    ["publication_id", publicationId],
+    ["client_event_id", event.clientEventId],
+    ["event_type", event.eventType],
+    ["event_at", new Date(event.eventAt).toISOString()],
+    ["section_id", event.sectionId ?? null],
+    ["content_hash", event.contentHash ?? null],
+    ["route", event.route ?? null],
+    ["payload", event.payload ?? {}],
+  ]);
+}
+
 export function createPublisherSupabaseSyncProvider(options = {}) {
   const environment = options.environment ?? process.env;
   const readCookies = options.cookies ?? cookies;
@@ -245,17 +259,9 @@ export function createPublisherSupabaseSyncProvider(options = {}) {
       const events = transfer.events ?? [];
       if (events.length > 0) {
         const result = await client.from("reader_engagement_events").upsert(
-          events.map((event) => ({
-            user_id: userId,
-            publication_id: publicationId,
-            client_event_id: event.clientEventId,
-            event_type: event.eventType,
-            event_at: new Date(event.eventAt).toISOString(),
-            section_id: event.sectionId ?? null,
-            content_hash: event.contentHash ?? null,
-            route: event.route ?? null,
-            payload: event.payload ?? {},
-          })),
+          events.map((event) =>
+            engagementDatabaseRow(userId, publicationId, event)
+          ),
           {
             onConflict: "user_id,publication_id,client_event_id",
             ignoreDuplicates: true,

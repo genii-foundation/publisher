@@ -7,6 +7,7 @@ This file records changes to the migration provenance system.
 - Removed copied creative fixture content from the Publisher source-loader record scope and regenerated the deterministic audit with zero CC-source phrase matches.
 - Replaced one inherited adjacent-range scan with a stricter independent interval-boundary algorithm, reducing significant source-token matches without weakening diagnostics.
 - Replaced inherited mutable quote-part rewriting with an independent immutable selection projection, removing the remaining selection-token matches.
+- Replaced inherited synchronization row construction with a declarative database projection and exact contract proof, removing the synchronization-token matches.
 
 ## 2026-08-27, GENII Foundation
 

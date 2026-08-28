@@ -7,6 +7,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Replaced publication-specific prose and provider labels in the neutral audio catalog schema fixture, eliminating every creative-content provenance match while retaining the unresolved source-code review boundary.
 - Hardened ReaderLink range validation so a shorter nested range cannot hide a later overlap with an earlier, wider range.
 - Made Reader selection quote assembly immutable while preserving exact boundary trimming and multi-block text order.
+- Centralized the Supabase engagement event database projection and bound every stored field through an exact server-provider test.
 
 ## 2026-08-27, GENII Foundation
 

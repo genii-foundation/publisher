@@ -278,7 +278,15 @@ test("remote transfer derives reader and publication scope on the server", async
         grantedAt: Date.parse("2026-08-18T00:00:00.000Z"),
         revokedAt: null,
       },
-      events: [{ clientEventId: "event-1", eventType: "section_opened", eventAt: 1 }],
+      events: [{
+        clientEventId: "event-1",
+        eventType: "section_opened",
+        eventAt: 1,
+        sectionId: "section-1",
+        contentHash: "sha256:content",
+        route: "/field-notes/section-1/",
+        payload: { source: "reader" },
+      }],
     },
   });
   assert.deepEqual(transferred.uploadedEventIds, ["event-1"]);
@@ -289,8 +297,17 @@ test("remote transfer derives reader and publication scope on the server", async
   const bookmarkMerge = calls.find((entry) => entry[0] === "rpc");
   assert.equal(bookmarkMerge[2].incoming_publication_id, "field-notes");
   const eventWrite = calls.find((entry) => entry[0] === "upsert" && entry[1] === "reader_engagement_events");
-  assert.equal(eventWrite[2][0].user_id, "reader-1");
-  assert.equal(eventWrite[2][0].publication_id, "field-notes");
+  assert.deepEqual(eventWrite[2], [{
+    user_id: "reader-1",
+    publication_id: "field-notes",
+    client_event_id: "event-1",
+    event_type: "section_opened",
+    event_at: "1970-01-01T00:00:00.001Z",
+    section_id: "section-1",
+    content_hash: "sha256:content",
+    route: "/field-notes/section-1/",
+    payload: { source: "reader" },
+  }]);
   assert.deepEqual(eventWrite[3], {
     onConflict: "user_id,publication_id,client_event_id",
     ignoreDuplicates: true,
