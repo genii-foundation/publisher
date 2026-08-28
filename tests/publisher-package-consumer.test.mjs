@@ -522,6 +522,7 @@ async function useLoaded(): Promise<readonly Diagnostic[]> {
   const validation = compileLoadedPublicationContent({
     loaded,
     works: [],
+    sectionIndexes: [],
   });
   return validation.diagnostics;
 }
@@ -757,9 +758,20 @@ const compiled = compileLoadedPublicationContent({
   loaded: result.value,
   works: [adapted.value.work],
   extensions: resolvedExtensions,
+  sectionIndexes: [{
+    id: "rain-gauge-index",
+    title: "Rain Gauge Index",
+    path: "/reading/rain-gauge-index/",
+    workId: workSource.workId,
+    sectionIds: [adapted.value.work.sections[0].id],
+  }],
 });
 assert.equal(compiled.valid, true, JSON.stringify(compiled.diagnostics));
 assert.equal(compiled.value.engineVersion, PUBLISHER_VERSION);
+assert.equal(
+  compiled.value.routes.active.at(-1).target.kind,
+  "section-index",
+);
 const rejectedOverride = compileLoadedPublicationContent({
   loaded: result.value,
   works: [adapted.value.work],

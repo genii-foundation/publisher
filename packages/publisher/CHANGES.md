@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. The GENII Publisher application package is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-28, GENII Foundation
+
+- Forwarded resolved aggregate section indexes through the public trusted-snapshot compilation boundary.
+
 ## 2026-08-19, GENII Foundation
 
 - Added build-time extension handler projection with independent grants, owned canonical API paths, closed methods, collision refusal, and frozen build-bound data.
