@@ -266,10 +266,10 @@
       "evidence": "The review receipt records zero exact-blob matches."
     },
     "normalizedLine": {
-      "outcome": "expected-match",
-      "matchCount": 53,
+      "outcome": "clear",
+      "matchCount": 0,
       "method": "Compare whitespace-normalized UTF-8 lines containing at least 60 characters.",
-      "evidence": "The review receipt records exactly 53 normalized-line matches, all confined to the six Supabase migrations. Generic framework, release, site, Reader, provider, and test source now records zero normalized-line matches."
+      "evidence": "The independent Supabase schema and bookmark merge implementation removed the final migration matches, and the deterministic review receipt records zero normalized-line matches."
     },
     "tokenShingle": {
       "outcome": "clear",
@@ -296,7 +296,7 @@
     "reviewerId": "publisher-provenance-audit-2026-07-28",
     "reviewedAt": "2026-08-28T09:01:01Z",
     "releaseApprovalRequired": true,
-    "notes": "Deterministic review completed and the copied creative fixture content was removed, but the fresh-cpal classification cannot be accepted while the recorded source-code matches remain. The receipt is review evidence, not an accepted provenance receipt. Remediation or truthful reclassification, maintainer review, human release approval, and counsel review remain required before the first 1.0 release."
+    "notes": "Deterministic review now records zero matches in every source scan. This scanner-development receipt is review evidence, not an accepted provenance receipt. A full retained-package audit, maintainer review, human release approval, and counsel review remain required before the first 1.0 release."
   },
   "documentation": {
     "notice": {

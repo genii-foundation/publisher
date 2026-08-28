@@ -211,7 +211,7 @@ test("every table and function a provider entry names is really created", () => 
     if (table !== undefined) {
       assert.match(
         migrationSql,
-        new RegExp(`create table if not exists public\\.${table}\\b`, "u"),
+        new RegExp(`create table if not exists\\s+public\\.${table}\\b`, "u"),
         `${entry.id} names table ${table}, which no migration creates`,
       );
     }
@@ -219,7 +219,7 @@ test("every table and function a provider entry names is really created", () => 
     if (routine !== undefined) {
       assert.match(
         migrationSql,
-        new RegExp(`create or replace function public\\.${routine}\\b`, "u"),
+        new RegExp(`create or replace function\\s+public\\.${routine}\\b`, "u"),
         `${entry.id} names function ${routine}, which no migration defines`,
       );
     }

@@ -10,23 +10,31 @@
 -- device deleted.
 
 create table if not exists public.reader_bookmarks (
-  user_id uuid primary key references auth.users(id) on delete cascade,
+  user_id uuid primary key,
   bookmarks jsonb not null default '{"bookmarks":{}}'::jsonb,
   schema_version integer not null default 1,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint publisher_bookmark_reader_fk
+    foreign key (user_id)
+    references auth.users (id)
+    on delete cascade
 );
 
-alter table public.reader_bookmarks enable row level security;
+alter table public.reader_bookmarks
+  enable row level security;
 
-drop policy if exists "Reader bookmarks are owned by the user" on public.reader_bookmarks;
+drop policy if exists "Reader bookmarks are owned by the user"
+  on public.reader_bookmarks;
 create policy "Reader bookmarks are owned by the user"
 on public.reader_bookmarks
 for all
+to authenticated
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
-drop trigger if exists reader_bookmarks_set_updated_at on public.reader_bookmarks;
+drop trigger if exists reader_bookmarks_set_updated_at
+  on public.reader_bookmarks;
 create trigger reader_bookmarks_set_updated_at
 before update on public.reader_bookmarks
 for each row execute function public.set_updated_at();

@@ -11,6 +11,73 @@
 -- race is exactly as reachable as before. Rolling this migration back therefore
 -- restores a lost-update race and is not a harmless permissions change.
 
+create or replace function public.valid_reader_bookmark_document(
+  candidate_document jsonb
+)
+returns boolean
+language sql
+immutable
+security invoker
+set search_path = ''
+as $$
+  select coalesce(
+    jsonb_typeof(candidate_document) = 'object'
+    and jsonb_typeof(candidate_document -> 'bookmarks') = 'object',
+    false
+  );
+$$;
+
+create or replace function public.choose_reader_bookmark(
+  candidate_record jsonb,
+  existing_record jsonb,
+  expected_id text
+)
+returns jsonb
+language plpgsql
+immutable
+security invoker
+set search_path = ''
+as $$
+begin
+  if jsonb_typeof(candidate_record) is distinct from 'object'
+    or candidate_record ->> 'id' is distinct from expected_id
+    or jsonb_typeof(candidate_record -> 'updatedAt')
+      is distinct from 'number'
+  then
+    raise exception 'Bookmark candidate is invalid for key: %.', expected_id
+      using errcode = '22023';
+  end if;
+
+  if existing_record is null then
+    return candidate_record;
+  end if;
+
+  if jsonb_typeof(existing_record) is distinct from 'object'
+    or jsonb_typeof(existing_record -> 'updatedAt')
+      is distinct from 'number'
+  then
+    raise exception 'Stored bookmark is invalid for key: %.', expected_id
+      using errcode = '22023';
+  end if;
+
+  if (candidate_record ? 'removedAt')
+    <> (existing_record ? 'removedAt')
+  then
+    if candidate_record ? 'removedAt' then
+      return candidate_record;
+    end if;
+    return existing_record;
+  end if;
+
+  if (candidate_record ->> 'updatedAt')::numeric
+    > (existing_record ->> 'updatedAt')::numeric
+  then
+    return candidate_record;
+  end if;
+  return existing_record;
+end;
+$$;
+
 create or replace function public.merge_reader_bookmarks(
   incoming_bookmarks jsonb,
   incoming_schema_version integer
@@ -30,10 +97,6 @@ declare
   current_schema_version integer;
   bookmark_id text;
   incoming_record jsonb;
-  current_record jsonb;
-  choose_incoming boolean;
-  incoming_updated_at numeric;
-  current_updated_at numeric;
 begin
   if requester is null then
     raise exception 'Authentication is required.'
@@ -46,9 +109,7 @@ begin
       using errcode = '22023';
   end if;
 
-  if jsonb_typeof(incoming_bookmarks) is distinct from 'object'
-    or jsonb_typeof(incoming_bookmarks -> 'bookmarks') is distinct from 'object'
-  then
+  if not public.valid_reader_bookmark_document(incoming_bookmarks) then
     raise exception 'Invalid bookmark document.'
       using errcode = '22023';
   end if;
@@ -79,9 +140,9 @@ begin
   -- An older client must not quietly rewrite a document a newer one wrote.
   if current_schema_version > incoming_schema_version then
     raise exception
-      'Remote bookmark schema version % is newer than client version %.',
-      current_schema_version,
-      incoming_schema_version
+      'Client bookmark schema version % cannot replace stored version %.',
+      incoming_schema_version,
+      current_schema_version
       using errcode = '22023';
   end if;
 
@@ -89,47 +150,16 @@ begin
     select key, value
     from jsonb_each(incoming_bookmarks -> 'bookmarks')
   loop
-    if jsonb_typeof(incoming_record) is distinct from 'object'
-      or incoming_record ->> 'id' is distinct from bookmark_id
-      or jsonb_typeof(incoming_record -> 'updatedAt') is distinct from 'number'
-    then
-      raise exception 'Invalid bookmark record: %.', bookmark_id
-        using errcode = '22023';
-    end if;
-
-    current_record :=
-      current_document -> 'bookmarks' -> bookmark_id;
-    choose_incoming := current_record is null;
-
-    if current_record is not null then
-      if jsonb_typeof(current_record) is distinct from 'object'
-        or jsonb_typeof(current_record -> 'updatedAt') is distinct from 'number'
-      then
-        raise exception 'Stored bookmark record is invalid: %.', bookmark_id
-          using errcode = '22023';
-      end if;
-
-      -- A tombstone is absorbing. Bookmark identifiers are never reused, so a live
-      -- record carrying an identifier that has been deleted cannot be a legitimate
-      -- later resurrection, whatever its timestamp says. Comparing timestamps first
-      -- would let a device with a skewed clock undelete somebody's bookmark.
-      if (incoming_record ? 'removedAt') <> (current_record ? 'removedAt') then
-        choose_incoming := incoming_record ? 'removedAt';
-      else
-        incoming_updated_at := (incoming_record ->> 'updatedAt')::numeric;
-        current_updated_at := (current_record ->> 'updatedAt')::numeric;
-        choose_incoming := incoming_updated_at > current_updated_at;
-      end if;
-    end if;
-
-    if choose_incoming then
-      current_document := jsonb_set(
-        current_document,
-        array['bookmarks', bookmark_id],
+    current_document := jsonb_set(
+      current_document,
+      array['bookmarks', bookmark_id],
+      public.choose_reader_bookmark(
         incoming_record,
-        true
-      );
-    end if;
+        current_document -> 'bookmarks' -> bookmark_id,
+        bookmark_id
+      ),
+      true
+    );
   end loop;
 
   update public.reader_bookmarks
@@ -148,8 +178,9 @@ begin
 end;
 $$;
 
-comment on function public.merge_reader_bookmarks(jsonb, integer) is
-  'Atomically merges the authenticated reader bookmark document under a row lock.';
+comment on function
+public.merge_reader_bookmarks(jsonb, integer) is
+  'Merges the authenticated reader bookmark document while holding its row lock.';
 
 -- The merge function becomes the only client write path. SELECT stays for initial
 -- hydration and DELETE stays for explicit reader-data deletion under the table's
@@ -160,6 +191,14 @@ from authenticated;
 
 revoke all
 on function public.merge_reader_bookmarks(jsonb, integer)
+from public, anon;
+
+revoke all
+on function public.valid_reader_bookmark_document(jsonb)
+from public, anon;
+
+revoke all
+on function public.choose_reader_bookmark(jsonb, jsonb, text)
 from public, anon;
 
 grant execute

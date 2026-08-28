@@ -104,7 +104,7 @@ test("every capability's table is created by a migration", () => {
     }
     assert.match(
       allSql,
-      new RegExp(`create table if not exists public\\.${table}\\b`, "u"),
+      new RegExp(`create table if not exists\\s+public\\.${table}\\b`, "u"),
       `${capability} names table ${table} and no migration creates it`,
     );
   }
@@ -121,7 +121,7 @@ test("every declared function is defined", () => {
   for (const name of Object.values(PUBLISHER_SYNC_PROVIDER.functions)) {
     assert.match(
       allSql,
-      new RegExp(`create or replace function public\\.${name}\\b`, "u"),
+      new RegExp(`create or replace function\\s+public\\.${name}\\b`, "u"),
       `the descriptor names function ${name} and no migration defines it`,
     );
   }
@@ -135,7 +135,7 @@ test("row level security is enabled on every reader table", () => {
     assert.match(
       allSql,
       new RegExp(
-        `alter table public\\.${table} enable row level security`,
+        `alter table public\\.${table}\\s+enable row level security`,
         "u",
       ),
       `${table} does not enable row level security`,
@@ -156,6 +156,11 @@ test("every reader table has an ownership policy on both sides", () => {
       `${table} has no for-all ownership policy`,
     );
     const clause = allSql.slice(start, start + 200);
+    assert.match(
+      clause,
+      /to authenticated/u,
+      `${table} ownership policy is not role scoped`,
+    );
     assert.match(
       clause,
       /using \(auth\.uid\(\) = user_id\)/u,
@@ -253,13 +258,13 @@ test("anonymous access is revoked from every reader table", () => {
   for (const table of readerTables) {
     assert.match(
       allSql,
-      new RegExp(`revoke all on table public\\.${table} from anon`, "u"),
+      new RegExp(`revoke all\\s+on table public\\.${table}\\s+from anon`, "u"),
       `${table} does not revoke anonymous access`,
     );
   }
   assert.match(
     allSql,
-    /revoke all on sequence public\.reader_engagement_events_id_seq from anon/u,
+    /revoke all\s+on sequence public\.reader_engagement_events_id_seq\s+from anon/u,
     "the event log's sequence is still reachable anonymously",
   );
 });
@@ -306,7 +311,7 @@ test("every function pins an empty search_path", () => {
   // can be made to call something other than what it names.
   const definitions = [
     ...allSql.matchAll(
-      /create or replace function public\.(\w+)\([\s\S]*?\$\$;/gu,
+      /create or replace function\s+public\.(\w+)\([\s\S]*?\$\$;/gu,
     ),
   ];
   assert.ok(
@@ -340,6 +345,29 @@ test("privileged functions are revoked from anonymous callers", () => {
   }
 });
 
+test("merge helpers stay internal to the database implementation", () => {
+  for (const signature of [
+    "valid_reader_bookmark_document\\(jsonb\\)",
+    "choose_reader_bookmark\\(jsonb, jsonb, text\\)",
+  ]) {
+    assert.match(
+      allSql,
+      new RegExp(
+        `revoke all\\s+on function public\\.${signature}\\s+from public, anon`,
+        "u",
+      ),
+      `public.${signature} remains callable by a client`,
+    );
+    assert.doesNotMatch(
+      allSql,
+      new RegExp(
+        `grant execute\\s+on function public\\.${signature}\\s+to authenticated`,
+        "u",
+      ),
+    );
+  }
+});
+
 // ----------------------------------------------------------- bounds hold
 
 test("every reader-controlled blob and text column is bounded", () => {
@@ -355,17 +383,17 @@ test("every reader-controlled blob and text column is bounded", () => {
     ["reader_progress_size", /pg_column_size\(progress\) <= 262144\b/u],
     ["reader_bookmarks_size", /pg_column_size\(bookmarks\) <= 4194304\b/u],
     [
-      "reader_engagement_events_payload_size",
+      "publisher_event_payload_size",
       /pg_column_size\(payload\) <= 8192\b/u,
     ],
-    ["reader_engagement_events_event_type_len", /char_length\(event_type\)/u],
+    ["publisher_event_type_length", /char_length\(event_type\)/u],
     [
-      "reader_engagement_events_client_event_id_len",
+      "publisher_client_event_length",
       /char_length\(client_event_id\)/u,
     ],
-    ["reader_engagement_events_section_id_len", /char_length\(section_id\)/u],
-    ["reader_engagement_events_content_hash_len", /char_length\(content_hash\)/u],
-    ["reader_engagement_events_route_len", /char_length\(route\)/u],
+    ["publisher_event_section_length", /char_length\(section_id\)/u],
+    ["publisher_event_hash_length", /char_length\(content_hash\)/u],
+    ["publisher_event_route_length", /char_length\(route\)/u],
     ["reader_sync_consent_copy_version_len", /char_length\(copy_version\)/u],
   ];
   for (const [constraint, check] of bounds) {
@@ -432,8 +460,10 @@ test("a tombstone wins over a timestamp", () => {
   // clock says. Comparing timestamps first would let a skewed device undelete
   // somebody's bookmark.
   const merge = migrations.get("0007_publication_scope.sql") ?? "";
-  const removedAtBranch = merge.indexOf("? 'removedAt') <> (");
-  const timestampBranch = merge.indexOf("incoming_updated_at > current_updated_at");
+  const removedAtBranch = merge.indexOf("candidate_record ? 'removedAt'");
+  const timestampBranch = merge.indexOf(
+    "candidate_record ->> 'updatedAt')::numeric",
+  );
   assert.ok(removedAtBranch > 0, "the tombstone comparison is gone");
   assert.ok(timestampBranch > 0, "the timestamp comparison is gone");
   assert.ok(
@@ -445,14 +475,34 @@ test("a tombstone wins over a timestamp", () => {
 test("the merge refuses a document written by a newer client", () => {
   const merge = migrations.get("0007_publication_scope.sql") ?? "";
   assert.match(merge, /current_schema_version > incoming_schema_version/u);
-  assert.match(merge, /is newer than client version/u);
+  assert.match(merge, /cannot replace stored version/u);
 });
 
 test("the merge validates each incoming record against its own key", () => {
   // A record whose id disagrees with its key would be stored under one identity and
   // claim another.
   const merge = migrations.get("0007_publication_scope.sql") ?? "";
-  assert.match(merge, /incoming_record ->> 'id' is distinct from bookmark_id/u);
+  assert.match(merge, /candidate_record ->> 'id' is distinct from expected_id/u);
+  assert.match(
+    merge,
+    /public\.choose_reader_bookmark\(\s+incoming_record,[\s\S]*?bookmark_id\s+\)/u,
+    "the locked merge bypasses the record decision primitive",
+  );
+});
+
+test("both merge migrations use the same record decision boundary", () => {
+  for (const migration of [
+    "0005_atomic_bookmark_merge.sql",
+    "0007_publication_scope.sql",
+  ]) {
+    const merge = migrations.get(migration) ?? "";
+    assert.match(merge, /create or replace function public\.choose_reader_bookmark/u);
+    assert.match(
+      merge,
+      /public\.choose_reader_bookmark\(\s+incoming_record,[\s\S]*?bookmark_id\s+\)/u,
+      `${migration} bypasses the shared record decision boundary`,
+    );
+  }
 });
 
 test("both privileged functions refuse an unauthenticated caller", () => {
