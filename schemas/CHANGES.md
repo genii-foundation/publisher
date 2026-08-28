@@ -8,6 +8,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Hardened ReaderLink range validation so a shorter nested range cannot hide a later overlap with an earlier, wider range.
 - Made Reader selection quote assembly immutable while preserving exact boundary trimming and multi-block text order.
 - Centralized the Supabase engagement event database projection and bound every stored field through an exact server-provider test.
+- Bounded offline metadata enumeration by the Reader package ceiling, centralized resilient cache cleanup, preserved redirected response metadata explicitly, and made the cache test double retain real cloned responses.
+- Centralized Reader text range and vertical-bound measurement for bookmark markers, with one guarded layout-shift observer boundary.
 
 ## 2026-08-27, GENII Foundation
 

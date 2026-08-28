@@ -70,7 +70,16 @@ function oldRecord() {
 function installCaches(seed = {}) {
   const stores = new Map(Object.entries(seed).map(([name, entries]) => [
     name,
-    new Map(Object.entries(entries)),
+    new Map(Object.entries(entries).map(([key, body]) => [
+      key,
+      new Response(body, {
+        headers: {
+          "content-type": name === PUBLISHER_READER_OFFLINE_METADATA_CACHE
+            ? "application/json"
+            : "application/octet-stream",
+        },
+      }),
+    ])),
   ]));
   const keyFor = (key) => typeof key === "string"
     ? key
@@ -81,19 +90,16 @@ function installCaches(seed = {}) {
     const store = stores.get(name) ?? new Map();
     stores.set(name, store);
     return {
-      match: (key) => {
-        const body = store.get(keyFor(key));
-        return Promise.resolve(body === undefined
-          ? undefined
-          : new Response(body, {
-              headers: { "content-type": "application/json" },
-            }));
+      async match(key) {
+        return store.get(keyFor(key))?.clone();
       },
-      put: async (key, response) => {
-        store.set(keyFor(key), await response.text());
+      async put(key, response) {
+        store.set(keyFor(key), response.clone());
       },
-      keys: () => Promise.resolve([...store.keys()].map((key) =>
-        new Request(new URL(key, "https://publisher.test").href))),
+      async keys() {
+        return [...store.keys()].map((key) =>
+          new Request(new URL(key, "https://publisher.test").href));
+      },
     };
   };
   Object.defineProperty(globalThis, "caches", {
@@ -104,6 +110,10 @@ function installCaches(seed = {}) {
     },
   });
   return stores;
+}
+
+async function storedText(stores, cacheName, key) {
+  return stores.get(cacheName)?.get(key)?.clone().text();
 }
 
 beforeEach(() => {
@@ -135,7 +145,11 @@ test("a failed replacement keeps the previous complete package active", async ()
   );
   assert.equal(stores.get(oldCacheName).has("/old-document/"), true);
   assert.equal(
-    stores.get(PUBLISHER_READER_OFFLINE_METADATA_CACHE).get(recordKey),
+    await storedText(
+      stores,
+      PUBLISHER_READER_OFFLINE_METADATA_CACHE,
+      recordKey,
+    ),
     oldRecord(),
   );
 });
@@ -172,7 +186,11 @@ test("activation switches one pointer only after every resource verifies", async
   assert.equal(status.updateAvailable, false);
   assert.equal(stores.has(oldCacheName), false);
   const record = JSON.parse(
-    stores.get(PUBLISHER_READER_OFFLINE_METADATA_CACHE).get(recordKey),
+    await storedText(
+      stores,
+      PUBLISHER_READER_OFFLINE_METADATA_CACHE,
+      recordKey,
+    ),
   );
   assert.notEqual(record.cacheName, oldCacheName);
   assert.deepEqual(record.resourceHrefs, fetched);
@@ -185,5 +203,24 @@ test("activation switches one pointer only after every resource verifies", async
   assert.deepEqual(
     await inspectPublisherReaderOfflinePackage(publicationId, offlinePackage),
     { cachedCount: 2, totalCount: 2, complete: true, updateAvailable: false },
+  );
+});
+
+test("metadata enumeration fails closed above the publication package ceiling", async () => {
+  const records = Object.fromEntries(Array.from(
+    { length: 5_000 },
+    (_, index) => [
+      `${PUBLISHER_READER_OFFLINE_RECORD_PREFIX}${publicationId}/work-${index}`,
+      oldRecord(),
+    ],
+  ));
+  installCaches({
+    [PUBLISHER_READER_OFFLINE_METADATA_CACHE]: records,
+  });
+
+  assert.deepEqual(await publisherReaderOfflineWorkIds(publicationId), []);
+  assert.equal(
+    await matchPublisherReaderOfflineResponse("/works/first/"),
+    undefined,
   );
 });

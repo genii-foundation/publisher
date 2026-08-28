@@ -13,9 +13,10 @@ If you wish to allow use of your version of this file only under the terms of th
 
 "use client";
 
-import type {
-  ReaderOfflinePackage,
-  ReaderOfflinePackageVersion,
+import {
+  MAXIMUM_READER_OFFLINE_PACKAGES,
+  type ReaderOfflinePackage,
+  type ReaderOfflinePackageVersion,
 } from "@genii-foundation/publisher-reader/offline";
 
 export const PUBLISHER_READER_OFFLINE_METADATA_CACHE =
@@ -24,6 +25,11 @@ export const PUBLISHER_READER_OFFLINE_PACKAGE_CACHE_PREFIX =
   "genii-publisher-offline-package-v1-";
 export const PUBLISHER_READER_OFFLINE_RECORD_PREFIX =
   "https://publisher.invalid/__offline-package__/";
+const LOCAL_DEPENDENCY_PATH_PREFIXES = Object.freeze([
+  "/_next/static/",
+  "/_next/image/",
+  "/assets/",
+]);
 
 export interface PublisherReaderOfflinePackageRecord {
   readonly schemaVersion: 1;
@@ -116,6 +122,29 @@ async function writeRecord(
   );
 }
 
+async function readMetadataRecords(
+  metadata: Cache,
+): Promise<readonly PublisherReaderOfflinePackageRecord[] | null> {
+  const requests = await metadata.keys();
+  if (requests.length > MAXIMUM_READER_OFFLINE_PACKAGES) return null;
+  const records: PublisherReaderOfflinePackageRecord[] = [];
+  for (const request of requests) {
+    if (!request.url.startsWith(PUBLISHER_READER_OFFLINE_RECORD_PREFIX)) {
+      continue;
+    }
+    try {
+      const response = await metadata.match(request);
+      const value: unknown = response === undefined
+        ? null
+        : await response.json();
+      if (isRecord(value)) records.push(value);
+    } catch {
+      continue;
+    }
+  }
+  return records;
+}
+
 async function cachedCount(
   cache: Cache,
   hrefs: readonly string[],
@@ -179,11 +208,9 @@ function localDependencyHref(value: string, base: string): string | null {
     const origin = window.location.origin;
     const url = new URL(value, new URL(base, origin).href);
     if (url.origin !== origin || url.hash !== "") return null;
-    if (
-      !url.pathname.startsWith("/_next/static/") &&
-      !url.pathname.startsWith("/_next/image/") &&
-      !url.pathname.startsWith("/assets/")
-    ) return null;
+    if (!LOCAL_DEPENDENCY_PATH_PREFIXES.some((prefix) =>
+      url.pathname.startsWith(prefix)
+    )) return null;
     return `${url.pathname}${url.search}`;
   } catch {
     return null;
@@ -242,12 +269,21 @@ async function portableResponse(
   if (final.origin !== requested.origin) {
     throw new Error(`Offline resource redirected outside its declared origin: ${requestedHref}`);
   }
-  if (!response.redirected) return response.clone();
-  return new Response(await response.clone().arrayBuffer(), {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
+  const copy = response.clone();
+  if (!response.redirected) return copy;
+  return new Response(await copy.arrayBuffer(), {
+    status: copy.status,
+    statusText: copy.statusText,
+    headers: new Headers(copy.headers),
   });
+}
+
+async function removeCacheIgnoringFailure(name: string): Promise<boolean> {
+  try {
+    return await caches.delete(name);
+  } catch {
+    return false;
+  }
 }
 
 export async function installPublisherReaderOfflinePackage(
@@ -305,10 +341,10 @@ export async function installPublisherReaderOfflinePackage(
     }));
     activated = true;
     if (previous !== null && previous.cacheName !== cacheName) {
-      await caches.delete(previous.cacheName).catch(() => false);
+      await removeCacheIgnoringFailure(previous.cacheName);
     }
   } catch (error) {
-    if (!activated) await caches.delete(cacheName).catch(() => false);
+    if (!activated) await removeCacheIgnoringFailure(cacheName);
     throw error;
   }
   const status = await inspectPublisherReaderOfflinePackage(
@@ -325,23 +361,10 @@ export async function publisherReaderOfflineWorkIds(
   if (!("caches" in globalThis)) return Object.freeze([]);
   try {
     const metadata = await caches.open(PUBLISHER_READER_OFFLINE_METADATA_CACHE);
-    const keys = await metadata.keys();
-    const records = await Promise.all(keys
-      .filter((request) => request.url.startsWith(PUBLISHER_READER_OFFLINE_RECORD_PREFIX))
-      .map(async (request) => {
-        try {
-          const response = await metadata.match(request);
-          const value: unknown = response === undefined ? null : await response.json();
-          return isRecord(value) && value.publicationId === publicationId
-            ? value
-            : null;
-        } catch {
-          return null;
-        }
-      }));
-    return Object.freeze(records
-      .filter((record): record is PublisherReaderOfflinePackageRecord =>
-        record !== null)
+    const records = await readMetadataRecords(metadata);
+    if (records === null) return Object.freeze([]);
+    return Object.freeze([...records]
+      .filter((record) => record.publicationId === publicationId)
       .sort((left, right) => right.savedAt.localeCompare(left.savedAt))
       .map(({ workId }) => workId));
   } catch {
@@ -355,14 +378,9 @@ export async function matchPublisherReaderOfflineResponse(
   if (!("caches" in globalThis)) return undefined;
   try {
     const metadata = await caches.open(PUBLISHER_READER_OFFLINE_METADATA_CACHE);
-    const keys = await metadata.keys();
-    const records = await Promise.all(keys.map(async (key) => {
-      const response = await metadata.match(key);
-      const value: unknown = response === undefined ? null : await response.json();
-      return isRecord(value) ? value : null;
-    }));
-    for (const record of records
-      .filter((value): value is PublisherReaderOfflinePackageRecord => value !== null)
+    const records = await readMetadataRecords(metadata);
+    if (records === null) return undefined;
+    for (const record of [...records]
       .sort((left, right) => right.savedAt.localeCompare(left.savedAt))) {
       const response = await (await caches.open(record.cacheName)).match(request);
       if (response !== undefined) return response;

@@ -23,9 +23,10 @@ import type { ReaderBlock, ReaderSection } from "@genii-foundation/publisher-sch
 import { useEffect, useState, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import {
-  publisherReaderTextClientRects,
   publisherReaderTextContent,
   publisherReaderTextPointForOffset,
+  publisherReaderTextRange,
+  publisherReaderTextVerticalBounds,
 } from "./reader-dom-text.js";
 
 interface PublisherReaderBookmarkMarker {
@@ -87,29 +88,38 @@ function measureBookmarkMarker(
     resolution.range.end.offset,
   );
   if (start === null || end === null) return null;
+  const range = publisherReaderTextRange(start, end);
+  if (range === null) return null;
+  const vertical = publisherReaderTextVerticalBounds(range);
+  if (vertical === null) return null;
   try {
-    const range = sectionRoot.ownerDocument.createRange();
-    range.setStart(start.node, start.offset);
-    range.setEnd(end.node, end.offset);
-    if (range.collapsed) return null;
-    const boxes = publisherReaderTextClientRects(range).filter(
-      (box) => box.width > 0 && box.height > 0,
-    );
-    if (boxes.length === 0) return null;
     const sectionBox = sectionRoot.getBoundingClientRect();
-    const top = Math.min(...boxes.map((box) => box.top));
-    const bottom = Math.max(...boxes.map((box) => box.bottom));
     return Object.freeze({
       bookmark,
       endBlockId: resolution.range.end.blockId,
-      height: Math.max(44, bottom - top + 4),
+      height: Math.max(44, vertical.bottom - vertical.top + 4),
       left: Math.max(2, sectionBox.left - 24) + window.scrollX,
       startBlockId: resolution.range.start.blockId,
-      top: top - 2 + window.scrollY,
+      top: vertical.top - 2 + window.scrollY,
     });
   } catch {
     return null;
   }
+}
+
+function observeLayoutShifts(
+  requestMeasure: () => void,
+): PerformanceObserver | null {
+  const Observer = globalThis.PerformanceObserver;
+  if (
+    Observer === undefined ||
+    !Observer.supportedEntryTypes.some((entryType) =>
+      entryType === "layout-shift"
+    )
+  ) return null;
+  const observer = new Observer(requestMeasure);
+  observer.observe({ type: "layout-shift", buffered: true });
+  return observer;
 }
 
 export function PublisherReaderBookmarkMarkers({
@@ -175,14 +185,7 @@ export function PublisherReaderBookmarkMarkers({
         "style",
       ],
     });
-    let layoutShiftObserver: PerformanceObserver | null = null;
-    if (
-      typeof PerformanceObserver !== "undefined" &&
-      PerformanceObserver.supportedEntryTypes.includes("layout-shift")
-    ) {
-      layoutShiftObserver = new PerformanceObserver(requestMeasure);
-      layoutShiftObserver.observe({ type: "layout-shift", buffered: true });
-    }
+    const layoutShiftObserver = observeLayoutShifts(requestMeasure);
     const handleFontSettle = (): void => requestMeasure();
     document.fonts?.addEventListener("loadingdone", handleFontSettle);
     document.fonts?.addEventListener("loadingerror", handleFontSettle);

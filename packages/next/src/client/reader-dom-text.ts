@@ -17,6 +17,16 @@ export const PUBLISHER_READER_TRANSIENT_UI_ATTRIBUTE =
 const TRANSIENT_READER_UI_SELECTOR =
   `[${PUBLISHER_READER_TRANSIENT_UI_ATTRIBUTE}='true']`;
 
+export interface PublisherReaderTextPoint {
+  readonly node: Node;
+  readonly offset: number;
+}
+
+export interface PublisherReaderTextVerticalBounds {
+  readonly bottom: number;
+  readonly top: number;
+}
+
 function transientReaderUiAncestor(node: Node): Element | null {
   const element = node.nodeType === Node.ELEMENT_NODE
     ? node as Element
@@ -52,7 +62,7 @@ export function publisherReaderTextContent(root: Node): string {
 export function publisherReaderTextPointForOffset(
   root: Node,
   offset: number,
-): { readonly node: Node; readonly offset: number } | null {
+): PublisherReaderTextPoint | null {
   if (!Number.isSafeInteger(offset) || offset < 0) return null;
   const walker = createPublisherReaderTextWalker(root);
   let consumed = 0;
@@ -66,6 +76,34 @@ export function publisherReaderTextPointForOffset(
     node = walker.nextNode();
   }
   return null;
+}
+
+function setTextRangeBoundary(
+  range: Range,
+  boundary: "start" | "end",
+  point: PublisherReaderTextPoint,
+): void {
+  if (boundary === "start") {
+    range.setStart(point.node, point.offset);
+  } else {
+    range.setEnd(point.node, point.offset);
+  }
+}
+
+export function publisherReaderTextRange(
+  start: PublisherReaderTextPoint,
+  end: PublisherReaderTextPoint,
+): Range | null {
+  const document = start.node.ownerDocument;
+  if (document === null || end.node.ownerDocument !== document) return null;
+  try {
+    const range = document.createRange();
+    setTextRangeBoundary(range, "start", start);
+    setTextRangeBoundary(range, "end", end);
+    return range.collapsed ? null : range;
+  } catch {
+    return null;
+  }
 }
 
 export function publisherReaderTextOffset(
@@ -124,4 +162,19 @@ export function publisherReaderTextClientRects(range: Range): readonly DOMRect[]
     node = walker.nextNode();
   }
   return Object.freeze(boxes);
+}
+
+export function publisherReaderTextVerticalBounds(
+  range: Range,
+): PublisherReaderTextVerticalBounds | null {
+  let top = Number.POSITIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const box of publisherReaderTextClientRects(range)) {
+    if (box.width <= 0 || box.height <= 0) continue;
+    top = Math.min(top, box.top);
+    bottom = Math.max(bottom, box.bottom);
+  }
+  return Number.isFinite(top) && Number.isFinite(bottom)
+    ? Object.freeze({ bottom, top })
+    : null;
 }
