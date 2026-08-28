@@ -355,11 +355,11 @@ test("the Coherence adoption plan pins authority and rollback boundaries", () =>
   );
   assert.match(
     plan,
-    /Publisher repository checkpoint: `cd874ff969ac82f06398cf0dda10cbdd6a0f4e0c`/u,
+    /Publisher repository checkpoint: `b0c1f88af73ae97f13367e6e2ddd75588943d567`/u,
   );
   assert.match(
     plan,
-    /Publisher package candidate: `580f5c548802df09fc9bb814286b205ba08acdb5`/u,
+    /Publisher package candidate: `b0c1f88af73ae97f13367e6e2ddd75588943d567`/u,
   );
   assert.match(
     plan,
@@ -367,7 +367,7 @@ test("the Coherence adoption plan pins authority and rollback boundaries", () =>
   );
   assert.match(
     plan,
-    /Coherence migration evidence checkpoint: `b75c6c9362c6502f9a7cac543ebef97a4177d734`/u,
+    /Coherence migration evidence checkpoint: `438b754f16c88076bce8a4b044444aa78fc33733`/u,
   );
   assert.match(
     plan,

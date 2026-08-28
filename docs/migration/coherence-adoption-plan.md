@@ -1,10 +1,10 @@
 # Coherence adoption plan
 
 - Status: executable migration proof refreshed, local preview approval pending
-- Publisher repository checkpoint: `cd874ff969ac82f06398cf0dda10cbdd6a0f4e0c`
-- Publisher package candidate: `580f5c548802df09fc9bb814286b205ba08acdb5`
+- Publisher repository checkpoint: `b0c1f88af73ae97f13367e6e2ddd75588943d567`
+- Publisher package candidate: `b0c1f88af73ae97f13367e6e2ddd75588943d567`
 - Coherence source baseline: `20740657f5cc8fbec934c1df609d7e7e0d95fc32`
-- Coherence migration evidence checkpoint: `b75c6c9362c6502f9a7cac543ebef97a4177d734`
+- Coherence migration evidence checkpoint: `438b754f16c88076bce8a4b044444aa78fc33733`
 - Coherence branch authority: committed `origin/main` at the source baseline
 - Production authority: unchanged
 
@@ -78,16 +78,18 @@ project may be created.
 
 The Publisher candidate now requires exact Next.js 16.3.1, React 19.2.8,
 React DOM 19.2.8, and its reference TypeScript 7.0.2 toolchain. The Coherence
-baseline already pins Next.js 16.3.1 but still pins React 19.2.4, React DOM
-19.2.4, and a TypeScript 5 range.
+candidate now pins Next.js 16.3.1, React 19.2.8, and React DOM 19.2.8 exactly.
+It retains TypeScript 5.9.3 with typescript-eslint 8.55.0 until the lint parser
+supports the Publisher reference TypeScript 7 toolchain.
 
 The preview branch must not suppress peer errors or accept two framework copies.
 Publisher must validate this exact framework stack before candidate installation.
-Coherence must then retain Next.js 16.3.1, adopt the validated React, React DOM,
-and TypeScript versions, copy the complete consuming-root overrides, and
-regenerate its lockfile with npm 10.9.0. The chosen versions must be exact in
-`package.json` and `package-lock.json`, pass both repositories' relevant gates,
-and appear once in the installed dependency graph.
+Coherence must retain the validated Next.js, React, and React DOM versions, copy
+the complete consuming-root overrides, and regenerate its lockfile with npm
+10.9.0. Those framework versions must be exact in `package.json` and
+`package-lock.json`, pass both repositories' relevant gates, and appear once in
+the installed dependency graph. TypeScript 7 adoption remains a separate closed
+toolchain migration and is not a condition for the current package candidate.
 
 ### Local state compatibility interface
 

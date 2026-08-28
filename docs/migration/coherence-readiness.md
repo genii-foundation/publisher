@@ -25,14 +25,14 @@ offline behavior, route, or manuscript behavior.
 
 The current executable refresh starts from Coherence `origin/main` at
 `20740657f5cc8fbec934c1df609d7e7e0d95fc32` and is preserved at Coherence
-checkpoint `b75c6c9362c6502f9a7cac543ebef97a4177d734`. It consumes Publisher
-package candidate `580f5c548802df09fc9bb814286b205ba08acdb5`. The surrounding Publisher
-release and public-site checkpoint is
-`cd874ff969ac82f06398cf0dda10cbdd6a0f4e0c`.
+checkpoint `438b754f16c88076bce8a4b044444aa78fc33733`. It consumes Publisher
+package candidate `b0c1f88af73ae97f13367e6e2ddd75588943d567`. The surrounding Publisher
+release and public-site checkpoint is the same exact Publisher commit.
 
-The audit was read only with respect to Coherence. It did not modify manuscripts,
-publishing records, generated output, deployment state, or the current production
-application.
+The refresh changed only isolated migration proof code, exact candidate package
+pins, and durable task evidence in a separate Coherence worktree. It did not
+modify manuscripts, publishing records, current application routes, deployment
+state, or the current production application.
 
 ## 2026-08-27 executable refresh
 
@@ -44,35 +44,38 @@ reported as a gap, not parity.
 
 The Coherence-owned adapter produces 583 active route plans and preserves all 21
 approved semantic links across 17 block groups. Its evidence identity is
-`sha256:aba6853f41d81838f7d1e82edc47c6601e36703f31cc032e396744a0638a07f6`,
+`sha256:b49a40b4f2a0fc8e453871e81c6cbf7e254775a3a84f62256b0104a8a9d8059e`,
 with Reader identity
-`sha256:461e4843f18b82ae6d7e7dbc1df8fcf5e6998a15dca06fd8165205d85b0a2ed4`
+`sha256:d51e09586804f0a23cfcb0ffa952c8cfbdf42b60b30aacca714320e8ee9b6e73`
 and application identity
-`sha256:13602c7e3a5fd8b8a25277eac8cab60209f0ea8c7c36c2466bb9a5e428d03932`.
-The adapter closes 142 reviewed route issues. It does not assign the remaining
-107 nested fragment addresses. The raw audit therefore remains at 7,247 known
-issues and the adapted comparison remains at 7,105.
+`sha256:779ccde423c45e6d6a0edca0af9efaf84879fb972b8b4e8461835aaaf38fa55d`.
+The adapter closes 249 reviewed route issues. It assigns all 107 direct child
+fragment addresses to their exact 46 chapter owners and verifies that the
+official renderer emits each child exactly once. The raw audit remains at 7,247
+known issues and the adapted comparison is now 6,998, with report identity
+`sha256:7345bdb1edff0c8e7b47225866f1668f62b8fafdbb623a87c32ce2509ef88453`.
 
 The audio constructor binds 19 immutable checkpoints and 574 historical units.
 It retains 122 clips whose spoken text is exact and withholds 403 incompatible
 clips. It constructs its catalog in memory only. It does not publish audio,
 change the live manifest, contact storage, or claim complete narration parity.
 
-The exact Coherence checkpoint passes all 1,063 repository tests, the 6,411-page
+The exact Coherence checkpoint passes all 1,064 repository tests, the 6,411-page
 production build, and the application browser suite with 230 passes and 40
 intentional skips. The isolated real Chromium proof validates explicit offline
 installation, worker lifecycle, atomic replacement and rollback, preserved
 Coherence caches, cold reading, text visibility, search, navigation, exclusions,
 range requests, and cleanup. Two clean runs produced the same cross-run semantic
 identity,
-`sha256:f06e5ed22f0fe3b76bcb050507888a8b94749483776e46e08af22d68bab9e82c`,
+`sha256:4ea3f7a9999cb8418987ca4eba36542f700187bb320119eedf60a6289754cf7b`,
 while retaining distinct exact per-run transport receipts as intended.
 
 This evidence leaves current Coherence routes untouched and asserts neither full
-content parity nor route parity. The final host wiring, complete fragment census,
-legacy state acceptance, existing-project preview, and explicit author approval
-remain open. No second Vercel project, database mutation, package publication,
-deployment, or production merge is authorized by this refresh.
+content parity nor route parity. Nested fragment parity is closed. The final host
+wiring, remaining route census, legacy state acceptance, existing-project
+preview, and explicit author approval remain open. No second Vercel project,
+database mutation, package publication, deployment, or production merge is
+authorized by this refresh.
 
 ## Headline
 
