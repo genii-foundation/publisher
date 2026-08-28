@@ -6,6 +6,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 - Added a bounded, read-only public release surface verifier that binds the attributed landing page and every reviewed public schema URL to exact repository bytes without weakening offline archive preparation or reverification.
 - Added a provider-neutral static public site artifact with the attributed landing page, exact reviewed schemas, and a deterministic deployment manifest.
+- Added a manual tagged OIDC release workflow that retains and reverifies exact archives under the pinned preparation toolchain, then uses token-free npm 11.5.1 on Node 24 for identity-checked publication.
 
 ## 2026-08-20, GENII Foundation
 

@@ -134,6 +134,22 @@ pointing at nothing is worse than an unpublished package.
 npm trusted publishing must be bound to the release workflow, so that uploads are
 attested to a workflow rather than to a token somebody holds.
 
+The repository workflow is `.github/workflows/publish.yml`. Each npm package must
+trust that exact filename in `genii-foundation/publisher` and require environment
+`npm-publish`. The GitHub environment should require human approval. Dispatch the
+workflow only from an exact `v<package-version>` tag and select the reviewed npm
+distribution tag. The workflow refuses branches, token credentials, mixed package
+versions, incomplete manifests, and changed archives.
+
+Preparation and reverification stay on Node 22.12 with npm 10.9. The final upload
+step switches to Node 24 with token-free npm 11.5.1, the minimum npm version that
+supports trusted publishing. It publishes only the retained tarball paths and
+rehashes each one immediately before and after npm reads it.
+
+Publishing five packages is sequential, not transactional. If one upload fails
+after an earlier immutable version was accepted, preserve the retained workflow
+artifact and investigate. Never rebuild or replace an accepted package version.
+
 The exact prerelease tag must be verified.
 
 A source package passing local tests is not a public release.

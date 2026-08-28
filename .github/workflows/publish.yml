@@ -1,0 +1,112 @@
+# No alternative license is selected for GENII Publisher Original Code. The alternative-license fields in the required Exhibit A notice below are intentionally unpopulated.
+#
+# “The contents of this file are subject to the Common Public Attribution License Version 1.0 (the “License”); you may not use this file except in compliance with the License. You may obtain a copy of the License at https://opensource.org/license/cpal-1.0. The License is based on the Mozilla Public License Version 1.1 but Sections 14 and 15 have been added to cover use of software over a computer network and provide for limited attribution for the Original Developer. In addition, Exhibit A has been modified to be consistent with Exhibit B.
+# Software distributed under the License is distributed on an “AS IS” basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for the specific language governing rights and limitations under the License.
+# The Original Code is GENII Publisher.
+# The Original Developer is not the Initial Developer and is __________. If left blank, the Original Developer is the Initial Developer.
+# The Initial Developer of the Original Code is GENII Foundation. All portions of the code written by GENII Foundation are Copyright (c) 2026 GENII Foundation. All Rights Reserved.
+# Contributor ______________________.
+# Alternatively, the contents of this file may be used under the terms of the _____ license (the [___] License), in which case the provisions of [______] License are applicable instead of those above.
+# If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.
+
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: Exact npm distribution tag
+        required: true
+        type: choice
+        options:
+          - next
+          - latest
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publisher-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    environment: npm-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Require an exact version tag
+        shell: bash
+        run: |
+          test "$GITHUB_REF_TYPE" = "tag"
+          case "$GITHUB_REF_NAME" in
+            v[0-9]*) ;;
+            *) exit 1 ;;
+          esac
+
+      - name: Check out the tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Use preparation Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.12.0
+          cache: npm
+
+      - name: Use exact preparation npm
+        run: npm install --global npm@10.9.0
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Validate tagged source
+        run: npm run validate
+
+      - name: Prepare exact package archives
+        shell: bash
+        env:
+          NPM_TAG: ${{ inputs.npm_tag }}
+          RELEASE_DIRECTORY: ${{ runner.temp }}/publisher-release
+        run: |
+          mkdir "$RELEASE_DIRECTORY"
+          npm run release:prepare -- --output "$RELEASE_DIRECTORY" --tag "$NPM_TAG"
+
+      - name: Reverify exact package archives
+        env:
+          RELEASE_MANIFEST: ${{ runner.temp }}/publisher-release/release-manifest.json
+        run: npm run release:verify -- --manifest "$RELEASE_MANIFEST"
+
+      - name: Verify deployed attribution and schemas
+        run: npm run release:verify-public-surface
+
+      - name: Retain exact release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: publisher-release-${{ github.ref_name }}
+          path: ${{ runner.temp }}/publisher-release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
+
+      - name: Use trusted publishing Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+
+      - name: Use trusted publishing npm
+        run: npm install --global npm@11.5.1
+
+      - name: Configure token-free npm registry access
+        shell: bash
+        run: |
+          npm_configuration="$RUNNER_TEMP/publisher-trusted.npmrc"
+          printf 'registry=https://registry.npmjs.org/\nprovenance=true\n' > "$npm_configuration"
+          chmod 600 "$npm_configuration"
+          printf 'NPM_CONFIG_USERCONFIG=%s\n' "$npm_configuration" >> "$GITHUB_ENV"
+
+      - name: Publish exact retained archives with OIDC
+        env:
+          RELEASE_MANIFEST: ${{ runner.temp }}/publisher-release/release-manifest.json
+        run: npm run release:publish -- --manifest "$RELEASE_MANIFEST"

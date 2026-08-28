@@ -28,6 +28,7 @@
     "provenance:validate": "node provenance/scripts/validate.mjs",
     "release:rehearse": "node --test tests/second-publication-release-rehearsal.test.mjs",
     "release:prepare": "node provenance/scripts/prepare-release.mjs",
+    "release:publish": "node provenance/scripts/publish-release.mjs",
     "release:verify-public-surface": "node provenance/scripts/verify-public-surface.mjs",
     "release:verify": "node provenance/scripts/verify-release.mjs",
     "site:build": "node site/scripts/build.mjs",

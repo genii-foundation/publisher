@@ -294,6 +294,10 @@ test("release mode requires exact candidates, rejects every package-affecting dr
     "node provenance/scripts/prepare-release.mjs",
   );
   assert.equal(
+    workspaceManifest.scripts["release:publish"],
+    "node provenance/scripts/publish-release.mjs",
+  );
+  assert.equal(
     workspaceManifest.scripts["release:verify"],
     "node provenance/scripts/verify-release.mjs",
   );

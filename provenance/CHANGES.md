@@ -2,6 +2,10 @@
 
 This file records changes to the migration provenance system.
 
+## 2026-08-27, GENII Foundation
+
+- Added exact retained-archive publication checks and a token-free, tagged GitHub OIDC workflow boundary without granting publication authority to local verification.
+
 ## 2026-07-28, GENII Foundation
 
 - Added the closed provenance record schema and validator.
