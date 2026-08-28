@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-27, GENII Foundation
 
+- Closed the Coherence nested fragment migration proof across all 107 direct child addresses, retained the raw 7,247 issue baseline, reduced the adapted comparison to 6,998, and verified stable cross-run offline semantics without authorizing host migration or release.
 - Refreshed the reversible Coherence adoption and readiness evidence against the current Publisher candidate and Coherence source baseline, including exact static, browser, offline, route-gap, and audio-withholding receipts without authorizing migration or release.
 - Added a bounded, read-only public release surface verifier that binds the attributed landing page and every reviewed public schema URL to exact repository bytes without weakening offline archive preparation or reverification.
 - Added a provider-neutral static public site artifact with the attributed landing page, exact reviewed schemas, and a deterministic deployment manifest.
