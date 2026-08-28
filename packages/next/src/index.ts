@@ -19,6 +19,10 @@ export {
   validatePublisherNextThemeInstance,
 } from "./theme/validation.js";
 export {
+  createPublisherReaderStore,
+  usePublisherReaderStore,
+} from "./client/reader-store.js";
+export {
   PUBLISHER_NEXT_APPLICATION_ARTIFACT_KIND,
   PUBLISHER_NEXT_APPLICATION_ARTIFACT_MEDIA_TYPE,
   PUBLISHER_NEXT_APPLICATION_ARTIFACT_RELATIVE_PATH,
@@ -45,6 +49,13 @@ export {
   PUBLISHER_NEXT_UPDATES_API_VERSION,
   PUBLISHER_NEXT_VERSION,
 } from "./types.js";
+export type {
+  CreatePublisherReaderStoreOptions,
+  PublisherReaderStore,
+  PublisherReaderStoreChangeSource,
+  PublisherReaderStoreEnvironment,
+  PublisherReaderStoreSignal,
+} from "./client/reader-store.js";
 export type {
   PublisherNextExtensionClientProps,
   PublisherNextExtensionHost,
