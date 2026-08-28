@@ -18,6 +18,13 @@ The renderer owns:
 
 A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state, lazy default narration playback, optional provider-neutral synchronization, two engine-owned server extension slots, one isolated client extension mount, declarative extension pages, and closed extension request handlers. It does not claim static export support.
 
+Authorized client extensions can import `createPublisherReaderStore` from
+`@genii-foundation/publisher-next/client`. A separate store configured with the
+same public storage key, parser, serializer, and empty-state factory converges
+with the built-in Reader through the renderer-owned same-tab and cross-tab
+signals. Extensions remain responsible for validating and bounding every value
+before writing it.
+
 Progress and complete bookmark documents share one publication-scoped reactive
 store. Its atomic updater always sees the latest in-memory snapshot. Same-tab
 writers notify each other directly, native storage events converge separate

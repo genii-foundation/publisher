@@ -23,6 +23,10 @@ export {
   PublisherReaderRail,
 } from "./reader-rail.js";
 export {
+  createPublisherReaderStore,
+  usePublisherReaderStore,
+} from "./reader-store.js";
+export {
   PUBLISHER_READER_NARRATION_NAVIGATION_EVENT,
   requestPublisherReaderNarrationNavigation,
 } from "./reader-narration-navigation.js";
@@ -39,6 +43,13 @@ export type {
   PublisherReaderOutlineEntry,
   PublisherReaderRailProps,
 } from "./reader-rail.js";
+export type {
+  CreatePublisherReaderStoreOptions,
+  PublisherReaderStore,
+  PublisherReaderStoreChangeSource,
+  PublisherReaderStoreEnvironment,
+  PublisherReaderStoreSignal,
+} from "./reader-store.js";
 export type {
   ReaderNarrationNavigationIntent,
 } from "./reader-narration-navigation.js";

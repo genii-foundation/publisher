@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-28, GENII Foundation
 
+- Exported the generic reactive Reader store through the public client entry so authorized client extensions can write validated local state and notify the built-in Reader without importing private renderer modules.
 - Made offline resource discovery explicit across link and source attributes, separated cache opening from lookup, and scoped Reader activity listeners to abortable lifecycles.
 - Clarified packaged-host failures and public integration examples without changing their contracts.
 

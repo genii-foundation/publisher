@@ -16,7 +16,7 @@ import test from "node:test";
 
 import {
   createPublisherReaderStore,
-} from "../packages/next/dist/client/reader-store.js";
+} from "../packages/next/dist/client/index.js";
 
 const storageKey = "genii.publisher.reader.test.v1.portable-reader";
 
