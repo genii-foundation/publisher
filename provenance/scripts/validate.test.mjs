@@ -670,6 +670,38 @@ test("receipt validation binds manifest entries and scan counts", () => {
       "sources[0].evidence must be empty when verified is false",
     ),
   );
+
+  const preservedUnicodeScale = structuredClone(receipt);
+  preservedUnicodeScale.scans.normalizedLine = {
+    outcome: "expected-match",
+    matchCount: 28_043,
+    matches: Array.from({ length: 28_043 }, () => ({
+      source: "https://www.unicode.org/Public/15.1.0/ucd/NormalizationTest.txt:1",
+      destination: "schemas/third-party-data/NormalizationTest-15.1.0.txt:1",
+      fingerprint: "Unicode 15.1 preserved line evidence",
+    })),
+  };
+  assert.deepEqual(validateReceipt(preservedUnicodeScale), {
+    valid: true,
+    errors: [],
+  });
+
+  const excessiveMatches = structuredClone(preservedUnicodeScale);
+  excessiveMatches.scans.normalizedLine.matches = Array.from(
+    { length: 50_001 },
+    () => ({
+      source: "https://www.unicode.org/Public/15.1.0/ucd/NormalizationTest.txt:1",
+      destination: "schemas/third-party-data/NormalizationTest-15.1.0.txt:1",
+      fingerprint: "Unexpectedly unbounded line evidence",
+    }),
+  );
+  excessiveMatches.scans.normalizedLine.matchCount = 50_001;
+  assert.equal(validateReceipt(excessiveMatches).valid, false);
+  assert.ok(
+    validateReceipt(excessiveMatches).errors.some((error) =>
+      error.includes("must NOT have more than 50000 items")
+    ),
+  );
 });
 
 test("accepted records bind the exact receipt sources and evidence", async (context) => {

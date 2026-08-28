@@ -10,10 +10,14 @@
     "destinationRepository": "https://github.com/genii-foundation/publisher",
     "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
     "destinationPaths": [
+      ".gitattributes",
       ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
       "CHANGES.md",
       "README.md",
       "docs/architecture/",
+      "docs/guides/",
+      "docs/migration/",
       "docs/protocol/",
       "fixtures/",
       "package.json",
@@ -21,16 +25,24 @@
       "packages/next/",
       "packages/publisher/",
       "packages/reader/",
+      "packages/sync-supabase/",
       "provenance/",
       "schemas/CHANGES.md",
       "schemas/README.md",
+      "schemas/audio-catalog.schema.json",
+      "schemas/audio-checkpoint.schema.json",
+      "schemas/audio-envelope.schema.json",
       "schemas/collection.schema.json",
       "schemas/content-envelope.schema.json",
       "schemas/publication.schema.json",
       "schemas/reader-envelope.schema.json",
       "schemas/scripts/build.mjs",
+      "schemas/scripts/check-release-tag.mjs",
       "schemas/scripts/generate-case-folding.mjs",
+      "schemas/src/attribution.ts",
+      "schemas/src/content-types.ts",
       "schemas/src/envelope-resource-limits.ts",
+      "schemas/src/generated-validators.d.ts",
       "schemas/src/index.ts",
       "schemas/src/layout.ts",
       "schemas/src/portable-unicode.ts",
@@ -40,10 +52,15 @@
       "schemas/src/schema-validation.ts",
       "schemas/src/semantic-validation.ts",
       "schemas/src/strict-json.ts",
+      "schemas/src/types.ts",
+      "schemas/sync-envelope.schema.json",
+      "schemas/updates-catalog.schema.json",
+      "schemas/updates-envelope.schema.json",
       "schemas/work.schema.json",
+      "site/",
       "tests/"
     ],
-    "summary": "Records the fresh CPAL implementation of the secure publication source loader, normalized source snapshot boundary, compiler integration, portable path enforcement, resource limits, tests, and supporting governance. Separately licensed Unicode data and license artifacts are excluded into their own preservation record."
+    "summary": "Records the fresh CPAL implementation of the secure publication source loader, normalized source snapshot boundary, compiler and Reader integration, narration, Updates, optional synchronization, public release surfaces, tests, and supporting governance. Separately licensed Unicode data and license artifacts are excluded into their own preservation record."
   },
   "auditedSource": {
     "repository": "https://github.com/genii-foundation/coherence-thesis",
@@ -213,7 +230,8 @@
       "packages/content/",
       "packages/next/",
       "packages/reader/",
-      "packages/publisher/"
+      "packages/publisher/",
+      "packages/sync-supabase/"
     ],
     "forbiddenPackagePatterns": [
       "The Coherence Thesis",
@@ -240,45 +258,45 @@
   },
   "scans": {
     "performedAt": "2026-07-28T20:32:06Z",
-    "scope": "Draft scan scope covers the current working-tree files declared by this record against the exact audited Coherence ref. Final outcomes require a deterministic receipt bound to the stable destination manifest.",
+    "scope": "Deterministic review covers the declared working-tree destination manifest, the exact audited Coherence ref, all six publishable package candidates, and the scanner runtime closure.",
     "exactBlob": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compare SHA-256 content identities for every audited Coherence blob and every selected destination file.",
-      "evidence": "Pending the stable destination manifest and final audit receipt."
+      "evidence": "The review receipt records zero exact-blob matches."
     },
     "normalizedLine": {
-      "outcome": "blocked",
-      "matchCount": 0,
+      "outcome": "expected-match",
+      "matchCount": 75,
       "method": "Compare whitespace-normalized UTF-8 lines containing at least 60 characters.",
-      "evidence": "Pending the stable destination manifest and final audit receipt."
+      "evidence": "The review receipt records 75 exact normalized-line matches, concentrated in the Supabase migration SQL with smaller matches in Reader, renderer, release, site, and test files."
     },
     "tokenShingle": {
-      "outcome": "blocked",
-      "matchCount": 0,
+      "outcome": "expected-match",
+      "matchCount": 54,
       "method": "Compare significant contiguous 16-token code windows after removing comments and literal bodies, normalizing numbers, and requiring at least six distinct nonnumeric identifiers.",
-      "evidence": "Pending the stable destination manifest and final audit receipt."
+      "evidence": "The review receipt records 54 significant-token matches in Reader bookmark, offline cache, selection, Markdown, synchronization, and their tests."
     },
     "ccPhrase": {
-      "outcome": "blocked",
-      "matchCount": 0,
+      "outcome": "expected-match",
+      "matchCount": 19,
       "method": "Compare exact contiguous eight-word windows against the explicitly declared CC-mapped Coherence paths.",
-      "evidence": "Pending the stable destination manifest and final audit receipt."
+      "evidence": "The review receipt records 19 eight-word CC-source matches in tests/audio-catalog-schema.test.mjs."
     },
     "packageLeak": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Build every affected publishable package through its full lifecycle in an owned clean workspace with the exact pinned npm CLI, hash and inspect the retained candidate archive, and reject declared Coherence names, paths, URLs, generated output, and durable publication state. An accepted candidate is the exact tarball supplied to publication.",
-      "evidence": "Pending packed archive digests and the final audit receipt."
+      "evidence": "All six retained package candidates passed the package-leak scan. Their receipt hashes are schemas f909ae3c8f9b, content 44967f33db5a, Next ce2aa1f19642, Reader 79405ff7d9f8, Publisher 77a578dfac4d, and Supabase 4e395383374b."
     }
   },
   "review": {
     "decision": "pending",
     "reviewerType": "automated",
     "reviewerId": "publisher-provenance-audit-2026-07-28",
-    "reviewedAt": "2026-07-28T20:32:06Z",
+    "reviewedAt": "2026-08-28T09:01:01Z",
     "releaseApprovalRequired": true,
-    "notes": "This draft records the intended fresh neutral implementation classification, not a formal clean-room claim or legal opinion. It requires final deterministic scans, maintainer review, human release approval, and counsel review before the first 1.0 release."
+    "notes": "Deterministic review completed, but the fresh-cpal classification cannot be accepted while the recorded source and CC matches remain. The receipt is review evidence, not an accepted provenance receipt. Remediation or truthful reclassification, maintainer review, human release approval, and counsel review remain required before the first 1.0 release."
   },
   "documentation": {
     "notice": {

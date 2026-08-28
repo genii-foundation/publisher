@@ -36,6 +36,7 @@ import { pack as packTar } from "tar-stream";
 import {
   auditPackages,
   auditRecord,
+  createScanResult,
   createDestinationManifest,
   listChangedEntries,
   listChangedPaths,
@@ -52,6 +53,22 @@ const destinationRepository =
   "https://example.test/genii/publisher";
 const artifactUrl =
   "https://example.test/upstream/source-data.txt";
+
+test("scan receipts retain the full bounded Unicode evidence scale", () => {
+  const unicodeScale = Array.from(
+    { length: 28_043 },
+    (_, index) => ({ index }),
+  );
+  assert.deepEqual(createScanResult(unicodeScale), {
+    outcome: "expected-match",
+    matchCount: 28_043,
+    matches: unicodeScale,
+  });
+  assert.throws(
+    () => createScanResult(Array.from({ length: 50_001 })),
+    /more than 50000 matches/u,
+  );
+});
 
 function runGit(repositoryRoot, arguments_) {
   return execFileSync("git", ["-C", repositoryRoot, ...arguments_], {

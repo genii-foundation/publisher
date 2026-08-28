@@ -244,45 +244,45 @@
   },
   "scans": {
     "performedAt": "2026-07-28T20:32:06Z",
-    "scope": "Draft scan scope covers the exact Unicode source refs, both official Unicode artifacts, installed npm inputs, declared destination files, deterministic regeneration and conformance output, and packed schema package. Final outcomes require a stable destination manifest and byte-bound receipt.",
+    "scope": "Deterministic review covers the declared working-tree destination manifest, exact Unicode source refs and artifacts, six installed inputs, deterministic regeneration and conformance, the schema candidate, and the scanner runtime closure.",
     "exactBlob": {
-      "outcome": "blocked",
-      "matchCount": 0,
+      "outcome": "expected-match",
+      "matchCount": 4,
       "method": "Compare SHA-256 content identities for exact upstream license or data files and selected destination files.",
-      "evidence": "Pending verification of both official Unicode artifacts and the stable destination receipt."
+      "evidence": "The review receipt records the four intended exact preserved files: UnicodeData, NormalizationTest, the node-unicode MIT license, and the Unicode License V3."
     },
     "normalizedLine": {
-      "outcome": "blocked",
-      "matchCount": 0,
+      "outcome": "expected-match",
+      "matchCount": 28043,
       "method": "Compare whitespace-normalized UTF-8 lines containing at least 60 characters across the exact upstream evidence and selected destination files.",
-      "evidence": "Pending final deterministic scan results bound to the stable destination manifest."
+      "evidence": "The review receipt records 28,043 intended normalized-line matches across both preserved Unicode data files and their two exact license files."
     },
     "tokenShingle": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compare significant contiguous 16-token code windows after removing comments and literal bodies, normalizing numbers, and requiring at least six distinct nonnumeric identifiers.",
-      "evidence": "Pending final deterministic scan results bound to the stable destination manifest."
+      "evidence": "The review receipt records zero significant-token matches."
     },
     "ccPhrase": {
-      "outcome": "blocked",
+      "outcome": "not-applicable",
       "matchCount": 0,
       "method": "No CC source paths are part of this preserved-material record.",
-      "evidence": "Expected final outcome is not-applicable after receipt generation."
+      "evidence": "No CC source paths are declared for this third-party preservation record."
     },
     "packageLeak": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Build the schema package through its full lifecycle in an owned clean workspace with the exact pinned npm CLI, hash the retained candidate archive, retain its file inventory, and reject declared Coherence names, paths, URLs, generated output, and durable publication state. An accepted candidate is the exact tarball supplied to publication.",
-      "evidence": "Pending the final schema package archive digest and receipt."
+      "evidence": "The retained 79-file schema candidate sha256:f909ae3c8f9ba72a3d2a8b6c3e1be7ac3db21046046b830c5f06341152d51306 passed the package-leak scan, both verification commands exited zero, and all six installed inputs matched their exact sources."
     }
   },
   "review": {
     "decision": "pending",
     "reviewerType": "automated",
     "reviewerId": "publisher-provenance-audit-2026-07-28",
-    "reviewedAt": "2026-07-28T20:32:06Z",
+    "reviewedAt": "2026-08-28T09:01:01Z",
     "releaseApprovalRequired": true,
-    "notes": "This draft records the intended third-party-preserved boundary. It requires offline verification of both official Unicode artifacts, exact installed npm inputs, deterministic regeneration, full normalization conformance, package inspection, maintainer review, human release approval, and counsel review before the first 1.0 release."
+    "notes": "Deterministic review verified both official Unicode artifacts, exact installed inputs, deterministic regeneration, full normalization conformance, preserved license files, and the retained schema candidate. The receipt remains review evidence while this record stays draft. Maintainer review, human release approval, and counsel review remain required before acceptance and the first 1.0 release."
   },
   "documentation": {
     "notice": {

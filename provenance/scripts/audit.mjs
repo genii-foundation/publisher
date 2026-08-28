@@ -72,7 +72,7 @@ const selfAuditingPathPatterns = [
   /^provenance\/receipts\/[^/]+\.json$/u,
 ];
 const maximumScannedFileBytes = 16 * 1024 * 1024;
-const maximumMatchesPerScan = 10_000;
+const maximumMatchesPerScan = 50_000;
 const tokenShingleWidth = 16;
 const minimumDistinctTokenIdentifiers = 6;
 const proseWindowWidth = 8;
@@ -537,7 +537,7 @@ function destinationDocuments(destinationRoot, entries) {
     );
 }
 
-function scanResult(matches, notApplicable = false) {
+export function createScanResult(matches, notApplicable = false) {
   const bounded = matches.slice(0, maximumMatchesPerScan);
   if (matches.length > maximumMatchesPerScan) {
     throw new Error(
@@ -577,7 +577,7 @@ function exactBlobScan(sourceDocuments, destination) {
       );
     }
   }
-  return scanResult(matches);
+  return createScanResult(matches);
 }
 
 function normalizedLine(value) {
@@ -633,7 +633,7 @@ function normalizedLineScan(
       }
     }
   }
-  return scanResult(matches);
+  return createScanResult(matches);
 }
 
 function lexicalTokens(value) {
@@ -723,7 +723,7 @@ function tokenShingleScan(
       }
     }
   }
-  return scanResult(matches);
+  return createScanResult(matches);
 }
 
 function proseWords(value) {
@@ -759,7 +759,7 @@ function ccPhraseScan(
   exclusionRecorder,
 ) {
   if (ccSourcePaths.length === 0) {
-    return scanResult([], true);
+    return createScanResult([], true);
   }
   const phrases = new Map();
   for (const document of sourceDocuments) {
@@ -807,7 +807,7 @@ function ccPhraseScan(
       }
     }
   }
-  return scanResult(matches);
+  return createScanResult(matches);
 }
 
 // One bounded in-process pass replaces the previous listing process plus one
@@ -904,7 +904,7 @@ export async function auditPackages(
 ) {
   if (packageRoots.length === 0) {
     return {
-      result: scanResult([], true),
+      result: createScanResult([], true),
       archives: Object.freeze([]),
       scanExclusions: exclusionRecorder.values(),
     };
@@ -967,7 +967,7 @@ export async function auditPackages(
       );
     }
     return {
-      result: scanResult(matches),
+      result: createScanResult(matches),
       archives: Object.freeze(archives),
       scanExclusions: exclusionRecorder.values(),
     };
@@ -1342,7 +1342,10 @@ export async function auditRecord({
 
   const packageScan = skipPackages
     ? {
-        result: scanResult([], record.audit.packageRoots.length === 0),
+        result: createScanResult(
+          [],
+          record.audit.packageRoots.length === 0,
+        ),
         archives: Object.freeze([]),
       }
     : await auditPackages(

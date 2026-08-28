@@ -112,6 +112,8 @@ Candidate preparation resolves the absolute `npm_execpath` and `npm_node_execpat
 
 Text scans fail closed when a non-binary file exceeds the byte limit, contains NUL, is not valid UTF-8, or cannot be extracted from a package archive. Only a fixed list of binary file extensions may bypass text decoding. Every such exclusion records the document hash and exact scans skipped. Exact-blob comparison still covers the bytes.
 
+Each scan retains at most 50,000 exact matches. This bound is high enough to record every long-line match in the preserved Unicode 15.1 data while still rejecting an unexpectedly unbounded comparison result.
+
 ## Package archive reading
 
 Every archive the audit inspects is read by [archive-reader.mjs](scripts/archive-reader.mjs). No external archive process participates, and none may be reintroduced. [ADR 0011](../docs/architecture/0011-trusted-package-archive-boundary.md) records the threat model, the fixed ceilings, and the rejected alternatives.
