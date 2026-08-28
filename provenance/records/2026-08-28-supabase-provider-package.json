@@ -16,7 +16,6 @@
       "docs/migration/coherence-readiness.md",
       "package-lock.json",
       "packages/sync-supabase/",
-      "provenance/records/2026-08-28-supabase-provider-package.json",
       "provenance/scripts/publish-release.test.mjs",
       "provenance/scripts/validate.test.mjs",
       "tests/coherence-parity.test.mjs",
@@ -201,36 +200,36 @@
   },
   "scans": {
     "performedAt": "2026-08-28T08:16:56Z",
-    "scope": "The new working-tree record is intentionally draft until the repository audit produces a byte-bound destination manifest, package archive receipt, and reviewed scan evidence.",
+    "scope": "The exact working-tree package candidate was scanned against the recorded Coherence source and Publisher specification commits. The record remains draft until maintainer and counsel review authorize a final receipt.",
     "exactBlob": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compare exact source and destination file hashes.",
-      "evidence": "No byte-bound working-tree receipt has been generated for this package candidate."
+      "evidence": "No destination file or packed package member shared an exact blob hash with the audited Coherence source."
     },
     "normalizedLine": {
-      "outcome": "blocked",
-      "matchCount": 0,
+      "outcome": "expected-match",
+      "matchCount": 138,
       "method": "Compare whitespace-normalized significant lines.",
-      "evidence": "No byte-bound working-tree receipt has been generated for this package candidate."
+      "evidence": "The 138 matches are 136 registry resolution or integrity lines shared by the two npm lockfiles and two generic Node filesystem import lines in repository tests. No provider source or migration line matched."
     },
     "tokenShingle": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compare exact contiguous normalized code token shingles.",
-      "evidence": "No byte-bound working-tree receipt has been generated for this package candidate."
+      "evidence": "No qualifying contiguous code token shingle matched the audited Coherence source."
     },
     "ccPhrase": {
-      "outcome": "blocked",
-      "matchCount": 0,
+      "outcome": "expected-match",
+      "matchCount": 1,
       "method": "Compare exact contiguous prose windows against publication content.",
-      "evidence": "No byte-bound working-tree receipt has been generated for this package candidate."
+      "evidence": "The one match is the adoption plan's explicit inventory phrase for editorial source volume directories. It documents author-owned paths and does not enter package source or package contents."
     },
     "packageLeak": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Inspect the exact packed archive for publication-specific material and excluded paths.",
-      "evidence": "The packed consumer proof is present, but no provenance audit receipt has been generated or reviewed."
+      "evidence": "The exact 23-file package archive contains none of the forbidden publication names or excluded author paths."
     }
   },
   "review": {
@@ -239,7 +238,7 @@
     "reviewerId": "publisher-provenance-audit-2026-08-28",
     "reviewedAt": "2026-08-28T08:16:56Z",
     "releaseApprovalRequired": true,
-    "notes": "This draft records the intended fresh neutral implementation classification, not a legal opinion. It requires the repository provenance audit, human release review, and counsel review before acceptance."
+    "notes": "The automated preview audit verified both source commits and produced the recorded scan outcomes. This draft is not a legal opinion and still requires maintainer release review and counsel review before acceptance or final receipt issuance."
   },
   "documentation": {
     "notice": {
