@@ -179,7 +179,7 @@ export function resolvePublicationAudio(
         continue;
       }
 
-      const clipKey = `${clip.sectionId} ${clip.audioVersionId}`;
+      const clipKey = `${clip.sectionId}\0${clip.audioVersionId}`;
       if (seenClips.has(clipKey)) {
         diagnostics.push(
           audioDiagnostic(

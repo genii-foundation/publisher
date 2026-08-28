@@ -308,6 +308,20 @@ test("Publisher release lifecycle enforces prerelease and stable npm tags", () =
   }
 });
 
+test("Publisher audio source and emitted module remain textual", async () => {
+  for (const path of [
+    join(publisherRoot, "src", "node", "audio.ts"),
+    join(publisherRoot, "dist", "node", "audio.js"),
+  ]) {
+    const bytes = await readFile(path);
+    assert.equal(
+      bytes.includes(0),
+      false,
+      `${packagePath(relative(repositoryRoot, path))} contains a raw NUL byte.`,
+    );
+  }
+});
+
 test("packed Publisher application installs offline and loads an unrelated publication", async () => {
   const [publisherManifest, workspaceManifest] = await Promise.all([
     readFile(join(publisherRoot, "package.json"), "utf8").then(
