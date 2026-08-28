@@ -32,28 +32,31 @@ import { fileURLToPath } from "node:url";
 
 import {
   publisherPublicLandingUrl,
+  publisherPublicLandingSourcePath,
   publisherPublicSchemaSources,
   verifyPublisherPublicSurface,
   verifyPublisherPublicSurfaceCli,
 } from "./verify-public-surface.mjs";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
-const landingHtml = `<!doctype html>
-<html lang="en">
-  <head><title>GENII Publisher</title></head>
-  <body>
-    <h1>GENII Publisher</h1>
-    <p>GENII Foundation</p>
-    <p>Published with GENII Publisher</p>
-    <a href="https://github.com/genii-foundation/publisher">Source</a>
-  </body>
-</html>
-`;
+const landingHtml = await readFile(
+  join(repositoryRoot, publisherPublicLandingSourcePath),
+  "utf8",
+);
 
 async function createRepositoryFixture() {
   const root = await mkdtemp(join(tmpdir(), "publisher-public-surface-"));
   const canonicalRoot = await realpath(root);
   execFileSync("git", ["init", "--quiet", canonicalRoot]);
+  const landingDestination = join(
+    canonicalRoot,
+    publisherPublicLandingSourcePath,
+  );
+  await mkdir(dirname(landingDestination), { recursive: true });
+  await copyFile(
+    join(repositoryRoot, publisherPublicLandingSourcePath),
+    landingDestination,
+  );
   for (const authority of publisherPublicSchemaSources) {
     const destination = join(canonicalRoot, authority.sourcePath);
     await mkdir(dirname(destination), { recursive: true });
@@ -76,10 +79,13 @@ function publicResponse(bytes, contentType) {
 }
 
 async function createPublicResponses(root) {
+  const fixtureLandingHtml = await readFile(
+    join(root, publisherPublicLandingSourcePath),
+  );
   const responses = new Map([
     [
       publisherPublicLandingUrl,
-      () => publicResponse(landingHtml, "text/html; charset=utf-8"),
+      () => publicResponse(fixtureLandingHtml, "text/html; charset=utf-8"),
     ],
   ]);
   for (const authority of publisherPublicSchemaSources) {
@@ -119,6 +125,7 @@ test("the public surface verifier binds the landing page and every exact schema"
 
   assert.deepEqual(first, second);
   assert.equal(first.format, "publisher-public-surface-1");
+  assert.equal(first.landing.sourcePath, publisherPublicLandingSourcePath);
   assert.equal(first.schemas.length, publisherPublicSchemaSources.length);
   assert.match(first.sha256, /^sha256:[0-9a-f]{64}$/u);
   assert.equal(
@@ -263,6 +270,24 @@ test("the public surface verifier requires the complete attributed landing page"
       repositoryRoot: root,
     }),
     /must be served as text\/html/u,
+  );
+
+  responses.set(
+    publisherPublicLandingUrl,
+    () => publicResponse(
+      landingHtml.replace(
+        "A portable, open source publication engine",
+        "A changed, open source publication engine",
+      ),
+      "text/html",
+    ),
+  );
+  await assert.rejects(
+    verifyPublisherPublicSurface({
+      fetchImpl: fetchFromResponses(responses),
+      repositoryRoot: root,
+    }),
+    /does not match site\/index\.html/u,
   );
 });
 

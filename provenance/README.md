@@ -65,10 +65,11 @@ npm run release:verify -- \
 The trusted workflow must also verify the public attribution and schema surface before uploading anything:
 
 ```bash
+npm run site:build
 npm run release:verify-public-surface
 ```
 
-This gate accepts no arguments, writes no files, follows no redirects, bounds every response, and requires all reviewed public schema URLs to serve byte-identical repository sources. It is intentionally separate from archive preparation and reverification so those local provenance gates remain offline and repeatable.
+The site build accepts no arguments and writes one provider-neutral artifact under `dist/public-site`. It copies the exact landing page and reviewed schemas, then records their deterministic manifest. The network gate accepts no arguments, writes no files, follows no redirects, bounds every response, and requires the deployed landing page and all reviewed public schema URLs to serve byte-identical repository sources. It is intentionally separate from archive preparation and reverification so those local provenance gates remain offline and repeatable.
 
 Direct package-directory publication is forbidden by every publishable package. The trusted release workflow may publish only the exact tarball paths named by the freshly reverified manifest. npm uploads a tarball input without rerunning the package-directory lifecycle, so this path sends the same bytes that passed provenance. A regression fixture gives its directory publication a failing `prepublishOnly` hook, then proves that `npm publish --dry-run <candidate.tgz>` succeeds with the candidate's exact integrity, shasum, and file inventory. The workflow must never rerun `npm pack`, rebuild a package, or substitute another archive between verification and `npm publish <exact-tarball-path>`. `release:verify` is deliberately inert and never publishes. The repository still lacks an authorized trusted-publishing workflow, so public release remains blocked until that separate credential-bound path exists and invokes verification immediately before each exact archive upload. Package lifecycle scripts remain defense in depth. Publishing with scripts disabled, publishing an arbitrary tarball, or bypassing the trusted workflow can evade local guards, so npm publishing credentials must remain bound to that workflow.
 

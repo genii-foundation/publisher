@@ -30,6 +30,7 @@ import {
 
 export const publisherPublicLandingUrl =
   "https://publisher.genii.foundation/";
+export const publisherPublicLandingSourcePath = "site/index.html";
 
 export const publisherPublicSchemaSources = Object.freeze([
   ["schemas/audio-catalog.schema.json", "audio-catalog.schema.json"],
@@ -60,9 +61,9 @@ export const publisherPublicSchemaSources = Object.freeze([
   url: `${publisherPublicLandingUrl}schemas/${publicName}`,
 })));
 
-const defaultRepositoryRoot = fileURLToPath(
+const defaultRepositoryRoot = realpathSync(fileURLToPath(
   new URL("../../", import.meta.url),
-);
+));
 const maximumLandingBytes = 256 * 1024;
 const maximumSchemaBytes = 256 * 1024;
 const maximumTotalBytes = 2 * 1024 * 1024;
@@ -125,7 +126,32 @@ function assertRepositoryRoot(repositoryRoot) {
   }
 }
 
-function readSchemaAuthorities(repositoryRoot) {
+function readBoundedSourceFile({
+  maximumBytes,
+  repositoryRoot,
+  sourcePath,
+}) {
+  const absolutePath = join(repositoryRoot, sourcePath);
+  const stat = lstatSync(absolutePath);
+  if (
+    stat.isSymbolicLink() ||
+    !stat.isFile() ||
+    stat.nlink !== 1 ||
+    stat.size < 1 ||
+    stat.size > maximumBytes ||
+    realpathSync(absolutePath) !== absolutePath
+  ) {
+    throw new Error(
+      `Public surface source ${sourcePath} must be one bounded regular file without links.`,
+    );
+  }
+  return readFileSync(absolutePath);
+}
+
+export function readPublisherPublicSurfaceAuthority({
+  repositoryRoot = defaultRepositoryRoot,
+} = {}) {
+  assertRepositoryRoot(repositoryRoot);
   let schemaCensus;
   try {
     schemaCensus = execFileSync(
@@ -169,23 +195,12 @@ function readSchemaAuthorities(repositoryRoot) {
   }
   const seenUrls = new Set();
   const schemas = [];
-  let totalBytes = 0;
   for (const authority of publisherPublicSchemaSources) {
-    const sourcePath = join(repositoryRoot, authority.sourcePath);
-    const stat = lstatSync(sourcePath);
-    if (
-      stat.isSymbolicLink() ||
-      !stat.isFile() ||
-      stat.nlink !== 1 ||
-      stat.size < 1 ||
-      stat.size > maximumSchemaBytes ||
-      realpathSync(sourcePath) !== sourcePath
-    ) {
-      throw new Error(
-        `Public schema source ${authority.sourcePath} must be one bounded regular file without links.`,
-      );
-    }
-    const bytes = readFileSync(sourcePath);
+    const bytes = readBoundedSourceFile({
+      maximumBytes: maximumSchemaBytes,
+      repositoryRoot,
+      sourcePath: authority.sourcePath,
+    });
     let parsed;
     try {
       parsed = JSON.parse(fatalUtf8Decoder.decode(bytes));
@@ -207,7 +222,6 @@ function readSchemaAuthorities(repositoryRoot) {
       );
     }
     seenUrls.add(parsed.$id);
-    totalBytes += bytes.length;
     schemas.push(Object.freeze({
       bytes,
       sourcePath: authority.sourcePath,
@@ -215,8 +229,12 @@ function readSchemaAuthorities(repositoryRoot) {
     }));
   }
   return Object.freeze({
+    landingBytes: readBoundedSourceFile({
+      maximumBytes: maximumLandingBytes,
+      repositoryRoot,
+      sourcePath: publisherPublicLandingSourcePath,
+    }),
     schemas: Object.freeze(schemas),
-    totalBytes,
   });
 }
 
@@ -345,7 +363,7 @@ export async function verifyPublisherPublicSurface({
     throw new TypeError("The public request deadline must be between 1 and 60000 milliseconds.");
   }
 
-  const authority = readSchemaAuthorities(repositoryRoot);
+  const authority = readPublisherPublicSurfaceAuthority({ repositoryRoot });
   const landing = await requestPublicBytes({
     fetchImpl,
     maximumBytes: maximumLandingBytes,
@@ -367,6 +385,11 @@ export async function verifyPublisherPublicSurface({
         `The Publisher public landing page is missing required marker ${JSON.stringify(marker)}.`,
       );
     }
+  }
+  if (!landing.bytes.equals(authority.landingBytes)) {
+    throw new Error(
+      `The Publisher public landing page does not match ${publisherPublicLandingSourcePath}.`,
+    );
   }
 
   let totalBytes = landing.bytes.length;
@@ -405,6 +428,7 @@ export async function verifyPublisherPublicSurface({
     landing: {
       bytes: landing.bytes.length,
       sha256: sha256(landing.bytes),
+      sourcePath: publisherPublicLandingSourcePath,
       url: publisherPublicLandingUrl,
     },
     schemas,

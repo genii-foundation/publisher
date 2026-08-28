@@ -115,12 +115,17 @@ last honest gate rather than as something to work around.
 The public web surface now has its own read-only network gate:
 
 ```bash
+npm run site:build
 npm run release:verify-public-surface
 ```
 
-It checks the attributed landing page and every reviewed schema URL against the
-repository's exact schema bytes. It follows no redirects and writes no files.
-Keep it separate from `release:prepare` and `release:verify`, which remain offline.
+The build command creates one provider-neutral artifact under `dist/public-site`
+from the exact attributed landing page and reviewed schemas. Its deterministic
+manifest records the source, output, size, and digest of every public file. The
+network gate checks the deployed landing page and every reviewed schema URL
+against those exact repository bytes. It follows no redirects and writes no
+files. Keep it separate from `release:prepare` and `release:verify`, which remain
+offline.
 
 `publisher.genii.foundation` must serve the attribution landing page and stable
 schema URLs, because published packages reference those URLs and a manifest
