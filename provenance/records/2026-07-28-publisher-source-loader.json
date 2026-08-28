@@ -278,10 +278,10 @@
       "evidence": "The review receipt records 54 significant-token matches in Reader bookmark, offline cache, selection, Markdown, synchronization, and their tests."
     },
     "ccPhrase": {
-      "outcome": "expected-match",
-      "matchCount": 19,
+      "outcome": "clear",
+      "matchCount": 0,
       "method": "Compare exact contiguous eight-word windows against the explicitly declared CC-mapped Coherence paths.",
-      "evidence": "The review receipt records 19 eight-word CC-source matches in tests/audio-catalog-schema.test.mjs."
+      "evidence": "The neutral audio catalog fixture no longer carries publication-specific labels or prose, and the review receipt records zero CC-source matches."
     },
     "packageLeak": {
       "outcome": "clear",
@@ -296,7 +296,7 @@
     "reviewerId": "publisher-provenance-audit-2026-07-28",
     "reviewedAt": "2026-08-28T09:01:01Z",
     "releaseApprovalRequired": true,
-    "notes": "Deterministic review completed, but the fresh-cpal classification cannot be accepted while the recorded source and CC matches remain. The receipt is review evidence, not an accepted provenance receipt. Remediation or truthful reclassification, maintainer review, human release approval, and counsel review remain required before the first 1.0 release."
+    "notes": "Deterministic review completed and the copied creative fixture content was removed, but the fresh-cpal classification cannot be accepted while the recorded source-code matches remain. The receipt is review evidence, not an accepted provenance receipt. Remediation or truthful reclassification, maintainer review, human release approval, and counsel review remain required before the first 1.0 release."
   },
   "documentation": {
     "notice": {

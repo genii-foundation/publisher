@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-28, GENII Foundation
+
+- Replaced publication-specific prose and provider labels in the neutral audio catalog schema fixture, eliminating every creative-content provenance match while retaining the unresolved source-code review boundary.
+
 ## 2026-08-27, GENII Foundation
 
 - Added a closed generic section-index route target with bounded ordered section membership.

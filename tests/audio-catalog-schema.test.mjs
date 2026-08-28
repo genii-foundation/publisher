@@ -57,15 +57,15 @@ function publishedCatalog() {
     generatedAt: "2026-07-25T18:13:00.000Z",
     voices: [
       {
-        id: "high-quality-1",
-        label: "High Quality 1",
-        provider: "fish-audio",
-        model: "s2.1-pro-free",
+        id: "archive-voice-a",
+        label: "Archive Voice A",
+        provider: "reference-provider",
+        model: "reference-model-1",
         sections: [
           {
             sectionId: "v01-orientation",
             audioVersionId: "v01-orientation-19f0907742968693",
-            href: "https://clips.example.test/audiobook/v1/high-quality-1/v01-orientation-19f0907742968693.opus",
+            href: "https://media.example.test/voices/archive-voice-a/v01-orientation-19f0907742968693.opus",
             format: "opus",
             byteSize: 2668193,
             durationSeconds: 78.94,
@@ -138,7 +138,7 @@ test("the schema file is exported, so its $id can be fetched by consumers", () =
  */
 function stableIdOfLength(length) {
   const words =
-    "that-heart-rate-variability-indexes-a-regulated-nervous-system-and-tracks-emotional-and-cognitive-self-regulation".split(
+    "steady-lantern-threads-map-bounded-publication-identities-across-portable-reader-state-without-guessing-source-ownership".split(
       "-",
     );
   let id = "v03-ii";

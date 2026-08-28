@@ -2,6 +2,10 @@
 
 This file records changes to the migration provenance system.
 
+## 2026-08-28, GENII Foundation
+
+- Removed copied creative fixture content from the Publisher source-loader record scope and regenerated the deterministic audit with zero CC-source phrase matches.
+
 ## 2026-08-27, GENII Foundation
 
 - Added exact retained-archive publication checks and a token-free, tagged GitHub OIDC workflow boundary without granting publication authority to local verification.
