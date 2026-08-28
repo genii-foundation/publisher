@@ -143,6 +143,21 @@ workflow only from an exact `v<package-version>` tag and select the reviewed npm
 distribution tag. The workflow refuses branches, token credentials, mixed package
 versions, incomplete manifests, and changed archives.
 
+### Verified external status on 2026-08-28
+
+The public GitHub repository exists, is enabled, and uses `main` as its default
+branch. The GitHub Actions API exposes only `.github/workflows/ci.yml` on that
+branch. The repository environments API reports zero environments, so the
+required protected `npm-publish` environment does not exist yet. The checked-in
+release workflow remains only a local candidate until it reaches the reviewed
+default branch through the ordinary repository process.
+
+DNS returns no A, AAAA, or CNAME record for `publisher.genii.foundation`. The
+attribution landing page and stable schema URLs therefore cannot pass the public
+surface verifier yet. npm trusted publisher settings are package-account state
+and were not inferred from repository files. Recheck every fact immediately before
+release. These are release blockers, not permission to create external state.
+
 Preparation and reverification stay on Node 22.12 with npm 10.9. The final upload
 step switches to Node 24 with token-free npm 11.5.1, the minimum npm version that
 supports trusted publishing. It publishes only the retained tarball paths and
