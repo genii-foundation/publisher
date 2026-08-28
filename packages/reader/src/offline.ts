@@ -282,7 +282,9 @@ function workDocumentHrefs(
   for (const route of reader.routes.active) {
     if (
       (route.target.kind === "work" && route.target.workId === work.id) ||
-      (route.target.kind === "section" && route.target.workId === work.id)
+      (route.target.kind === "section" && route.target.workId === work.id) ||
+      (route.target.kind === "section-index" &&
+        route.target.workId === work.id)
     ) hrefs.add(route.path);
     if (route.target.kind === "collection") {
       const collectionId = route.target.collectionId;

@@ -210,6 +210,16 @@ export type ContentRoute =
         readonly sectionId: string;
         readonly routeName: string;
       };
+    }
+  | {
+      readonly path: string;
+      readonly target: {
+        readonly kind: "section-index";
+        readonly id: string;
+        readonly title: string;
+        readonly workId: string;
+        readonly sectionIds: readonly string[];
+      };
     };
 
 export interface ResolvedContentAsset {

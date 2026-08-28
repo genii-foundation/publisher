@@ -100,6 +100,16 @@ function reader() {
           },
         },
         {
+          path: "/works/first/index/",
+          target: {
+            kind: "section-index",
+            id: "first-index",
+            title: "First Index",
+            workId: "first-work",
+            sectionIds: ["first-opening", "first-closing"],
+          },
+        },
+        {
           path: "/works/second/",
           target: { kind: "work", workId: "second-work" },
         },
@@ -191,6 +201,7 @@ test("offline planning closes each work over documents, data, assets, and narrat
     "/collections/notes/",
     "/works/first/",
     "/works/first/opening/",
+    "/works/first/index/",
     "/old/first/",
     "/older/first/",
     "/publication-reader-offline.json",

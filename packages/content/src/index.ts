@@ -75,6 +75,7 @@ export type {
   PublicationContentArtifact,
   ResolvedContentAssetInput,
   ResolvedContentRedirectInput,
+  ResolvedContentSectionIndexInput,
   ResolvedExtensionInput,
   ResolvedContentLinkLocationInput,
   ResolvedContentLinkInput,

@@ -207,6 +207,22 @@ function resourceAtPath(
   }
 
   if (
+    root === "routes" &&
+    firstIndex === "active" &&
+    isNumericPathToken(nested) &&
+    secondIndex === "target" &&
+    leaf === "sectionIds" &&
+    path.length === 5
+  ) {
+    return {
+      maximumItems:
+        PUBLICATION_PROTOCOL_LIMITS.maximumSectionReferences,
+      path: "/routes/active",
+      resource: "section index references",
+    };
+  }
+
+  if (
     root === "payloads" &&
     isNumericPathToken(firstIndex) &&
     nested === "sourcePaths" &&

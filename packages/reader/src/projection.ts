@@ -134,6 +134,17 @@ function cloneRoute(route: ContentRoute): ContentRoute {
           routeName: route.target.routeName,
         },
       };
+    case "section-index":
+      return {
+        path: route.path,
+        target: {
+          kind: "section-index",
+          id: route.target.id,
+          title: route.target.title,
+          workId: route.target.workId,
+          sectionIds: [...route.target.sectionIds],
+        },
+      };
   }
 }
 
@@ -314,6 +325,7 @@ function shouldRetainRoute(
       return true;
     case "work":
     case "section":
+    case "section-index":
       return retainedWorkIds.has(route.target.workId);
     case "collection":
       return retainedCollectionIds.has(route.target.collectionId);

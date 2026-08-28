@@ -149,6 +149,7 @@ export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
       "work",
       "collection",
       "section",
+      "section-index",
       "updates",
       "extension",
     ]),

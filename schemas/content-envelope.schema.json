@@ -1183,6 +1183,42 @@
               "$ref": "#/$defs/stableId"
             }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "id",
+            "title",
+            "workId",
+            "sectionIds"
+          ],
+          "properties": {
+            "kind": {
+              "const": "section-index"
+            },
+            "id": {
+              "$ref": "#/$defs/stableId"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "workId": {
+              "$ref": "#/$defs/stableId"
+            },
+            "sectionIds": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 50000,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/contentId"
+              }
+            }
+          }
         }
       ]
     },

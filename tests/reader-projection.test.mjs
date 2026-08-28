@@ -2827,6 +2827,62 @@ test("the browser runtime snapshots its input and fails closed on adversarial va
   });
 });
 
+test("section index routes survive projection and runtime rejects forged ownership", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const sectionId = input.works[0].sections[0].id;
+  const reader = project(
+    {
+      ...input,
+      sectionIndexes: [
+        {
+          id: "rain-gauge-index",
+          title: "Rain Gauge Index",
+          path: "/reading/rain-gauge-index/",
+          workId: "rain-gauge",
+          sectionIds: [sectionId],
+        },
+      ],
+    },
+    "public",
+  );
+  const route = reader.routes.active.at(-1);
+  assert.deepEqual(route, {
+    path: "/reading/rain-gauge-index/",
+    target: {
+      kind: "section-index",
+      id: "rain-gauge-index",
+      title: "Rain Gauge Index",
+      workId: "rain-gauge",
+      sectionIds: [sectionId],
+    },
+  });
+  assertValid(createPublicationReaderRuntime(reader));
+
+  for (const target of [
+    { ...route.target, workId: "missing-work" },
+    { ...route.target, sectionIds: ["missing-section"] },
+    { ...route.target, sectionIds: [sectionId, sectionId] },
+    { ...route.target, title: " Rain Gauge Index" },
+  ]) {
+    const forged = structuredClone(reader);
+    forged.routes.active.at(-1).target = target;
+    rehashReaderEnvelope(forged);
+    assert.equal(
+      createPublicationReaderRuntime(forged).valid,
+      false,
+      JSON.stringify(target),
+    );
+  }
+
+  const duplicateId = structuredClone(reader);
+  duplicateId.routes.active.push({
+    path: "/reading/rain-gauge-index-two/",
+    target: { ...route.target },
+  });
+  rehashReaderEnvelope(duplicateId);
+  assert.equal(createPublicationReaderRuntime(duplicateId).valid, false);
+});
+
 test("runtime derived-value checks ignore nested record insertion order", async () => {
   const reader = project(
     await loadCompilationInput("declared-night-dispatch"),

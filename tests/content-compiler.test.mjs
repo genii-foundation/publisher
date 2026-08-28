@@ -1713,6 +1713,33 @@ test("compiler rejects oversized aggregate inputs before content work", async (t
       resource: "redirects",
     },
     {
+      name: "section indexes",
+      change: {
+        sectionIndexes: new Array(
+          CONTENT_COMPILATION_LIMITS.maximumSectionIndexes + 1,
+        ),
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumSectionIndexes,
+      path: "/sectionIndexes",
+      resource: "section indexes",
+    },
+    {
+      name: "section index references",
+      change: {
+        sectionIndexes: [
+          {
+            sectionIds: new Array(
+              CONTENT_COMPILATION_LIMITS.maximumSectionIndexReferences + 1,
+            ),
+          },
+        ],
+      },
+      maximum:
+        CONTENT_COMPILATION_LIMITS.maximumSectionIndexReferences,
+      path: "/sectionIndexes",
+      resource: "section index references",
+    },
+    {
       name: "extensions",
       change: {
         extensions: new Array(
@@ -2947,6 +2974,61 @@ test("resolved redirects bind adapter routes without rewriting manifest authorit
     ),
     validationMessage(unresolvedTarget),
   );
+});
+
+test("resolved section indexes own aggregate routes and validate ordered section membership", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const sectionId = input.works[0].sections[0].id;
+  const sectionIndex = {
+    id: "rain-gauge-index",
+    title: "Rain Gauge Index",
+    path: "/reading/rain-gauge-index/",
+    workId: "rain-gauge",
+    sectionIds: [sectionId],
+  };
+  const envelope = compile({
+    ...input,
+    sectionIndexes: [sectionIndex],
+    redirects: [
+      {
+        from: "/legacy-rain-gauge-index/",
+        to: sectionIndex.path,
+        status: 308,
+      },
+    ],
+  });
+
+  assert.deepEqual(envelope.routes.active.at(-1), {
+    path: sectionIndex.path,
+    target: {
+      kind: "section-index",
+      id: sectionIndex.id,
+      title: sectionIndex.title,
+      workId: sectionIndex.workId,
+      sectionIds: [sectionId],
+    },
+  });
+  assert.deepEqual(envelope.routes.redirects.at(-1), {
+    from: "/legacy-rain-gauge-index/",
+    to: sectionIndex.path,
+    status: 308,
+  });
+  assertValid(validateContentEnvelopeShape(envelope));
+
+  for (const candidate of [
+    { ...sectionIndex, sectionIds: [] },
+    { ...sectionIndex, sectionIds: [sectionId, sectionId] },
+    { ...sectionIndex, sectionIds: ["missing-section"] },
+    { ...sectionIndex, workId: "missing-work" },
+    { ...sectionIndex, title: " Rain Gauge Index" },
+    { ...sectionIndex, path: input.publication.routes.home },
+  ]) {
+    const result = compilePublicationContent({
+      ...input,
+      sectionIndexes: [candidate],
+    });
+    assert.equal(result.valid, false, JSON.stringify(candidate));
+  }
 });
 
 test("redirect loops and unresolved internal targets are rejected after compilation", async () => {

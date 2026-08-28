@@ -38,6 +38,7 @@ export const FIXTURE_ROUTES = Object.freeze({
   publishedWork: "/works/caf%C3%A9+notes",
   sectionOne: "/readings/caf%C3%A9+one",
   sectionTwo: "/readings/plus+two",
+  sectionIndex: "/readings/field-notes/",
   unlistedWork: "/works/quiet-draft",
   updates: "/updates",
 });
@@ -535,6 +536,19 @@ export async function createFixtureReader(options = {}) {
       sourceGraph,
       sources,
       works,
+      ...(options.includeSectionIndex === true
+        ? {
+            sectionIndexes: [
+              {
+                id: "field-notes-index",
+                title: "Field Notes",
+                path: FIXTURE_ROUTES.sectionIndex,
+                workId: "published-notes",
+                sectionIds: ["published-opening", "published-closing"],
+              },
+            ],
+          }
+        : {}),
       links:
         options.includeReaderLinks === false ||
           options.composedPublishedSectionPage === true

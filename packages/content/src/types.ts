@@ -164,6 +164,19 @@ export interface ResolvedContentLinkInput {
  */
 export type ResolvedContentRedirectInput = ContinuityRedirect;
 
+/**
+ * A resolved index route that groups an ordered set of sections from one work.
+ * Author adapters can use this for part, chapter group, or other aggregate
+ * navigation pages without inventing prose section ownership.
+ */
+export interface ResolvedContentSectionIndexInput {
+  readonly id: string;
+  readonly title: string;
+  readonly path: string;
+  readonly workId: string;
+  readonly sectionIds: readonly string[];
+}
+
 export interface CompilePublicationContentInput {
   readonly engineVersion: string;
   readonly publication: PublicationManifest;
@@ -175,6 +188,7 @@ export interface CompilePublicationContentInput {
   readonly assets?: readonly ResolvedContentAssetInput[];
   readonly links?: readonly ResolvedContentLinkInput[];
   readonly redirects?: readonly ResolvedContentRedirectInput[];
+  readonly sectionIndexes?: readonly ResolvedContentSectionIndexInput[];
   readonly wordsPerMinute?: number;
 }
 

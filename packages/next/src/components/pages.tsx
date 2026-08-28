@@ -126,7 +126,9 @@ function sectionHref(
 }
 
 function readerOutline(page: PublisherNextPage): readonly PublisherReaderOutlineEntry[] {
-  const work = page.kind === "work" || page.kind === "section"
+  const work = page.kind === "work" ||
+    page.kind === "section" ||
+    page.kind === "section-index"
     ? page.work
     : null;
   if (work === null) return Object.freeze([]);
@@ -533,6 +535,56 @@ function SectionPage({
   );
 }
 
+function SectionIndexPage({
+  page,
+}: {
+  readonly page: Extract<
+    PublisherNextPage,
+    { kind: "section-index" }
+  >;
+}): ReactElement {
+  const number = new Intl.NumberFormat("en");
+  const sectionUnit = new Intl.PluralRules("en").select(
+    page.sections.length,
+  ) === "one" ? "section" : "sections";
+  const minuteUnit = new Intl.PluralRules("en").select(
+    page.readingMinutes,
+  ) === "one" ? "minute" : "minutes";
+  return (
+    <article
+      data-publisher-section-index={page.id}
+      data-publisher-work={page.work.id}
+      lang={page.work.language}
+    >
+      <header>
+        <nav className="publisher-breadcrumbs" aria-label="Breadcrumb">
+          <ol>
+            <li><a href={page.work.route}>{page.work.title}</a></li>
+            <li><span aria-current="page">{page.title}</span></li>
+          </ol>
+        </nav>
+        <h1>{page.title}</h1>
+        <p className="publisher-reading-stat" lang="en">
+          {number.format(page.sections.length)} {sectionUnit},{" "}
+          {number.format(page.wordCount)} words,{" "}
+          {number.format(page.readingMinutes)} {minuteUnit} read
+        </p>
+      </header>
+      <ol className="publisher-catalog">
+        {page.sections.map((section) => (
+          <li key={section.id}>
+            <h2>
+              <a href={sectionHref(page.work.route, section)}>
+                {section.title}
+              </a>
+            </h2>
+          </li>
+        ))}
+      </ol>
+    </article>
+  );
+}
+
 function UpdatesPage({
   updates,
   page,
@@ -625,6 +677,8 @@ async function PageBody({
           page={page}
         />
       );
+    case "section-index":
+      return <SectionIndexPage page={page} />;
     case "updates":
       if (updates === null) {
         throw new TypeError(

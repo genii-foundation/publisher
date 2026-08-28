@@ -9,7 +9,7 @@ The package is prerelease software. Its API may change before 1.0 through explic
 The renderer owns:
 
 - the publication shell, safe Markdown renderer, ordinary HTML anchors, adjacent heading actions, and accessible table regions
-- home, work, collection, section, and optional Updates page resolution
+- home, work, collection, section, section-index, and optional Updates page resolution
 - the persistent linked GENII Publisher footer and publication source link
 - one closed theme-token API
 - exact redirect status, exact internal path and query behavior, and semantically equivalent external destinations through Next.js Proxy

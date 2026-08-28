@@ -349,6 +349,17 @@ export interface PublisherNextSectionPage
   readonly next: ReaderSection | null;
 }
 
+export interface PublisherNextSectionIndexPage
+  extends PublisherNextPageBase {
+  readonly kind: "section-index";
+  readonly id: string;
+  readonly title: string;
+  readonly work: ReaderWork;
+  readonly sections: readonly ReaderSection[];
+  readonly wordCount: number;
+  readonly readingMinutes: number;
+}
+
 export interface PublisherNextUpdatesPage
   extends PublisherNextPageBase {
   readonly kind: "updates";
@@ -389,6 +400,7 @@ export type PublisherNextPage =
   | PublisherNextWorkPage
   | PublisherNextCollectionPage
   | PublisherNextSectionPage
+  | PublisherNextSectionIndexPage
   | PublisherNextUpdatesPage
   | PublisherNextExtensionRoutePage;
 

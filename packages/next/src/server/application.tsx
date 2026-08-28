@@ -1352,7 +1352,9 @@ function createExtensionRequestHandler(
 function extensionPageContext(
   page: PublisherNextPage,
 ): PublisherNextExtensionPageContext {
-  const work = page.kind === "work" || page.kind === "section"
+  const work = page.kind === "work" ||
+    page.kind === "section" ||
+    page.kind === "section-index"
     ? Object.freeze({ id: page.work.id, title: page.work.title })
     : undefined;
   const section = page.kind === "section"
@@ -3227,6 +3229,63 @@ function pageResolver(
         });
         break;
       }
+      case "section-index": {
+        const work = workById.get(route.target.workId);
+        const sectionsById = sectionByWorkAndId.get(route.target.workId);
+        if (work === undefined || sectionsById === undefined) {
+          return null;
+        }
+        const sections = route.target.sectionIds.map((sectionId) =>
+          sectionsById.get(sectionId),
+        );
+        if (sections.some((section) => section === undefined)) {
+          return null;
+        }
+        const resolvedSections = sections as ReaderSection[];
+        const includedSectionIds = new Set<string>();
+        for (const root of resolvedSections) {
+          for (const candidate of work.sections) {
+            const seen = new Set<string>();
+            let current: ReaderSection | undefined = candidate;
+            while (current !== undefined && !seen.has(current.id)) {
+              if (current.id === root.id) {
+                includedSectionIds.add(candidate.id);
+                break;
+              }
+              seen.add(current.id);
+              current = current.parentId === null
+                ? undefined
+                : sectionsById.get(current.parentId);
+            }
+          }
+        }
+        const includedSections = work.sections.filter(({ id }) =>
+          includedSectionIds.has(id),
+        );
+        const wordCount = includedSections.reduce(
+          (total, section) => total + section.wordCount,
+          0,
+        );
+        const readingMinutes = wordCount === 0
+          ? 0
+          : Math.max(
+              1,
+              Math.ceil(
+                wordCount / reader.statistics.wordsPerMinute,
+              ),
+            );
+        page = Object.freeze({
+          ...base,
+          kind: "section-index",
+          id: route.target.id,
+          title: route.target.title,
+          work,
+          sections: Object.freeze([...resolvedSections]),
+          wordCount,
+          readingMinutes,
+        });
+        break;
+      }
     }
     if (page !== null) {
       issuedPages.add(page);
@@ -3284,6 +3343,10 @@ function metadataForPage(
       break;
     case "section":
       title = `${page.section.title} | ${page.work.title}`;
+      description = page.work.summary ?? page.publication.description;
+      break;
+    case "section-index":
+      title = `${page.title} | ${page.work.title}`;
       description = page.work.summary ?? page.publication.description;
       break;
     case "updates":

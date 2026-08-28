@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-27, GENII Foundation
 
+- Added server-rendered section-index pages with ordered section navigation, aggregate reading statistics, Reader outline access, metadata, and offline-capable host authority.
 - Composed section pages from the route owner and same-work descendants that explicitly select the exact page path, preserving each descendant section and block fragment without admitting unrelated sections.
 
 ## 2026-08-20, GENII Foundation

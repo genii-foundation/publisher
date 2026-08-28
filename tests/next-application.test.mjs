@@ -486,6 +486,43 @@ test("section pages preserve adjacency and render Markdown safely", async () => 
   );
 });
 
+test("section index routes render ordered aggregate navigation without claiming prose ownership", async () => {
+  const reader = await createFixtureReader({ includeSectionIndex: true });
+  const application = await createApplication({ reader });
+  const resolution = application.resolveRoute(["readings", "field-notes"]);
+
+  assert.equal(resolution.status, "resolved");
+  assert.equal(resolution.page.kind, "section-index");
+  assert.equal(resolution.page.id, "field-notes-index");
+  assert.equal(resolution.page.title, "Field Notes");
+  assert.deepEqual(
+    resolution.page.sections.map(({ id }) => id),
+    ["published-opening", "published-closing"],
+  );
+  assert.equal(
+    resolution.page.wordCount,
+    resolution.page.sections.reduce(
+      (total, section) => total + section.wordCount,
+      0,
+    ),
+  );
+  const html = renderToStaticMarkup(
+    await application.renderPage(resolution.page),
+  );
+  assert.match(
+    html,
+    /data-publisher-section-index="field-notes-index"/u,
+  );
+  assert.match(html, /<h1>Field Notes<\/h1>/u);
+  const openingLink =
+    `<a href="${FIXTURE_ROUTES.sectionOne}">Opening</a>`;
+  const closingLink =
+    `<a href="${FIXTURE_ROUTES.sectionTwo}">Next</a>`;
+  assert.notEqual(html.indexOf(openingLink), -1);
+  assert.ok(html.indexOf(openingLink) < html.indexOf(closingLink));
+  assert.doesNotMatch(html, /class="publisher-manuscript"/u);
+});
+
 test("section pages compose explicitly addressed descendants", async () => {
   const application = await createApplication({
     reader: await createFixtureReader({

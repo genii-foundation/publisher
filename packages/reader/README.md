@@ -35,6 +35,8 @@ Sections and blocks carry explicit structured reader addresses and DOM IDs. The 
 
 An unanchored section address must use that section's work route or an active section route owned by the same section. Home, Updates, collection, and unrelated work routes cannot acquire section content through an accidental address collision. Browser-equivalent fragment aliases may name one section, but resolution reports the exact requested address rather than whichever alias appeared first in an object.
 
+Section-index routes remain distinct from prose ownership. They retain one work and an ordered set of unique navigable sections, survive audience filtering only with that work, and join the work's offline document closure. The runtime rejects unknown, duplicate, nonnavigable, or cross-work members.
+
 Fragments must contain well-formed Unicode scalar values. The runtime rejects lone UTF-16 surrogate code units before a browser can replace them with U+FFFD and collapse distinct addresses. Publication URLs, source links, external link targets, and external redirects must use exact ASCII HTTP or HTTPS URI serialization with a usable host and no credentials. Input that depends on browser repair, including whitespace, controls, raw Unicode, malformed percent escapes, or backslashes, is invalid.
 
 Source-backed link ranges use the fixed `genii-reader-block-markdown` profile. Offsets are UTF-16 code units into exact `block.markdown`, scoped to one block, with an exclusive end boundary. They are not offsets into `block.text`.
