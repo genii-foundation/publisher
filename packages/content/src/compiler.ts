@@ -67,6 +67,7 @@ import {
   type PublicationContentArtifact,
   type ResolvedContentAssetInput,
   type ResolvedContentLinkInput,
+  type ResolvedContentRedirectInput,
   type SectionContentInput,
   type WorkContentInput,
 } from "./types.js";
@@ -3809,6 +3810,7 @@ function validateCompilationResourceLimits(
   const payloads = input.payloads ?? [];
   const assets = input.assets ?? [];
   const links = input.links ?? [];
+  const resolvedRedirects = input.redirects ?? [];
   const publicationCollections =
     input.publication.collections ?? [];
   const publicationExtensions =
@@ -3880,6 +3882,14 @@ function validateCompilationResourceLimits(
       maximumItems: CONTENT_COMPILATION_LIMITS.maximumLinks,
       path: "/links",
       resource: "links",
+    },
+    {
+      actualItems:
+        (input.publication.continuity?.redirects.length ?? 0) +
+        resolvedRedirects.length,
+      maximumItems: PUBLICATION_PROTOCOL_LIMITS.maximumRedirects,
+      path: "/redirects",
+      resource: "redirects",
     },
   ] as const) {
     pushResourceLimitDiagnostic(
@@ -4207,9 +4217,10 @@ function compilePublicationContentInternal(
     ),
     wordsPerMinute: effectiveWordsPerMinute,
   };
-  const redirects = (input.publication.continuity?.redirects ?? []).map(
-    (redirect) => ({ ...redirect }),
-  );
+  const redirects: ResolvedContentRedirectInput[] = [
+    ...(input.publication.continuity?.redirects ?? []),
+    ...(input.redirects ?? []),
+  ].map((redirect) => ({ ...redirect }));
   validateCompiledRedirects(
     redirects,
     routeOwnerByPath,

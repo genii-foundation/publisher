@@ -74,6 +74,7 @@ export type {
   MarkdownBlockInput,
   PublicationContentArtifact,
   ResolvedContentAssetInput,
+  ResolvedContentRedirectInput,
   ResolvedExtensionInput,
   ResolvedContentLinkLocationInput,
   ResolvedContentLinkInput,

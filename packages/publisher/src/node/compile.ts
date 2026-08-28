@@ -41,7 +41,7 @@ export type CompileLoadedPublicationContentInput = Readonly<{
 }> &
   Pick<
     CompilePublicationContentInput,
-    "extensions" | "links" | "wordsPerMinute" | "works"
+    "extensions" | "links" | "redirects" | "wordsPerMinute" | "works"
   >;
 
 const requiredInputKeys = Object.freeze([
@@ -52,6 +52,7 @@ const allowedInputKeys = new Set<string>([
   ...requiredInputKeys,
   "extensions",
   "links",
+  "redirects",
   "wordsPerMinute",
 ]);
 
@@ -201,6 +202,9 @@ export function compileLoadedPublicationContent(
     ...(inspected.links === undefined
       ? {}
       : { links: inspected.links }),
+    ...(inspected.redirects === undefined
+      ? {}
+      : { redirects: inspected.redirects }),
     ...(inspected.wordsPerMinute === undefined
       ? {}
       : { wordsPerMinute: inspected.wordsPerMinute }),

@@ -1690,6 +1690,29 @@ test("compiler rejects oversized aggregate inputs before content work", async (t
       resource: "links",
     },
     {
+      name: "manifest and resolved redirects",
+      change: {
+        publication: {
+          ...input.publication,
+          continuity: {
+            redirects: [
+              {
+                from: "/manifest-redirect/",
+                to: firstWork.route,
+                status: 308,
+              },
+            ],
+          },
+        },
+        redirects: new Array(
+          PUBLICATION_PROTOCOL_LIMITS.maximumRedirects,
+        ),
+      },
+      maximum: PUBLICATION_PROTOCOL_LIMITS.maximumRedirects,
+      path: "/redirects",
+      resource: "redirects",
+    },
+    {
       name: "extensions",
       change: {
         extensions: new Array(
@@ -2849,6 +2872,80 @@ test("redirects resolve through adapter routes and reject final collisions", asy
   assert.ok(
     diagnosticCodes(result).has("content.redirect.active_route_source"),
     validationMessage(result),
+  );
+});
+
+test("resolved redirects bind adapter routes without rewriting manifest authority", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const routed = replaceWork(input, "rain-gauge", (work) => ({
+    ...work,
+    sections: [
+      {
+        ...work.sections[0],
+        routes: { canonical: { path: "/reading/rain-gauge/" } },
+        activeRouteNames: ["canonical"],
+      },
+    ],
+  }));
+  const withoutResolvedRedirect = compile(routed);
+  const resolvedRedirect = {
+    from: "/legacy-rain-gauge/",
+    to: "/reading/rain-gauge/",
+    status: 308,
+  };
+  const withResolvedRedirect = compile({
+    ...routed,
+    redirects: [resolvedRedirect],
+  });
+
+  assert.deepEqual(
+    withResolvedRedirect.publication.continuity,
+    withoutResolvedRedirect.publication.continuity,
+  );
+  assert.deepEqual(withResolvedRedirect.routes.redirects, [
+    ...withoutResolvedRedirect.routes.redirects,
+    resolvedRedirect,
+  ]);
+  assert.notEqual(
+    withResolvedRedirect.hashes.content,
+    withoutResolvedRedirect.hashes.content,
+  );
+  assert.notEqual(
+    withResolvedRedirect.buildId,
+    withoutResolvedRedirect.buildId,
+  );
+
+  const duplicateSource = compilePublicationContent({
+    ...replacePublication(routed, (publication) => ({
+      ...publication,
+      continuity: { redirects: [resolvedRedirect] },
+    })),
+    redirects: [resolvedRedirect],
+  });
+  assert.equal(duplicateSource.valid, false);
+  assert.ok(
+    diagnosticCodes(duplicateSource).has(
+      "content.redirect.duplicate_source",
+    ),
+    validationMessage(duplicateSource),
+  );
+
+  const unresolvedTarget = compilePublicationContent({
+    ...routed,
+    redirects: [
+      {
+        from: "/legacy-missing/",
+        to: "/reading/missing/",
+        status: 308,
+      },
+    ],
+  });
+  assert.equal(unresolvedTarget.valid, false);
+  assert.ok(
+    diagnosticCodes(unresolvedTarget).has(
+      "content.redirect.internal_target_unresolved",
+    ),
+    validationMessage(unresolvedTarget),
   );
 });
 
