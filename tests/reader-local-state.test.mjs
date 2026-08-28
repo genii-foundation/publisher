@@ -95,6 +95,7 @@ test("package manifest exposes the browser-safe state entry points", async () =>
   assert.deepEqual(manifest.exports["./progress"], {
     types: "./dist/progress.d.ts",
     import: "./dist/progress.js",
+    default: "./dist/progress.js",
   });
   assert.deepEqual(manifest.exports["./progress-overview"], {
     types: "./dist/progress-overview.d.ts",

@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-28, GENII Foundation
 
+- Added explicit default export conditions for the browser-safe progress and bookmarks entry points so CommonJS-aware TypeScript loaders can consume their public contracts.
 - Made synchronized clock validation explicit across type, sign, and safe-integer boundaries while preserving the public failure contract.
 
 ## 2026-08-27, GENII Foundation

@@ -409,9 +409,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
   });
   for (const subpath of [
     "preferences",
-    "progress",
     "passage-range",
-    "bookmarks",
     "sync",
     "search",
     "narration",
@@ -419,6 +417,13 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     assert.deepEqual(readerManifest.exports[`./${subpath}`], {
       types: `./dist/${subpath}.d.ts`,
       import: `./dist/${subpath}.js`,
+    });
+  }
+  for (const subpath of ["progress", "bookmarks"]) {
+    assert.deepEqual(readerManifest.exports[`./${subpath}`], {
+      types: `./dist/${subpath}.d.ts`,
+      import: `./dist/${subpath}.js`,
+      default: `./dist/${subpath}.js`,
     });
   }
   assert.equal(

@@ -45,7 +45,8 @@
     },
     "./progress": {
       "types": "./dist/progress.d.ts",
-      "import": "./dist/progress.js"
+      "import": "./dist/progress.js",
+      "default": "./dist/progress.js"
     },
     "./progress-overview": {
       "types": "./dist/progress-overview.d.ts",
@@ -61,7 +62,8 @@
     },
     "./bookmarks": {
       "types": "./dist/bookmarks.d.ts",
-      "import": "./dist/bookmarks.js"
+      "import": "./dist/bookmarks.js",
+      "default": "./dist/bookmarks.js"
     },
     "./sync": {
       "types": "./dist/sync.d.ts",

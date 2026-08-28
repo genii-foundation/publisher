@@ -140,6 +140,7 @@ test("package manifest exposes browser-safe passage and bookmark entry points", 
   assert.deepEqual(manifest.exports["./bookmarks"], {
     types: "./dist/bookmarks.d.ts",
     import: "./dist/bookmarks.js",
+    default: "./dist/bookmarks.js",
   });
 });
 
