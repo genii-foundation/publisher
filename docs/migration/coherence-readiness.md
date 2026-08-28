@@ -25,14 +25,44 @@ offline behavior, route, or manuscript behavior.
 
 The current executable refresh starts from Coherence `origin/main` at
 `20740657f5cc8fbec934c1df609d7e7e0d95fc32` and is preserved at Coherence
-checkpoint `b75c6c9362c6502f9a7cac543ebef97a4177d734`. It consumes Publisher
-package candidate `580f5c548802df09fc9bb814286b205ba08acdb5`. The surrounding Publisher
-release and public-site checkpoint is
-`cd874ff969ac82f06398cf0dda10cbdd6a0f4e0c`.
+checkpoint `20980d155909850710ad95253e3eaf83a14e4c98`. It consumes exact Publisher
+package candidate `55efeee334848b714d52dbedce933de73aa7c6e1`.
 
 The audit was read only with respect to Coherence. It did not modify manuscripts,
 publishing records, generated output, deployment state, or the current production
 application.
+
+## 2026-08-28 executable refresh
+
+The candidate now mounts one exact Coherence-owned state migration extension
+inside the official Reader application. Its bounded public projection translates
+the complete accepted legacy state census or refuses one whole concern without
+changing either the source or target bytes. The extension's data resource is
+included in the immutable work package, so a cold offline load has the same
+translation authority as an online load.
+
+The Cardinal offline package now contains 18 declared resources, including four
+data resources. The state migration resource is 1,324,067 bytes with SHA-256
+`469264c91ad4dfc850863c2b9fdfbb6b7f316cb88c91a8a85253cbba7c1d8518`.
+The package proof binds the extension mount, its empty server placeholder, the
+resource identity, the active cache receipt, and the absence of private state
+from server HTML and public projection bytes.
+
+The exact Coherence checkpoint passes all 1,074 repository tests, the 6,411-page
+production build, and the application browser suite with 230 passes and 40
+intentional skips. The isolated Chromium proof passes explicit installation,
+atomic replacement and rollback, preserved Coherence caches, cold reading, text
+visibility, search, navigation, exclusions, range requests, state migration
+resource availability, and cleanup. Two clean executions produced the same
+cross-run semantic identity,
+`sha256:29d9666fddb1771300ded73b5e34434aed2f4e7736b70545cdeb792075ce11d4`,
+while retaining distinct exact transport receipts as intended.
+
+The managed local preview is bound to Coherence commit
+`20980d155909850710ad95253e3eaf83a14e4c98` and candidate digest
+`8b9f73cf6350b5504521e8a8338e0229490637188f82b7e1149d2ff287e73cbb`.
+It is evidence awaiting author review. It is not approval to push, merge, publish,
+change provider state, or deploy.
 
 ## 2026-08-27 executable refresh
 
@@ -436,20 +466,21 @@ and extension overrides without accepting provenance or publishing anything.
 The following are accepted scope, not release blockers waiting for another
 product decision:
 
-1. Adopt Coherence through a reviewed migration plan with dual-read or
-   copy-and-verify state compatibility.
+1. Complete author review of the exact Coherence local preview, then use the
+   existing Coherence deployment project for a reviewed preview only after that
+   local candidate is approved.
 
 The executable, reversible sequence is recorded in
 [`coherence-adoption-plan.md`](coherence-adoption-plan.md). It is pinned to exact
 Publisher and Coherence commits, names the remaining Coherence-specific adapter
 and full-census acceptance work, preserves the current Coherence
 workbench and provider state, and stops before merge or production deployment.
-Publisher's closed executable bootstrap and separately bounded public state
-projection are complete. The remaining adapter must populate that projection
-from Coherence-owned committed identity evidence. Valid textured preferences,
-detailed progress evidence, system voice choices, pitch, several narration
-rates, and the legacy last-sync display still need an explicit compatible target
-or honest refusal policy. A narrow happy-path fixture cannot close this gate.
+Publisher's closed executable bootstrap, separately bounded public state
+projection, Coherence-owned adapter, exact refusal census, and offline resource
+closure are complete in the reviewed candidate. The remaining gate is human and
+deployment specific. The author must review the exact local preview before the
+candidate may be pushed for an ordinary preview through the existing Coherence
+project. Production remains unchanged.
 
 ## Material that remains Coherence-owned
 

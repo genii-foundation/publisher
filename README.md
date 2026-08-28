@@ -33,7 +33,7 @@ Each publication repository owns its manuscripts, editorial evidence, assets, co
 
 Migration and extraction decisions are recorded in the machine-validated [provenance ledger](provenance/README.md). The ledger distinguishes fresh implementation, preserved source licenses, documented relicensing, host-only creative material, third-party material, and blocked provenance.
 
-## Planned package surface
+## Package and capability surface
 
 | Package | Responsibility |
 | --- | --- |
@@ -42,9 +42,16 @@ Migration and extraction decisions are recorded in the machine-validated [proven
 | `@genii-foundation/publisher-content` | Framework-neutral content model and compilation primitives |
 | `@genii-foundation/publisher-reader` | Deterministic reader projection, framework-neutral runtime behavior, and shared presentation contracts |
 | `@genii-foundation/publisher-next` | Server-rendered Next.js application, data-only themes, and exact host continuity |
-| `@genii-foundation/publisher-audio` | Optional audio catalog and playback contracts |
 | `@genii-foundation/publisher-sync-supabase` | Optional Supabase synchronization adapter |
-| `@genii-foundation/publisher-updates` | Author-repository history and Updates generation |
+
+Narration and Updates are capability boundaries, not separate packages. Their
+schemas live in `publisher-schema`, their framework-neutral compilation and
+validation live in `publisher-content` and `publisher`, and their Reader behavior
+lives in `publisher-reader` and `publisher-next`. Author repositories retain the
+pipelines that interpret Git history, classify publication paths, select
+narrators, and produce the plain catalogs Publisher consumes. This keeps one
+publication's policy out of the generic engine and avoids publishing wrapper
+packages with no independent implementation or consumer.
 
 The implemented package boundaries are proven against two invented neutral fixtures. The packed canonical host installs independent theme and extension packages, performs a frozen offline reinstall, renders extension server slots, an interactive client mount, a declarative extension page, and an exact namespaced request handler, preserves the theme across framework error surfaces, and keeps manuscript plus extension server data out of client chunks.
 

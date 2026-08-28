@@ -1,11 +1,11 @@
 # Coherence adoption plan
 
 - Status: executable migration proof refreshed, local preview approval pending
-- Publisher repository checkpoint: `cd874ff969ac82f06398cf0dda10cbdd6a0f4e0c`
-- Publisher package candidate: `580f5c548802df09fc9bb814286b205ba08acdb5`
+- Publisher repository checkpoint: `55efeee334848b714d52dbedce933de73aa7c6e1`
+- Publisher package candidate: `55efeee334848b714d52dbedce933de73aa7c6e1`
 - Coherence source baseline: `20740657f5cc8fbec934c1df609d7e7e0d95fc32`
-- Coherence migration evidence checkpoint: `b75c6c9362c6502f9a7cac543ebef97a4177d734`
-- Coherence branch authority: committed `origin/main` at the source baseline
+- Coherence migration evidence checkpoint: `20980d155909850710ad95253e3eaf83a14e4c98`
+- Coherence branch authority: committed candidate branch at the migration evidence checkpoint
 - Production authority: unchanged
 
 This plan turns the readiness audit into a reversible sequence for adopting GENII
@@ -72,22 +72,17 @@ The existing deployment uses the current Vercel project with the Next.js framewo
 use that same project's ordinary pull request preview. No second Coherence Vercel
 project may be created.
 
-## Preconditions that must close first
+## Closed preconditions retained as evidence
 
 ### Exact host dependencies
 
-The Publisher candidate now requires exact Next.js 16.3.1, React 19.2.8,
-React DOM 19.2.8, and its reference TypeScript 7.0.2 toolchain. The Coherence
-baseline already pins Next.js 16.3.1 but still pins React 19.2.4, React DOM
-19.2.4, and a TypeScript 5 range.
-
-The preview branch must not suppress peer errors or accept two framework copies.
-Publisher must validate this exact framework stack before candidate installation.
-Coherence must then retain Next.js 16.3.1, adopt the validated React, React DOM,
-and TypeScript versions, copy the complete consuming-root overrides, and
-regenerate its lockfile with npm 10.9.0. The chosen versions must be exact in
-`package.json` and `package-lock.json`, pass both repositories' relevant gates,
-and appear once in the installed dependency graph.
+The Publisher candidate requires exact Next.js 16.3.1, React 19.2.8, and React
+DOM 19.2.8. Its reference build uses TypeScript 7.0.2, while the packed public
+declarations also compile under Coherence's exact TypeScript 5.9.3 toolchain. The
+candidate retains those exact framework versions, the complete consuming-root
+overrides, and one installed framework graph. Both repositories pass their
+relevant gates without suppressing peer errors or accepting a second framework
+copy.
 
 ### Local state compatibility interface
 
@@ -96,10 +91,10 @@ now exposes the closed Reader state bootstrap and separately bounded public
 projection described by ADR 0057 and ADR 0059. The generic hook runs before
 prepaint, receives renderer-derived target keys and a frozen build-bound
 projection, reports what it copied or refused, leaves legacy keys intact, and is
-safe to run again. Coherence preview adoption still requires a
-publication-owned adapter plus acceptance fixtures for its exact legacy document
-versions. Those fixtures must prove lossless copies and explicit refusal of any
-state that cannot be represented safely.
+safe to run again. The Coherence candidate supplies the publication-owned adapter
+and acceptance fixtures for its exact legacy document versions. The adapter is an
+explicit client extension with a bounded build projection and one declared data
+resource included in every affected offline package.
 
 The Coherence adapter must map these legacy keys:
 
@@ -131,13 +126,15 @@ state. Retained evidence must also prove that the exact inline script multiplied
 by the complete static route count remains within Publisher's total static
 transport limit.
 
-Acceptance fixtures must cover every currently valid legacy shape, not only values
-that happen to fit Publisher today. Textured preferences, progress fields without
-target equivalents, truncated section and paragraph hashes, system narration
-voices, nondefault pitch, unsupported rates, and the legacy last-sync display need
-an explicit compatible representation or a documented refusal. Any record that
-would be dropped, truncated, guessed, or ambiguously mapped refuses its entire
-concern and leaves every legacy byte unchanged.
+The candidate fixtures cover every currently valid legacy shape, not only values
+that happen to fit Publisher today. They bind textured preferences, progress
+fields without target equivalents, truncated section and paragraph hashes,
+system narration voices, nondefault pitch, supported and unsupported rates, and
+the legacy last-sync display to an explicit compatible representation or a
+documented refusal. Any record that would be dropped, truncated, guessed, or
+ambiguously mapped refuses its entire concern and leaves every legacy byte
+unchanged. Preview review remains necessary because passing fixtures do not grant
+authority over a reader's real local state.
 
 ### Supabase adapter choice
 
