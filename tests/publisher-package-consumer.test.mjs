@@ -133,7 +133,9 @@ function runNpm(args, options = {}) {
       label,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error && typeof error.message === "string"
+      ? error.message
+      : `${error}`;
     if (looksLikeRegistryFailure(message)) {
       throw new Error(
         `The npm registry could not be reached, so ${label} could not complete. This is a network failure rather than a finding about this package.\n${message}`,

@@ -267,9 +267,9 @@
     },
     "normalizedLine": {
       "outcome": "expected-match",
-      "matchCount": 72,
+      "matchCount": 53,
       "method": "Compare whitespace-normalized UTF-8 lines containing at least 60 characters.",
-      "evidence": "The review receipt records 72 exact normalized-line matches. Fifty-three are concentrated in the six Supabase migrations, with nineteen generic framework, release, site, Reader, provider, and test lines elsewhere."
+      "evidence": "The review receipt records exactly 53 normalized-line matches, all confined to the six Supabase migrations. Generic framework, release, site, Reader, provider, and test source now records zero normalized-line matches."
     },
     "tokenShingle": {
       "outcome": "clear",

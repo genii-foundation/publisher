@@ -460,7 +460,7 @@ if (
     );
     console.log(`Public surface receipt: ${receipt.sha256}`);
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(error instanceof Error ? error.message : `${error}`);
     process.exitCode = 1;
   }
 }

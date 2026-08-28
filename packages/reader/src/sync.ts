@@ -158,7 +158,11 @@ function requirePublicationId(value: unknown): asserts value is string {
 }
 
 function requireNow(value: unknown): asserts value is number {
-  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+  if (
+    typeof value !== "number" ||
+    value < 0 ||
+    !Number.isSafeInteger(value)
+  ) {
     throw new TypeError("now must be a nonnegative epoch millisecond integer.");
   }
 }

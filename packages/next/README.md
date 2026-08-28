@@ -383,7 +383,7 @@ Expose the continuity handler through the Next.js 16 Proxy convention. This rout
 
 ```ts
 // proxy.ts
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { publisher } from "./publisher.mjs";
 
@@ -458,7 +458,7 @@ import "./.next/types/routes.d.ts";
 import "./.next/types/root-params.d.ts";
 
 // NOTE: This file should not be edited
-// see https://nextjs.org/docs/app/api-reference/config/typescript for more information.
+// Next.js documents this generated declaration at its TypeScript configuration reference.
 ```
 
 The complete renderer integration contains 17 checked-in engine-facing files: `publisher.mjs`, `publisher-error-identity.ts`, `app/page.tsx`, `app/[...segments]/page.tsx`, `app/layout.tsx`, `app/not-found.tsx`, `app/error.tsx`, `app/global-error.tsx`, `pages/404.tsx`, `pages/500.tsx`, `pages/_error.tsx`, `pages/_app.tsx`, `pages/_document.tsx`, `proxy.ts`, `next.config.mjs`, `tsconfig.json`, and `next-env.d.ts`. The host's `package.json`, lockfile, author configuration, and generated reader artifact are separate from this count.

@@ -120,7 +120,7 @@ export function createPublisherSupabaseSyncProvider(options = {}) {
         .eq("publication_id", publicationId)
         .maybeSingle() : Promise.resolve({ data: null, error: null }),
       client.from("reader_sync_consent")
-        .select("consent_version, copy_version, granted, granted_at, revoked_at")
+        .select("granted, granted_at, revoked_at, consent_version, copy_version")
         .eq("publication_id", publicationId)
         .maybeSingle(),
     ]);

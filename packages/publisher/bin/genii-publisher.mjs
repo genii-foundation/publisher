@@ -1463,7 +1463,8 @@ async function runStatus(options) {
   }
 
   if (options.json) {
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    const output = `${JSON.stringify(report, null, 2)}\n`;
+    process.stdout.write(output);
   } else {
     process.stdout.write(`${describeStatus(report)}\n`);
   }

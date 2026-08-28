@@ -2,6 +2,11 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher Next.js renderer is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-28, GENII Foundation
+
+- Made offline resource discovery explicit across link and source attributes, separated cache opening from lookup, and scoped Reader activity listeners to abortable lifecycles.
+- Clarified packaged-host failures and public integration examples without changing their contracts.
+
 ## 2026-08-27, GENII Foundation
 
 - Added server-rendered section-index pages with ordered section navigation, aggregate reading statistics, Reader outline access, metadata, and offline-capable host authority.

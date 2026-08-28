@@ -773,11 +773,22 @@ export function PublisherReaderRail({
       commit(now);
     };
 
-    window.addEventListener("scroll", markActivity, { passive: true });
-    window.addEventListener("pointerdown", markActivity, { passive: true });
-    window.addEventListener("keydown", markActivity);
-    window.addEventListener("focus", markActivity);
-    document.addEventListener("visibilitychange", noteVisibility);
+    const activityListeners = new AbortController();
+    const passiveActivity = {
+      passive: true,
+      signal: activityListeners.signal,
+    };
+    window.addEventListener("scroll", markActivity, passiveActivity);
+    window.addEventListener("pointerdown", markActivity, passiveActivity);
+    window.addEventListener("keydown", markActivity, {
+      signal: activityListeners.signal,
+    });
+    window.addEventListener("focus", markActivity, {
+      signal: activityListeners.signal,
+    });
+    document.addEventListener("visibilitychange", noteVisibility, {
+      signal: activityListeners.signal,
+    });
     const interval = window.setInterval(
       sampleAndCommit,
       READING_TIME_SAMPLE_INTERVAL_MS,
@@ -785,11 +796,7 @@ export function PublisherReaderRail({
     return () => {
       sampleAndCommit();
       window.clearInterval(interval);
-      window.removeEventListener("scroll", markActivity);
-      window.removeEventListener("pointerdown", markActivity);
-      window.removeEventListener("keydown", markActivity);
-      window.removeEventListener("focus", markActivity);
-      document.removeEventListener("visibilitychange", noteVisibility);
+      activityListeners.abort();
     };
   }, [currentSection, progressStore]);
 
@@ -996,19 +1003,27 @@ export function PublisherReaderRail({
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === "Escape") setReaderSelection(null);
     };
-    document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("pointerup", onPointerUp);
-    document.addEventListener("keyup", read);
-    document.addEventListener("selectionchange", onSelectionChange);
-    document.addEventListener("keydown", onKeyDown);
+    const selectionListeners = new AbortController();
+    const selectionListenerOptions = {
+      signal: selectionListeners.signal,
+    };
+    document.addEventListener(
+      "pointerdown",
+      onPointerDown,
+      selectionListenerOptions,
+    );
+    document.addEventListener("pointerup", onPointerUp, selectionListenerOptions);
+    document.addEventListener("keyup", read, selectionListenerOptions);
+    document.addEventListener(
+      "selectionchange",
+      onSelectionChange,
+      selectionListenerOptions,
+    );
+    document.addEventListener("keydown", onKeyDown, selectionListenerOptions);
     schedule(0);
     return () => {
       clearTimer();
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("pointerup", onPointerUp);
-      document.removeEventListener("keyup", read);
-      document.removeEventListener("selectionchange", onSelectionChange);
-      document.removeEventListener("keydown", onKeyDown);
+      selectionListeners.abort();
     };
   }, [currentSection, currentWorkId]);
 

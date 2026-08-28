@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher reader is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-28, GENII Foundation
+
+- Made synchronized clock validation explicit across type, sign, and safe-integer boundaries while preserving the public failure contract.
+
 ## 2026-08-27, GENII Foundation
 
 - Preserved validated section-index routes through audience projection, runtime authority, and complete offline work packages.

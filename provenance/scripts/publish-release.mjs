@@ -317,7 +317,7 @@ if (
       `Published ${result.packageCount} exact package archive(s) with npm ${result.npmVersion} under tag ${result.tag}.`,
     );
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(error instanceof Error ? error.message : `${error}`);
     process.exitCode = 1;
   }
 }

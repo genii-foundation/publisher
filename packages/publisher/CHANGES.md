@@ -5,6 +5,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 ## 2026-08-28, GENII Foundation
 
 - Forwarded resolved aggregate section indexes through the public trusted-snapshot compilation boundary.
+- Made command output serialization explicit before writing and retained the exact JSON interface.
 
 ## 2026-08-19, GENII Foundation
 

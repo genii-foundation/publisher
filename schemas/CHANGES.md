@@ -10,6 +10,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Centralized the Supabase engagement event database projection and bound every stored field through an exact server-provider test.
 - Bounded offline metadata enumeration by the Reader package ceiling, centralized resilient cache cleanup, preserved redirected response metadata explicitly, and made the cache test double retain real cloned responses.
 - Centralized Reader text range and vertical-bound measurement for bookmark markers, with one guarded layout-shift observer boundary.
+- Reworked the remaining generic framework, release, site, Reader, provider, and test expressions so the deterministic source review now isolates all normalized-line matches to the six Supabase migrations.
 
 ## 2026-08-27, GENII Foundation
 

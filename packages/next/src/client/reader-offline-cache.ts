@@ -222,6 +222,14 @@ function srcsetHrefs(value: string): string[] {
     candidate.trim().split(/\s+/u)[0] ?? "").filter(Boolean);
 }
 
+function elementResourceHref(element: Element): string | null {
+  for (const attribute of ["href", "src"] as const) {
+    const value = element.getAttribute(attribute);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
 async function responseDependencies(
   response: Response,
   requestedHref: string,
@@ -236,7 +244,7 @@ async function responseDependencies(
     for (const element of document.querySelectorAll(
       "link[href], script[src], img[src], source[src], audio[src], video[src]",
     )) {
-      const value = element.getAttribute("href") ?? element.getAttribute("src");
+      const value = elementResourceHref(element);
       if (value !== null) {
         const href = localDependencyHref(value, requestedHref);
         if (href !== null) output.add(href);
@@ -292,7 +300,9 @@ export async function installPublisherReaderOfflinePackage(
   onProgress: (progress: PublisherReaderOfflinePackageProgress) => void,
 ): Promise<PublisherReaderOfflinePackageStatus> {
   if (!("caches" in globalThis) || !("fetch" in globalThis)) {
-    throw new Error("Offline downloads are not supported by this browser.");
+    throw new Error(
+      "Offline package installation requires Cache Storage and Fetch support.",
+    );
   }
   const previous = await readRecord(publicationId, offlinePackage.workId);
   const cacheName = stagingCacheName(publicationId, offlinePackage);
@@ -382,7 +392,8 @@ export async function matchPublisherReaderOfflineResponse(
     if (records === null) return undefined;
     for (const record of [...records]
       .sort((left, right) => right.savedAt.localeCompare(left.savedAt))) {
-      const response = await (await caches.open(record.cacheName)).match(request);
+      const packageCache = await caches.open(record.cacheName);
+      const response = await packageCache.match(request);
       if (response !== undefined) return response;
     }
   } catch {}

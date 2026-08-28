@@ -9,6 +9,7 @@ This file records changes to the migration provenance system.
 - Replaced inherited mutable quote-part rewriting with an independent immutable selection projection, removing the remaining selection-token matches.
 - Replaced inherited synchronization row construction with a declarative database projection and exact contract proof, removing the synchronization-token matches.
 - Reworked offline cache enumeration, response copying, rollback, and its browser test double, then centralized bookmark range geometry and layout observation, eliminating every remaining significant-token match.
+- Reworked the remaining generic framework, release, site, Reader, provider, and test expressions, leaving exactly 53 normalized-line matches confined to the six Supabase migrations.
 
 ## 2026-08-27, GENII Foundation
 

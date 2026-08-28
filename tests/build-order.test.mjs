@@ -24,7 +24,9 @@ If you wish to allow use of your version of this file only under the terms of th
 // places is worse than no guard, because it is believed.
 
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";

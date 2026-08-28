@@ -165,7 +165,9 @@ function runNpm(args, options = {}) {
       label: options.label ?? `npm ${args[0] ?? ""}`.trim(),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error && typeof error.message === "string"
+      ? error.message
+      : `${error}`;
     if (looksLikeRegistryFailure(message)) {
       throw new Error(
         `The npm registry could not be reached, so ${
