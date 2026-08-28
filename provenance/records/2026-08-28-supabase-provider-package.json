@@ -15,17 +15,24 @@
       "docs/migration/coherence-adoption-plan.md",
       "docs/migration/coherence-readiness.md",
       "package-lock.json",
+      "packages/publisher/src/node/audio.ts",
       "packages/sync-supabase/",
+      "provenance/README.md",
+      "provenance/receipt.schema.json",
+      "provenance/scripts/audit.mjs",
+      "provenance/scripts/audit.test.mjs",
       "provenance/scripts/publish-release.test.mjs",
       "provenance/scripts/validate.test.mjs",
       "tests/coherence-parity.test.mjs",
       "tests/legal-contract.test.mjs",
+      "tests/publisher-package-consumer.test.mjs",
       "tests/release-tag-copies.test.mjs",
       "tests/second-publication-release-rehearsal.test.mjs",
       "tests/sync-provider-schema.test.mjs",
-      "tests/sync-supabase-package-consumer.test.mjs"
+      "tests/sync-supabase-package-consumer.test.mjs",
+      "tests/unicode-generation.test.mjs"
     ],
-    "summary": "Records the fresh CPAL optional Supabase provider as a complete public prerelease package candidate with legal, consumer, provenance, and release boundaries."
+    "summary": "Records the fresh CPAL optional Supabase provider as a complete public prerelease package candidate with legal, consumer, provenance, scanner-capacity, textual-package, and release boundaries."
   },
   "auditedSource": {
     "repository": "https://github.com/genii-foundation/coherence-thesis",
@@ -209,9 +216,9 @@
     },
     "normalizedLine": {
       "outcome": "expected-match",
-      "matchCount": 138,
+      "matchCount": 139,
       "method": "Compare whitespace-normalized significant lines.",
-      "evidence": "The 138 matches are 136 registry resolution or integrity lines shared by the two npm lockfiles and two generic Node filesystem import lines in repository tests. No provider source or migration line matched."
+      "evidence": "The 139 matches are 136 registry resolution or integrity lines shared by the two npm lockfiles and three generic Node filesystem import lines in repository tests. No provider source or migration line matched."
     },
     "tokenShingle": {
       "outcome": "clear",

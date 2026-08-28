@@ -12,9 +12,11 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   normalizePortableRepositoryText,
@@ -27,88 +29,17 @@ function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-test("UnicodeData verification accepts an exact derived snapshot", () => {
-  const source = [
-    "0041;LATIN CAPITAL LETTER A;Lu;0;L;;;;;N;;;;0061;",
-    "00C0;LATIN CAPITAL LETTER A WITH GRAVE;Lu;0;L;0041 0300;;;;N;LATIN CAPITAL LETTER A GRAVE;;;00E0;",
-    "0300;COMBINING GRAVE ACCENT;Mn;230;NSM;;;;;N;NON-SPACING GRAVE ACCENT;;;;",
-    "",
-  ].join("\n");
-  const sourceMetadata = {
-    sha256: sha256(source),
-    url: "https://example.test/UnicodeData.txt",
-  };
-  const expected = {
-    unicodeVersion: "15.1.0",
-    source: sourceMetadata,
-    canonicalCombiningClasses: [
-      [
-        0x0300,
-        230,
-      ],
-    ],
-    canonicalDecompositions: [
-      [
-        0x00c0,
-        [
-          0x0041,
-          0x0300,
-        ],
-      ],
-    ],
-  };
-  const snapshot = `${JSON.stringify(expected)}\n`;
-
-  assert.deepEqual(
-    verifyUnicodeDataSnapshot(
-      source,
-      snapshot,
-      sourceMetadata,
-    ),
-    expected,
+const verificationArguments = process.argv.slice(2);
+const provenanceVerification =
+  verificationArguments.length === 1 &&
+  verificationArguments[0] === "--provenance-verification";
+if (verificationArguments.length > 0 && !provenanceVerification) {
+  throw new Error(
+    "Usage: node tests/unicode-generation.test.mjs [--provenance-verification]",
   );
-});
+}
 
-test("UnicodeData verification rejects stale derived data and source mismatches", () => {
-  const source =
-    "0300;COMBINING GRAVE ACCENT;Mn;230;NSM;;;;;N;NON-SPACING GRAVE ACCENT;;;;\n";
-  const sourceMetadata = {
-    sha256: sha256(source),
-    url: "https://example.test/UnicodeData.txt",
-  };
-  const stale = `${JSON.stringify({
-    unicodeVersion: "15.1.0",
-    source: sourceMetadata,
-    canonicalCombiningClasses: [
-      [
-        0x0300,
-        220,
-      ],
-    ],
-    canonicalDecompositions: [],
-  })}\n`;
-
-  assert.throws(
-    () =>
-      verifyUnicodeDataSnapshot(
-        source,
-        stale,
-        sourceMetadata,
-      ),
-    /stale or does not derive/u,
-  );
-  assert.throws(
-    () =>
-      verifyUnicodeDataSnapshot(
-        `${source}\n`,
-        stale,
-        sourceMetadata,
-      ),
-    /checksum .* does not match pinned/u,
-  );
-});
-
-test("the compiled public normalizer passes every official Unicode 15.1 NFC conformance case", async () => {
+async function verifyCompiledUnicodeConformance() {
   const source = await readFile(
     new URL(
       "../schemas/third-party-data/NormalizationTest-15.1.0.txt",
@@ -151,4 +82,111 @@ test("the compiled public normalizer passes every official Unicode 15.1 NFC conf
     caseCount += 1;
   }
   assert.ok(caseCount > 19_000);
+}
+
+if (provenanceVerification) {
+  await verifyCompiledUnicodeConformance();
+}
+const selectedTest = provenanceVerification ? () => {} : test;
+
+selectedTest("UnicodeData verification accepts an exact derived snapshot", () => {
+  const source = [
+    "0041;LATIN CAPITAL LETTER A;Lu;0;L;;;;;N;;;;0061;",
+    "00C0;LATIN CAPITAL LETTER A WITH GRAVE;Lu;0;L;0041 0300;;;;N;LATIN CAPITAL LETTER A GRAVE;;;00E0;",
+    "0300;COMBINING GRAVE ACCENT;Mn;230;NSM;;;;;N;NON-SPACING GRAVE ACCENT;;;;",
+    "",
+  ].join("\n");
+  const sourceMetadata = {
+    sha256: sha256(source),
+    url: "https://example.test/UnicodeData.txt",
+  };
+  const expected = {
+    unicodeVersion: "15.1.0",
+    source: sourceMetadata,
+    canonicalCombiningClasses: [
+      [
+        0x0300,
+        230,
+      ],
+    ],
+    canonicalDecompositions: [
+      [
+        0x00c0,
+        [
+          0x0041,
+          0x0300,
+        ],
+      ],
+    ],
+  };
+  const snapshot = `${JSON.stringify(expected)}\n`;
+
+  assert.deepEqual(
+    verifyUnicodeDataSnapshot(
+      source,
+      snapshot,
+      sourceMetadata,
+    ),
+    expected,
+  );
+});
+
+selectedTest("UnicodeData verification rejects stale derived data and source mismatches", () => {
+  const source =
+    "0300;COMBINING GRAVE ACCENT;Mn;230;NSM;;;;;N;NON-SPACING GRAVE ACCENT;;;;\n";
+  const sourceMetadata = {
+    sha256: sha256(source),
+    url: "https://example.test/UnicodeData.txt",
+  };
+  const stale = `${JSON.stringify({
+    unicodeVersion: "15.1.0",
+    source: sourceMetadata,
+    canonicalCombiningClasses: [
+      [
+        0x0300,
+        220,
+      ],
+    ],
+    canonicalDecompositions: [],
+  })}\n`;
+
+  assert.throws(
+    () =>
+      verifyUnicodeDataSnapshot(
+        source,
+        stale,
+        sourceMetadata,
+      ),
+    /stale or does not derive/u,
+  );
+  assert.throws(
+    () =>
+      verifyUnicodeDataSnapshot(
+        `${source}\n`,
+        stale,
+        sourceMetadata,
+      ),
+    /checksum .* does not match pinned/u,
+  );
+});
+
+selectedTest("the compiled public normalizer passes every official Unicode 15.1 NFC conformance case", async () => {
+  await verifyCompiledUnicodeConformance();
+});
+
+selectedTest("the provenance conformance mode is silent and deterministic", () => {
+  const program = fileURLToPath(import.meta.url);
+  const executions = Array.from({ length: 2 }, () =>
+    spawnSync(
+      process.execPath,
+      [program, "--provenance-verification"],
+      { encoding: "utf8" },
+    )
+  );
+  for (const execution of executions) {
+    assert.equal(execution.status, 0, execution.stderr);
+    assert.equal(execution.stdout, "");
+    assert.equal(execution.stderr, "");
+  }
+  assert.deepEqual(executions[0].stdout, executions[1].stdout);
 });

@@ -189,9 +189,10 @@
       {
         "argv": [
           "node",
-          "tests/unicode-generation.test.mjs"
+          "tests/unicode-generation.test.mjs",
+          "--provenance-verification"
         ],
-        "description": "Runs every official Unicode 15.1 NFC conformance case through the compiled public schema-package normalizer so a generated runtime template regression cannot pass on generator-side agreement alone."
+        "description": "Runs every official Unicode 15.1 NFC conformance case through the compiled public schema-package normalizer in a silent deterministic verification mode so a generated runtime template regression cannot pass on generator-side agreement alone."
       }
     ],
     "installedInputs": [
