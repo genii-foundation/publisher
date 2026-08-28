@@ -248,6 +248,11 @@ test("Next package metadata pins one verified renderer stack", async () => {
     workspaceManifest.overrides,
     nextManifest.publisherHostOverrides,
   );
+  assert.deepEqual(nextManifest.exports["."], {
+    types: "./dist/index.d.ts",
+    import: "./dist/index.js",
+    default: "./dist/index.js",
+  });
   for (const [packageName, version] of Object.entries({
     ...nextManifest.dependencies,
     ...nextManifest.devDependencies,
