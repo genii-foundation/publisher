@@ -25,6 +25,7 @@
   "scripts": {
     "build": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/next/scripts/build.mjs",
     "provenance:audit": "node provenance/scripts/audit.mjs",
+    "provenance:review": "node provenance/scripts/review-status.mjs",
     "provenance:validate": "node provenance/scripts/validate.mjs",
     "release:rehearse": "node --test tests/second-publication-release-rehearsal.test.mjs",
     "release:prepare": "node provenance/scripts/prepare-release.mjs",

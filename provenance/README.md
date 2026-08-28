@@ -45,6 +45,19 @@ npm run provenance:validate
 
 The command validates every JSON file under `provenance/records/` and every referenced receipt. For accepted working-tree records, it also recomputes current Git coverage, the full destination manifest, deletion tombstones, the current scanner runtime closure identity, installed-input hashes, package archives, package leakage, and package scan exclusions. Package reconstruction runs through the exact npm CLI that invoked the workspace command. It does not fetch source repositories, publish rights documents, or modify source.
 
+For one deterministic human review summary, run:
+
+```bash
+npm run provenance:review
+npm --silent run provenance:review -- --json
+```
+
+The command validates the same committed directory first, then reports each
+record's status, classification, package scope, review identity, final manifest
+and receipt presence, scan outcomes, exact review notes, and remaining lifecycle
+gates. It writes nothing. It does not fetch evidence, issue a receipt, accept a
+record, grant release approval, or replace maintainer and counsel review.
+
 Release preparation requires at least one working-tree record, requires every provenance record that names a publishable package root to be accepted, and requires an explicit empty output directory outside the repository. Every current publishable package root must also remain covered by an accepted working-tree record:
 
 ```bash

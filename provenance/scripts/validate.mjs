@@ -1245,6 +1245,35 @@ export async function validateProvenanceDirectory({
   return {
     count: recordNames.length,
     recordNames,
+    recordSummaries: Object.freeze(records.map(({ record, recordName }) =>
+      Object.freeze({
+        recordName,
+        recordId: record.recordId,
+        status: record.status,
+        classification: record.classification,
+        packageRoots: Object.freeze([...record.audit.packageRoots]),
+        coverageMode: record.audit.coverageMode,
+        destinationManifestPresent:
+          record.audit.destinationManifest !== null,
+        receiptPresent: record.audit.receipt !== null,
+        review: Object.freeze({
+          decision: record.review.decision,
+          reviewerType: record.review.reviewerType,
+          reviewerId: record.review.reviewerId,
+          reviewedAt: record.review.reviewedAt,
+          releaseApprovalRequired:
+            record.review.releaseApprovalRequired,
+          notes: record.review.notes,
+        }),
+        scanOutcomes: Object.freeze(Object.fromEntries(
+          scanNames.map((scanName) => [
+            scanName,
+            record.scans[scanName].outcome,
+          ]),
+        )),
+        treatmentBlocker: record.treatment.blocker,
+      })
+    )),
   };
 }
 

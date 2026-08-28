@@ -4,6 +4,7 @@ This file records changes to the migration provenance system.
 
 ## 2026-08-28, GENII Foundation
 
+- Added a validated, read-only provenance review summary that exposes every record's exact lifecycle gates without issuing receipts or granting acceptance.
 - Removed copied creative fixture content from the Publisher source-loader record scope and regenerated the deterministic audit with zero CC-source phrase matches.
 - Replaced one inherited adjacent-range scan with a stricter independent interval-boundary algorithm, reducing significant source-token matches without weakening diagnostics.
 - Replaced inherited mutable quote-part rewriting with an independent immutable selection projection, removing the remaining selection-token matches.
