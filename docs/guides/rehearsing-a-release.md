@@ -31,7 +31,7 @@ Run the complete neutral-publication proof through the pinned package manager:
 npm run release:rehearse
 ```
 
-The rehearsal builds the same five exact package candidates used by release
+The rehearsal builds the same six exact package candidates used by release
 preparation. It installs those tarballs into a clean, unrelated canonical
 publication, writes a lockfile, performs a frozen offline reinstall, and invokes
 the installed `genii-publisher` executable. The executable plans and applies the
@@ -146,7 +146,7 @@ step switches to Node 24 with token-free npm 11.5.1, the minimum npm version tha
 supports trusted publishing. It publishes only the retained tarball paths and
 rehashes each one immediately before and after npm reads it.
 
-Publishing five packages is sequential, not transactional. If one upload fails
+Publishing six packages is sequential, not transactional. If one upload fails
 after an earlier immutable version was accepted, preserve the retained workflow
 artifact and investigate. Never rebuild or replace an accepted package version.
 
@@ -167,10 +167,10 @@ Release verification requires --manifest <absolute-release-manifest-path>.
 Verification reads the tag out of the manifest rather than from an argument, so a
 manifest recording the wrong tag is caught here rather than after upload.
 
-## The guard that runs five times
+## The guard that runs six times
 
 Each publishable package carries its own copy of `scripts/check-release-tag.mjs`,
 because a published package cannot reach into the workspace for a script its own
-prepublish hook runs. Five copies that must stay identical is a drift hazard, so
+prepublish hook runs. Six copies that must stay identical is a drift hazard, so
 byte equality across them is asserted in `tests/release-tag-copies.test.mjs`. Edit
-one and you must edit all five.
+one and you must edit all six.

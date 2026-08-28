@@ -427,7 +427,7 @@ browser chunks. Author initialization also preserves the exact existing package
 manifest while adding managed host files. ADR 0049 records this boundary.
 
 This closes the unrelated-publication gate. The full release rehearsal now uses
-the exact five package candidates in a clean canonical publication, repeats the
+the exact six package candidates in a clean canonical publication, repeats the
 installation from a frozen offline lockfile, and exercises separately packed theme
 and extension overrides without accepting provenance or publishing anything.
 
@@ -489,7 +489,7 @@ server and client projection data are absent from static browser chunks. This
 closes the generic override proof. It does not replace the separate exact
 Coherence candidate and preview acceptance gates below.
 
-The release rehearsal now binds that portability evidence to the exact five
+The release rehearsal now binds that portability evidence to the exact six
 publishable package candidates. A clean canonical Field Notes repository installs
 those tarballs, repeats the install offline from its lockfile, runs the shipped
 author lifecycle, builds the official production host, and serves home, work, and

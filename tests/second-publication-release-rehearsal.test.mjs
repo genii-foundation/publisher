@@ -271,6 +271,7 @@ test("exact release candidates build and serve a second canonical publication", 
     "packages/next/",
     "packages/publisher/",
     "packages/reader/",
+    "packages/sync-supabase/",
     "schemas/",
   ]);
   const npmInvocation = resolveExactNpmInvocation({ repositoryRoot });
@@ -292,7 +293,7 @@ test("exact release candidates build and serve a second canonical publication", 
       npmInvocation,
       prepared: preparation,
     });
-    assert.equal(archives.size, 5);
+    assert.equal(archives.size, 6);
     for (const archive of archives.values()) {
       assert.equal(archive.name.toLowerCase().includes("coherence"), false);
       assert.equal(

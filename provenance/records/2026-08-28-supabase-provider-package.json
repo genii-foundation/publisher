@@ -1,0 +1,277 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/provenance-record-1.2.0.schema.json",
+  "schemaVersion": "1.2.0",
+  "recordId": "2026-08-28-supabase-provider-package",
+  "status": "draft",
+  "classification": "fresh-cpal",
+  "recordedAt": "2026-08-28T08:16:56Z",
+  "batch": {
+    "batchId": "2026-08-28-supabase-provider-package",
+    "destinationRepository": "https://github.com/genii-foundation/publisher",
+    "destinationBaseRef": "266967e21cd7fc1de14e72ded42ee057a98b8962",
+    "destinationPaths": [
+      "docs/architecture/0011-trusted-package-archive-boundary.md",
+      "docs/guides/rehearsing-a-release.md",
+      "docs/migration/coherence-adoption-plan.md",
+      "docs/migration/coherence-readiness.md",
+      "package-lock.json",
+      "packages/sync-supabase/",
+      "provenance/records/2026-08-28-supabase-provider-package.json",
+      "provenance/scripts/publish-release.test.mjs",
+      "provenance/scripts/validate.test.mjs",
+      "tests/coherence-parity.test.mjs",
+      "tests/legal-contract.test.mjs",
+      "tests/release-tag-copies.test.mjs",
+      "tests/second-publication-release-rehearsal.test.mjs",
+      "tests/sync-provider-schema.test.mjs",
+      "tests/sync-supabase-package-consumer.test.mjs"
+    ],
+    "summary": "Records the fresh CPAL optional Supabase provider as a complete public prerelease package candidate with legal, consumer, provenance, and release boundaries."
+  },
+  "auditedSource": {
+    "repository": "https://github.com/genii-foundation/coherence-thesis",
+    "ref": "d250a760b51a071037af0c18ac73cc3131312f09",
+    "evidence": [
+      {
+        "path": "NOTICE",
+        "sha256": "sha256:5800675e0b42df3ee09a0c8c5136ae9820390dbfaa49ec5636ef8716d67a01c5",
+        "role": "license-map",
+        "license": "mixed",
+        "lineStart": 1,
+        "lineEnd": 48,
+        "description": "Maps Coherence software, creative material, and generated boundaries."
+      },
+      {
+        "path": "LICENSE",
+        "sha256": "sha256:37f6b7d766eb6791edb89211111a48e3e12ff5cb06578299019bb009fd5be44c",
+        "role": "software-license",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 201,
+        "description": "Contains the license governing the inspected Coherence synchronization implementation."
+      },
+      {
+        "path": "src/lib/reader-sync.ts",
+        "sha256": "sha256:939429e10ea73a9d68b6f5b2e7d2546e28bce4f7336a4b8dc989101765141837",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 297,
+        "description": "Shows the local-first synchronization coordinator and provider-neutral transfer behavior inspected before implementing the neutral contracts."
+      },
+      {
+        "path": "src/lib/supabase/server.ts",
+        "sha256": "sha256:dac428c072721514c52cb5f00cf484775c970cb0bc0b65388508e1c2ff00d7d6",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 43,
+        "description": "Shows the existing Coherence server client boundary and credential separation inspected before implementing the provider."
+      },
+      {
+        "path": "supabase/migrations/20260630000000_reader_sync.sql",
+        "sha256": "sha256:a6c66f39000ceaca59c6b8a09f63d1fdb2e0358e96aded65eb7ff52439cd453f",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 77,
+        "description": "Shows the original publication synchronization tables and row ownership policies."
+      },
+      {
+        "path": "supabase/migrations/20260705000000_reader_sync_hardening.sql",
+        "sha256": "sha256:efb974fba0d6a91c688d67fbd38994bf2d48ca4f3b2d6bcd028b39535c84fef3",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 89,
+        "description": "Shows server-side bounds, grants, and retention behavior inspected for the neutral provider."
+      },
+      {
+        "path": "supabase/migrations/20260707000000_reader_sync_api_grants.sql",
+        "sha256": "sha256:6b0e62b6d4c0ff443493ffa28f4c74045c703bb7ef3ae3ab048783c33d0e1842",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 26,
+        "description": "Shows the explicit Data API grant boundary."
+      },
+      {
+        "path": "supabase/migrations/20260726000000_reader_bookmarks.sql",
+        "sha256": "sha256:44745caafd8b7fa6106ba10952222f9b23558db15256114714c631e8f22a23bb",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 50,
+        "description": "Shows bookmark storage and ownership behavior inspected for the neutral schema."
+      },
+      {
+        "path": "supabase/migrations/20260727000000_atomic_reader_bookmark_merge.sql",
+        "sha256": "sha256:bba9af33f3d5680b8c4cb7bb45431ae8ee278bc2d708c6dbe3d2c8e292be9d37",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 170,
+        "description": "Shows the atomic bookmark merge and tombstone behavior inspected for the neutral schema."
+      },
+      {
+        "path": "supabase/migrations/20260730000000_reader_bookmark_passage_ranges.sql",
+        "sha256": "sha256:c600967ce6e33363a0b56370b556d8526aa7dfe07f4fb9459f0c13952c57eadb",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 174,
+        "description": "Shows the evolved bounded bookmark shape inspected before finalizing the neutral provider schema."
+      }
+    ]
+  },
+  "additionalSources": [],
+  "specifications": {
+    "repository": "https://github.com/genii-foundation/publisher",
+    "ref": "266967e21cd7fc1de14e72ded42ee057a98b8962",
+    "evidence": [
+      {
+        "path": "docs/architecture/0019-synchronization-provider-delegation.md",
+        "sha256": "sha256:822268ba5ec1065cc9dcb3b9f8fa4a8910650395980d0ebbaa5e8bb224984bc8",
+        "role": "architecture",
+        "license": "CPAL-1.0",
+        "lineStart": 1,
+        "lineEnd": 51,
+        "description": "Defines server-only provider delegation and dormant behavior when no provider is selected."
+      },
+      {
+        "path": "docs/architecture/0021-reader-authentication-and-consent.md",
+        "sha256": "sha256:6b2dbdcbdfb4cf1377f6d0f686abb3939cc6f6e11d7843c2c8a89c20d6b3f079",
+        "role": "architecture",
+        "license": "CPAL-1.0",
+        "lineStart": 1,
+        "lineEnd": 55,
+        "description": "Defines stable authentication, consent, session, and account deletion routes."
+      },
+      {
+        "path": "docs/architecture/0025-default-reader-synchronization-integration.md",
+        "sha256": "sha256:525494da3c3a2aea1ce6bec8ee3a3cd938f8f4f6ce032c9bd4320cd02052dd6e",
+        "role": "architecture",
+        "license": "CPAL-1.0",
+        "lineStart": 1,
+        "lineEnd": 55,
+        "description": "Defines the local-first browser coordinator and provider-neutral transfer contract."
+      },
+      {
+        "path": "docs/migration/coherence-extraction-inventory.md",
+        "sha256": "sha256:ece45ade50399dc955bcb69d9146450f6d1b3384875c9ed5b68b4612773606e9",
+        "role": "migration-inventory",
+        "license": "CPAL-1.0",
+        "lineStart": 1,
+        "lineEnd": 353,
+        "description": "Defines the optional Supabase adapter boundary and keeps provider state author owned."
+      }
+    ]
+  },
+  "audit": {
+    "coverageMode": "working-tree",
+    "destinationManifest": null,
+    "receipt": null,
+    "ccSourcePaths": [
+      "editorial/",
+      "publishing/"
+    ],
+    "packageRoots": [
+      "packages/sync-supabase/"
+    ],
+    "forbiddenPackagePatterns": [
+      "The Coherence Thesis",
+      "coherence-thesis",
+      "editorial/",
+      "publishing/",
+      "generated/",
+      "public/data/",
+      "public/downloads/"
+    ],
+    "verificationCommands": [],
+    "installedInputs": []
+  },
+  "treatment": {
+    "summary": "The Supabase provider, schema, tests, and package boundary are fresh neutral expression written after inspecting Coherence behavior. No Coherence source, tests, database rows, credentials, migrations, manuscripts, or durable publishing state were copied. Separately licensed dependency terms are preserved in the package legal bundle.",
+    "copiedSource": false,
+    "copiedTests": false,
+    "implementationAccess": "observed",
+    "sourceLicenseTreatment": "not-applicable",
+    "rightsDocument": null,
+    "blocker": null
+  },
+  "scans": {
+    "performedAt": "2026-08-28T08:16:56Z",
+    "scope": "The new working-tree record is intentionally draft until the repository audit produces a byte-bound destination manifest, package archive receipt, and reviewed scan evidence.",
+    "exactBlob": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compare exact source and destination file hashes.",
+      "evidence": "No byte-bound working-tree receipt has been generated for this package candidate."
+    },
+    "normalizedLine": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compare whitespace-normalized significant lines.",
+      "evidence": "No byte-bound working-tree receipt has been generated for this package candidate."
+    },
+    "tokenShingle": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compare exact contiguous normalized code token shingles.",
+      "evidence": "No byte-bound working-tree receipt has been generated for this package candidate."
+    },
+    "ccPhrase": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Compare exact contiguous prose windows against publication content.",
+      "evidence": "No byte-bound working-tree receipt has been generated for this package candidate."
+    },
+    "packageLeak": {
+      "outcome": "blocked",
+      "matchCount": 0,
+      "method": "Inspect the exact packed archive for publication-specific material and excluded paths.",
+      "evidence": "The packed consumer proof is present, but no provenance audit receipt has been generated or reviewed."
+    }
+  },
+  "review": {
+    "decision": "pending",
+    "reviewerType": "automated",
+    "reviewerId": "publisher-provenance-audit-2026-08-28",
+    "reviewedAt": "2026-08-28T08:16:56Z",
+    "releaseApprovalRequired": true,
+    "notes": "This draft records the intended fresh neutral implementation classification, not a legal opinion. It requires the repository provenance audit, human release review, and counsel review before acceptance."
+  },
+  "documentation": {
+    "notice": {
+      "status": "updated",
+      "paths": [
+        "packages/sync-supabase/NOTICE.md"
+      ],
+      "reason": "The public package now carries the required attribution and source notice."
+    },
+    "legal": {
+      "status": "updated",
+      "paths": [
+        "packages/sync-supabase/LEGAL",
+        "packages/sync-supabase/LICENSE",
+        "packages/sync-supabase/SOURCE-NOTICE"
+      ],
+      "reason": "The package carries the complete CPAL legal bundle."
+    },
+    "changes": {
+      "status": "updated",
+      "paths": [
+        "packages/sync-supabase/CHANGES.md"
+      ],
+      "reason": "The package change record identifies the public prerelease boundary."
+    },
+    "thirdPartyNotices": {
+      "status": "updated",
+      "paths": [
+        "packages/sync-supabase/THIRD_PARTY_NOTICES.md",
+        "packages/sync-supabase/third-party-licenses/"
+      ],
+      "reason": "Direct dependency and peer license texts are preserved beside the package."
+    }
+  }
+}

@@ -3,15 +3,20 @@
 The database half of reader synchronization: tables, row level security, bounds,
 retention, grants, and one function that takes a lock.
 
-## Why this is still private
+## Package boundary
 
 The official host now owns stable email authentication, session, callback, and
 account deletion routes. The server export supplies a provider for those routes
 using exact Supabase dependencies and server-only environment configuration.
 
-The package remains private until its remote data synchronization client, legal
-bundle, packed-consumer proof, provenance evidence, and release lifecycle are
-complete. Route mounting is no longer the blocker.
+The package is a public prerelease candidate. Its provider, migrations, legal
+bundle, package inventory, clean consumer installation, and release lifecycle are
+validated with the other Publisher packages. No package has been published.
+
+Installing the package does not enable synchronization. A publication must
+select the provider in server-only host configuration and supply its own Supabase
+project, credentials, migration review, consent copy, and deployment decision.
+Package validation never contacts Supabase or applies a migration.
 
 ## Server configuration
 
@@ -112,3 +117,11 @@ identity only from Publisher's validated provider context, and never accepts
 either identity from browser data. Progress and consent use publication-scoped
 upserts, bookmarks use the locked merge function, and engagement retries use the
 publication-scoped client event identity.
+
+## Attribution and source
+
+Copyright 2026 GENII Foundation. Published with GENII Publisher.
+
+GENII Publisher source is available at
+`https://github.com/genii-foundation/publisher`. Graphical publications must
+retain the linked `Published with GENII Publisher` credit required by CPAL 1.0.

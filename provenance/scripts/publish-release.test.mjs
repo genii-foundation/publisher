@@ -53,6 +53,7 @@ async function createFixture() {
     ["packages/reader/", "@genii-foundation/publisher-reader"],
     ["packages/publisher/", "@genii-foundation/publisher"],
     ["packages/next/", "@genii-foundation/publisher-next"],
+    ["packages/sync-supabase/", "@genii-foundation/publisher-sync-supabase"],
   ];
   const archivePaths = [];
   const packages = [];
@@ -145,10 +146,10 @@ test("trusted publication rechecks and publishes only the exact retained archive
 
   assert.deepEqual(result, {
     npmVersion: "11.5.1",
-    packageCount: 5,
+    packageCount: 6,
     tag: "next",
   });
-  assert.equal(calls.length, 6);
+  assert.equal(calls.length, 7);
   assert.deepEqual(calls[1].args.slice(1), [
     "publish",
     fixture.archivePaths[0],

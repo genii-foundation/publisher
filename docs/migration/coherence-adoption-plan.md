@@ -141,9 +141,10 @@ concern and leaves every legacy byte unchanged.
 
 ### Supabase adapter choice
 
-`@genii-foundation/publisher-sync-supabase` is currently private at version
-`0.0.0`. It is not one of the five exact release candidates. Its seven reference
-migrations also do not match the six dated migrations committed in Coherence.
+`@genii-foundation/publisher-sync-supabase` is a public prerelease candidate at
+version `0.1.0-alpha.0`. It is included in the exact release package census, but
+its seven reference migrations do not match the six dated migrations committed
+in Coherence.
 
 The first preview therefore keeps Coherence's current Supabase behavior behind a
 Coherence-owned implementation of the Publisher provider interface. It uses the
@@ -153,9 +154,9 @@ apply Publisher migrations, reinterpret existing rows, or accept publication or
 reader identity from browser input.
 
 Replacing that bridge with the reference package is a later reviewed migration.
-It requires a publishable packed provider, an exact schema compatibility report,
-a linked migration dry run, explicit handling of existing rows, and separate
-database authority. No database migration is part of this adoption plan.
+It requires an exact schema compatibility report, a linked migration dry run,
+explicit handling of existing rows, and separate database authority. No database
+migration is part of this adoption plan.
 
 ## Phase 1: Refresh immutable evidence
 
@@ -361,7 +362,7 @@ maps an exact candidate to all fourteen gates:
     screen-reader behavior, geometry, prepaint, reduced motion, and contrast.
 11. Packed consumers, supported Node matrix, exact pins, deterministic artifacts,
     protected source, transactional migration, and rollback.
-12. The unrelated second publication release rehearsal against the same five
+12. The unrelated second publication release rehearsal against the same six
     candidate archives.
 13. The exact Coherence candidate repository validation, local preview, existing
     Vercel preview, and candidate identity evidence.

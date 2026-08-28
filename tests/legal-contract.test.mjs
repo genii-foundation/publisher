@@ -53,6 +53,11 @@ const packageDefinitions = [
     root: "packages/next/",
     manifestPath: "packages/next/package.json",
   },
+  {
+    label: "sync-supabase",
+    root: "packages/sync-supabase/",
+    manifestPath: "packages/sync-supabase/package.json",
+  },
 ];
 
 const packages = await Promise.all(
@@ -86,6 +91,7 @@ const [
   publisherPackage,
   readerPackage,
   nextPackage,
+  syncSupabasePackage,
 ] = packages;
 assert.ok(workspacePackage);
 assert.ok(schemaPackage);
@@ -93,6 +99,7 @@ assert.ok(contentPackage);
 assert.ok(publisherPackage);
 assert.ok(readerPackage);
 assert.ok(nextPackage);
+assert.ok(syncSupabasePackage);
 
 const sourceNoticeBody = workspacePackage.sourceNotice
   .split("\n")
@@ -123,6 +130,7 @@ test("workspace and public package metadata identify CPAL 1.0", () => {
     publisherPackage,
     readerPackage,
     nextPackage,
+    syncSupabasePackage,
   ]) {
     for (const artifact of requiredPackageArtifacts) {
       assert.ok(
@@ -457,4 +465,39 @@ test("Next package includes notices for direct and peer dependencies", async () 
   assert.match(serverOnlyLicense, /Copyright \(c\) Meta Platforms/);
   assert.match(serverOnlyLicense, /Permission is hereby granted/);
   assert.match(semverLicense, /The ISC License/);
+});
+
+test("Supabase sync package includes notices for direct and peer dependencies", async () => {
+  assert.ok(
+    syncSupabasePackage.manifest.files.includes("THIRD_PARTY_NOTICES.md"),
+  );
+  assert.ok(
+    syncSupabasePackage.manifest.files.includes("third-party-licenses"),
+  );
+
+  const [
+    thirdPartyNotices,
+    ssrLicense,
+    supabaseLicense,
+    serverOnlyLicense,
+    nextLicense,
+  ] = await Promise.all([
+    read("packages/sync-supabase/THIRD_PARTY_NOTICES.md"),
+    read("packages/sync-supabase/third-party-licenses/supabase-ssr-LICENSE-MIT.txt"),
+    read("packages/sync-supabase/third-party-licenses/supabase-js-LICENSE-MIT.txt"),
+    read("packages/sync-supabase/third-party-licenses/server-only-LICENSE-MIT.txt"),
+    read("packages/sync-supabase/third-party-licenses/next-LICENSE-MIT.txt"),
+  ]);
+
+  for (const [packageName, version] of Object.entries({
+    ...syncSupabasePackage.manifest.dependencies,
+    ...syncSupabasePackage.manifest.peerDependencies,
+  })) {
+    assert.ok(thirdPartyNotices.includes(`\`${packageName}\``));
+    assert.ok(thirdPartyNotices.includes(version));
+  }
+  assert.match(ssrLicense, /Copyright \(c\) 2022-2023 Supabase, Inc\./);
+  assert.match(supabaseLicense, /Copyright \(c\) 2020 Supabase/);
+  assert.match(serverOnlyLicense, /Copyright \(c\) Meta Platforms/);
+  assert.match(nextLicense, /Copyright \(c\) 2025 Vercel, Inc\./);
 });

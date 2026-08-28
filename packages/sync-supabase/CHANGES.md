@@ -2,6 +2,11 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. The reference Supabase provider is GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-28, GENII Foundation
+
+- Completed the public prerelease package manifest, legal bundle, exact release tag guard, directory-publication refusal, and packed consumer proof.
+- Kept installation inert. Publishing the package does not configure a project, apply a migration, contact Supabase, or enable synchronization in a host.
+
 ## 2026-08-18, GENII Foundation
 
 - Added server-only publication-scoped reads and transfers for progress, bookmarks, consent, and idempotent engagement events.

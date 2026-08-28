@@ -51,7 +51,7 @@ Provenance tooling depends on nothing but Node builtins, `ajv`, and its own sibl
 
 ## Consequences
 
-The pathological case is no longer pathological. The 8,307-member Content candidate is read in 81.8 milliseconds, and all five current candidates together in 111.8 milliseconds. A synthetic 10,001-member archive is read in 104 milliseconds.
+The pathological case is no longer pathological. The 8,307-member Content candidate is read in 81.8 milliseconds, and the five candidates measured in that benchmark together in 111.8 milliseconds. A synthetic 10,001-member archive is read in 104 milliseconds.
 
 The member inventory the reader reports is byte-identical to what the external listing produced, including the trailing separator on a directory member, so receipts built from it are unchanged in content and key order.
 

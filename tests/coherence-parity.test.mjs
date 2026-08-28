@@ -373,14 +373,14 @@ test("the Coherence adoption plan pins authority and rollback boundaries", () =>
     plan,
     /No second Coherence Vercel\s+project may be created\./u,
   );
-  assert.match(plan, /No database migration is part of this adoption plan\./u);
+  assert.match(plan, /No database\s+migration is part of this adoption plan\./u);
   assert.match(
     plan,
     /The final migration cannot merge under this plan without fresh explicit approval\./u,
   );
   assert.match(
     plan,
-    /@genii-foundation\/publisher-sync-supabase` is currently private at version\s+`0\.0\.0`/u,
+    /@genii-foundation\/publisher-sync-supabase` is a public prerelease candidate at\s+version `0\.1\.0-alpha\.0`/u,
   );
   assert.match(
     plan,

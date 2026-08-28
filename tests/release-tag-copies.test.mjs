@@ -11,7 +11,7 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-// The five copies of the release tag guard must stay one thing.
+// The six copies of the release tag guard must stay one thing.
 //
 // Each publishable package carries its own copy, because a published package
 // cannot reach into the workspace for a script its own prepublish hook runs. That
@@ -19,7 +19,7 @@ If you wish to allow use of your version of this file only under the terms of th
 // copy and not the others is silent, and a consumer installing one package gets a
 // different rule from the next.
 //
-// This file existed the moment I found five identical files with nothing asserting
+// This file existed the moment I found six identical files with nothing asserting
 // that they were identical. Byte equality is the whole claim.
 
 import assert from "node:assert/strict";

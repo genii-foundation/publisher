@@ -480,19 +480,26 @@ test("reader data deletion removes every table a reader owns", () => {
   }
 });
 
-// --------------------------------------------- the package says what it is not
+// --------------------------------------------- public package boundary
 
-test("the package remains private until its complete release gate is closed", () => {
+test("the package declares the complete inert public prerelease boundary", () => {
   const manifest = JSON.parse(
     readFileSync(join(packageRoot, "package.json"), "utf8"),
   );
-  assert.equal(manifest.private, true);
+  assert.equal(manifest.version, "0.1.0-alpha.0");
+  assert.notEqual(manifest.private, true);
+  assert.deepEqual(manifest.publishConfig, {
+    access: "public",
+    provenance: true,
+  });
   assert.deepEqual(manifest.dependencies, {
     "@supabase/ssr": "0.12.0",
     "@supabase/supabase-js": "2.110.0",
+    "server-only": "0.0.1",
   });
   const readme = readFileSync(join(packageRoot, "README.md"), "utf8");
-  assert.match(readme, /Why this is still private/u);
+  assert.match(readme, /public prerelease candidate/u);
+  assert.match(readme, /never contacts Supabase or applies a migration/u);
 });
 
 test("the descriptor names the complete server-only host integration", () => {

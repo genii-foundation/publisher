@@ -226,11 +226,12 @@ function emptyReceipt() {
 test("the committed provenance directory is valid", async () => {
   const result = await validateProvenanceDirectory();
 
-  assert.equal(result.count, 3);
+  assert.equal(result.count, 4);
   assert.deepEqual(result.recordNames, [
     "2026-07-28-foundation-extraction.json",
     "2026-07-28-publisher-source-loader.json",
     "2026-07-28-unicode-portability-preservation.json",
+    "2026-08-28-supabase-provider-package.json",
   ]);
 });
 
