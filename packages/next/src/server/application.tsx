@@ -165,6 +165,7 @@ import type {
   PublisherNextReaderStateBootstrapContext,
   PublisherNextReaderStateBootstrapInstance,
   PublisherNextReaderStateBootstrapProjectionDescriptor,
+  PublisherNextReaderProvidersProps,
   PublisherNextRouteResolution,
   PublisherNextRootLayoutProps,
   PublisherNextThemeInstance,
@@ -3925,6 +3926,41 @@ export async function createPublicationNextApplication(
         ({ segments }) => segments !== undefined,
       ),
     );
+    const ReaderPrepaint = (): ReactElement => (
+      <PublisherReaderPrepaint
+        publicationId={reader.publicationId}
+        {...(readerStateBootstrap === null
+          ? {}
+          : {
+              readerStateBootstrapSource:
+                readerStateBootstrap.script,
+            })}
+        readerFontFamilies={
+          themeResult.value.instance.tokens.typography
+            .readerFontFamilies
+        }
+      />
+    );
+    const ReaderProviders = ({
+      children,
+    }: PublisherNextReaderProvidersProps): ReactElement => (
+      <PublisherReaderOfflineProvider
+        catalogPath={offlineCatalog.catalogHref}
+        publicationId={reader.publicationId}
+        readerBuildId={reader.buildId}
+        rendererBuildId={artifact.manifest.buildId}
+      >
+        <PublisherReaderNarrationProvider
+          audioPath="/publication-audio.json"
+          progressPath="/publication-reader-progress.json"
+          publicationId={reader.publicationId}
+          readerBuildId={reader.buildId}
+          themeStyle={publisherNextThemeStyle(themeResult.value.instance)}
+        >
+          {children}
+        </PublisherReaderNarrationProvider>
+      </PublisherReaderOfflineProvider>
+    );
 
     const application: PublicationNextApplication = Object.freeze({
       reader,
@@ -3946,6 +3982,8 @@ export async function createPublicationNextApplication(
           theme: themeResult.value.instance,
         }),
       Page,
+      ReaderPrepaint,
+      ReaderProviders,
       RootLayout({
         children,
       }: PublisherNextRootLayoutProps): ReactElement {
@@ -3955,37 +3993,10 @@ export async function createPublicationNextApplication(
             suppressHydrationWarning
           >
             <head>
-              <PublisherReaderPrepaint
-                publicationId={reader.publicationId}
-                {...(readerStateBootstrap === null
-                  ? {}
-                  : {
-                      readerStateBootstrapSource:
-                        readerStateBootstrap.script,
-                    })}
-                readerFontFamilies={
-                  themeResult.value.instance.tokens.typography
-                    .readerFontFamilies
-                }
-              />
+              <ReaderPrepaint />
             </head>
             <body>
-              <PublisherReaderOfflineProvider
-                catalogPath={offlineCatalog.catalogHref}
-                publicationId={reader.publicationId}
-                readerBuildId={reader.buildId}
-                rendererBuildId={artifact.manifest.buildId}
-              >
-                <PublisherReaderNarrationProvider
-                  audioPath="/publication-audio.json"
-                  progressPath="/publication-reader-progress.json"
-                  publicationId={reader.publicationId}
-                  readerBuildId={reader.buildId}
-                  themeStyle={publisherNextThemeStyle(themeResult.value.instance)}
-                >
-                  {children}
-                </PublisherReaderNarrationProvider>
-              </PublisherReaderOfflineProvider>
+              <ReaderProviders>{children}</ReaderProviders>
             </body>
           </html>
         );

@@ -543,6 +543,10 @@ export interface PublisherNextRootLayoutProps {
   readonly children: ReactNode;
 }
 
+export interface PublisherNextReaderProvidersProps {
+  readonly children: ReactNode;
+}
+
 export interface PublicationNextApplication {
   readonly reader: PublicationReaderEnvelope;
   readonly manifest: PublisherNextApplicationManifest;
@@ -568,6 +572,10 @@ export interface PublicationNextApplication {
   readonly Page: (
     props: PublisherNextPageProps,
   ) => Promise<ReactElement>;
+  readonly ReaderPrepaint: () => ReactElement;
+  readonly ReaderProviders: (
+    props: PublisherNextReaderProvidersProps,
+  ) => ReactElement;
   readonly RootLayout: (
     props: PublisherNextRootLayoutProps,
   ) => ReactElement;

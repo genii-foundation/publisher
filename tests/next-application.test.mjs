@@ -714,6 +714,37 @@ test("authored work languages and English renderer chrome are scoped", async () 
   );
 });
 
+test("an established host can compose the exact Reader prepaint and providers", async () => {
+  const application = await createApplication({
+    readerStateBootstrap: createReaderStateBootstrap(),
+  });
+  const prepaint = renderToStaticMarkup(
+    application.ReaderPrepaint(),
+  );
+  const providers = renderToStaticMarkup(
+    application.ReaderProviders({ children: "proof" }),
+  );
+  const root = renderToStaticMarkup(
+    application.RootLayout({ children: "proof" }),
+  );
+
+  assert.match(prepaint, /data-publisher-reader-state-bootstrap=""/u);
+  assert.match(prepaint, /data-publisher-reader-prepaint=""/u);
+  assert.doesNotMatch(prepaint, /<(?:html|body)(?:\s|>)/u);
+  assert.match(providers, /class="publisher-reader-audio-host"/u);
+  assert.match(providers, /<audio preload="metadata"><\/audio>/u);
+  assert.equal(providers.startsWith("proof"), true);
+  assert.doesNotMatch(providers, /<(?:html|head)(?:\s|>)/u);
+  assert.ok(
+    root.indexOf("data-publisher-reader-prepaint") <
+      root.indexOf("<body>"),
+  );
+  assert.ok(
+    root.indexOf("<body>") <
+      root.indexOf('class="publisher-reader-audio-host"'),
+  );
+});
+
 test("Reader state bootstrap is ordered, frozen, and bound to application identity", async () => {
   let receivedContext;
   let receivedConfig;

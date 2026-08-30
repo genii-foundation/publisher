@@ -36,6 +36,7 @@ export type {
   PublisherNextApplicationManifest,
   PublisherNextPage,
   PublisherNextPageProps,
+  PublisherNextReaderProvidersProps,
   PublisherNextRootLayoutProps,
   PublisherNextRouteParams,
   PublisherNextRouteResolution,

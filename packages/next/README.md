@@ -194,6 +194,40 @@ export const viewport: Viewport = {
 export default publisher.RootLayout;
 ```
 
+An established application may already own its root document because it keeps
+author tools, account routes, or other nonpublication surfaces beside the
+Reader. In that case, compose the same two pieces used by `RootLayout` instead
+of copying renderer internals:
+
+```tsx
+// app/layout.tsx
+import "@genii-foundation/publisher-next/styles.css";
+import { publisher } from "../publisher.mjs";
+
+export default function ExistingRootLayout({ children }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <publisher.ReaderPrepaint />
+      </head>
+      <body>
+        <ExistingAuthorShell>
+          <publisher.ReaderProviders>
+            {children}
+          </publisher.ReaderProviders>
+        </ExistingAuthorShell>
+      </body>
+    </html>
+  );
+}
+```
+
+`ReaderPrepaint` must appear once in the document head before body paint.
+`ReaderProviders` must surround every rendered Publisher page. They retain the
+same publication identity, state bootstrap, offline package, narration, theme,
+and audio host behavior as the standalone `RootLayout`. The composable entry
+does not grant an existing shell authority to replace those contracts.
+
 Use the engine-owned not-found page. It keeps the source link and required attribution on unknown routes.
 
 ```tsx
