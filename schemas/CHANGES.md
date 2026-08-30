@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-29, GENII Foundation
 
+- Added an independent public-site artifact check that binds the complete output census, manifest, and file bytes to repository authority.
 - Added a compact, hash-bound full-audit summary mode for human review without weakening or replacing the exact receipt candidate.
 - Added a fast deterministic provenance coverage gate to ordinary validation and bound the repository governance and security policies to the live source-loader audit scope.
 

@@ -15,6 +15,8 @@ import { createHash, randomUUID } from "node:crypto";
 import {
   lstatSync,
   mkdirSync,
+  readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -96,10 +98,122 @@ function writeExclusive(path, bytes) {
   writeFileSync(path, bytes, { flag: "wx", mode: 0o644 });
 }
 
+function publicSiteReceipt(authority) {
+  const landingOutputPath = "index.html";
+  const schemas = authority.schemas.map((schema, index) => {
+    const publicName = new URL(
+      publisherPublicSchemaSources[index].url,
+    ).pathname.split("/").at(-1);
+    return Object.freeze({
+      bytes: schema.bytes.length,
+      outputPath: `schemas/${publicName}`,
+      sha256: sha256(schema.bytes),
+      sourcePath: schema.sourcePath,
+      url: schema.url,
+    });
+  });
+  const basis = {
+    format: "publisher-public-site-1",
+    landing: {
+      bytes: authority.landingBytes.length,
+      outputPath: landingOutputPath,
+      sha256: sha256(authority.landingBytes),
+      sourcePath: publisherPublicLandingSourcePath,
+    },
+    schemas,
+  };
+  return Object.freeze({
+    ...basis,
+    sha256: sha256(canonicalJson(basis)),
+  });
+}
+
+function assertRealDirectory(path, description) {
+  const stat = lstatSync(path);
+  if (
+    stat.isSymbolicLink() ||
+    !stat.isDirectory() ||
+    realpathSync(path) !== path
+  ) {
+    throw new Error(`${description} must be one real directory.`);
+  }
+}
+
+function assertExactEntryNames(path, expected, description) {
+  const actual = readdirSync(path).sort();
+  const sortedExpected = [...expected].sort();
+  if (
+    actual.length !== sortedExpected.length ||
+    actual.some((name, index) => name !== sortedExpected[index])
+  ) {
+    throw new Error(`${description} has an unexpected file census.`);
+  }
+}
+
+function assertExactFile(path, expectedBytes, description) {
+  const stat = lstatSync(path);
+  if (
+    stat.isSymbolicLink() ||
+    !stat.isFile() ||
+    stat.nlink !== 1 ||
+    stat.size !== expectedBytes.length ||
+    realpathSync(path) !== path ||
+    !readFileSync(path).equals(expectedBytes)
+  ) {
+    throw new Error(`${description} does not match its reviewed source bytes.`);
+  }
+}
+
+export function checkPublisherPublicSite({
+  repositoryRoot = defaultRepositoryRoot,
+} = {}) {
+  const authority = readPublisherPublicSurfaceAuthority({ repositoryRoot });
+  const receipt = publicSiteReceipt(authority);
+  const outputDirectory = join(repositoryRoot, "dist", "public-site");
+  const schemasDirectory = join(outputDirectory, "schemas");
+  assertRealDirectory(outputDirectory, "The public site output");
+  assertRealDirectory(schemasDirectory, "The public site schema output");
+  assertExactEntryNames(
+    outputDirectory,
+    ["index.html", "public-surface-manifest.json", "schemas"],
+    "The public site output",
+  );
+  const schemaNames = receipt.schemas.map(
+    (schema) => schema.outputPath.slice("schemas/".length),
+  );
+  assertExactEntryNames(
+    schemasDirectory,
+    schemaNames,
+    "The public site schema output",
+  );
+  assertExactFile(
+    join(outputDirectory, receipt.landing.outputPath),
+    authority.landingBytes,
+    "The public landing page",
+  );
+  for (const [index, schema] of receipt.schemas.entries()) {
+    assertExactFile(
+      join(outputDirectory, schema.outputPath),
+      authority.schemas[index].bytes,
+      `Public schema ${schema.outputPath}`,
+    );
+  }
+  assertExactFile(
+    join(outputDirectory, "public-surface-manifest.json"),
+    Buffer.from(`${canonicalJson(receipt)}\n`),
+    "The public site manifest",
+  );
+  return Object.freeze({
+    ...receipt,
+    outputDirectory,
+  });
+}
+
 export function buildPublisherPublicSite({
   repositoryRoot = defaultRepositoryRoot,
 } = {}) {
   const authority = readPublisherPublicSurfaceAuthority({ repositoryRoot });
+  const receipt = publicSiteReceipt(authority);
   const outputParent = prepareOutputParent(repositoryRoot);
   const outputDirectory = join(outputParent, "public-site");
   const stagingDirectory = join(
@@ -109,49 +223,23 @@ export function buildPublisherPublicSite({
   mkdirSync(stagingDirectory, { mode: 0o755 });
 
   try {
-    const landingOutputPath = "index.html";
     writeExclusive(
-      join(stagingDirectory, landingOutputPath),
+      join(stagingDirectory, receipt.landing.outputPath),
       authority.landingBytes,
     );
-    const schemas = authority.schemas.map((schema, index) => {
-      const publicName = new URL(
-        publisherPublicSchemaSources[index].url,
-      ).pathname.split("/").at(-1);
-      const outputPath = `schemas/${publicName}`;
-      writeExclusive(join(stagingDirectory, outputPath), schema.bytes);
-      return {
-        bytes: schema.bytes.length,
-        outputPath,
-        sha256: sha256(schema.bytes),
-        sourcePath: schema.sourcePath,
-        url: schema.url,
-      };
-    });
-    const basis = {
-      format: "publisher-public-site-1",
-      landing: {
-        bytes: authority.landingBytes.length,
-        outputPath: landingOutputPath,
-        sha256: sha256(authority.landingBytes),
-        sourcePath: publisherPublicLandingSourcePath,
-      },
-      schemas,
-    };
-    const receipt = {
-      ...basis,
-      sha256: sha256(canonicalJson(basis)),
-    };
+    for (const [index, schema] of receipt.schemas.entries()) {
+      writeExclusive(
+        join(stagingDirectory, schema.outputPath),
+        authority.schemas[index].bytes,
+      );
+    }
     writeExclusive(
       join(stagingDirectory, "public-surface-manifest.json"),
       `${canonicalJson(receipt)}\n`,
     );
     removeExistingOutput(outputDirectory);
     renameSync(stagingDirectory, outputDirectory);
-    return Object.freeze({
-      ...receipt,
-      outputDirectory,
-    });
+    return checkPublisherPublicSite({ repositoryRoot });
   } catch (error) {
     rmSync(stagingDirectory, { force: true, recursive: true });
     throw error;

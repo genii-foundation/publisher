@@ -310,6 +310,10 @@ test("release mode requires exact candidates, rejects every package-affecting dr
     workspaceManifest.scripts["site:build"],
     "node site/scripts/build.mjs",
   );
+  assert.equal(
+    workspaceManifest.scripts["site:check"],
+    "node site/scripts/check.mjs",
+  );
 });
 
 test("npm refuses direct package-directory publication before it can rebuild", () => {

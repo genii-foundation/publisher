@@ -37,7 +37,9 @@ import {
 import {
   buildPublisherPublicSite,
   buildPublisherPublicSiteCli,
+  checkPublisherPublicSite,
 } from "./build.mjs";
+import { checkPublisherPublicSiteCli } from "./check.mjs";
 
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -93,8 +95,10 @@ test("the public site build emits one deterministic exact deployment artifact", 
     join(second.outputDirectory, "public-surface-manifest.json"),
     "utf8",
   );
+  const checked = checkPublisherPublicSite({ repositoryRoot: root });
 
   assert.deepEqual(first, second);
+  assert.deepEqual(checked, second);
   assert.equal(first.format, "publisher-public-site-1");
   assert.equal(first.schemas.length, publisherPublicSchemaSources.length);
   assert.equal(firstManifest, secondManifest);
@@ -126,6 +130,65 @@ test("the public site build emits one deterministic exact deployment artifact", 
   assert.equal(verification.schemas.length, publisherPublicSchemaSources.length);
 });
 
+test("the public site check refuses output census and byte drift", async (t) => {
+  const root = await createRepositoryFixture();
+  t.after(async () => rm(root, { force: true, recursive: true }));
+  const built = buildPublisherPublicSite({ repositoryRoot: root });
+  const stalePath = join(built.outputDirectory, "stale.txt");
+  await writeFile(stalePath, "stale\n");
+  assert.throws(
+    () => checkPublisherPublicSite({ repositoryRoot: root }),
+    /unexpected file census/u,
+  );
+
+  await rm(stalePath);
+  await writeFile(join(built.outputDirectory, "index.html"), "changed\n");
+  assert.throws(
+    () => checkPublisherPublicSite({ repositoryRoot: root }),
+    /does not match its reviewed source bytes/u,
+  );
+
+  buildPublisherPublicSite({ repositoryRoot: root });
+  const firstSchema = publisherPublicSchemaSources[0];
+  const schemaOutput = join(
+    built.outputDirectory,
+    "schemas",
+    new URL(firstSchema.url).pathname.split("/").at(-1),
+  );
+  await rm(schemaOutput);
+  assert.throws(
+    () => checkPublisherPublicSite({ repositoryRoot: root }),
+    /unexpected file census/u,
+  );
+
+  buildPublisherPublicSite({ repositoryRoot: root });
+  await writeFile(
+    join(built.outputDirectory, "public-surface-manifest.json"),
+    "{}\n",
+  );
+  assert.throws(
+    () => checkPublisherPublicSite({ repositoryRoot: root }),
+    /does not match its reviewed source bytes/u,
+  );
+});
+
+test("the public site check refuses linked deployment files", async (t) => {
+  const root = await createRepositoryFixture();
+  t.after(async () => rm(root, { force: true, recursive: true }));
+  const built = buildPublisherPublicSite({ repositoryRoot: root });
+  const landingOutput = join(built.outputDirectory, "index.html");
+  await rm(landingOutput);
+  await symlink(
+    join(root, publisherPublicLandingSourcePath),
+    landingOutput,
+  );
+
+  assert.throws(
+    () => checkPublisherPublicSite({ repositoryRoot: root }),
+    /does not match its reviewed source bytes/u,
+  );
+});
+
 test("the public site build refuses a linked output boundary", async (t) => {
   const root = await createRepositoryFixture();
   const outside = await mkdtemp(join(tmpdir(), "publisher-public-site-outside-"));
@@ -145,5 +208,9 @@ test("the public site build CLI rejects arguments before writing", () => {
   assert.throws(
     () => buildPublisherPublicSiteCli(["--output", "somewhere"]),
     /accepts no command-line arguments/u,
+  );
+  assert.throws(
+    () => checkPublisherPublicSiteCli(["--output", "somewhere"]),
+    /check accepts no command-line arguments/u,
   );
 });

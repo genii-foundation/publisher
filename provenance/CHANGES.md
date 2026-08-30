@@ -4,6 +4,7 @@ This file records changes to the migration provenance system.
 
 ## 2026-08-29, GENII Foundation
 
+- Added a fail-closed local verifier for the complete public-site deployment artifact.
 - Added a compact full-audit summary that hashes each exact receipt candidate and retains every bounded review outcome without emitting or accepting a receipt.
 - Added the repository governance and security policies to the live Publisher source-loader provenance scope so the complete release-sensitive working tree remains auditable.
 
