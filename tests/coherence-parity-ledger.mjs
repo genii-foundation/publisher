@@ -58,6 +58,236 @@ export const COHERENCE_PARITY_SOURCE = Object.freeze({
   observedThrough: "2026-08-26",
 });
 
+// Every Coherence commit that changed the application source between the start
+// of the recent Reader polish sequence and the audited ref above. Engine parity
+// commits name the exact ledger capabilities that absorb their generic behavior.
+// Author-owned commits are retained in the census with a reason instead of being
+// quietly ignored. Publication audio promotions and manuscript-only commits do
+// not change application behavior and remain under Coherence publishing custody.
+export const RECENT_COHERENCE_APPLICATION_COMMITS = Object.freeze([
+  {
+    ref: "c74fa0bb1707b1da79f81565619b1ff858a46198",
+    disposition: "author-owned",
+    reason: "Local editorial revision workbench presentation.",
+  },
+  {
+    ref: "d250a760b51a071037af0c18ac73cc3131312f09",
+    disposition: "engine-parity",
+    capabilityIds: ["reader.toolbar.viewport_access"],
+  },
+  {
+    ref: "b001d42e50a95c6a2f6a4d67bd6b0879bed9cf89",
+    disposition: "engine-parity",
+    capabilityIds: ["audio.playback.engine"],
+  },
+  {
+    ref: "7cc32c1dd7421678e01f2df213df75c7e0a3656f",
+    disposition: "engine-parity",
+    capabilityIds: ["audio.playback.engine"],
+  },
+  {
+    ref: "6ed21e5bc48f747989d3cd580d5bcd24daec686f",
+    disposition: "engine-parity",
+    capabilityIds: ["reader.bookmarks.margin_markers"],
+  },
+  {
+    ref: "cf60f3dd07a66b11e442cb9ceaa02cdadbf9d239",
+    disposition: "mixed",
+    capabilityIds: ["audio.statistics.duration"],
+    reason: "The overview statistic label remains Coherence presentation.",
+  },
+  {
+    ref: "618a98bf3811d5b5839b98d9e01516cdb7f3f7f1",
+    disposition: "author-owned",
+    reason: "Coherence editorial debt state and presentation.",
+  },
+  {
+    ref: "3af5fed1e48f6888c8628169b6fb09d6c1bb33d5",
+    disposition: "author-owned",
+    reason: "Coherence admin skill and editorial workbench behavior.",
+  },
+  {
+    ref: "7e50161cecc0ce6039c36e4738d8c9fc90710e62",
+    disposition: "author-owned",
+    reason: "A Coherence Updates title correction for one historical commit.",
+  },
+  {
+    ref: "c60aa2bca5aa3cc7abf0d9bd661538a247315f59",
+    disposition: "engine-parity",
+    capabilityIds: ["audio.offline.cache", "reader.accessibility.content"],
+  },
+  {
+    ref: "3de08c7987737743b41a2c4253721a2b39472af7",
+    disposition: "mixed",
+    capabilityIds: [
+      "reader.catalog.navigation",
+      "reader.hierarchy.breadcrumbs",
+      "reader.routes.continuity",
+    ],
+    reason: "Volume VIII content and continuity values remain Coherence owned.",
+  },
+  {
+    ref: "61c5764f073f161a62d858e80c46b4f4139ef338",
+    disposition: "author-owned",
+    reason: "Coherence editorial outline state.",
+  },
+  {
+    ref: "d9da3927b3fc8bed84cb7325e76e37d8f7b49f2c",
+    disposition: "engine-parity",
+    capabilityIds: [
+      "reader.offline.atomic_packages",
+      "reader.offline.complete_manuscript",
+      "reader.offline.network_fallback",
+      "reader.search.default_interface",
+    ],
+  },
+  {
+    ref: "f7d9320c75143bcd212d421beafb01558a5e562e",
+    disposition: "engine-parity",
+    capabilityIds: [
+      "reader.bookmarks.export",
+      "reader.bookmarks.large_collections",
+      "reader.bookmarks.merge_and_tombstones",
+      "reader.bookmarks.passage_ranges",
+      "reader.bookmarks.revision_relocation",
+    ],
+  },
+  {
+    ref: "9397348f9aa3f36e56c6147a1bda5df53dea71b7",
+    disposition: "engine-parity",
+    capabilityIds: [
+      "reader.progress.canonical_percent",
+      "reader.progress.default_interface",
+      "reader.progress.map_and_recommendations",
+    ],
+  },
+  {
+    ref: "29ac0f92c261f3673f42d5fbac388c20de105cf6",
+    disposition: "mixed",
+    capabilityIds: [
+      "audio.playback.engine",
+      "reader.bookmarks.safe_deletion",
+      "reader.preferences.default_interface",
+      "reader.toolbar.viewport_access",
+    ],
+    reason: "Manuscripts, editorial evidence, and admin workbench state remain Coherence owned.",
+  },
+  {
+    ref: "744e2b5444ec62b34298932bb29e1bb1e06d2955",
+    disposition: "engine-parity",
+    capabilityIds: ["reader.progress.default_interface"],
+  },
+  {
+    ref: "688ef31110d3dfa272a5a230b28cf1125196857d",
+    disposition: "engine-parity",
+    capabilityIds: ["reader.toolbar.viewport_access"],
+  },
+  {
+    ref: "0e730e803406dc9aca7dc507485099913354d92c",
+    disposition: "engine-parity",
+    capabilityIds: [
+      "reader.focus.adjustable",
+      "reader.focus.text_ownership",
+      "reader.preferences.default_interface",
+      "reader.preferences.state",
+    ],
+  },
+  {
+    ref: "e24451b9f48480e8c69a1334f44a2ee0b0064627",
+    disposition: "engine-parity",
+    capabilityIds: [
+      "reader.bookmarks.margin_markers",
+      "reader.preferences.state",
+    ],
+  },
+  {
+    ref: "6166ec5e4330eebfb2e97182cc4920886378ebbe",
+    disposition: "engine-parity",
+    capabilityIds: [
+      "reader.bookmarks.secondary_surfaces",
+      "reader.search.default_interface",
+    ],
+  },
+  {
+    ref: "654a2c36ba825ee191e67ded3b193ff4e0acde24",
+    disposition: "engine-parity",
+    capabilityIds: [
+      "reader.artifacts.capability_slices",
+      "reader.bookmarks.large_collections",
+      "reader.progress.map_and_recommendations",
+    ],
+  },
+  {
+    ref: "87ff7cf7e55c8059e3f85f73fa8d149cf91a2ce9",
+    disposition: "engine-parity",
+    capabilityIds: [
+      "audio.voices.selection",
+      "reader.bookmarks.secondary_surfaces",
+      "reader.search.default_interface",
+    ],
+  },
+  {
+    ref: "8303fe0c1269d45224257bc4550c407b9a0cb23c",
+    disposition: "engine-parity",
+    capabilityIds: [
+      "reader.bookmarks.local",
+      "reader.bookmarks.merge_and_tombstones",
+      "reader.bookmarks.safe_deletion",
+      "reader.state.reactive_store",
+      "sync.bookmarks",
+      "sync.consent",
+      "sync.engagement",
+      "sync.progress",
+    ],
+  },
+  {
+    ref: "e51e570f3d7d74d1164daf6ea2703e9bf6e79313",
+    disposition: "engine-parity",
+    capabilityIds: ["audio.anchors.words"],
+  },
+  {
+    ref: "4d7cbd82d1b4daeb8ce46bb1150c2198c847bfc8",
+    disposition: "engine-parity",
+    capabilityIds: ["audio.anchors.words"],
+  },
+  {
+    ref: "ee7bb3e5fd6474023225d7b05c6fa8a71c7a9024",
+    disposition: "engine-parity",
+    capabilityIds: ["reader.toolbar.viewport_access"],
+  },
+  {
+    ref: "c126678226e9ff367c173042959a63f8004a7ce7",
+    disposition: "engine-parity",
+    capabilityIds: ["audio.catalog.staleness"],
+  },
+  {
+    ref: "ea9135084dfb1f2c168bf746087d2d1f10c67883",
+    disposition: "engine-parity",
+    capabilityIds: ["reader.toolbar.viewport_access"],
+  },
+  {
+    ref: "e4f02c45c324bc5f9f5920203268130f64f7a425",
+    disposition: "mixed",
+    capabilityIds: [
+      "audio.catalog.contract",
+      "audio.catalog.delivery",
+      "audio.offline.cache",
+      "audio.playback.engine",
+    ],
+    reason: "Published recordings and their immutable Coherence checkpoint state remain author owned.",
+  },
+  {
+    ref: "c784377c003456674927e4ec2c14aa383423a2ea",
+    disposition: "engine-parity",
+    capabilityIds: ["audio.navigation.event", "audio.playback.engine"],
+  },
+].map((entry) => Object.freeze({
+  ...entry,
+  ...(entry.capabilityIds === undefined
+    ? {}
+    : { capabilityIds: Object.freeze(entry.capabilityIds) }),
+})));
+
 export const READER_PARITY = Object.freeze([
   {
     id: "reader.text.server_rendering",

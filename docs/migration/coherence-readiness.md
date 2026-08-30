@@ -139,6 +139,15 @@ synchronization capabilities.
 | 0 planned | 0 | No inventoried generic capability remains merely planned. |
 | 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
 
+The source audit also retains the exact 31 Coherence application commits from
+July 25 through August 26 that formed the recent Reader polish sequence. Every
+generic behavior change maps to one or more checked capability IDs. Five changes
+that affect only local Updates, editorial, or admin state remain explicitly
+classified as author owned. Four mixed changes map their generic behavior while
+retaining publication content, checkpoint, overview, continuity, or workbench
+state in Coherence. This commit census is exported beside the parity ledger and
+fails if a reviewed commit or mapped capability disappears.
+
 Target ownership is 30 engine capabilities, 29 official renderer capabilities,
 9 provider capabilities, and 2 author-tooling capabilities. Publication-specific
 state is deliberately excluded from that count rather than mislabeled as generic

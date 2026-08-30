@@ -42,6 +42,7 @@ import {
   PARITY_HOMES,
   PARITY_LEDGER,
   PARITY_STATUSES,
+  RECENT_COHERENCE_APPLICATION_COMMITS,
   READER_PARITY,
   SYNC_PARITY,
 } from "./coherence-parity-ledger.mjs";
@@ -90,6 +91,99 @@ test("the Reader inventory is pinned to the current audited Coherence ref", () =
         path.split("/").includes(".."),
         false,
         `${entry.id} uses a parent source path`,
+      );
+    }
+  }
+});
+
+test("every recent Coherence application commit has an explicit parity disposition", () => {
+  const expectedRefs = [
+    "c74fa0bb1707b1da79f81565619b1ff858a46198",
+    "d250a760b51a071037af0c18ac73cc3131312f09",
+    "b001d42e50a95c6a2f6a4d67bd6b0879bed9cf89",
+    "7cc32c1dd7421678e01f2df213df75c7e0a3656f",
+    "6ed21e5bc48f747989d3cd580d5bcd24daec686f",
+    "cf60f3dd07a66b11e442cb9ceaa02cdadbf9d239",
+    "618a98bf3811d5b5839b98d9e01516cdb7f3f7f1",
+    "3af5fed1e48f6888c8628169b6fb09d6c1bb33d5",
+    "7e50161cecc0ce6039c36e4738d8c9fc90710e62",
+    "c60aa2bca5aa3cc7abf0d9bd661538a247315f59",
+    "3de08c7987737743b41a2c4253721a2b39472af7",
+    "61c5764f073f161a62d858e80c46b4f4139ef338",
+    "d9da3927b3fc8bed84cb7325e76e37d8f7b49f2c",
+    "f7d9320c75143bcd212d421beafb01558a5e562e",
+    "9397348f9aa3f36e56c6147a1bda5df53dea71b7",
+    "29ac0f92c261f3673f42d5fbac388c20de105cf6",
+    "744e2b5444ec62b34298932bb29e1bb1e06d2955",
+    "688ef31110d3dfa272a5a230b28cf1125196857d",
+    "0e730e803406dc9aca7dc507485099913354d92c",
+    "e24451b9f48480e8c69a1334f44a2ee0b0064627",
+    "6166ec5e4330eebfb2e97182cc4920886378ebbe",
+    "654a2c36ba825ee191e67ded3b193ff4e0acde24",
+    "87ff7cf7e55c8059e3f85f73fa8d149cf91a2ce9",
+    "8303fe0c1269d45224257bc4550c407b9a0cb23c",
+    "e51e570f3d7d74d1164daf6ea2703e9bf6e79313",
+    "4d7cbd82d1b4daeb8ce46bb1150c2198c847bfc8",
+    "ee7bb3e5fd6474023225d7b05c6fa8a71c7a9024",
+    "c126678226e9ff367c173042959a63f8004a7ce7",
+    "ea9135084dfb1f2c168bf746087d2d1f10c67883",
+    "e4f02c45c324bc5f9f5920203268130f64f7a425",
+    "c784377c003456674927e4ec2c14aa383423a2ea",
+  ];
+  assert.deepEqual(
+    RECENT_COHERENCE_APPLICATION_COMMITS.map((entry) => entry.ref),
+    expectedRefs,
+  );
+  assert.equal(
+    RECENT_COHERENCE_APPLICATION_COMMITS.filter(
+      (entry) => entry.disposition === "author-owned",
+    ).length,
+    5,
+  );
+  assert.equal(
+    RECENT_COHERENCE_APPLICATION_COMMITS.filter(
+      (entry) => entry.disposition === "mixed",
+    ).length,
+    4,
+  );
+  const capabilityIds = new Set(PARITY_LEDGER.map((entry) => entry.id));
+  for (const entry of RECENT_COHERENCE_APPLICATION_COMMITS) {
+    assert.match(entry.ref, /^[0-9a-f]{40}$/u);
+    assert.ok(
+      entry.disposition === "engine-parity" ||
+        entry.disposition === "author-owned" ||
+        entry.disposition === "mixed",
+      `${entry.ref} has an unknown disposition`,
+    );
+    if (entry.disposition === "author-owned") {
+      assert.ok(
+        typeof entry.reason === "string" && entry.reason.length > 0,
+        `${entry.ref} has no author-owned reason`,
+      );
+      assert.equal(entry.capabilityIds, undefined);
+      continue;
+    }
+    if (entry.disposition === "mixed") {
+      assert.ok(
+        typeof entry.reason === "string" && entry.reason.length > 0,
+        `${entry.ref} has no author-owned remainder`,
+      );
+    } else {
+      assert.equal(entry.reason, undefined);
+    }
+    assert.ok(
+      Array.isArray(entry.capabilityIds) && entry.capabilityIds.length > 0,
+      `${entry.ref} names no Publisher capability`,
+    );
+    assert.equal(
+      new Set(entry.capabilityIds).size,
+      entry.capabilityIds.length,
+      `${entry.ref} repeats a Publisher capability`,
+    );
+    for (const capabilityId of entry.capabilityIds) {
+      assert.ok(
+        capabilityIds.has(capabilityId),
+        `${entry.ref} names missing capability ${capabilityId}`,
       );
     }
   }
