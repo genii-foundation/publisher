@@ -129,10 +129,19 @@ npm run provenance:audit -- \
   --source https://github.com/node-unicode/node-unicode-data=/path/to/node-unicode-data \
   --artifact https://www.unicode.org/Public/15.1.0/ucd/UnicodeData.txt=/path/to/UnicodeData.txt \
   --artifact https://www.unicode.org/Public/15.1.0/ucd/NormalizationTest.txt=/path/to/NormalizationTest.txt \
-  --artifact https://www.unicode.org/license.txt=schemas/third-party-licenses/unicode-data-LICENSE.txt
+  --artifact https://www.unicode.org/license.txt=schemas/third-party-licenses/unicode-data-LICENSE.txt \
+  --summary
 ```
 
 The command fails if a changed or deleted path has no working-tree record, a declared scope selects no changed path, or a working-tree manifest is empty. It hashes every selected present file and records deterministic tombstones for deletions. It verifies source refs, evidence, and exact installed dependency files; runs exact-blob, normalized-line, significant-token, CC-phrase, and package-leak scans; executes declared read-only regeneration checks; and builds each publishable package through its complete lifecycle.
+
+`--summary` returns one compact, immutable review projection. Each record binds
+the SHA-256 hash of the exact full receipt bytes, destination manifest, scanner,
+scan outcomes and counts, package archives, installed inputs, exclusions, and
+verification command results. It omits individual scan matches and manifest
+entries. The summary is not a receipt, cannot be combined with receipt emission,
+and grants no review or release authority. Omit the flag to inspect the complete
+receipt candidate on standard output.
 
 Candidate preparation resolves the absolute `npm_execpath` and `npm_node_execpath` supplied by the invoking workspace command, verifies the exact npm version pinned by the root manifest, copies only the tracked and nonignored working-tree source into an owned temporary workspace, installs the locked workspace offline with scripts disabled, and packs packages in dependency order. Ignored build output and package-local dependency staging never enter from the source checkout. Content and Reader therefore contribute their rebuilt output and complete staged dependency closures to the candidate archive before scanning. The source checkout is read-only throughout this process.
 

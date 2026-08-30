@@ -1429,7 +1429,80 @@ function parseMapping(value, optionName) {
   ];
 }
 
-function parseArguments(argv) {
+function serializeReceipt(receipt) {
+  return `${JSON.stringify(receipt, null, 2)}\n`;
+}
+
+export function createAuditSummary(receipts) {
+  if (!Array.isArray(receipts) || receipts.length === 0) {
+    throw new Error("Audit summary requires at least one receipt.");
+  }
+  const records = receipts.map((receipt) => {
+    const scans = Object.freeze(
+      Object.fromEntries(
+        Object.entries(receipt.scans).map(([name, scan]) => [
+          name,
+          Object.freeze({
+            outcome: scan.outcome,
+            matchCount: scan.matchCount,
+          }),
+        ]),
+      ),
+    );
+    const packageArchives = Object.freeze(
+      receipt.packageArchives.map((archive) =>
+        Object.freeze({
+          root: archive.root,
+          sha256: archive.sha256,
+          fileCount: archive.fileCount,
+        })
+      ),
+    );
+    const verificationCommands = Object.freeze(
+      receipt.verificationCommands.map((command) =>
+        Object.freeze({
+          argv: Object.freeze([...command.argv]),
+          exitCode: command.exitCode,
+          stdoutSha256: command.stdoutSha256,
+          stderrSha256: command.stderrSha256,
+        })
+      ),
+    );
+    return Object.freeze({
+      recordId: receipt.recordId,
+      performedAt: receipt.performedAt,
+      destinationBaseRef: receipt.destinationBaseRef,
+      receiptSha256: sha256(serializeReceipt(receipt)),
+      stableClaimsSha256: receipt.stableClaims.sha256,
+      destinationManifest: Object.freeze({
+        entryCount: receipt.destinationManifest.entryCount,
+        deletedCount: receipt.destinationManifest.deletedCount,
+        sha256: receipt.destinationManifest.sha256,
+      }),
+      scanner: Object.freeze({
+        algorithm: receipt.scanner.algorithm,
+        sha256: receipt.scanner.sha256,
+        fileCount: receipt.scanner.fileCount,
+      }),
+      sourceCount: receipt.sources.length,
+      verifiedSourceCount: receipt.sources.filter(
+        (source) => source.verified,
+      ).length,
+      scans,
+      packageArchives,
+      installedInputCount: receipt.installedInputs.length,
+      scanExclusionCount: receipt.scanExclusions.length,
+      verificationCommands,
+    });
+  });
+  return Object.freeze({
+    schemaVersion: "1.0.0",
+    receiptCount: records.length,
+    records: Object.freeze(records),
+  });
+}
+
+export function parseAuditArguments(argv) {
   const options = {
     artifactMap: new Map(),
     destinationRoot: process.cwd(),
@@ -1438,6 +1511,7 @@ function parseArguments(argv) {
     recordPaths: [],
     skipPackages: false,
     sourceMap: new Map(),
+    summary: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const option = argv[index];
@@ -1463,6 +1537,8 @@ function parseArguments(argv) {
       options.emitReceiptDirectory = argv[++index];
     } else if (option === "--skip-packages") {
       options.skipPackages = true;
+    } else if (option === "--summary") {
+      options.summary = true;
     } else {
       throw new Error(`Unknown provenance audit option ${option}`);
     }
@@ -1473,6 +1549,17 @@ function parseArguments(argv) {
   ) {
     throw new Error(
       "--emit-receipt and --emit-receipt-dir are mutually exclusive",
+    );
+  }
+  if (
+    options.summary &&
+    (
+      options.emitReceipt !== undefined ||
+      options.emitReceiptDirectory !== undefined
+    )
+  ) {
+    throw new Error(
+      "--summary cannot be combined with receipt emission.",
     );
   }
   return options;
@@ -1487,7 +1574,7 @@ function defaultRecordPaths(destinationRoot) {
 }
 
 export async function runAuditCli(argv = process.argv.slice(2)) {
-  const options = parseArguments(argv);
+  const options = parseAuditArguments(argv);
   const recordPaths =
     options.recordPaths.length === 0
       ? defaultRecordPaths(options.destinationRoot)
@@ -1574,7 +1661,11 @@ export async function runAuditCli(argv = process.argv.slice(2)) {
     null,
     2,
   )}\n`;
-  if (options.emitReceiptDirectory !== undefined) {
+  if (options.summary) {
+    process.stdout.write(
+      `${JSON.stringify(createAuditSummary(receipts), null, 2)}\n`,
+    );
+  } else if (options.emitReceiptDirectory !== undefined) {
     const outputDirectory = resolve(
       options.destinationRoot,
       options.emitReceiptDirectory,
@@ -1597,7 +1688,7 @@ export async function runAuditCli(argv = process.argv.slice(2)) {
       const outputPath = outputPaths[index];
       writeFileSync(
         outputPath,
-        `${JSON.stringify(receipt, null, 2)}\n`,
+        serializeReceipt(receipt),
         {
           encoding: "utf8",
           flag: "wx",

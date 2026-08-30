@@ -36,10 +36,12 @@ import { pack as packTar } from "tar-stream";
 import {
   auditPackages,
   auditRecord,
+  createAuditSummary,
   createScanResult,
   createDestinationManifest,
   listChangedEntries,
   listChangedPaths,
+  parseAuditArguments,
   pathsForRecord,
   sha256,
   verifyCoverage,
@@ -67,6 +69,31 @@ test("scan receipts retain the full bounded Unicode evidence scale", () => {
   assert.throws(
     () => createScanResult(Array.from({ length: 50_001 })),
     /more than 50000 matches/u,
+  );
+});
+
+test("audit summary mode is read only and mutually exclusive with receipt emission", () => {
+  const options = parseAuditArguments(["--summary", "--skip-packages"]);
+
+  assert.equal(options.summary, true);
+  assert.equal(options.skipPackages, true);
+  assert.throws(
+    () =>
+      parseAuditArguments([
+        "--summary",
+        "--emit-receipt",
+        "receipt.json",
+      ]),
+    /cannot be combined with receipt emission/u,
+  );
+  assert.throws(
+    () =>
+      parseAuditArguments([
+        "--summary",
+        "--emit-receipt-dir",
+        "provenance/receipts",
+      ]),
+    /cannot be combined with receipt emission/u,
   );
 });
 
@@ -451,6 +478,31 @@ test("the offline audit binds coverage, source evidence, similarity, regeneratio
   const receipt = await auditRecord(auditArguments);
   const repeatedReceipt = await auditRecord(auditArguments);
   assert.deepEqual(receipt, repeatedReceipt);
+  const summary = createAuditSummary([receipt]);
+  const expectedReceiptHash = `sha256:${createHash("sha256")
+    .update(`${JSON.stringify(receipt, null, 2)}\n`)
+    .digest("hex")}`;
+  assert.equal(summary.schemaVersion, "1.0.0");
+  assert.equal(summary.receiptCount, 1);
+  assert.equal(summary.records[0].recordId, receipt.recordId);
+  assert.equal(
+    summary.records[0].receiptSha256,
+    expectedReceiptHash,
+  );
+  assert.deepEqual(summary.records[0].scans.tokenShingle, {
+    outcome: receipt.scans.tokenShingle.outcome,
+    matchCount: receipt.scans.tokenShingle.matchCount,
+  });
+  assert.equal(
+    JSON.stringify(summary).includes("matches"),
+    false,
+  );
+  assert.equal(Object.isFrozen(summary), true);
+  assert.equal(Object.isFrozen(summary.records), true);
+  assert.throws(
+    () => createAuditSummary([]),
+    /at least one receipt/u,
+  );
   assert.equal(receipt.sources.length, 3);
   assert.ok(
     receipt.sources.every((source) => source.verified),

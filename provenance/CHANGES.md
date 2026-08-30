@@ -2,9 +2,13 @@
 
 This file records changes to the migration provenance system.
 
+## 2026-08-29, GENII Foundation
+
+- Added a compact full-audit summary that hashes each exact receipt candidate and retains every bounded review outcome without emitting or accepting a receipt.
+- Added the repository governance and security policies to the live Publisher source-loader provenance scope so the complete release-sensitive working tree remains auditable.
+
 ## 2026-08-28, GENII Foundation
 
-- Added the repository governance and security policies to the live Publisher source-loader provenance scope so the complete release-sensitive working tree remains auditable.
 - Added a validated, read-only provenance review summary that exposes every record's exact lifecycle gates without issuing receipts or granting acceptance.
 - Removed copied creative fixture content from the Publisher source-loader record scope and regenerated the deterministic audit with zero CC-source phrase matches.
 - Replaced one inherited adjacent-range scan with a stricter independent interval-boundary algorithm, reducing significant source-token matches without weakening diagnostics.
