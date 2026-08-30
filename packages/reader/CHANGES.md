@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher reader is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-30, GENII Foundation
+
+- Exposed the canonical narration scanner as frozen inclusive-start and exclusive-end UTF-16 code unit word ranges while preserving the spoken profile and timing contracts.
+
 ## 2026-08-28, GENII Foundation
 
 - Added explicit default export conditions for the browser-safe progress and bookmarks entry points so CommonJS-aware TypeScript loaders can consume their public contracts.

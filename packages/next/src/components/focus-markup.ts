@@ -11,6 +11,10 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
+import {
+  createReaderNarrationWordRanges,
+} from "@genii-foundation/publisher-reader/narration";
+
 type FocusTier = "light" | "normal" | "strong";
 
 interface HastText {
@@ -36,7 +40,6 @@ export interface PublisherFocusMarkupOptions {
   readonly narrationWords?: boolean;
 }
 
-const WORD_PATTERN = /[\p{L}\p{N}][\p{L}\p{N}'’·ˈ]*/gu;
 const FOCUS_WORD_PATTERN = /^\p{L}[\p{L}'’]*$/u;
 const EXCLUDED_ELEMENTS = new Set(["code", "pre", "strong"]);
 
@@ -86,11 +89,11 @@ function focusSegments(word: string): HastNode[] {
 function focusText(value: string, narrationWords: boolean): HastNode[] {
   const nodes: HastNode[] = [];
   let offset = 0;
-  WORD_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = WORD_PATTERN.exec(value)) !== null) {
-    if (match.index > offset) nodes.push(textNode(value.slice(offset, match.index)));
-    const word = match[0];
+  for (const range of createReaderNarrationWordRanges(value)) {
+    if (range.charStart > offset) {
+      nodes.push(textNode(value.slice(offset, range.charStart)));
+    }
+    const word = value.slice(range.charStart, range.charEnd);
     const focusWord = FOCUS_WORD_PATTERN.test(word);
     nodes.push(
       focusWord || narrationWords
@@ -106,7 +109,7 @@ function focusText(value: string, narrationWords: boolean): HastNode[] {
           )
         : textNode(word),
     );
-    offset = match.index + word.length;
+    offset = range.charEnd;
   }
   if (offset < value.length) nodes.push(textNode(value.slice(offset)));
   return nodes;

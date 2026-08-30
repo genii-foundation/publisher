@@ -83,6 +83,11 @@ export interface ReaderNarrationWordTiming {
   readonly match: "exact" | "interpolated";
 }
 
+export interface ReaderNarrationWordRange {
+  readonly charStart: number;
+  readonly charEnd: number;
+}
+
 export interface ReaderNarrationTimingDocument {
   readonly version: 1;
   readonly sectionId: string;
@@ -223,12 +228,40 @@ function normalizeNarrationText(value: string): string {
   return value.replace(/\s+/gu, " ").trim();
 }
 
-export function countReaderNarrationWords(value: string): number {
-  if (typeof value !== "string") return 0;
+function scanReaderNarrationWords(
+  text: unknown,
+  visit?: (charStart: number, charEnd: number) => void,
+): number {
+  if (typeof text !== "string") return 0;
   NARRATION_WORD_PATTERN.lastIndex = 0;
   let count = 0;
-  while (NARRATION_WORD_PATTERN.exec(value) !== null) count += 1;
+  let match: RegExpExecArray | null;
+  while ((match = NARRATION_WORD_PATTERN.exec(text)) !== null) {
+    visit?.(match.index, match.index + match[0].length);
+    count += 1;
+  }
   return count;
+}
+
+/**
+ * Returns frozen inclusive start and exclusive end UTF-16 code-unit word ranges
+ * for the exact scanner. Invalid runtime input produces an empty projection.
+ */
+export function createReaderNarrationWordRanges(
+  text: string,
+): readonly ReaderNarrationWordRange[] {
+  const ranges: ReaderNarrationWordRange[] = [];
+  scanReaderNarrationWords(text, (charStart, charEnd) => {
+    ranges.push(Object.freeze({
+      charStart,
+      charEnd,
+    }));
+  });
+  return Object.freeze(ranges);
+}
+
+export function countReaderNarrationWords(value: string): number {
+  return scanReaderNarrationWords(value);
 }
 
 /**

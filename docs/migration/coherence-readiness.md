@@ -318,6 +318,16 @@ The Chrome proof covers destination mismatch refusal and both navigation cases.
 ADR 0015 supersedes the earlier claim that playback should remain outside the
 engine application. ADR 0045 records the routed playback boundary.
 
+Publisher now exports the exact browser-safe narration word scanner as frozen
+inclusive-start and exclusive-end UTF-16 code-unit ranges. The Next renderer
+uses that same function to create its existing ordered narration anchors. A
+transition host can bind those anchors to an exact section only after proving
+every timing range equals its canonical profile range, dropping the profile's
+`titleWordCount` ranges, proving the exact remaining count, and proving each
+anchor `textContent` equals its corresponding profile text slice. A count match
+without the range and per-word text proofs must fail closed. ADR 0062 records
+this portable boundary.
+
 Per-word timing data does not belong in the reader artifact. It remains in lazy
 narration sidecars bound to the narration catalog and exact Reader build.
 

@@ -335,6 +335,14 @@ identities into Publisher envelopes without uploading, regenerating, promoting, 
 rewriting audio. Every public clip must have matching accepted evidence. A build
 with narration disabled must also succeed.
 
+For timed word binding, derive the canonical section profile and public Reader
+word ranges. Refuse binding unless the timing document has the same total count
+and every timing `charStart` and `charEnd` equals its canonical range. Then drop
+the profile's `titleWordCount` ranges and query ordered
+`data-publisher-narration-word` anchors only inside that exact section. Require
+the remaining range count and every anchor `textContent` to match the
+corresponding slice of `profile.text` exactly.
+
 The Coherence sync bridge implements only the Publisher provider interface. It
 continues using the existing authenticated session and committed Coherence schema.
 It must preserve explicit consent, local-only operation, schema-ahead refusal,

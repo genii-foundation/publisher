@@ -8,6 +8,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Documented the opaque React element contract and the requirement for the host to paint the exact validated Publisher canvas behind the transparent embedded root.
 - Added optional complete light, dark, and black Theme 2.0 palettes with independent validation and a legacy base-palette fallback.
 - Replaced fixed alternate Reader colors with a pure frozen appearance projection that full and embedded hosts can consume without activating Reader lifecycle behavior.
+- Reused the public Reader narration range contract for server word markup without changing its classes or data attributes.
 
 ## 2026-08-29, GENII Foundation
 

@@ -105,6 +105,24 @@ and destination against the exact build-bound progress catalog before consuming
 it. The subpath does not fetch, store, inspect the DOM, dispatch events, navigate,
 or play media.
 
+`createReaderNarrationWordRanges(text)` applies the canonical narration scanner
+and returns a frozen ordered array of frozen UTF-16 code unit ranges. Each
+`charStart` is inclusive and each `charEnd` is exclusive.
+`countReaderNarrationWords(text)` uses the same scanner, so its result cannot
+drift from the public ranges.
+
+A host binding the official renderer's word anchors must scope its query to one
+exact section and create ranges from that section's
+`createReaderNarrationSectionTextProfile(section).text`. First require the timing
+document to contain the same total range count and require every timing word's
+`charStart` and `charEnd` to equal the corresponding canonical range. Then drop
+the first `titleWordCount` ranges because the title is outside the body anchor
+sequence. Require the remaining range count to equal the ordered
+`data-publisher-narration-word` anchor count, and require every anchor's
+`textContent` to equal `profile.text.slice(range.charStart, range.charEnd)` for
+its corresponding range. A count match alone is not sufficient. Any mismatch
+must leave timing unbound.
+
 The `offline` subpath projects one immutable package plan per work. Each plan is
 bound to the exact Reader build, renderer build, work content, and optional
 narration catalog. It closes over canonical and historical route documents,

@@ -76,6 +76,16 @@ state. Playback therefore survives current-section and cross-route Next.js
 navigation. Ordinary link behavior wins when the player cannot consume the
 request.
 
+The renderer creates `publisher-narration-word` spans with
+`data-publisher-narration-word="true"` from the public Reader narration range
+function. A separate host must query those anchors inside one exact section,
+derive the canonical ranges from that section's spoken-text profile, and verify
+every timing range against them. It then drops the first `titleWordCount` ranges.
+Before binding timing, it must verify both the exact remaining count and every
+anchor `textContent` against the corresponding
+`profile.text.slice(charStart, charEnd)`. Count-only binding is not valid. See
+[ADR 0062](../../docs/architecture/0062-public-narration-word-ranges.md).
+
 The Offline panel downloads one complete immutable package per work. Each
 package includes its publication documents, lazy Reader data, assets, discovered
 Next.js dependencies, and every declared narration clip and timing sidecar. The

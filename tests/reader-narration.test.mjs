@@ -15,9 +15,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  countReaderNarrationWords,
   createReaderNarrationPreferences,
   createReaderNarrationPreferencesStorageKey,
   createReaderNarrationSectionTextProfile,
+  createReaderNarrationWordRanges,
   parseReaderNarrationEnvelope,
   parseReaderNarrationNavigationIntent,
   parseReaderNarrationPreferences,
@@ -191,6 +193,15 @@ test("section narration text and timing hrefs follow one closed profile", () => 
     titleWordCount: 3,
     bodyWordCount: 4,
   });
+  const bodyRanges = createReaderNarrationWordRanges(profile.text).slice(
+    profile.titleWordCount,
+  );
+  assert.equal(bodyRanges.length, profile.bodyWordCount);
+  assert.deepEqual(
+    bodyRanges.map(({ charStart, charEnd }) =>
+      profile.text.slice(charStart, charEnd)),
+    ["First", "light", "Water", "returns"],
+  );
   assert.equal(readerNarrationTimingHref({
     href: "/audio/opening.mp3",
     timingsByteSize: 234,
@@ -203,6 +214,34 @@ test("section narration text and timing hrefs follow one closed profile", () => 
     href: "/audio/opening",
     timingsByteSize: 234,
   }), null);
+});
+
+test("narration word ranges are frozen UTF-16 code unit boundaries from the canonical scanner", () => {
+  const text = "A😀𐐀 O’Neill ka·ra ˈtone 42";
+  const ranges = createReaderNarrationWordRanges(text);
+  assert.deepEqual(ranges, [
+    { charStart: 0, charEnd: 1 },
+    { charStart: 3, charEnd: 5 },
+    { charStart: 6, charEnd: 13 },
+    { charStart: 14, charEnd: 19 },
+    { charStart: 20, charEnd: 25 },
+    { charStart: 26, charEnd: 28 },
+  ]);
+  assert.deepEqual(
+    ranges.map(({ charStart, charEnd }) =>
+      text.slice(charStart, charEnd)),
+    ["A", "𐐀", "O’Neill", "ka·ra", "ˈtone", "42"],
+  );
+  assert.equal(countReaderNarrationWords(text), ranges.length);
+  assert.equal(Object.isFrozen(ranges), true);
+  assert.equal(
+    ranges.every((range) => Object.isFrozen(range)),
+    true,
+  );
+  const invalidRanges = createReaderNarrationWordRanges(null);
+  assert.deepEqual(invalidRanges, []);
+  assert.equal(Object.isFrozen(invalidRanges), true);
+  assert.equal(countReaderNarrationWords(null), 0);
 });
 
 function timingFixture(overrides = {}) {

@@ -8,6 +8,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Recorded the opaque element, exact host canvas, shell ownership, and Reader lifecycle limits required for a reversible Coherence migration preview.
 - Added optional complete light, dark, and black Theme 2.0 palettes with independent validation and a legacy base-palette fallback.
 - Replaced fixed alternate Reader colors with a pure frozen theme appearance projection usable by full and embedded hosts without activating Reader lifecycle behavior.
+- Exposed the canonical narration scanner as frozen UTF-16 code unit word ranges and bound word counts to the same scanner.
+- Reused the public narration ranges in Next word markup and documented exact section, count, and text-slice verification for host timing bindings.
 
 ## 2026-08-29, GENII Foundation
 

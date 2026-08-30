@@ -896,12 +896,15 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         type ReaderSearchIndex,
       } from "@genii-foundation/publisher-reader/search";
       import {
+        countReaderNarrationWords,
         createReaderNarrationPreferences,
         createReaderNarrationSectionTextProfile,
+        createReaderNarrationWordRanges,
         parseReaderNarrationNavigationIntent,
         type ReaderNarrationNavigationIntent,
         type ReaderNarrationPreferences,
         type ReaderNarrationSectionTextProfile,
+        type ReaderNarrationWordRange,
       } from "@genii-foundation/publisher-reader/narration";
       import {
         createReaderOfflineCatalog,
@@ -961,6 +964,10 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       });
       declare const narrationText: ReaderNarrationSectionTextProfile;
       void createReaderNarrationSectionTextProfile;
+      const narrationWordRanges: readonly ReaderNarrationWordRange[] =
+        createReaderNarrationWordRanges(narrationText.text);
+      const narrationWordCount: number =
+        countReaderNarrationWords(narrationText.text);
       const offlineCatalog: ReaderOfflineCatalog = createReaderOfflineCatalog({
         reader: envelope,
         rendererBuildId: envelope.buildId,
@@ -995,6 +1002,8 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         narration,
         navigation,
         narrationText,
+        narrationWordRanges,
+        narrationWordCount,
         offlineCatalog,
         parsedOfflineCatalog,
       ];
@@ -1194,6 +1203,7 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       } from "@genii-foundation/publisher-reader/search";
       import {
         createReaderNarrationPreferences,
+        createReaderNarrationWordRanges,
         readerNarrationTimingHref,
       } from "@genii-foundation/publisher-reader/narration";
       import {
@@ -1312,6 +1322,17 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         "reader",
       ]);
       assert.equal(createReaderNarrationPreferences().playbackRate, 1);
+      const narrationRanges = createReaderNarrationWordRanges(
+        "12😀𐐀·3 ka·ra ˈ42",
+      );
+      assert.deepEqual(narrationRanges, [
+        { charStart: 0, charEnd: 2 },
+        { charStart: 4, charEnd: 8 },
+        { charStart: 9, charEnd: 14 },
+        { charStart: 15, charEnd: 18 },
+      ]);
+      assert.equal(Object.isFrozen(narrationRanges), true);
+      assert.equal(Object.isFrozen(narrationRanges[0]), true);
       assert.equal(readerNarrationTimingHref({
         href: "/audio/portable.mp3",
         timingsByteSize: 123,

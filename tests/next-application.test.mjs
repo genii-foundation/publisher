@@ -29,6 +29,7 @@ import {
   createReaderBookmarksStorageKey,
 } from "../packages/reader/dist/bookmarks.js";
 import {
+  createReaderNarrationWordRanges,
   createReaderNarrationPreferencesStorageKey,
 } from "../packages/reader/dist/narration.js";
 import {
@@ -2492,20 +2493,32 @@ test("pipe syntax requires an adapter-classified table block", () => {
 });
 
 test("narration anchors share the spoken word profile", () => {
+  const text = "12😀𐐀·3 ka·ra ˈ42";
   const html = renderToStaticMarkup(
     createElement(PublisherMarkdownBlock, {
       assetHrefs: new Set(),
-      block: { id: "pronunciation", kind: "paragraph", text: "ka·ra ˈtone" },
-      markdown: "ka·ra ˈtone",
+      block: { id: "pronunciation", kind: "paragraph", text },
+      markdown: text,
       narrationWords: true,
       renderedPath: "/works/pronunciation/",
     }),
   );
+  const ranges = createReaderNarrationWordRanges(text);
+  const expectedWords = ranges.map(({ charStart, charEnd }) =>
+    text.slice(charStart, charEnd));
+  const anchorWords = [...html.matchAll(
+    /<span(?=[^>]*data-publisher-narration-word="true")[^>]*>([^<]*)<\/span>/gu,
+  )].map(([, word]) => word);
   assert.equal(
     html.match(/data-publisher-narration-word="true"/gu)?.length,
-    2,
+    ranges.length,
   );
-  assert.equal(html.replace(/<[^>]+>/gu, ""), "ka·ra ˈtone");
+  assert.equal(
+    html.match(/class="publisher-narration-word"/gu)?.length,
+    ranges.length,
+  );
+  assert.deepEqual(anchorWords, expectedWords);
+  assert.equal(html.replace(/<[^>]+>/gu, ""), text);
 });
 
 test("static routes preserve server-rendered manuscript around client tools", async () => {
