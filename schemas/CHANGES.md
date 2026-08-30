@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-29, GENII Foundation
+
+- Added a fast deterministic provenance coverage gate to ordinary validation and bound the repository governance and security policies to the live source-loader audit scope.
+
 ## 2026-08-28, GENII Foundation
 
 - Added a validated, read-only provenance review summary that exposes every record's exact lifecycle gates without issuing receipts or granting acceptance.

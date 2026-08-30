@@ -25,6 +25,7 @@
   "scripts": {
     "build": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/next/scripts/build.mjs",
     "provenance:audit": "node provenance/scripts/audit.mjs",
+    "provenance:coverage": "node provenance/scripts/coverage.mjs",
     "provenance:review": "node provenance/scripts/review-status.mjs",
     "provenance:validate": "node provenance/scripts/validate.mjs",
     "release:rehearse": "node --test tests/second-publication-release-rehearsal.test.mjs",
@@ -33,8 +34,8 @@
     "release:verify-public-surface": "node provenance/scripts/verify-public-surface.mjs",
     "release:verify": "node provenance/scripts/verify-release.mjs",
     "site:build": "node site/scripts/build.mjs",
-    "test": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/next/scripts/build.mjs && npm run provenance:validate && node --test --test-concurrency=1",
-    "validate": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/next/scripts/build.mjs && npm run provenance:validate && node --test --test-concurrency=1"
+    "test": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/next/scripts/build.mjs && npm run provenance:validate && npm run provenance:coverage && node --test --test-concurrency=1",
+    "validate": "node schemas/scripts/build.mjs && node packages/content/scripts/build.mjs && node packages/reader/scripts/build.mjs && node packages/publisher/scripts/build.mjs && node packages/next/scripts/build.mjs && npm run provenance:validate && npm run provenance:coverage && node --test --test-concurrency=1"
   },
   "devDependencies": {
     "ajv": "8.20.0",

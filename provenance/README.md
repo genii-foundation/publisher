@@ -58,6 +58,19 @@ and receipt presence, scan outcomes, exact review notes, and remaining lifecycle
 gates. It writes nothing. It does not fetch evidence, issue a receipt, accept a
 record, grant release approval, or replace maintainer and counsel review.
 
+Every ordinary validation also runs the fast working-tree coverage gate:
+
+```bash
+npm run provenance:coverage
+```
+
+The command validates the committed ledger, resolves the one shared destination
+base ref, and requires every changed tracked or nonignored path to belong to at
+least one working-tree record. It also rejects a declared destination scope that
+selects no changed path. It does not scan source repositories, build packages,
+issue receipts, or write files. The full audit repeats the same coverage check
+before doing its more expensive source, package, and regeneration work.
+
 Release preparation requires at least one working-tree record, requires every provenance record that names a publishable package root to be accepted, and requires an explicit empty output directory outside the repository. Every current publishable package root must also remain covered by an accepted working-tree record:
 
 ```bash
