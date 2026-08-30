@@ -480,6 +480,31 @@ the exact six package candidates in a clean canonical publication, repeats the
 installation from a frozen offline lockfile, and exercises separately packed theme
 and extension overrides without accepting provenance or publishing anything.
 
+### Reversible embedded rendering boundary
+
+The official Next application now exposes one protected server method for a
+staged host transition. `renderEmbeddedPage` accepts only a page issued by the
+same Publisher resolver and returns one opaque React element. It retains the
+validated theme scope, safe server-rendered page body, stable page and manuscript
+identities, Updates and extension route bodies, server slots, isolated client
+mount, publication source link, and mandatory attribution.
+
+The embedded element deliberately omits the Publisher header, Reader rail, skip
+link, main landmark, document shell, layout measure, prepaint, providers, and
+audio host. Coherence can therefore retain its current outer shell, route and
+continuity surfaces, metadata, errors, and browser lifecycle while replacing the
+content renderer in one reversible preview step. The host must paint the exact
+selected Publisher theme canvas behind the transparent embedded root because
+Publisher contrast validation is relative to that canvas.
+
+This closes the missing content-renderer seam. It does not close Reader lifecycle
+parity. Current progress observation, passage selection and bookmark geometry,
+word timing highlights, legacy paragraph anchors, settings and theme preference
+mapping, offline orchestration, narration persistence, and synchronization still
+need explicit host bridges or accepted Publisher replacements in the Coherence
+candidate. ADR 0060 records the boundary and forbids treating the returned element
+as a component tree for host rearrangement.
+
 ## Remaining migration gap
 
 The established-host composition seam now exists. Publisher exposes Reader
@@ -522,11 +547,14 @@ and full-census acceptance work, preserves the current Coherence
 workbench and provider state, and stops before merge or production deployment.
 Publisher's closed executable bootstrap, separately bounded public state
 projection, Coherence-owned state adapter, exact refusal census, and generic
-offline resource closure are complete in the proof candidate. The established
-Coherence host cutover described above remains local engineering work. After it
-is complete, the author must review the exact local preview before the candidate
-may be pushed for an ordinary preview through the existing Coherence project.
-Production remains unchanged.
+offline resource closure are complete in the proof candidate. The embedded
+renderer can replace page-body rendering without duplicating Publisher internals,
+but the host-owned lifecycle bridges above remain acceptance work. A narrow
+happy-path fixture cannot close this gate. The established Coherence host cutover
+described above remains local engineering work. After it is complete, the author
+must review the exact local preview before the candidate may be pushed for an
+ordinary preview through the existing Coherence project. Production remains
+unchanged.
 
 ## Material that remains Coherence-owned
 

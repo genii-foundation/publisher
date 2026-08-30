@@ -35,6 +35,12 @@ If you wish to allow use of your version of this file only under the terms of th
   line-height: var(--publisher-line-height);
 }
 
+.publisher-root.publisher-root-embedded {
+  min-height: 0;
+  display: block;
+  background: transparent;
+}
+
 html[data-publisher-reader-scheme="light"] .publisher-root,
 html[data-publisher-reader-scheme="light"] .publisher-reader-audio-host {
   --publisher-color-canvas: #f5f7f4 !important;
@@ -889,9 +895,18 @@ html[data-publisher-reader-focus="strong"] .publisher-focus-emphasis-strong {
   font-weight: var(--publisher-focus-weight);
 }
 
-html[data-publisher-reader-motion="reduced"] *,
-html[data-publisher-reader-motion="reduced"] *::before,
-html[data-publisher-reader-motion="reduced"] *::after {
+html[data-publisher-reader-motion="reduced"] .publisher-root,
+html[data-publisher-reader-motion="reduced"] .publisher-root *,
+html[data-publisher-reader-motion="reduced"] .publisher-root::before,
+html[data-publisher-reader-motion="reduced"] .publisher-root::after,
+html[data-publisher-reader-motion="reduced"] .publisher-root *::before,
+html[data-publisher-reader-motion="reduced"] .publisher-root *::after,
+html[data-publisher-reader-motion="reduced"] .publisher-reader-audio-host,
+html[data-publisher-reader-motion="reduced"] .publisher-reader-audio-host *,
+html[data-publisher-reader-motion="reduced"] .publisher-reader-audio-host::before,
+html[data-publisher-reader-motion="reduced"] .publisher-reader-audio-host::after,
+html[data-publisher-reader-motion="reduced"] .publisher-reader-audio-host *::before,
+html[data-publisher-reader-motion="reduced"] .publisher-reader-audio-host *::after {
   scroll-behavior: auto !important;
   transition-duration: 0.01ms !important;
   animation-duration: 0.01ms !important;

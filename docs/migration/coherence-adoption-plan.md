@@ -244,22 +244,45 @@ Run Publisher initialization in declared-layout plan mode and retain its conflic
 report as migration evidence. Existing Coherence application files are expected to
 conflict. Do not apply that plan over author files.
 
-Prepare reviewed host patches with these ownership rules:
+The first reversible preview may use the embedded page boundary from ADR 0060
+instead of replacing the complete host in one patch. Existing public route files
+resolve the matching Publisher page and render `renderEmbeddedPage` as one opaque
+React element. They must not inspect, clone, rearrange, or rewrite the returned
+element. This boundary lets the preview replace public content rendering while
+retaining the current shell and browser lifecycle for direct comparison and
+rollback.
 
-- Publisher owns the public Reader root, catch-all Reader route, generated Reader
-  data routes, error surfaces, offline worker, and provider-neutral Reader APIs.
+Prepare reviewed host patches with these transition ownership rules:
+
+- Coherence owns the outer public shell, one `main` landmark, layout, metadata,
+  current continuity handling, static parameters, and error surfaces.
+- Publisher owns the validated page body, theme scope, stable page and manuscript
+  identities, server extension slots, isolated client extension mount,
+  publication source link, and mandatory attribution inside that shell.
+- The embedded root is transparent. The Coherence frame must paint the exact
+  selected Publisher theme canvas behind it. Contrast evidence must verify the
+  effective canvas rather than only the theme data in isolation.
+- The Publisher embedded wrapper owns no reading measure, gutter, width, margin,
+  padding, or landmark. Coherence remains the only frame authority during this
+  phase.
+- Coherence temporarily retains its navigation, progress, bookmark, search,
+  settings, prepaint, offline, narration, synchronization, and audio-host
+  lifecycle. Embedded rendering does not prove parity for any of those systems.
 - Coherence retains every `/admin` page and handler, plus admin-only styling and
   data access.
-- The shared root layout may host Publisher's prepaint, offline, and narration
-  providers. It must still render nested admin pages without importing manuscript
-  payloads into browser chunks.
 - Coherence-owned configuration selects the theme, extensions, sync provider, and
   publication data. Manifest package names never import executable code.
 - Existing public art and fonts remain in Coherence. A Coherence theme package or
   adapter selects them without copying those assets into Publisher.
-- Publisher attribution remains persistent, linked, conspicuous, and present on
-  every Reader and error surface. Admin-only pages need not impersonate Reader
-  pages to satisfy that rule.
+- Publisher attribution remains persistent, linked, conspicuous, and present in
+  every embedded page. Coherence-owned error surfaces must retain equivalent
+  required attribution. Admin-only pages need not impersonate Reader pages to
+  satisfy that rule.
+
+The embedded preview is an integration checkpoint, not the final default Reader
+claim. A later reviewed patch must move each temporary host lifecycle surface to
+the official Publisher implementation or an accepted supported override. The
+complete generated host contract remains the reference for that final state.
 
 After the selected patches match the reviewed host contract, initialize or upgrade
 the host through a plan hash and commit `publisher.host.json`. Any deliberately

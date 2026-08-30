@@ -2,8 +2,14 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-30, GENII Foundation
+
+- Added a narrow server-only embedded page renderer that preserves Publisher theme scope, safe content, extension ordering, publication source availability, and mandatory attribution inside a host-owned transition shell.
+- Recorded the opaque element, exact host canvas, shell ownership, and Reader lifecycle limits required for a reversible Coherence migration preview.
+
 ## 2026-08-29, GENII Foundation
 
+- Corrected the Coherence migration readiness boundary after the first established-host preview exposed the remaining artifact, worker, aggregate-route, and author-adapter cutover work.
 - Exposed a composable Publisher Reader document shell for established applications that retain author-owned routes and layout.
 - Bound every recent Coherence application commit to explicit Publisher capability parity or an author-owned disposition.
 - Added an independent public-site artifact check that binds the complete output census, manifest, and file bytes to repository authority.

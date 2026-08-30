@@ -213,6 +213,18 @@ async function renderResolved(application, segments) {
   );
 }
 
+async function renderEmbeddedResolved(application, segments) {
+  const resolution = application.resolveRoute(segments);
+  assert.equal(
+    resolution.status,
+    "resolved",
+    JSON.stringify(resolution),
+  );
+  return renderToStaticMarkup(
+    await application.renderEmbeddedPage(resolution.page),
+  );
+}
+
 function headingOutline(html) {
   return [...html.matchAll(/<h([1-6])[^>]*>(.*?)<\/h\1>/gu)].map(
     ([, level, contents]) => ({
@@ -269,6 +281,101 @@ test("home catalogs expose only published works and collections", async () => {
     { level: 2, text: "Collections" },
     { level: 3, text: "Field Notes" },
   ]);
+});
+
+test("embedded pages retain Publisher content and attribution without taking the host shell", async () => {
+  const application = await createApplication({
+    theme: resolveDefaultPublisherNextTheme({ accent: "#004B5A" }),
+  });
+  const segments = ["readings", "café+one"];
+  const full = await renderResolved(application, segments);
+  const embedded = await renderEmbeddedResolved(application, segments);
+
+  assert.match(full, /class="publisher-site-header"/u);
+  assert.match(full, /class="publisher-reader-rail"/u);
+  assert.match(full, /class="publisher-skip-link"/u);
+  assert.match(full, /<main/u);
+
+  assert.match(
+    embedded,
+    /class="publisher-root publisher-root-embedded"/u,
+  );
+  assert.match(embedded, /data-publisher-page="section"/u);
+  assert.match(embedded, /lang="en"/u);
+  assert.match(
+    embedded,
+    /--publisher-color-accent:#004B5A/u,
+  );
+  assert.match(embedded, /data-publisher-section="published-opening"/u);
+  assert.match(embedded, /data-publisher-block=/u);
+  assert.match(embedded, />Opening</u);
+  assert.match(embedded, /data-publisher-attribution="required"/u);
+  assert.match(
+    embedded,
+    /href="https:\/\/github\.com\/genii-foundation\/publisher">Publication source code/u,
+  );
+
+  for (const forbidden of [
+    /class="publisher-site-header"/u,
+    /class="publisher-reader-rail"/u,
+    /class="publisher-skip-link"/u,
+    /<main/u,
+    /<html/u,
+    /<body/u,
+    /publisher-reader-prepaint/u,
+    /publisher-reader-audio-host/u,
+  ]) {
+    assert.doesNotMatch(embedded, forbidden);
+  }
+});
+
+test("embedded rendering preserves every built-in catalog page body", async () => {
+  const application = await createApplication();
+  const cases = [
+    {
+      segments: undefined,
+      kind: "home",
+      marker: /id="publisher-works-heading"/u,
+    },
+    {
+      segments: ["works", "café+notes"],
+      kind: "work",
+      marker: /data-publisher-work="published-notes"/u,
+    },
+    {
+      segments: ["collections", "field-notes"],
+      kind: "collection",
+      marker: /data-publisher-collection="field-notes"/u,
+    },
+  ];
+
+  for (const { segments, kind, marker } of cases) {
+    const html = await renderEmbeddedResolved(application, segments);
+    assert.match(html, new RegExp(`data-publisher-page="${kind}"`, "u"));
+    assert.match(html, marker);
+    assert.match(html, /data-publisher-attribution="required"/u);
+    assert.doesNotMatch(html, /<main(?:\s|>)/u);
+    assert.doesNotMatch(html, /publisher-reader-rail/u);
+  }
+
+  const sectionIndexApplication = await createApplication({
+    reader: await createFixtureReader({ includeSectionIndex: true }),
+  });
+  const sectionIndexHtml = await renderEmbeddedResolved(
+    sectionIndexApplication,
+    ["readings", "field-notes"],
+  );
+  assert.match(
+    sectionIndexHtml,
+    /data-publisher-page="section-index"/u,
+  );
+  assert.match(
+    sectionIndexHtml,
+    /data-publisher-section-index="field-notes-index"/u,
+  );
+  assert.match(sectionIndexHtml, /data-publisher-attribution="required"/u);
+  assert.doesNotMatch(sectionIndexHtml, /<main(?:\s|>)/u);
+  assert.doesNotMatch(sectionIndexHtml, /publisher-reader-rail/u);
 });
 
 test("a matching synchronization artifact enables only the progressive account surface", async () => {
@@ -1675,6 +1782,12 @@ test("Updates content stays inside the engine owned page shell", async () => {
     html.indexOf("data-publisher-update") <
       html.indexOf("data-publisher-attribution"),
   );
+  const embedded = await renderEmbeddedResolved(application, ["updates"]);
+  assert.match(embedded, /data-publisher-update="release-1"/u);
+  assert.match(embedded, /Recorded at \/updates/u);
+  assert.match(embedded, /data-publisher-attribution="required"/u);
+  assert.doesNotMatch(embedded, /<main/u);
+  assert.doesNotMatch(embedded, /publisher-reader-rail/u);
   const metadata = await application.generateMetadata({
     params: Promise.resolve({ segments: ["updates"] }),
   });
@@ -1967,6 +2080,9 @@ test("application identity is deterministic, immutable, and content bound", asyn
   const first = await createApplication({ reader });
   const second = await createApplication({ reader });
   assert.deepEqual(first.manifest, second.manifest);
+  assert.equal(Object.isFrozen(first), true);
+  assert.equal(typeof first.renderPage, "function");
+  assert.equal(typeof first.renderEmbeddedPage, "function");
   assert.match(
     first.manifest.buildId,
     /^sha256:[0-9a-f]{64}$/,
@@ -2131,7 +2247,7 @@ test("invalid and hostile application inputs return diagnostics", async () => {
   assert.equal(result.valid, false);
 });
 
-test("renderPage accepts only pages issued by its own resolver", async () => {
+test("page renderers accept only pages issued by their own resolver", async () => {
   const application = await createApplication();
   const otherApplication = await createApplication();
   const resolution = application.resolveRoute([
@@ -2142,6 +2258,9 @@ test("renderPage accepts only pages issued by its own resolver", async () => {
   await assert.doesNotReject(() =>
     application.renderPage(resolution.page),
   );
+  await assert.doesNotReject(() =>
+    application.renderEmbeddedPage(resolution.page),
+  );
   await assert.rejects(
     () =>
       application.renderPage(
@@ -2150,8 +2269,19 @@ test("renderPage accepts only pages issued by its own resolver", async () => {
     /issued by this application's resolveRoute/u,
   );
   await assert.rejects(
+    () =>
+      application.renderEmbeddedPage(
+        structuredClone(resolution.page),
+      ),
+    /renderEmbeddedPage accepts only a page issued by this application's resolveRoute/u,
+  );
+  await assert.rejects(
     () => otherApplication.renderPage(resolution.page),
     /issued by this application's resolveRoute/u,
+  );
+  await assert.rejects(
+    () => otherApplication.renderEmbeddedPage(resolution.page),
+    /renderEmbeddedPage accepts only a page issued by this application's resolveRoute/u,
   );
 });
 

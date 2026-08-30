@@ -567,6 +567,9 @@ export interface PublicationNextApplication {
   readonly renderPage: (
     page: PublisherNextPage,
   ) => Promise<ReactElement>;
+  readonly renderEmbeddedPage: (
+    page: PublisherNextPage,
+  ) => Promise<ReactElement>;
   readonly RootPage: () => Promise<ReactElement>;
   readonly NotFoundPage: () => ReactElement;
   readonly Page: (

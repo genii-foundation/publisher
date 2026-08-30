@@ -704,18 +704,22 @@ async function PageBody({
   }
 }
 
-export interface PublisherPageViewProps {
+export interface PublisherEmbeddedPageViewProps {
   readonly afterMain?: ReactNode;
   readonly beforeMain?: ReactNode;
   readonly clientExtensions?: ReactNode;
   readonly extensionRouteBody?: ReactNode;
-  readonly homePath: string;
   readonly markdownForBlock: PublisherNextMarkdownForBlock;
   readonly page: PublisherNextPage;
-  readonly readerBuildId: Sha256Digest;
-  readonly sync: SyncEnvelope | null;
   readonly theme: PublisherNextThemeInstance;
   readonly updates: PublisherNextUpdatesView | null;
+}
+
+export interface PublisherPageViewProps
+  extends PublisherEmbeddedPageViewProps {
+  readonly homePath: string;
+  readonly readerBuildId: Sha256Digest;
+  readonly sync: SyncEnvelope | null;
 }
 
 interface PublisherPageShellProps {
@@ -842,6 +846,42 @@ export async function PublisherPageView({
       }}
       theme={theme}
     />
+  );
+}
+
+export async function PublisherEmbeddedPageView({
+  afterMain,
+  beforeMain,
+  clientExtensions,
+  extensionRouteBody,
+  markdownForBlock,
+  page,
+  theme,
+  updates,
+}: PublisherEmbeddedPageViewProps): Promise<ReactElement> {
+  const body = await PageBody({
+    extensionRouteBody,
+    markdownForBlock,
+    page,
+    updates,
+  });
+  return (
+    <div
+      className="publisher-root publisher-root-embedded"
+      data-publisher-page={page.kind}
+      lang={page.publication.language}
+      style={publisherNextThemeStyle(theme)}
+    >
+      <div className="publisher-embedded-content">
+        {beforeMain}
+        {body}
+        {afterMain}
+        {clientExtensions}
+      </div>
+      <PublisherAttribution
+        sourceCodeUrl={page.publication.attribution.sourceCodeUrl}
+      />
+    </div>
   );
 }
 

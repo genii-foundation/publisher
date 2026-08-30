@@ -2,6 +2,11 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher Next.js renderer is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-08-30, GENII Foundation
+
+- Added `renderEmbeddedPage` as a protected server transition seam that retains themed page content, extensions, source link, and mandatory attribution while omitting the full Publisher shell and Reader lifecycle providers.
+- Documented the opaque React element contract and the requirement for the host to paint the exact validated Publisher canvas behind the transparent embedded root.
+
 ## 2026-08-29, GENII Foundation
 
 - Exposed the exact Reader prepaint and provider shell used by the standalone root layout so established applications can retain author-owned surfaces while adopting Publisher routes.

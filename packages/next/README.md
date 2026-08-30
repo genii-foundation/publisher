@@ -18,6 +18,12 @@ The renderer owns:
 
 A theme can change validated colors, fonts, dimensions, and spacing. It cannot replace the shell, manuscript renderer, source link, or attribution footer. The renderer ships local Reader state, lazy default narration playback, optional provider-neutral synchronization, two engine-owned server extension slots, one isolated client extension mount, declarative extension pages, and closed extension request handlers. It does not claim static export support.
 
+For a reviewed migration, the protected server application also exposes a narrow
+embedded page renderer. It keeps Publisher content, theme variables, extensions,
+source availability, and attribution inside an existing host shell. It does not
+replace the complete renderer or claim Reader lifecycle parity. See
+[ADR 0060](../../docs/architecture/0060-embedded-page-rendering.md).
+
 Authorized client extensions can import `createPublisherReaderStore` from
 `@genii-foundation/publisher-next` or its browser-focused `/client` entry. A
 separate store configured with the same public storage key, parser, serializer,
@@ -637,9 +643,11 @@ chunks.
 The official renderer implements `renderer.slot` through two fixed server
 slots, `page.before-main` and `page.after-main`. It implements
 `renderer.client` through one fixed `page.client` mount after both server slots.
-All three sit inside the engine-owned `main` element and before the required
-attribution footer. The not-found and framework error surfaces do not invoke
-extensions.
+With `renderPage`, all three sit inside the engine-owned `main` element and
+before the required attribution footer. With `renderEmbeddedPage`, they keep
+the same order inside the Publisher embedded content wrapper, which the host
+places inside its own `main`. The not-found and framework error surfaces do not
+invoke extensions.
 
 Install an extension package explicitly and register it in author-owned host
 code:
@@ -847,7 +855,38 @@ The supported author integration is `createPublicationNextApplication` from `@ge
 
 `next.config.mjs` must import `createPublisherNextRoutePlan` and `createPublisherNextConfig` from `@genii-foundation/publisher-next/config`, not from `/server`. The config entry is safe in the ordinary Node configuration process and does not expose application rendering. Its helpers do not repeat full reader validation.
 
-Build route plans only from an already validated generated reader artifact. The raw continuity constructor is internal; use the validated application's `handleRequest` so route planning and continuity share one exact reader snapshot. `resolveRoute` consumes logical framework segments, while `handleRequest` owns raw request paths and must run before route rendering. Pass `renderPage` only a page returned by the same application's `resolveRoute`.
+Build route plans only from an already validated generated reader artifact. The raw continuity constructor is internal; use the validated application's `handleRequest` so route planning and continuity share one exact reader snapshot. `resolveRoute` consumes logical framework segments, while `handleRequest` owns raw request paths and must run before route rendering. Pass `renderPage` or `renderEmbeddedPage` only a page returned by the same application's `resolveRoute`.
+
+### Embedded host transition
+
+`renderEmbeddedPage(page)` is a server-only migration seam. It returns one
+opaque React element containing the selected theme scope, page language, safe
+page body, stable page and manuscript identities, server extension slots,
+isolated client extension mount, publication source link, and mandatory linked
+Publisher attribution. It supports the same home, work, collection, section,
+section-index, Updates, and extension page kinds as `renderPage`.
+
+Render the returned element directly. Do not inspect, clone, rearrange, or
+rewrite its type or props. The host supplies the outer shell and the only
+`main` landmark. It also owns layout, metadata, continuity, static parameters,
+error surfaces, and any temporary Reader lifecycle integration used during the
+transition. The `handleRequest` continuity requirement above applies to the
+complete Publisher host. An embedded transition keeps its existing continuity
+authority only through an explicit reviewed migration plan.
+
+Embedded markup intentionally omits the Publisher header, Reader rail, skip
+link, page frame, reading measure, page gutter, document elements, preference
+prepaint, offline and narration providers, synchronization providers, and the
+Reader audio host. The content wrapper adds no width, margin, padding, or
+landmark. This method therefore proves content integration, not navigation,
+progress, bookmarks, search, preferences, offline reading, narration,
+synchronization, or complete Reader parity.
+
+The embedded root is transparent. Publisher theme validation measures text,
+muted text, links, focus, borders, and surfaces against the selected theme's
+canvas token. The host must paint that exact validated canvas color behind the
+embedded root. To use a different canvas, select a Publisher theme that
+validates it. Do not override theme variables after validation.
 
 Client error components and their types live only at `@genii-foundation/publisher-next/client`. They accept the fixed public error identity described above. They never accept a reader envelope or server application.
 
@@ -857,7 +896,7 @@ Every publication page and the engine-owned not-found page display:
 
 > Copyright 2026 GENII Foundation. Published with GENII Publisher.
 
-The credit links to `https://publisher.genii.foundation`. The renderer reads the fixed Exhibit B values from its own constants rather than trusting caller data. The footer also exposes the validated reader envelope attribution field `sourceCodeUrl` as a conspicuous publication source link. Invalid low-level caller data falls back to the canonical GENII Publisher source instead of removing either link. Themes cannot remove either element through the supported API. The same renderer-owned interface appears on attributed static framework 404 and 500 pages and on hydrated App Router error boundaries.
+The credit links to `https://publisher.genii.foundation`. The renderer reads the fixed Exhibit B values from its own constants rather than trusting caller data. The footer also exposes the validated reader envelope attribution field `sourceCodeUrl` as a conspicuous publication source link. Invalid low-level caller data falls back to the canonical GENII Publisher source instead of removing either link. Themes cannot remove either element through the supported API. `renderEmbeddedPage` retains both links and offers no caller switch to suppress them. The same renderer-owned interface appears on attributed static framework 404 and 500 pages and on hydrated App Router error boundaries.
 
 Raw App Router error HTTP shells remain framework-generic before hydration. Next.js emits those bytes before the client boundary can render. The user-visible hydrated `app/error.tsx` and `app/global-error.tsx` surfaces display the required linked attribution and source URL. This is a graphical interface guarantee, not a claim that every intermediate framework shell contains Publisher markup.
 

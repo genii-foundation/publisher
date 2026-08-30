@@ -529,6 +529,114 @@ test("host.route adds a static attributed page through a narrow compatible adapt
   );
 });
 
+test("embedded extension routes preserve extension surfaces without taking the host shell", async (t) => {
+  const calls = [];
+  const clientCalls = [];
+  const hostCalls = [];
+  const capabilities = [
+    "content.project",
+    "renderer.slot",
+    "renderer.client",
+    "host.route",
+  ];
+  const registration = extensionRegistration({
+    id: "station-index",
+    packageName: "@example/station-index-extension",
+    capabilities,
+    calls,
+    clientCalls,
+    hostCalls,
+  });
+  const built = await buildPublicationReader({
+    publicationRoot: routeFixture(t, capabilities),
+    audience: "public",
+    extensions: [registration],
+  });
+  assert.ok(built.valid, JSON.stringify(built.diagnostics, null, 2));
+  const created = await createFromBuild(built.value, [registration]);
+  assert.ok(created.valid, JSON.stringify(created.diagnostics, null, 2));
+  const resolved = created.value.resolveRoute(["field-station"]);
+  assert.equal(resolved.status, "resolved");
+  const html = renderToStaticMarkup(
+    await created.value.renderEmbeddedPage(resolved.page),
+  );
+
+  assert.match(
+    html,
+    /class="publisher-root publisher-root-embedded" data-publisher-page="extension" lang="en"/u,
+  );
+  assert.match(html, /class="publisher-embedded-content"/u);
+  assert.match(
+    html,
+    /data-publisher-extension-route="field-station"/u,
+  );
+  assert.match(html, /<h1>Field station<\/h1>/u);
+  assert.match(html, /data-extension-route-body="field-station"/u);
+  assert.match(html, /EXTENSION_ROUTE_DATA:EXTENSION_SERVER_DATA/u);
+  assert.match(
+    html,
+    /data-publisher-attribution="required"/u,
+  );
+  assert.match(
+    html,
+    /href="https:\/\/github\.com\/genii-foundation\/publisher">Publication source code<\/a>/u,
+  );
+  assert.doesNotMatch(html, /publisher-site-header/u);
+  assert.doesNotMatch(html, /publisher-reader-rail/u);
+  assert.doesNotMatch(html, /publisher-skip-link/u);
+  assert.doesNotMatch(html, /<main(?:\s|>)/u);
+  assert.doesNotMatch(html, /publication-audio\.json/u);
+  assert.doesNotMatch(html, /publication-reader-progress\.json/u);
+
+  const order = [
+    html.indexOf('data-publisher-slot="page.before-main"'),
+    html.indexOf('data-publisher-extension-route="field-station"'),
+    html.indexOf('data-publisher-slot="page.after-main"'),
+    html.indexOf('data-publisher-client="page.client"'),
+    html.indexOf('data-publisher-attribution="required"'),
+  ];
+  assert.equal(order.every((index) => index >= 0), true, html);
+  assert.deepEqual([...order].sort((left, right) => left - right), order);
+
+  assert.deepEqual(
+    calls.map(({ slot }) => slot),
+    ["page.before-main", "page.after-main"],
+  );
+  for (const input of calls) {
+    assert.ok(Object.isFrozen(input));
+    assert.ok(Object.isFrozen(input.page));
+    assert.deepEqual(Object.keys(input.page).sort(), [
+      "extension",
+      "kind",
+      "path",
+      "publication",
+    ]);
+    assert.deepEqual(input.page.extension, {
+      id: "station-index",
+      routeId: "field-station",
+    });
+    assert.equal(Object.hasOwn(input.page, "data"), false);
+  }
+
+  assert.equal(clientCalls.length, 1);
+  assert.deepEqual(Object.keys(clientCalls[0]).sort(), [
+    "clientData",
+    "mount",
+    "page",
+  ]);
+  assert.ok(Object.isFrozen(clientCalls[0].page));
+  assert.equal(Object.hasOwn(clientCalls[0], "serverData"), false);
+  assert.equal(Object.hasOwn(clientCalls[0].page, "data"), false);
+
+  assert.equal(hostCalls.length, 1);
+  assert.ok(Object.isFrozen(hostCalls[0]));
+  assert.ok(Object.isFrozen(hostCalls[0].page));
+  assert.deepEqual(Object.keys(hostCalls[0]).sort(), ["page", "serverData"]);
+  assert.equal(Object.hasOwn(hostCalls[0], "request"), false);
+  assert.equal(Object.hasOwn(hostCalls[0], "response"), false);
+  assert.equal(Object.hasOwn(hostCalls[0], "environment"), false);
+});
+
 test("host route failures identify public ownership without leaking the thrown value", async (t) => {
   const registration = extensionRegistration({
     id: "station-index",

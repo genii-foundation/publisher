@@ -218,7 +218,7 @@ test("Next release lifecycle enforces prerelease and stable npm tags", async () 
 });
 
 test("Next package metadata pins one verified renderer stack", async () => {
-  const [workspaceManifest, workspaceLock, nextManifest] =
+  const [workspaceManifest, workspaceLock, nextManifest, styles] =
     await Promise.all([
       readFile(join(repositoryRoot, "package.json"), "utf8").then(
         JSON.parse,
@@ -227,6 +227,7 @@ test("Next package metadata pins one verified renderer stack", async () => {
         JSON.parse,
       ),
       readFile(join(nextRoot, "package.json"), "utf8").then(JSON.parse),
+      readFile(join(nextRoot, "styles.css"), "utf8"),
     ]);
   assert.equal(
     runNpm(["--version"], { label: "npm version check" }),
@@ -291,6 +292,26 @@ test("Next package metadata pins one verified renderer stack", async () => {
     nextManifest.exports["./application-manifest.schema.json"],
     "./application-manifest.schema.json",
   );
+  assert.match(
+    styles,
+    /\.publisher-root\.publisher-root-embedded\s*\{\s*min-height: 0;\s*display: block;\s*background: transparent;\s*\}/u,
+  );
+  assert.doesNotMatch(
+    styles,
+    /\.publisher-embedded-content\s*\{[^}]*(?:width|margin|padding|background|min-height|max-width)\s*:/u,
+  );
+  assert.doesNotMatch(
+    styles,
+    /html\[data-publisher-reader-motion="reduced"\]\s+\*/u,
+  );
+  assert.match(
+    styles,
+    /html\[data-publisher-reader-motion="reduced"\] \.publisher-root \*::after/u,
+  );
+  assert.match(
+    styles,
+    /html\[data-publisher-reader-motion="reduced"\] \.publisher-reader-audio-host \*::after/u,
+  );
 });
 
 test("packed Next source rebuilds to byte-identical distribution files", async () => {
@@ -338,6 +359,14 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
       label: "packed Next source extraction",
     });
     const extractedRoot = join(rebuildRoot, "package");
+    const packedTypes = await readFile(
+      join(extractedRoot, "dist", "types.d.ts"),
+      "utf8",
+    );
+    assert.match(
+      packedTypes,
+      /readonly renderEmbeddedPage: \(page: PublisherNextPage\) => Promise<ReactElement>;/u,
+    );
     const shippedDist = new Map(
       await Promise.all(
         (await listFiles(join(extractedRoot, "dist"))).map(

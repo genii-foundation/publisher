@@ -78,6 +78,7 @@ import type {
 } from "react";
 
 import {
+  PublisherEmbeddedPageView,
   PublisherNotFoundView,
   PublisherPageView,
 } from "../components/pages.js";
@@ -3819,12 +3820,13 @@ export async function createPublicationNextApplication(
     });
     const offlineCatalogText = serializeReaderOfflineCatalog(offlineCatalog);
 
-    const renderPage = async (
+    const preparePageRender = async (
       page: PublisherNextPage,
-    ): Promise<ReactElement> => {
+      methodName: "renderEmbeddedPage" | "renderPage",
+    ) => {
       if (!resolver.owns(page)) {
         throw new TypeError(
-          "renderPage accepts only a page issued by this application's resolveRoute.",
+          `${methodName} accepts only a page issued by this application's resolveRoute.`,
         );
       }
       const updatesView =
@@ -3863,6 +3865,25 @@ export async function createPublicationNextApplication(
       const extensionRouteBody = page.kind === "extension"
         ? await renderExtensionRoute(extensions, page)
         : undefined;
+      return {
+        afterMain,
+        beforeMain,
+        clientExtensions,
+        extensionRouteBody,
+        updatesView,
+      };
+    };
+
+    const renderPage = async (
+      page: PublisherNextPage,
+    ): Promise<ReactElement> => {
+      const {
+        afterMain,
+        beforeMain,
+        clientExtensions,
+        extensionRouteBody,
+        updatesView,
+      } = await preparePageRender(page, "renderPage");
       return PublisherPageView({
         afterMain,
         beforeMain,
@@ -3875,6 +3896,30 @@ export async function createPublicationNextApplication(
         page,
         readerBuildId: reader.buildId,
         sync,
+        theme: themeResult.value.instance,
+        updates: updatesView,
+      });
+    };
+
+    const renderEmbeddedPage = async (
+      page: PublisherNextPage,
+    ): Promise<ReactElement> => {
+      const {
+        afterMain,
+        beforeMain,
+        clientExtensions,
+        extensionRouteBody,
+        updatesView,
+      } = await preparePageRender(page, "renderEmbeddedPage");
+      return PublisherEmbeddedPageView({
+        afterMain,
+        beforeMain,
+        clientExtensions,
+        ...(extensionRouteBody === undefined
+          ? {}
+          : { extensionRouteBody }),
+        markdownForBlock,
+        page,
         theme: themeResult.value.instance,
         updates: updatesView,
       });
@@ -3974,6 +4019,7 @@ export async function createPublicationNextApplication(
       staticParams,
       resolveRoute: resolver.resolve,
       renderPage,
+      renderEmbeddedPage,
       RootPage: () => Page(rootProps),
       NotFoundPage: () =>
         PublisherNotFoundView({
