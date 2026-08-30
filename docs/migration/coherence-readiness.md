@@ -482,12 +482,38 @@ and extension overrides without accepting provenance or publishing anything.
 
 ## Remaining migration gap
 
-The following are accepted scope, not release blockers waiting for another
-product decision:
+The established-host composition seam now exists. Publisher exposes Reader
+prepaint and provider boundaries without requiring an author application to
+replace its root layout, and the first staged Coherence host confirms that its
+home, Updates, progress, and administrative surfaces can retain the existing
+Coherence shell while work and direct section routes use the Publisher Reader.
+That staged host is useful migration evidence. It is not yet a complete
+acceptance candidate.
 
-1. Complete author review of the exact Coherence local preview, then use the
-   existing Coherence deployment project for a reviewed preview only after that
-   local candidate is approved.
+The remaining local engineering scope is explicit:
+
+1. Materialize the exact Reader, search, progress, offline, and public identity
+   artifacts as part of the established application's production lifecycle,
+   then serve those bytes from their declared public paths without relying on a
+   previously prepared ignored directory.
+2. Replace the current Coherence and Publisher `/offline-sw.js` collision with
+   one owned worker cutover. The migration must retain the existing application's
+   offline behavior until the Publisher package is installed and must not
+   register two competing workers for the same scope.
+3. Preserve all forty-six Coherence part and chapter index surfaces. Forty-four
+   can migrate to Publisher section-index pages once their exact hierarchy and
+   links are bound. Two paths also own semantic sections, so their index and
+   fragment ownership must be resolved explicitly instead of being inferred
+   from matching URLs.
+4. Connect the established host to Coherence-owned Updates, narration, audio,
+   and synchronization adapters. The staged Reader may not claim those
+   capabilities merely because the generic Publisher contracts exist.
+5. Run the full route, no-JavaScript, state translation, offline, accessibility,
+   administration, and browser acceptance census against one committed local
+   candidate.
+6. Complete author review of that exact candidate, then use the existing
+   Coherence deployment project for a reviewed preview only after the local
+   candidate is approved.
 
 The executable, reversible sequence is recorded in
 [`coherence-adoption-plan.md`](coherence-adoption-plan.md). It is pinned to exact
@@ -495,11 +521,12 @@ Publisher and Coherence commits, names the remaining Coherence-specific adapter
 and full-census acceptance work, preserves the current Coherence
 workbench and provider state, and stops before merge or production deployment.
 Publisher's closed executable bootstrap, separately bounded public state
-projection, Coherence-owned adapter, exact refusal census, and offline resource
-closure are complete in the reviewed candidate. The remaining gate is human and
-deployment specific. The author must review the exact local preview before the
-candidate may be pushed for an ordinary preview through the existing Coherence
-project. Production remains unchanged.
+projection, Coherence-owned state adapter, exact refusal census, and generic
+offline resource closure are complete in the proof candidate. The established
+Coherence host cutover described above remains local engineering work. After it
+is complete, the author must review the exact local preview before the candidate
+may be pushed for an ordinary preview through the existing Coherence project.
+Production remains unchanged.
 
 ## Material that remains Coherence-owned
 

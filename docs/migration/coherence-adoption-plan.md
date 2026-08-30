@@ -1,11 +1,12 @@
 # Coherence adoption plan
 
-- Status: executable migration proof refreshed, local preview approval pending
-- Publisher repository checkpoint: `55efeee334848b714d52dbedce933de73aa7c6e1`
-- Publisher package candidate: `55efeee334848b714d52dbedce933de73aa7c6e1`
+- Status: established-host migration in progress, acceptance candidate not yet complete
+- Publisher repository checkpoint: `47275264f5cee67e6e83995a6bc6b60b2c456055`
+- Publisher package candidate: `47275264f5cee67e6e83995a6bc6b60b2c456055`
 - Coherence source baseline: `20740657f5cc8fbec934c1df609d7e7e0d95fc32`
 - Coherence migration candidate: `b2bbe1320593fbd1b3aec25f8253f9c7c41d55a9`
 - Coherence executable proof checkpoint: `20980d155909850710ad95253e3eaf83a14e4c98`
+- Coherence established-host package checkpoint: `e796c5d5`
 - Coherence branch authority: committed candidate branch at the migration candidate checkpoint
 - Production authority: unchanged
 
@@ -14,11 +15,14 @@ Publisher in The Coherence Thesis. It authorizes no package publication, databas
 change, credential change, pull request merge, production deployment, or production
 alias change.
 
-The refreshed Coherence checkpoint is still proof-only. It validates the exact
+The refreshed executable checkpoint remains proof-only. It validates the exact
 Publisher package archives, compiles the author-owned corpus through declared
-adapters, exercises the official renderer and offline browser host, and leaves
-the current Coherence application routes untouched. It is not the final host
-migration, a package release, a preview approval, or production authorization.
+adapters, and exercises the official renderer and offline browser host without
+changing Coherence application routes. A later package checkpoint pins the
+composable established-host Reader candidate. The current staged host uses that
+candidate to exercise route ownership in the real Coherence application, but it
+is not yet a committed acceptance candidate, a package release, a preview
+approval, or production authorization.
 
 The two repositories may live anywhere. Every migration command that needs both
 must receive the absolute Publisher path and the absolute clean Coherence worktree
@@ -261,6 +265,35 @@ After the selected patches match the reviewed host contract, initialize or upgra
 the host through a plan hash and commit `publisher.host.json`. Any deliberately
 author-owned file must sit outside the renderer-managed set. A later lifecycle
 command must detect its edits as author input, not silently replace them.
+
+### Established-host cutover order
+
+Use the composable Reader prepaint and provider boundaries rather than importing
+the generated standalone Publisher root layout. The staged Coherence host follows
+this order:
+
+1. Keep the Coherence shell around home, Updates, progress, aggregate chapter,
+   and administrative routes while their existing behavior remains authoritative.
+2. Render volume roots and direct semantic section routes with the Publisher
+   Reader, while preserving exact aliases, redirects, canonical metadata, and
+   useful server-rendered text.
+3. Materialize the Reader and every public client artifact during the ordinary
+   Coherence preparation lifecycle. A clean checkout must not depend on ignored
+   output left by an earlier proof run.
+4. Serve search, progress, offline package, public identity, and related Reader
+   artifacts from their declared application paths.
+5. Replace the existing offline worker only through one reviewed ownership
+   transition. Never let two workers compete for the same application scope.
+6. Convert aggregate chapter and part pages only after their exact hierarchy and
+   fragment behavior are represented. Forty-four index paths are distinct from
+   semantic sections. Two paths also own a semantic section and require an
+   explicit combined ownership decision.
+7. Bind Coherence-owned Updates, narration, audio, and synchronization adapters
+   before describing those capabilities as present in the migrated host.
+
+The initial staged preview intentionally stops after step 2. It proves the shell
+and route composition seam while keeping every unresolved capability under the
+current Coherence implementation. It is diagnostic evidence, not acceptance.
 
 ## Phase 6: Bind Updates, narration, and sync
 

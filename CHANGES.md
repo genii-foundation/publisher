@@ -4,6 +4,7 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-08-29, GENII Foundation
 
+- Corrected the Coherence migration readiness boundary after the first established-host preview exposed the remaining artifact, worker, aggregate-route, and author-adapter cutover work.
 - Exposed a composable Publisher Reader document shell for established applications that retain author-owned routes and layout.
 - Bound every recent Coherence application commit to explicit Publisher capability parity or an author-owned disposition.
 - Added an independent public-site artifact check that binds the complete output census, manifest, and file bytes to repository authority.
