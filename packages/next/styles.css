@@ -43,32 +43,35 @@ If you wish to allow use of your version of this file only under the terms of th
 
 html[data-publisher-reader-scheme="light"] .publisher-root,
 html[data-publisher-reader-scheme="light"] .publisher-reader-audio-host {
-  --publisher-color-canvas: #f5f7f4 !important;
-  --publisher-color-surface: #fcfdfb !important;
-  --publisher-color-text: #162225 !important;
-  --publisher-color-muted-text: #526166 !important;
-  --publisher-color-accent: #18586c !important;
-  --publisher-color-focus: #9a4e00 !important;
-  --publisher-color-border: #c8d0cf !important;
+  --publisher-color-canvas: var(--publisher-color-light-canvas) !important;
+  --publisher-color-surface: var(--publisher-color-light-surface) !important;
+  --publisher-color-text: var(--publisher-color-light-text) !important;
+  --publisher-color-muted-text: var(--publisher-color-light-muted-text) !important;
+  --publisher-color-accent: var(--publisher-color-light-accent) !important;
+  --publisher-color-focus: var(--publisher-color-light-focus) !important;
+  --publisher-color-border: var(--publisher-color-light-border) !important;
 }
 
 html[data-publisher-reader-scheme="dark"] .publisher-root,
-html[data-publisher-reader-scheme="black"] .publisher-root,
-html[data-publisher-reader-scheme="dark"] .publisher-reader-audio-host,
-html[data-publisher-reader-scheme="black"] .publisher-reader-audio-host {
-  --publisher-color-canvas: #11191b !important;
-  --publisher-color-surface: #182326 !important;
-  --publisher-color-text: #f1f4ef !important;
-  --publisher-color-muted-text: #b8c3c4 !important;
-  --publisher-color-accent: #86d0e0 !important;
-  --publisher-color-focus: #f0ae54 !important;
-  --publisher-color-border: #3d5055 !important;
+html[data-publisher-reader-scheme="dark"] .publisher-reader-audio-host {
+  --publisher-color-canvas: var(--publisher-color-dark-canvas) !important;
+  --publisher-color-surface: var(--publisher-color-dark-surface) !important;
+  --publisher-color-text: var(--publisher-color-dark-text) !important;
+  --publisher-color-muted-text: var(--publisher-color-dark-muted-text) !important;
+  --publisher-color-accent: var(--publisher-color-dark-accent) !important;
+  --publisher-color-focus: var(--publisher-color-dark-focus) !important;
+  --publisher-color-border: var(--publisher-color-dark-border) !important;
 }
 
 html[data-publisher-reader-scheme="black"] .publisher-root,
 html[data-publisher-reader-scheme="black"] .publisher-reader-audio-host {
-  --publisher-color-canvas: #000 !important;
-  --publisher-color-surface: #0d1011 !important;
+  --publisher-color-canvas: var(--publisher-color-black-canvas) !important;
+  --publisher-color-surface: var(--publisher-color-black-surface) !important;
+  --publisher-color-text: var(--publisher-color-black-text) !important;
+  --publisher-color-muted-text: var(--publisher-color-black-muted-text) !important;
+  --publisher-color-accent: var(--publisher-color-black-accent) !important;
+  --publisher-color-focus: var(--publisher-color-black-focus) !important;
+  --publisher-color-border: var(--publisher-color-black-border) !important;
 }
 
 .publisher-root a,

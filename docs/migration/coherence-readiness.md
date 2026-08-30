@@ -495,7 +495,10 @@ audio host. Coherence can therefore retain its current outer shell, route and
 continuity surfaces, metadata, errors, and browser lifecycle while replacing the
 content renderer in one reversible preview step. The host must paint the exact
 selected Publisher theme canvas behind the transparent embedded root because
-Publisher contrast validation is relative to that canvas.
+Publisher contrast validation is relative to that canvas. Theme API 2.0 now
+projects the validated base, light, dark, and black palettes through one pure
+read only function. The host can derive that canvas without activating Publisher
+prepaint, providers, stores, or any other Reader lifecycle surface.
 
 This closes the missing content-renderer seam. It does not close Reader lifecycle
 parity. Current progress observation, passage selection and bookmark geometry,

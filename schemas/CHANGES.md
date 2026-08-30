@@ -6,6 +6,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 - Added a narrow server-only embedded page renderer that preserves Publisher theme scope, safe content, extension ordering, publication source availability, and mandatory attribution inside a host-owned transition shell.
 - Recorded the opaque element, exact host canvas, shell ownership, and Reader lifecycle limits required for a reversible Coherence migration preview.
+- Added optional complete light, dark, and black Theme 2.0 palettes with independent validation and a legacy base-palette fallback.
+- Replaced fixed alternate Reader colors with a pure frozen theme appearance projection usable by full and embedded hosts without activating Reader lifecycle behavior.
 
 ## 2026-08-29, GENII Foundation
 

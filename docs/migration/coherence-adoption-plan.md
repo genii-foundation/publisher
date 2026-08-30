@@ -261,7 +261,10 @@ Prepare reviewed host patches with these transition ownership rules:
   publication source link, and mandatory attribution inside that shell.
 - The embedded root is transparent. The Coherence frame must paint the exact
   selected Publisher theme canvas behind it. Contrast evidence must verify the
-  effective canvas rather than only the theme data in isolation.
+  effective canvas rather than only the theme data in isolation. Derive that
+  canvas from Publisher's pure validated appearance projection. Do not duplicate
+  palette values in the host or activate Publisher Reader lifecycle behavior to
+  calculate it.
 - The Publisher embedded wrapper owns no reading measure, gutter, width, margin,
   padding, or landmark. Coherence remains the only frame authority during this
   phase.

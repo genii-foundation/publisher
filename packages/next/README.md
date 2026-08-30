@@ -558,6 +558,13 @@ Theme API 2.0 requires the theme to declare the ordered Reader font choices and
 their default. Themes written for API 1.0 must add this policy and update their
 adapter version before use.
 
+Theme API 2.0 also accepts one optional complete `colorSchemes` record with
+`light`, `dark`, and `black` palettes. Each palette repeats the seven base color
+fields and passes the same validation independently. A theme that omits the
+record remains valid and uses its base palette for every Reader scheme. Partial
+scheme records and partial palettes are rejected. See
+[ADR 0061](../../docs/architecture/0061-theme-declared-reader-appearance.md).
+
 A separately published theme package can expose this complete adapter:
 
 ```ts
@@ -566,6 +573,32 @@ import {
   type PublisherNextTheme,
   type ResolvedPublisherNextTheme,
 } from "@genii-foundation/publisher-next/theme";
+
+const lightPalette = {
+  canvas: "#F7F4ED",
+  surface: "#FFFFFF",
+  text: "#182326",
+  mutedText: "#4C5A5E",
+  accent: "#005A6E",
+  focus: "#8A3500",
+  border: "#C5CDCE"
+};
+
+const darkPalette = {
+  canvas: "#11191B",
+  surface: "#182326",
+  text: "#F1F4EF",
+  mutedText: "#B8C3C4",
+  accent: "#86D0E0",
+  focus: "#F0AE54",
+  border: "#3D5055"
+};
+
+const blackPalette = {
+  ...darkPalette,
+  canvas: "#000000",
+  surface: "#0D1011"
+};
 
 const implementation: PublisherNextTheme = {
   kind: "genii.publisher.next-theme",
@@ -581,6 +614,11 @@ const implementation: PublisherNextTheme = {
           accent: "#005A6E",
           focus: "#8A3500",
           border: "#C5CDCE"
+        },
+        colorSchemes: {
+          light: lightPalette,
+          dark: darkPalette,
+          black: blackPalette
         },
         typography: {
           bodyFamily: "Charter, Cambria, serif",
@@ -620,6 +658,19 @@ export const theme: ResolvedPublisherNextTheme = {
   config: {},
   implementation
 };
+```
+
+Every named palette above must use the complete `color` shape shown for the
+base palette. The browser safe projection exposes the validated effective data
+without reading preferences or activating Reader lifecycle behavior:
+
+```ts
+import {
+  projectPublisherNextThemeAppearance,
+} from "@genii-foundation/publisher-next/theme";
+
+const appearance = projectPublisherNextThemeAppearance(application.theme);
+const embeddedDarkCanvas = appearance.dark.canvas;
 ```
 
 The host imports that package explicitly and passes `theme` to `createPublicationNextApplication`. Manifest package strings remain identity data, never import authority.

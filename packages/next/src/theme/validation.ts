@@ -18,6 +18,8 @@ import type {
 
 import type {
   PublisherNextReaderFontFamily,
+  PublisherNextThemeColorPalette,
+  PublisherNextThemeColorSchemes,
   PublisherNextThemeInstance,
   PublisherNextThemeTokens,
 } from "../types.js";
@@ -58,6 +60,7 @@ function diagnostic(
 function plainDataRecord(
   value: unknown,
   requiredKeys: readonly string[],
+  optionalKeys: readonly string[] = [],
 ):
   | {
       readonly valid: true;
@@ -84,8 +87,11 @@ function plainDataRecord(
     }
     const descriptors = Object.getOwnPropertyDescriptors(value);
     const keys = Object.keys(descriptors).sort();
-    const expected = [...requiredKeys].sort();
-    if (JSON.stringify(keys) !== JSON.stringify(expected)) {
+    const allowed = new Set([...requiredKeys, ...optionalKeys]);
+    if (
+      requiredKeys.some((key) => !keys.includes(key)) ||
+      keys.some((key) => !allowed.has(key))
+    ) {
       return { valid: false, issue: "properties" };
     }
     for (const key of keys) {
@@ -246,6 +252,127 @@ function isValidLayoutDimension(
   );
 }
 
+const COLOR_KEYS = Object.freeze([
+  "accent",
+  "border",
+  "canvas",
+  "focus",
+  "mutedText",
+  "surface",
+  "text",
+] as const);
+
+function validateColorPalette(
+  descriptors: Readonly<Record<string, PropertyDescriptor>>,
+  path: string,
+): ValidationResult<PublisherNextThemeColorPalette> {
+  const colorEntries = Object.fromEntries(
+    Object.keys(descriptors).map((key) => [
+      key,
+      descriptorValue(descriptors, key),
+    ]),
+  );
+  for (const [key, color] of Object.entries(colorEntries)) {
+    if (typeof color !== "string" || !COLOR.test(color)) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.color.invalid",
+            `${path}/${key}`,
+            "Theme colors must be opaque six-digit hexadecimal values.",
+            "pattern",
+            { value: color },
+          ),
+        ]),
+      });
+    }
+  }
+
+  const canvas = colorEntries.canvas as string;
+  for (const [key, minimum] of [
+    ["text", 4.5],
+    ["mutedText", 4.5],
+    ["accent", 4.5],
+    ["focus", 3],
+  ] as const) {
+    const ratio = contrast(canvas, colorEntries[key] as string);
+    if (ratio < minimum) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.color.contrast",
+            `${path}/${key}`,
+            "Theme colors must preserve readable contrast against the canvas.",
+            "contrast",
+            { minimum, ratio },
+          ),
+        ]),
+      });
+    }
+  }
+  if (
+    contrast(
+      colorEntries.surface as string,
+      colorEntries.text as string,
+    ) < 4.5
+  ) {
+    return Object.freeze({
+      valid: false,
+      diagnostics: Object.freeze([
+        diagnostic(
+          "next.theme.surface.contrast",
+          `${path}/surface`,
+          "The theme surface must preserve readable text contrast.",
+          "contrast",
+          { minimum: 4.5 },
+        ),
+      ]),
+    });
+  }
+  const surface = colorEntries.surface as string;
+  for (const [key, minimum] of [
+    ["mutedText", 4.5],
+    ["accent", 4.5],
+    ["focus", 3],
+  ] as const) {
+    const ratio = contrast(surface, colorEntries[key] as string);
+    if (ratio < minimum) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.surface_color.contrast",
+            `${path}/${key}`,
+            "Theme colors used on surfaces must preserve visible contrast.",
+            "contrast",
+            {
+              background: "surface",
+              minimum,
+              ratio,
+            },
+          ),
+        ]),
+      });
+    }
+  }
+
+  return Object.freeze({
+    valid: true,
+    value: Object.freeze({
+      canvas,
+      surface,
+      text: colorEntries.text as string,
+      mutedText: colorEntries.mutedText as string,
+      accent: colorEntries.accent as string,
+      focus: colorEntries.focus as string,
+      border: colorEntries.border as string,
+    }),
+    diagnostics: Object.freeze([]),
+  });
+}
+
 export function validatePublisherNextThemeInstance(
   value: unknown,
 ): ValidationResult<PublisherNextThemeInstance> {
@@ -271,7 +398,7 @@ export function validatePublisherNextThemeInstance(
     "color",
     "layout",
     "typography",
-  ]);
+  ], ["colorSchemes"]);
   if (!tokens.valid) {
     return Object.freeze({
       valid: false,
@@ -287,20 +414,16 @@ export function validatePublisherNextThemeInstance(
   }
 
   const colorValue = descriptorValue(tokens.descriptors, "color");
+  const colorSchemesValue = descriptorValue(
+    tokens.descriptors,
+    "colorSchemes",
+  );
   const typographyValue = descriptorValue(
     tokens.descriptors,
     "typography",
   );
   const layoutValue = descriptorValue(tokens.descriptors, "layout");
-  const colors = plainDataRecord(colorValue, [
-    "accent",
-    "border",
-    "canvas",
-    "focus",
-    "mutedText",
-    "surface",
-    "text",
-  ]);
+  const colors = plainDataRecord(colorValue, COLOR_KEYS);
   const typography = plainDataRecord(typographyValue, [
     "baseSize",
     "bodyFamily",
@@ -330,96 +453,68 @@ export function validatePublisherNextThemeInstance(
     });
   }
 
-  const colorEntries = Object.fromEntries(
-    Object.keys(colors.descriptors).map((key) => [
-      key,
-      descriptorValue(colors.descriptors, key),
-    ]),
+  const color = validateColorPalette(
+    colors.descriptors,
+    "/theme/tokens/color",
   );
-  for (const [key, color] of Object.entries(colorEntries)) {
-    if (typeof color !== "string" || !COLOR.test(color)) {
-      return Object.freeze({
-        valid: false,
-        diagnostics: Object.freeze([
-          diagnostic(
-            "next.theme.color.invalid",
-            `/theme/tokens/color/${key}`,
-            "Theme colors must be opaque six-digit hexadecimal values.",
-            "pattern",
-            { value: color },
-          ),
-        ]),
-      });
-    }
-  }
+  if (!color.valid) return color;
 
-  const canvas = colorEntries.canvas as string;
-  for (const [key, minimum] of [
-    ["text", 4.5],
-    ["mutedText", 4.5],
-    ["accent", 4.5],
-    ["focus", 3],
-  ] as const) {
-    const ratio = contrast(canvas, colorEntries[key] as string);
-    if (ratio < minimum) {
+  let colorSchemes: PublisherNextThemeColorSchemes | undefined;
+  if (Object.hasOwn(tokens.descriptors, "colorSchemes")) {
+    const inspectedColorSchemes = plainDataRecord(
+      colorSchemesValue,
+      ["black", "dark", "light"],
+    );
+    if (!inspectedColorSchemes.valid) {
       return Object.freeze({
         valid: false,
         diagnostics: Object.freeze([
           diagnostic(
-            "next.theme.color.contrast",
-            `/theme/tokens/color/${key}`,
-            "Theme colors must preserve readable contrast against the canvas.",
-            "contrast",
-            { minimum, ratio },
+            "next.theme.color_schemes.invalid",
+            "/theme/tokens/colorSchemes",
+            "Theme color schemes must declare complete light, dark, and black palettes.",
+            inspectedColorSchemes.issue,
           ),
         ]),
       });
     }
-  }
-  if (
-    contrast(
-      colorEntries.surface as string,
-      colorEntries.text as string,
-    ) < 4.5
-  ) {
-    return Object.freeze({
-      valid: false,
-      diagnostics: Object.freeze([
-        diagnostic(
-          "next.theme.surface.contrast",
-          "/theme/tokens/color/surface",
-          "The theme surface must preserve readable text contrast.",
-          "contrast",
-          { minimum: 4.5 },
-        ),
-      ]),
+    const validatedColorSchemes: Record<
+      keyof PublisherNextThemeColorSchemes,
+      PublisherNextThemeColorPalette
+    > = Object.create(null) as Record<
+      keyof PublisherNextThemeColorSchemes,
+      PublisherNextThemeColorPalette
+    >;
+    for (const scheme of ["light", "dark", "black"] as const) {
+      const inspectedPalette = plainDataRecord(
+        descriptorValue(inspectedColorSchemes.descriptors, scheme),
+        COLOR_KEYS,
+      );
+      if (!inspectedPalette.valid) {
+        return Object.freeze({
+          valid: false,
+          diagnostics: Object.freeze([
+            diagnostic(
+              "next.theme.color_scheme.invalid",
+              `/theme/tokens/colorSchemes/${scheme}`,
+              "Every theme color scheme must use the complete closed palette shape.",
+              inspectedPalette.issue,
+            ),
+          ]),
+        });
+      }
+      const validatedPalette = validateColorPalette(
+        inspectedPalette.descriptors,
+        `/theme/tokens/colorSchemes/${scheme}`,
+      );
+      if (!validatedPalette.valid) return validatedPalette;
+      validatedColorSchemes[scheme] = validatedPalette.value;
+    }
+    colorSchemes = Object.freeze({
+      light: validatedColorSchemes.light,
+      dark: validatedColorSchemes.dark,
+      black: validatedColorSchemes.black,
     });
-  }
-  const surface = colorEntries.surface as string;
-  for (const [key, minimum] of [
-    ["mutedText", 4.5],
-    ["accent", 4.5],
-    ["focus", 3],
-  ] as const) {
-    const ratio = contrast(surface, colorEntries[key] as string);
-    if (ratio < minimum) {
-      return Object.freeze({
-        valid: false,
-        diagnostics: Object.freeze([
-          diagnostic(
-            "next.theme.surface_color.contrast",
-            `/theme/tokens/color/${key}`,
-            "Theme colors used on surfaces must preserve visible contrast.",
-            "contrast",
-            {
-              background: "surface",
-              minimum,
-              ratio,
-            },
-          ),
-        ]),
-      });
-    }
   }
 
   const bodyFamily = descriptorValue(
@@ -642,15 +737,8 @@ export function validatePublisherNextThemeInstance(
   }
 
   const snapshot: PublisherNextThemeTokens = Object.freeze({
-    color: Object.freeze({
-      canvas,
-      surface: colorEntries.surface as string,
-      text: colorEntries.text as string,
-      mutedText: colorEntries.mutedText as string,
-      accent: colorEntries.accent as string,
-      focus: colorEntries.focus as string,
-      border: colorEntries.border as string,
-    }),
+    color: color.value,
+    ...(colorSchemes === undefined ? {} : { colorSchemes }),
     typography: Object.freeze({
       bodyFamily: bodyFamily as string,
       headingFamily: headingFamily as string,

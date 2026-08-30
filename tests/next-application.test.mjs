@@ -294,6 +294,7 @@ test("embedded pages retain Publisher content and attribution without taking the
   assert.match(full, /class="publisher-site-header"/u);
   assert.match(full, /class="publisher-reader-rail"/u);
   assert.match(full, /class="publisher-skip-link"/u);
+  assert.match(full, /--publisher-color-black-canvas:#000000/u);
   assert.match(full, /<main/u);
 
   assert.match(
@@ -305,6 +306,18 @@ test("embedded pages retain Publisher content and attribution without taking the
   assert.match(
     embedded,
     /--publisher-color-accent:#004B5A/u,
+  );
+  assert.match(
+    embedded,
+    /--publisher-color-light-accent:#004B5A/u,
+  );
+  assert.match(
+    embedded,
+    /--publisher-color-dark-canvas:#11191B/u,
+  );
+  assert.match(
+    embedded,
+    /--publisher-color-black-canvas:#000000/u,
   );
   assert.match(embedded, /data-publisher-section="published-opening"/u);
   assert.match(embedded, /data-publisher-block=/u);
@@ -839,6 +852,10 @@ test("an established host can compose the exact Reader prepaint and providers", 
   assert.match(prepaint, /data-publisher-reader-prepaint=""/u);
   assert.doesNotMatch(prepaint, /<(?:html|body)(?:\s|>)/u);
   assert.match(providers, /class="publisher-reader-audio-host"/u);
+  assert.match(
+    providers,
+    /--publisher-color-black-canvas:#000000/u,
+  );
   assert.match(providers, /<audio preload="metadata"><\/audio>/u);
   assert.equal(providers.startsWith("proof"), true);
   assert.doesNotMatch(providers, /<(?:html|head)(?:\s|>)/u);
@@ -1632,6 +1649,7 @@ test("client-safe error boundaries preserve attribution without leaking errors",
       html,
       /href="https:\/\/github\.com\/genii-foundation\/publisher"/u,
     );
+    assert.match(html, /--publisher-color-black-canvas:#000000/u);
     assert.doesNotMatch(html, /private rendering detail/u);
     assert.doesNotMatch(html, /private-digest/u);
   }

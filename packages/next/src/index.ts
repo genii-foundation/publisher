@@ -16,6 +16,9 @@ export {
   resolveDefaultPublisherNextTheme,
 } from "./theme/default.js";
 export {
+  projectPublisherNextThemeAppearance,
+} from "./theme/appearance.js";
+export {
   validatePublisherNextThemeInstance,
 } from "./theme/validation.js";
 export {
@@ -70,6 +73,9 @@ export type {
   PublisherNextExtensionSlot,
   PublisherNextJsonObject,
   PublisherNextReaderFontFamily,
+  PublisherNextThemeAppearanceProjection,
+  PublisherNextThemeColorPalette,
+  PublisherNextThemeColorSchemes,
   PublisherNextReaderStateBootstrap,
   PublisherNextReaderStateBootstrapContext,
   PublisherNextReaderStateBootstrapInstance,

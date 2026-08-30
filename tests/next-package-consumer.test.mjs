@@ -367,6 +367,10 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
       packedTypes,
       /readonly renderEmbeddedPage: \(page: PublisherNextPage\) => Promise<ReactElement>;/u,
     );
+    assert.match(
+      packedTypes,
+      /interface PublisherNextThemeAppearanceProjection/u,
+    );
     const shippedDist = new Map(
       await Promise.all(
         (await listFiles(join(extractedRoot, "dist"))).map(
@@ -407,6 +411,17 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
     }
     const packedRoot = await import(
       `${pathToFileURL(join(extractedRoot, "dist", "index.js")).href}?projection-contract`
+    );
+    const packedTheme = await import(
+      `${pathToFileURL(join(extractedRoot, "dist", "theme", "index.js")).href}?appearance-contract`
+    );
+    assert.equal(
+      typeof packedRoot.projectPublisherNextThemeAppearance,
+      "function",
+    );
+    assert.equal(
+      packedRoot.projectPublisherNextThemeAppearance,
+      packedTheme.projectPublisherNextThemeAppearance,
     );
     assert.deepEqual(
       {

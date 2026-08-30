@@ -6,6 +6,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 - Added `renderEmbeddedPage` as a protected server transition seam that retains themed page content, extensions, source link, and mandatory attribution while omitting the full Publisher shell and Reader lifecycle providers.
 - Documented the opaque React element contract and the requirement for the host to paint the exact validated Publisher canvas behind the transparent embedded root.
+- Added optional complete light, dark, and black Theme 2.0 palettes with independent validation and a legacy base-palette fallback.
+- Replaced fixed alternate Reader colors with a pure frozen appearance projection that full and embedded hosts can consume without activating Reader lifecycle behavior.
 
 ## 2026-08-29, GENII Foundation
 

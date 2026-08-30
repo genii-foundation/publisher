@@ -183,16 +183,32 @@ export interface PublisherNextExtensionHandlerInput {
   readonly serverData?: JSONValue;
 }
 
+export interface PublisherNextThemeColorPalette {
+  readonly canvas: string;
+  readonly surface: string;
+  readonly text: string;
+  readonly mutedText: string;
+  readonly accent: string;
+  readonly focus: string;
+  readonly border: string;
+}
+
+export interface PublisherNextThemeColorSchemes {
+  readonly light: PublisherNextThemeColorPalette;
+  readonly dark: PublisherNextThemeColorPalette;
+  readonly black: PublisherNextThemeColorPalette;
+}
+
+export interface PublisherNextThemeAppearanceProjection {
+  readonly base: PublisherNextThemeColorPalette;
+  readonly light: PublisherNextThemeColorPalette;
+  readonly dark: PublisherNextThemeColorPalette;
+  readonly black: PublisherNextThemeColorPalette;
+}
+
 export interface PublisherNextThemeTokens {
-  readonly color: {
-    readonly canvas: string;
-    readonly surface: string;
-    readonly text: string;
-    readonly mutedText: string;
-    readonly accent: string;
-    readonly focus: string;
-    readonly border: string;
-  };
+  readonly color: PublisherNextThemeColorPalette;
+  readonly colorSchemes?: PublisherNextThemeColorSchemes;
   readonly typography: {
     readonly bodyFamily: string;
     readonly headingFamily: string;
