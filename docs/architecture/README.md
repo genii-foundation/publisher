@@ -64,5 +64,6 @@ These records define the accepted foundation of GENII Publisher.
 60. [ADR 0060: Embedded page rendering for host transitions](./0060-embedded-page-rendering.md)
 61. [ADR 0061: Theme declared Reader appearance palettes](./0061-theme-declared-reader-appearance.md)
 62. [ADR 0062: Public narration word ranges](./0062-public-narration-word-ranges.md)
+63. [ADR 0063: Public Reader selection coordinates](./0063-public-reader-selection-coordinates.md)
 
 Changes to an accepted decision require a new record that supersedes the earlier one. The earlier record remains as historical evidence.

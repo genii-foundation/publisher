@@ -10,6 +10,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Replaced fixed alternate Reader colors with a pure frozen theme appearance projection usable by full and embedded hosts without activating Reader lifecycle behavior.
 - Exposed the canonical narration scanner as frozen UTF-16 code unit word ranges and bound word counts to the same scanner.
 - Reused the public narration ranges in Next word markup and documented exact section, count, and text-slice verification for host timing bindings.
+- Exposed the canonical Reader selection adapter and text coordinate primitives through the public Next client entry without adding a second DOM coordinate implementation.
+- Documented the exact section identity, transient interface exclusion, null conditions, coordinate basis, private helper boundary, and packed consumer proof for established hosts.
 
 ## 2026-08-29, GENII Foundation
 

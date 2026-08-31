@@ -359,10 +359,16 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
       label: "packed Next source extraction",
     });
     const extractedRoot = join(rebuildRoot, "package");
-    const packedTypes = await readFile(
-      join(extractedRoot, "dist", "types.d.ts"),
-      "utf8",
-    );
+    const [packedTypes, packedClientTypes] = await Promise.all([
+      readFile(
+        join(extractedRoot, "dist", "types.d.ts"),
+        "utf8",
+      ),
+      readFile(
+        join(extractedRoot, "dist", "client", "index.d.ts"),
+        "utf8",
+      ),
+    ]);
     assert.match(
       packedTypes,
       /readonly renderEmbeddedPage: \(page: PublisherNextPage\) => Promise<ReactElement>;/u,
@@ -370,6 +376,22 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
     assert.match(
       packedTypes,
       /interface PublisherNextThemeAppearanceProjection/u,
+    );
+    assert.match(
+      packedClientTypes,
+      /export \{ publisherReaderTextContent, publisherReaderTextPointForOffset, publisherReaderTextRange, publisherReaderTextVerticalBounds,? \} from "\.\/reader-dom-text\.js";/u,
+    );
+    assert.match(
+      packedClientTypes,
+      /export \{ readPublisherReaderSelection,? \} from "\.\/reader-selection\.js";/u,
+    );
+    assert.match(
+      packedClientTypes,
+      /export type \{ PublisherReaderTextPoint, PublisherReaderTextVerticalBounds,? \} from "\.\/reader-dom-text\.js";/u,
+    );
+    assert.match(
+      packedClientTypes,
+      /export type \{ PublisherReaderSelection,? \} from "\.\/reader-selection\.js";/u,
     );
     const shippedDist = new Map(
       await Promise.all(
@@ -415,6 +437,19 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
     const packedTheme = await import(
       `${pathToFileURL(join(extractedRoot, "dist", "theme", "index.js")).href}?appearance-contract`
     );
+    const packedClient = await import(
+      `${pathToFileURL(join(extractedRoot, "dist", "client", "index.js")).href}?selection-contract`
+    );
+    const packedReaderDomText = await import(
+      pathToFileURL(
+        join(extractedRoot, "dist", "client", "reader-dom-text.js"),
+      ).href
+    );
+    const packedReaderSelection = await import(
+      pathToFileURL(
+        join(extractedRoot, "dist", "client", "reader-selection.js"),
+      ).href
+    );
     assert.equal(
       typeof packedRoot.projectPublisherNextThemeAppearance,
       "function",
@@ -423,6 +458,27 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
       packedRoot.projectPublisherNextThemeAppearance,
       packedTheme.projectPublisherNextThemeAppearance,
     );
+    assert.equal(
+      packedClient.readPublisherReaderSelection,
+      packedReaderSelection.readPublisherReaderSelection,
+    );
+    for (const name of [
+      "publisherReaderTextContent",
+      "publisherReaderTextPointForOffset",
+      "publisherReaderTextRange",
+      "publisherReaderTextVerticalBounds",
+    ]) {
+      assert.equal(typeof packedClient[name], "function", name);
+      assert.equal(packedClient[name], packedReaderDomText[name], name);
+    }
+    for (const privateName of [
+      "PUBLISHER_READER_TRANSIENT_UI_ATTRIBUTE",
+      "createPublisherReaderTextWalker",
+      "publisherReaderTextClientRects",
+      "publisherReaderTextOffset",
+    ]) {
+      assert.equal(Object.hasOwn(packedClient, privateName), false);
+    }
     assert.deepEqual(
       {
         projectionBytes:

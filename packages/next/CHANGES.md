@@ -9,6 +9,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 - Added optional complete light, dark, and black Theme 2.0 palettes with independent validation and a legacy base-palette fallback.
 - Replaced fixed alternate Reader colors with a pure frozen appearance projection that full and embedded hosts can consume without activating Reader lifecycle behavior.
 - Reused the public Reader narration range contract for server word markup without changing its classes or data attributes.
+- Exposed the canonical Reader selection adapter and four text coordinate primitives through the public client entry while keeping lower level DOM policy helpers private.
+- Added focused public entry, packed declaration, packed runtime, and clean host declaration proofs for the new browser seam.
 
 ## 2026-08-29, GENII Foundation
 

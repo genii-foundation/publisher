@@ -56,6 +56,33 @@ offsets and measured rectangles, while leaving those controls available to
 assistive technology. Marker geometry therefore remains stable as transient
 Reader interface text changes.
 
+An established host that retains its own Reader state and controls may reuse the
+same browser coordinate authority through the public client entry:
+
+```ts
+import {
+  publisherReaderTextContent,
+  publisherReaderTextPointForOffset,
+  publisherReaderTextRange,
+  publisherReaderTextVerticalBounds,
+  readPublisherReaderSelection,
+  type PublisherReaderSelection,
+  type PublisherReaderTextPoint,
+  type PublisherReaderTextVerticalBounds,
+} from "@genii-foundation/publisher-next/client";
+```
+
+These exports are the exact functions used by the official Reader. They do not
+create a second coordinate system or activate storage, bookmarks, progress,
+synchronization, interface state, or event handling. Selection capture requires
+the exact validated `ReaderSection` rendered on the current page. Text points
+use UTF-16 offsets over canonical manuscript text after Publisher transient
+interface descendants are excluded. Text ranges must remain in one document,
+and vertical bounds use viewport coordinates from nonempty text rectangles. A
+missing point, invalid range, mismatched block text, cross-section selection, or
+unmeasurable rectangle returns `null`. See
+[ADR 0063](../../docs/architecture/0063-public-reader-selection-coordinates.md).
+
 The default Listen panel fetches the build-bound narration envelope only when a
 reader opens it. One persistent media element supplies play, pause, seek, bounded
 speed, remembered voice choice, 15-second back and forward jumps, previous and
