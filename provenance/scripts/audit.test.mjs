@@ -852,7 +852,7 @@ test("package auditing reads archives in process and fails closed on an unreadab
   assert.notEqual(refused.status, 0);
   assert.match(
     refused.stderr,
-    /Package archive could not be decompressed and parsed/u,
+    /Package archive does not begin with a gzip member/u,
   );
   assert.match(
     refused.stderr,

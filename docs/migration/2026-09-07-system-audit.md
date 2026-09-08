@@ -36,6 +36,35 @@ and zero failures. The log is local and ignored, `completion-audit-validation.lo
 
 Reference: [fast-uri maintainer advisory](https://github.com/fastify/fast-uri/security/advisories/GHSA-f65p-4m7j-42xc).
 
+### Archive audit tail bypass
+
+Independent code review found that trailer equality did not prove complete gzip
+input consumption. A bounded adversarial fixture containing a benign archive,
+a zero byte, hidden compressed source, and a copied benign trailer was accepted
+by the scanner. The new rejection regression failed before the repair.
+
+A second regression proved that optional gzip comments could also carry
+unscanned data. The reader now accepts one metadata-free gzip header, frames off
+its fixed header and trailer, and requires a single raw DEFLATE decoder to
+consume the complete descriptor-bound framed body. This refuses concatenated
+members, including an empty first member hiding a later metadata-bearing member.
+The existing trailer CRC and length, raw tar, member, deadline, and size checks
+remain intact. Tests cover copied-trailer tails within one input chunk and across
+chunk boundaries, optional comments, and empty-prefix member smuggling. This
+concerns adversarial archive acceptance, not evidence that any real candidate
+contains hidden data.
+
+The repaired reader passes all 74 archive tests on Node 22.12.0, 24.18.0, and
+26.4.0. The integrated archive and audit suite passes 79 tests under the exact
+npm invocation. Complete browser-enabled validation passes 1,143 tests with two
+intentional skips and no failures, including actual package and independent
+publication rehearsals. The local log is `archive-repair-validation.log`.
+
+The earlier provenance scan used the earlier scanner. New source-audit evidence
+must use the repaired scanner; its separate local output is
+`provenance-repaired-scanner-audit.log`. Historical receipt identities are not
+rewritten, and neither scan results nor parser fixes accept provenance records.
+
 ### Coherence theme proof drift
 
 The saved import-closure repair allows the real Next compiler to finish. The
@@ -91,6 +120,15 @@ The new theme's exact default Next build passes with application identity
 Two live observations agreed on its catalog and stylesheet identities. Its
 full Coherence offline browser acceptance remains separate and in progress.
 
+Coherence checkpoint `df62bbe9` now passes the isolated Cardinal offline browser
+proof with all 90 semantic documents checked sequentially. The unchanged
+per-document tree ceiling no longer incorrectly limits the combined publication
+tree, and the total cache-byte ceiling remains enforced. Cold offline reading,
+search, navigation, rollback, atomic replacement, existing-cache preservation,
+runtime artifact preservation, and generated-host cleanup all pass. Browser
+evidence is `sha256:1e1a99d4e3cdbff5c7e4ac039328a47715e29c2b64353c04b63c5af723de0383`.
+This is isolated-host evidence, not established-host migration acceptance.
+
 The provenance review command still reports four draft records and no accepted
 records. That command summarizes recorded scans; it is not a fresh retained-package
 source audit and does not approve provenance or release.
@@ -102,3 +140,19 @@ scan was clear or an explicitly expected match. The local ignored log is
 `provenance-completion-audit.log`. Its record dates remain the original audit
 record dates, not the date of this rerun. Human provenance acceptance and release
 authorization remain outstanding.
+
+## Fresh external release checks
+
+On September 7, GitHub's read-only API still reports zero environments for
+`genii-foundation/publisher` and only the active CI workflow on the remote default
+branch. The required protected `npm-publish` environment and release workflow
+are not available there. DNS queries for A, AAAA, and CNAME records at
+`publisher.genii.foundation` each return NXDOMAIN, and the public-surface verifier
+fails to fetch. npm account trusted-publisher settings remain unverified. These
+are separate release blockers. No external settings were changed.
+
+The same read-only check confirms private vulnerability reporting is disabled,
+as are Dependabot security updates, secret scanning, and push protection. The
+security policy's pre-release reporting gate is still open. The repaired archive
+regressions use synthetic data and remain local; no exploit details were posted
+to an external service.

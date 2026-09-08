@@ -852,6 +852,29 @@ test("bytes outside the single gzip member are refused rather than attested unex
     /carries bytes outside its single gzip member/u;
   for (const [label, tail, pattern] of [
     [
+      "a hidden second member followed by a copied benign trailer",
+      Buffer.concat([Buffer.from([0]), smuggled, benign.subarray(-8)]),
+      trailerPattern,
+    ],
+    [
+      "hidden arbitrary bytes followed by a copied benign trailer",
+      Buffer.concat([
+        Buffer.from([0]),
+        Buffer.alloc(32768, 0xaa),
+        benign.subarray(-8),
+      ]),
+      trailerPattern,
+    ],
+    ...[65_536, 131_072].map((length) => [
+      `a copied trailer after ${length} hidden bytes across stream chunks`,
+      Buffer.concat([
+        Buffer.from([0]),
+        Buffer.alloc(length, 0xaa),
+        benign.subarray(-8),
+      ]),
+      /carries bytes outside its single gzip member|incorrect header check/u,
+    ]),
+    [
       "a second gzip member behind a padding byte",
       Buffer.concat([Buffer.from([0]), smuggled]),
       trailerPattern,
@@ -897,6 +920,59 @@ test("bytes outside the single gzip member are refused rather than attested unex
   }
 });
 
+test("optional gzip metadata cannot carry unscanned publication source", async (t) => {
+  const root = workspace(t);
+  const benign = gzipSync(wellFormedTar());
+  const header = Buffer.from(benign.subarray(0, 10));
+  header[3] = 0x10;
+  const archivePath = join(root, "hidden-comment.tgz");
+  writeFileSync(archivePath, Buffer.concat([
+    header,
+    Buffer.from("private publication source in a gzip comment\0"),
+    benign.subarray(10),
+  ]));
+  await assert.rejects(
+    readPackageArchive({ archivePath, captureFile: () => true }),
+    /unsupported gzip header metadata/u,
+  );
+  const prefixedPath = join(root, "empty-member-before-hidden-comment.tgz");
+  writeFileSync(prefixedPath, Buffer.concat([
+    gzipSync(Buffer.alloc(0)),
+    header,
+    Buffer.from("private publication source in a later gzip comment\0"),
+    benign.subarray(10),
+  ]));
+  await assert.rejects(
+    readPackageArchive({ archivePath: prefixedPath, captureFile: () => true }),
+    /carries bytes outside its single gzip member|omits the two required end-of-archive blocks/u,
+  );
+});
+
+test("single-member framing independently checks gzip flags and trailer integrity", async (t) => {
+  const root = workspace(t);
+  const benign = gzipSync(wellFormedTar());
+  for (const flag of [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80]) {
+    const altered = Buffer.from(benign);
+    altered[3] = flag;
+    const archivePath = join(root, `flag-${flag}.tgz`);
+    writeFileSync(archivePath, altered);
+    await assert.rejects(
+      readPackageArchive({ archivePath }),
+      /unsupported gzip header metadata/u,
+    );
+  }
+  for (const offset of [8, 4]) {
+    const altered = Buffer.from(benign);
+    altered[altered.length - offset] ^= 1;
+    const archivePath = join(root, `trailer-${offset}.tgz`);
+    writeFileSync(archivePath, altered);
+    await assert.rejects(
+      readPackageArchive({ archivePath }),
+      /trailer does not describe everything it holds/u,
+    );
+  }
+});
+
 test("an archive that does not begin with a gzip member is refused", async (t) => {
   const root = workspace(t);
   const archivePath = join(root, "not-gzip.tgz");
@@ -913,7 +989,7 @@ test("a corrupt gzip stream is rejected", async (t) => {
   await rejects(
     t,
     Buffer.from("this is definitely not gzip"),
-    /incorrect header check|unknown compression method/u,
+    /does not begin with a gzip member/u,
     { gzip: false },
   );
 });

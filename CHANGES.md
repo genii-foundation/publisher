@@ -4,6 +4,8 @@ This file records changes to GENII Publisher covered code as required by CPAL 1.
 
 ## 2026-09-07, GENII Foundation
 
+- Bound archive acceptance to the decompressor's consumed compressed-byte count, rejecting hidden tails even when they repeat a valid gzip trailer, with adversarial single-chunk and cross-chunk regression tests.
+- Required a single metadata-free gzip member around the exact decoded package archive, rejecting unscanned optional headers and empty-member concatenation bypasses.
 - Updated the build-only fast-uri dependency from 3.1.5 to 3.1.7 to address the current URI normalization advisories without changing the published schema runtime dependencies.
 - Began a fresh completion audit that separates local validation, optional browser evidence, migration acceptance, and public release gates.
 - Updated the packed-host browser fixture to declare alternate theme palettes and verify its custom near-black canvas before hydration.
