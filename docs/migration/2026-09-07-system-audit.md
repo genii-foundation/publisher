@@ -94,3 +94,11 @@ full Coherence offline browser acceptance remains separate and in progress.
 The provenance review command still reports four draft records and no accepted
 records. That command summarizes recorded scans; it is not a fresh retained-package
 source audit and does not approve provenance or release.
+
+A separate fresh `provenance:audit` completed successfully against all four
+records after checkpoint `16b2064`. It used existing local source repositories
+and Unicode artifacts, without cloning or issuing accepted receipts. Every
+scan was clear or an explicitly expected match. The local ignored log is
+`provenance-completion-audit.log`. Its record dates remain the original audit
+record dates, not the date of this rerun. Human provenance acceptance and release
+authorization remain outstanding.
