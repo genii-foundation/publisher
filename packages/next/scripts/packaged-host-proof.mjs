@@ -2683,6 +2683,7 @@ async function assertHydratedReaderTools({
 
 async function assertReaderPreferencePrepaint({
   browser,
+  readerBackgroundColor,
   projectionMarker,
   publicationId,
   readerFontFamily,
@@ -2765,7 +2766,7 @@ async function assertReaderPreferencePrepaint({
     assert.equal(result.highlights, "off");
     assert.equal(result.fontFamily, readerFontFamily);
     assert.equal(result.fontScale, "1.2");
-    assert.equal(result.backgroundColor, "rgb(0, 0, 0)");
+    assert.equal(result.backgroundColor, readerBackgroundColor);
     assert.equal(result.bootstrapStatus, "completed");
     assert.ok(result.bootstrapScriptBytes > 32_768);
     assert.equal(result.legacy, preferenceDocument);
@@ -3961,6 +3962,11 @@ export async function runPackagedHostProof(
   );
   assert.notEqual(homeRoute, undefined);
   const portableThemeAccent = "#6B3F84";
+  const portableThemeColorSchemes = Object.freeze({
+    light: { canvas: "#FFFFFF", surface: "#F8F9FA", text: "#172126", mutedText: "#48575F", accent: "#5D3775", focus: "#814100", border: "#CED8DB" },
+    dark: { canvas: "#142027", surface: "#1B2A32", text: "#F3F5F6", mutedText: "#BCCBD3", accent: "#DBB6ED", focus: "#EDBE74", border: "#3F5662" },
+    black: { canvas: "#070B0D", surface: "#111719", text: "#F5F7F7", mutedText: "#BFCACC", accent: "#DFBEED", focus: "#F4CB8A", border: "#354448" },
+  });
   const portableReaderFontFamily =
     "Trebuchet MS, Avenir Next, sans-serif";
   const portableReaderFontFamilyId = "field-sans";
@@ -4046,6 +4052,7 @@ export async function runPackagedHostProof(
           '    focus: "#8A3500",',
           '    border: "#C5CDCE",',
           "  }),",
+          `  colorSchemes: ${JSON.stringify(portableThemeColorSchemes)},`,
           "  typography: Object.freeze({",
           '    bodyFamily: "Charter, Cambria, serif",',
           '    headingFamily: "Avenir Next, Segoe UI, sans-serif",',
@@ -5192,6 +5199,7 @@ export async function runPackagedHostProof(
         assert.equal(typeof sectionPath, "string");
         await assertReaderPreferencePrepaint({
           browser,
+          readerBackgroundColor: "rgb(7, 11, 13)",
           projectionMarker: packedReaderStateProjectionMarker,
           publicationId: reader.publicationId,
           readerFontFamily: portableReaderFontFamily,

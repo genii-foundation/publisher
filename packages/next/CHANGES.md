@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher Next.js renderer is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-09-07, GENII Foundation
+
+- Updated the packed-host browser fixture to declare alternate theme palettes and verify its custom near-black canvas before hydration, matching the current theme contract.
+
 ## 2026-08-30, GENII Foundation
 
 - Added `renderEmbeddedPage` as a protected server transition seam that retains themed page content, extensions, source link, and mandatory attribution while omitting the full Publisher shell and Reader lifecycle providers.

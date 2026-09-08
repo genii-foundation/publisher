@@ -2,6 +2,12 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-09-07, GENII Foundation
+
+- Updated the build-only fast-uri dependency from 3.1.5 to 3.1.7 to address the current URI normalization advisories without changing the published schema runtime dependencies.
+- Began a fresh completion audit that separates local validation, optional browser evidence, migration acceptance, and public release gates.
+- Updated the packed-host browser fixture to declare alternate theme palettes and verify its custom near-black canvas before hydration.
+
 ## 2026-08-30, GENII Foundation
 
 - Added a narrow server-only embedded page renderer that preserves Publisher theme scope, safe content, extension ordering, publication source availability, and mandatory attribution inside a host-owned transition shell.
