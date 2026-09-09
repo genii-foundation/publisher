@@ -32,9 +32,13 @@ real image optimization, browser checks, and unrelated six-package rehearsal
 all pass. The local log is `next-security-node24-validation.log`.
 The preceding Node 22 run passed those same packed and browser proofs but
 failed one stale CLI version assertion. All 28 focused template and CLI tests
-passed after that assertion was corrected. A complete final Node 22 and Node
-26 matrix remains separate work; no cross-platform claim follows from this
-local macOS run.
+passed after that assertion was corrected. Final full runs against checkpoint
+`b519a20` also pass on Node 22.12.0 and Node 26.4.0, each with 1,143 passes,
+two intentional skips, and zero failures. Both enabled Chrome and the
+six-package publication rehearsal. The logs are
+`next-security-node22-final-validation.log` and
+`next-security-node26-validation.log`. This verifies the supported Node major
+matrix locally; no cross-platform claim follows from these macOS runs.
 
 Coherence's review candidate is not changed by this engine patch. Adopting the
 new package bytes and host dependencies requires a separate local review. No

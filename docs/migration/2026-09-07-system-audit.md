@@ -25,8 +25,12 @@ expects the explicit 0.19.0 migration. All 28 focused template and CLI tests pas
 The corrected full Node 24.18.0 run with npm 10.9.0 and Chrome enabled passes
 1,143 tests with two intentional skips and zero failures, including the packed
 host and unrelated six-package publication. The exact local output is
-`next-security-node24-validation.log`. Final full Node 22 and Node 26 matrix
-checks remain open. The new source bytes also require a fresh provenance scan;
+`next-security-node24-validation.log`. Final full runs at `b519a20` on Node
+22.12.0 and 26.4.0 also pass, each with 1,143 passes, two intentional skips,
+and zero failures. Both enabled Chrome and the independent six-package
+publication rehearsal. Their logs are `next-security-node22-final-validation.log`
+and `next-security-node26-validation.log`. These are local macOS results, not
+fresh Windows or Linux CI evidence. The new source bytes require a fresh provenance scan;
 the earlier receipt candidates cannot establish their source identity. Prior
 zero-vulnerability observations are dated history, not perpetual release evidence.
 
