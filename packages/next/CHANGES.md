@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. GENII Publisher Next.js renderer is derived directly from GENII Publisher Original Code provided by GENII Foundation. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-09-08, GENII Foundation
+
+- Raised the exact Next.js host and provider peer pin to 16.3.3 and the consuming-root Sharp override to 0.35.4 after the live packed production audit rejected the previous stack. Updated templates, notices, and exact runtime assertions together. Validation remains required before release.
+
 ## 2026-09-07, GENII Foundation
 
 - Updated the packed-host browser fixture to declare alternate theme palettes and verify its custom near-black canvas before hydration, matching the current theme contract.

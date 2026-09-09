@@ -36,7 +36,7 @@ import { PUBLISHER_NEXT_VERSION } from "./types.js";
  * release has no host migration to apply. It advances when the file set, a
  * file's content, or the meaning of an input changes.
  */
-export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.18.0";
+export const PUBLISHER_NEXT_HOST_CONTRACT_VERSION = "0.19.0";
 
 /** The renderer that owns this contract. */
 export const PUBLISHER_NEXT_HOST_RENDERER =
@@ -299,9 +299,18 @@ export const PUBLISHER_NEXT_HOST_MIGRATIONS: readonly PublisherNextHostMigration
     }),
     Object.freeze({
       from: "0.17.0",
-      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      to: "0.18.0",
       summary:
         "Include build-bound extension browser resources in every generated offline work package.",
+    }),
+    Object.freeze({
+      from: "0.18.0",
+      to: PUBLISHER_NEXT_HOST_CONTRACT_VERSION,
+      summary:
+        "Require the patched Next.js 16.3.3 and Sharp 0.35.4 host stack.",
+      manualSteps: Object.freeze([
+        "Pin Next.js to 16.3.3 and copy PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES into the consuming root package.json, then regenerate and review package-lock.json and verify the installed Sharp version is 0.35.4.",
+      ]),
     }),
   ]);
 

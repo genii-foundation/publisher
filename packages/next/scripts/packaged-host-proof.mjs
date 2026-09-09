@@ -4884,7 +4884,7 @@ export async function runPackagedHostProof(
         'const extension = await import("@example/packed-publication-extension");',
         'assert.equal(postcssManifest.version, "8.5.24");',
         'assert.equal(nanoidManifest.version, "3.3.18");',
-        'assert.equal(sharp.versions.sharp, "0.35.3");',
+        'assert.equal(sharp.versions.sharp, "0.35.4");',
         'assert.equal(typeof sharp.versions.vips, "string");',
         'assert.equal(extension.default.version, "1.0.0");',
         "process.stdout.write(JSON.stringify({ extensionVersion: extension.default.version, nanoidVersion: nanoidManifest.version, postcssVersion: postcssManifest.version, sharpVersion: sharp.versions.sharp, vipsVersion: sharp.versions.vips }));",

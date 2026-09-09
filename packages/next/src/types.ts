@@ -90,10 +90,10 @@ export const PUBLISHER_NEXT_EXTENSION_CLIENT_MOUNT =
   "page.client" as const;
 export const PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES =
   Object.freeze({
-    "next@16.3.1": Object.freeze({
+    "next@16.3.3": Object.freeze({
       nanoid: "3.3.18",
       postcss: "8.5.24",
-      sharp: "0.35.3",
+      sharp: "0.35.4",
     }),
   });
 

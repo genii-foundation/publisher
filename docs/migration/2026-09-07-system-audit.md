@@ -4,6 +4,36 @@ This audit resumes from Publisher `ab4c573` and Coherence `c1809f6`.
 It distinguishes implementation, executable evidence, author acceptance, and
 public release. No result here authorizes publication or production changes.
 
+## September 8 security recheck
+
+The complete Node 24.18.0 run against `1bfe5b2` finished with 1,142 passes,
+one failure, and two intentional skips. The live production dependency audit
+inside the packed-host proof rejected Next.js 16.3.1 and Sharp 0.35.3 for newly
+indexed critical and high advisories. The independent six-package publication
+rehearsal passed. This is a dependency security failure, not demonstrated Node
+24 incompatibility. See `completion-node24-validation.log` for the exact run.
+
+ADR 0064 proposes Next.js 16.3.3, Sharp 0.35.4, and an explicit host contract
+0.19.0 dependency migration. The manifests, root overrides, provider peer,
+templates, notices, and runtime assertions are updated together. npm initially
+retained the old Sharp install despite the new override; a targeted dependency
+refresh was necessary. The fresh workspace audit reports zero vulnerabilities.
+The first repaired-stack full Node 22 run passes the packed-host Chrome proof
+and independent six-package publication rehearsal, with 1,142 passes and one
+failure caused by an old 0.18.0 CLI contract assertion. That assertion now
+expects the explicit 0.19.0 migration. All 28 focused template and CLI tests pass.
+The corrected full Node 24.18.0 run with npm 10.9.0 and Chrome enabled passes
+1,143 tests with two intentional skips and zero failures, including the packed
+host and unrelated six-package publication. The exact local output is
+`next-security-node24-validation.log`. Final full Node 22 and Node 26 matrix
+checks remain open. The new source bytes also require a fresh provenance scan;
+the earlier receipt candidates cannot establish their source identity. Prior
+zero-vulnerability observations are dated history, not perpetual release evidence.
+
+Coherence remains clean at `4de8baa` awaiting local preview review. It has not
+adopted these new package bytes. No dependency update here authorizes publication,
+deployment, provider mutation, or a production migration.
+
 ## Verified baseline
 
 - Fresh upstream fetches leave Publisher main at `22557b4` and Coherence main

@@ -43,7 +43,7 @@ const input = Object.freeze({
   hostPackageName: "probe-host",
   dependencies: Object.freeze({
     "@genii-foundation/publisher-next": "0.1.0-alpha.0",
-    next: "16.3.1",
+    next: "16.3.3",
   }),
   devDependencies: Object.freeze({ typescript: "5.9.4" }),
   overrides: Object.freeze({ postcss: "8.5.24" }),
@@ -245,6 +245,15 @@ test("the host contract declares exactly the author host file set", () => {
       to: "0.18.0",
       summary:
         "Include build-bound extension browser resources in every generated offline work package.",
+    },
+    {
+      from: "0.18.0",
+      to: "0.19.0",
+      summary:
+        "Require the patched Next.js 16.3.3 and Sharp 0.35.4 host stack.",
+      manualSteps: [
+        "Pin Next.js to 16.3.3 and copy PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES into the consuming root package.json, then regenerate and review package-lock.json and verify the installed Sharp version is 0.35.4.",
+      ],
     },
   ]);
 });

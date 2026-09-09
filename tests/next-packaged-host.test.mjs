@@ -61,10 +61,10 @@ test("the packed renderer builds a thin host with server rendered prose", async 
     result.offlineReaderVerified,
     browserExecutable !== undefined,
   );
-  assert.equal(result.nextVersion, "16.3.1");
+  assert.equal(result.nextVersion, "16.3.3");
   assert.equal(result.postcssVersion, "8.5.24");
   assert.equal(result.nanoidVersion, "3.3.18");
-  assert.equal(result.sharpVersion, "0.35.3");
+  assert.equal(result.sharpVersion, "0.35.4");
   assert.equal(
     result.extensionPackage,
     "@example/packed-publication-extension@1.0.0",

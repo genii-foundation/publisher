@@ -2,6 +2,10 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-09-08, GENII Foundation
+
+- Raised the exact Next.js host and provider peer pin to 16.3.3 and the consuming-root Sharp override to 0.35.4 after the live packed production audit rejected the previous stack. Updated templates, notices, and exact runtime assertions together. Validation remains required before release.
+
 ## 2026-09-07, GENII Foundation
 
 - Bound archive acceptance to the decompressor's consumed compressed-byte count, rejecting hidden tails even when they repeat a valid gzip trailer, with adversarial single-chunk and cross-chunk regression tests.

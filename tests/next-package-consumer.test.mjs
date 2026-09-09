@@ -241,7 +241,7 @@ test("Next package metadata pins one verified renderer stack", async () => {
   assert.equal(nextManifest.publishConfig.provenance, true);
   assert.equal(Object.hasOwn(nextManifest.publishConfig, "tag"), false);
   assert.deepEqual(nextManifest.peerDependencies, {
-    next: "16.3.1",
+    next: "16.3.3",
     react: "19.2.8",
     "react-dom": "19.2.8",
   });
