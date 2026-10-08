@@ -1,6 +1,6 @@
 # GENII Publisher
 
-GENII Publisher is an opinionated, open source publishing application for authors and institutions. It will provide the complete path from a manuscript repository to a durable, accessible publication while keeping each author's content, history, identity, and deployment under that author's control.
+GENII Publisher is open source publishing engine for authors and institutions. It will provide the complete path from a manuscript repository to a durable, accessible publication while keeping each author's content, history, identity, and deployment under that author's control.
 
 Implementation has begun. The schema runtime, framework-neutral content compiler, strict reader-envelope contract, explicit extension grants, and server-rendered Next.js reference application are built and tested from packed artifacts, but no npm release exists yet.
 
