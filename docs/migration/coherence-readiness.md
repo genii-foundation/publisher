@@ -1,290 +1,659 @@
 # Coherence migration readiness
 
-An audit of what The Coherence Thesis actually needs from this engine, measured
-against that repository rather than inferred from the objective.
-
-Read-only. Nothing in the Coherence repository was modified to produce this.
-
-Every count of Coherence below was measured against its commit `87ff7cf7`, dated
-2026-07-27. Those numbers cannot be checked from this repository, because nothing
-here may depend on that one existing, so treat them as a snapshot and remeasure
-before relying on them. The claims about this engine are checked by the test suite
-and are noted as such where they appear.
-
-## Why this exists
-
-The migration was blocked on two decisions, and "blocked" was doing a lot of work
-in that sentence. Nobody had measured the distance. This turns it into a list.
-
-The headline: the distance is much larger than the open issues suggest, and most
-of it is not the engine's problem. Sorting which is which is the useful part.
-
-## What Coherence is
-
-Nine volumes. Twelve route patterns, which expand to 8,007 live URLs. Forty-seven
-components, twenty-six of them client-interactive islands. Seventy-one library
-modules. Supabase-backed progress sync with authentication. Seven continuity
-ledgers holding 10,551 entries.
-
-The twelve routes:
-
-```
-/                                      /progress
-/overview                              /updates
-/manuscripts                           /updates/[page]
-/manuscripts/[volumeId]                /updates/literary
-/manuscripts/[volumeId]/[...route]     /updates/literary/[page]
-/auth/callback                         /api/account
-```
-
-## What the engine is
-
-The renderer is about 2,700 lines: an application, a pages component, a Markdown
-component, an attribution footer, and an error boundary. It renders a publication
-from a reader artifact. That is the whole of it.
-
-Counting features against features would give a ratio that reads like an
-indictment and would be the wrong conclusion, because most of Coherence's surface
-does not need to move into the engine at all.
-
-## The distinction that matters
-
-An engine command only writes the files its renderer's host contract declares.
-Anything else in the repository is untouched by init, upgrade, and rollback, and
-an upgrade removes only paths the previous contract owned. So a host can keep its
-own routes, its own components, and its own client code beside the generated ones.
-
-That splits Coherence's surface in two.
-
-**Host-retainable.** Features that consume the reader artifact and render in the
-author's own code. These do not block the migration and should not move into the
-engine merely because they exist. Bookmarks (four components), progress display
-(five), search, offline support, the overview map, cover flow, tile reveal, page
-fade, toolbar islands, engagement, reading heatmap. Roughly twenty of the
-twenty-six islands.
-
-**Engine-required.** Anything that determines a public URL, the artifact's
-contents, or what the server renders. A host cannot retain these because the
-engine owns route resolution and the artifact.
-
-## Engine-required gaps, in order of consequence
-
-### 1. Updates, and it is narrower than issue #16 says
-
-Issue #16 called this unimplemented. That is wrong and the correction matters.
-The renderer already has the interface: `ResolvedPublisherNextUpdates`, carrying a
-package, version, renderer compatibility, config, and an implementation, and
-`createPublicationNextApplication` accepts it and serves the route.
-
-The real gap is that nothing lets an author supply one. The generated host calls
-`createPublicationNextApplication({ reader })` and there is no manifest field, no
-resolution rule, and no host contract wiring for an Updates adapter. So the
-capability exists and is unreachable.
-
-Coherence needs more than one Updates route: `/updates`, `/updates/[page]`,
-`/updates/literary`, and `/updates/literary/[page]`. The engine's route model has
-a single `updates` route path. Pagination and a second view are not expressible.
-
-Whatever shape the adapter decision takes, it has to account for a paginated
-Updates route and a second derived view over the same data.
-
-### 2. Route shape and URL preservation
-
-Coherence serves `/manuscripts/{volumeId}` and `/manuscripts/{volumeId}/{...route}`.
-The engine's work route template is configurable, so `/manuscripts/{workId}` is
-expressible. The nested per-section path under a work is the question: the engine
-gives a work one route and its sections their own declared routes, which may or
-may not compose into the same URLs.
-
-This is the one gap where being wrong is unrecoverable, because a changed URL is a
-broken link somebody else published. So I measured it rather than recommending
-that somebody measure it.
-
-| Ledger | Entries | Shape |
-| --- | --- | --- |
-| `route-ledger.json` | 8,007 | `{href, kind, targetContinuityIds}` |
-| `section-ledger.json` | 1,211 | routes |
-| `section-lineage.json` | 551 | sections |
-| `version-provenance.json` | 550 | entries |
-| `aliases.json` | 136 | `{sourceHref, targetSectionId, note}` |
-| `route-aliases.json` | 62 | `{sourceHref, targetHref, note}` |
-| `historical-section-mappings.json` | 34 | mappings |
-
-Three findings.
-
-**8,007 ledger entries, of which 4,518 are routes and 3,489 are aliases.** Broken
-down by kind:
-
-| Kind | Count |
-| --- | --- |
-| `section-alias` | 3,255 |
-| `section` | 2,194 |
-| `reader` | 1,190 |
-| `chapter` | 960 |
-| `route-alias` | 234 |
-| `part` | 146 |
-| `volume` | 28 |
-
-So the addressable surface is 4,518 routes over 3,300 hierarchical units, and the
-redirect surface is 3,489. Both are under the engine's 10,000 redirect cap.
-
-**Redirect capacity is not the problem.** The curated alias ledgers hold 232
-entries and the generated ledger marks 3,489 routes as aliases. Those are different
-populations and I have not established which is authoritative for a migration, but
-both are well under the cap of 10,000.
-
-**Expressiveness is the problem.** `route-aliases.json` maps `sourceHref` to
-`targetHref` and translates directly. `aliases.json` maps `sourceHref` to a
-`targetSectionId`, and the engine's redirect takes a path, not an identifier. Those
-136 entries cannot be expressed without resolving each section id to its current
-route at build time, and the engine has no mechanism that does that.
-
-This is the failure mode worth being frightened of. A redirect that resolves to the
-wrong path still returns 200, so it does not look like breakage. It looks like the
-wrong chapter.
-
-The aliases also show that Coherence has already changed its own URL scheme once
-and kept both alive: current routes look like `/manuscripts/1/`, while aliases
-reference `/manuscripts/humanitys-most-viable-future/...`. The redirect machinery is
-load-bearing in production today, not a precaution.
-
-### 3. A section can have its own URL, and the build path will not make one
-
-I have now been wrong about this twice, in opposite directions, so here is what
-running it establishes.
-
-A section route becomes an active server route, and a section is addressable at its
-own path. Verified end to end and pinned in `tests/publication-build.test.mjs`:
-
-```
-/                                 -> home
-/works/first-light                -> work
-/works/first-light/low-water      -> section (low-water)
-/collections/mornings             -> collection
-```
-
-The condition is `activeRouteNames`. A section may declare `routes`, but a route
-only becomes active if its name appears in that section's `activeRouteNames`. My
-earlier probe set `routes` and `readerLocation` and never set that field, so the
-route was never registered and the reader address had no owner. The refusal said a
-reader address must use an active server route, and I read it as "there is no way
-to make one active" rather than "you did not make this one active". The diagnostic
-was correct and my reading was not.
-
-So the route model needs no change, and the correction I published to issue #17
-claiming otherwise was wrong. The original framing was right.
-
-What remains true is narrower and unchanged since the first report. Every block in
-a work must come from that work's single resolved manuscript, so sections are
-divisions of one file rather than separate files. And the build path produces
-exactly one section per work: `derivePublicationWorkInputs` calls the one-section
-convenience once per work.
-
-So the work is in the build path, and the one thing still to decide is how a
-manuscript declares its section boundaries and their routes. Splitting on headings
-couples a URL to prose an author edits. Declaring boundaries in the work manifest is
-a schema addition and holds still when a heading is renamed. That is a smaller
-question than a route model change, and the engine already supports whichever
-answer it gets.
-
-### 4. Audio is a schema definition and nothing else
-
-`publication.schema.json` defines an `audio` block with an adapter package and
-config. No implementation exists in the renderer or the reader. Grepping both
-packages for audio returns exactly one hit, in the schema.
-
-Coherence has an audio player with word-level interaction, which is two islands
-plus supporting library code, and published audio under `publishing/audio`. The
-islands are host-retainable. What is not is whatever the artifact must carry to
-align audio with words: if per-word timing has to reach the client, it has to be
-in the reader artifact, and the artifact has no place for it.
-
-### 5. Sync is a schema definition and nothing else
-
-Same finding. `SyncConfiguration` exists in the schema. A word-boundary search for
-sync across the renderer and reader returns nothing. My first search returned
-matches and all of them were the word "async", which is worth recording as a
-caution about this kind of audit.
-
-Coherence has `src/lib/reader-sync.ts`, Supabase browser and server clients, an
-auth callback route, and an account API route. The engine's own interface rule
-says local progress is private by default and remote sync must not be added
-without explicit product approval, so sync arguably belongs in the host
-permanently. If so, the schema field is misleading and should say what it is for.
-
-## Scale, measured
-
-I ran the pipeline at Coherence's size rather than recommending that somebody do
-it. Each work is a directory with a manifest and a short manuscript, built through
-`buildPublicationReader` on Node 22.12.0.
-
-| Works | Build | Artifact | Active routes | Peak RSS |
-| --- | --- | --- | --- | --- |
-| 100 | 347 ms | 0.2 MB | 101 | 108 MB |
-| 1,000 | 3.1 s | 2.5 MB | 1,001 | 217 MB |
-| 3,300 | 9.0 s | 8.1 MB | 3,301 | 387 MB |
-| 4,999 | 14.0 s | 12.3 MB | 5,000 | 478 MB |
-| 5,000 | refused in 11 ms | none | none | `schema.resource_limit` |
-
-The cap and the refusal code are checked by the suite. The timings are one machine
-on one day and are recorded to show the shape of the curve, not as a promise.
-
-Four things this establishes.
-
-**The pipeline handles Coherence's size.** Roughly 2.8 ms per work, linear across
-the range, and about 9 seconds at 3,300 units. Nothing degrades nonlinearly.
-
-**The ceiling is enforced properly.** One work past the declared cap of 4,999 is
-refused in 11 milliseconds with a named diagnostic, rather than timing out or
-exhausting memory. That is the behaviour a limit should have.
-
-**Memory is the constraint worth watching.** Peak resident set reaches 478 MB at
-the cap and 707 MB across a two-case run. A continuous integration runner with a
-small memory allowance would fail here before anything else did.
-
-**A 12 MB artifact never reaches a browser.** The generated host imports the
-artifact with a JSON import assertion, which would be alarming if any of it shipped
-to a client. It does not: the renderer's server entry point imports `server-only`,
-no client code references the reader, and none of the rendering components are
-client components. Verified rather than assumed, because 12 MB to a phone would end
-the project.
-
-## What is not blocked
-
-The nine volumes are Markdown manuscripts with per-volume metadata, which is
-exactly the shape the loader and compiler already ingest. The content pipeline
-handles the volume of work Coherence represents. Its structure is the problem, not
-its size.
-
-## Recommended order
-
-1. Decide how a manuscript declares its section boundaries and their routes, then
-   teach the build path to emit them. The route model already serves section URLs,
-   so this is a build path change and one schema question rather than a protocol
-   redesign. Issue #17, corrected twice by this document, most recently back toward
-   its original framing.
-2. Decide the Updates adapter shape, accounting for pagination and a derived
-   view. Issue #16, also corrected by this document.
-3. Give redirects an identifier target, or give the engine a way to resolve a
-   section identifier to its current route while compiling redirects. 136 of
-   Coherence's aliases point at section identifiers and cannot be expressed today.
-   Measured, not assumed.
-4. Decide whether audio timing data belongs in the reader artifact. That decides
-   whether audio is an engine feature or a host one.
-5. Decide whether sync is engine scope at all, and if not, remove or annotate the
-   schema field so it stops implying an implementation.
-
-Items 3 through 5 are decidable now and none requires a release.
-
-Scale is measured and is not a blocker. Memory at the ceiling is the one operational
-number worth carrying into deployment planning.
-
-## What this audit does not establish
-
-It counts, classifies, and measures. It has not run Coherence's own manuscripts
-through the engine, because the build path emits one section per work
-and Coherence needs 3,300 of them addressed. The protocol serves those addresses
-already; nothing has taught the build path to produce them.
-
-Every count here came from the repository as it stands. None of it came from
-reading the objective and inferring what must be true.
+This is the current gap audit between GENII Publisher and The Coherence Thesis
+Reader. It records migration scope. It does not authorize a Coherence merge,
+database change, package publication, or deployment.
+
+## Authorities
+
+The original complete Coherence inventory was pinned to commit
+`7e50161cecc0ce6039c36e4738d8c9fc90710e62`, dated 2026-08-18. That audit covers
+39 first-parent commits from 2026-07-28 through that ref. It also considers five
+direct Reader precursor changes from 2026-07-27 because those changes created the
+state, bookmark, audio, and synchronization substrate modified during the audit
+window. Focused Reader parity evidence was refreshed read only through current
+Coherence `origin/main` at `20740657f5cc8fbec934c1df609d7e7e0d95fc32`,
+dated 2026-08-26. The actionable Reader delta came from bookmark anchoring at
+`6ed21e5bc48f747989d3cd580d5bcd24daec686f`, mobile Safari playback isolation at
+`7cc32c1dd7421678e01f2df213df75c7e0a3656f`, and dedicated audiobook transport
+controls at `b001d42e50a95c6a2f6a4d67bd6b0879bed9cf89`. The latest narrow-toolbar
+change at `d250a760b51a071037af0c18ac73cc3131312f09` keeps maximum Reader text
+preferences from enlarging phone controls, retains direct playback access, and
+places secondary actions behind one named surface at 340 pixels and below. It
+changes no Reader state schema, narration engine, synchronization contract,
+offline behavior, route, or manuscript behavior.
+
+The four later Coherence commits through `20740657f5cc8fbec934c1df609d7e7e0d95fc32`
+change agent guidance, validation scheduling, publication evidence, manuscript
+content, and the localhost editorial revision page. The one application change
+renders author working variants through Coherence's existing Markdown component.
+That surface remains part of the author-owned localhost workbench. It introduces
+no new generic Reader, narration, offline, synchronization, renderer, or lifecycle
+contract for Publisher to absorb.
+
+The current executable refresh starts from Coherence `origin/main` at
+`20740657f5cc8fbec934c1df609d7e7e0d95fc32` and is preserved at executable proof
+checkpoint `20980d155909850710ad95253e3eaf83a14e4c98`. The current committed migration
+candidate is `b2bbe1320593fbd1b3aec25f8253f9c7c41d55a9`; its only later change refreshes
+the factual admin task record. It consumes exact Publisher package candidate
+`55efeee334848b714d52dbedce933de73aa7c6e1`.
+
+The audit was read only with respect to Coherence. It did not modify manuscripts,
+publishing records, generated output, deployment state, or the current production
+application.
+
+## 2026-08-28 executable refresh
+
+The candidate now mounts one exact Coherence-owned state migration extension
+inside the official Reader application. Its bounded public projection translates
+the complete accepted legacy state census or refuses one whole concern without
+changing either the source or target bytes. The extension's data resource is
+included in the immutable work package, so a cold offline load has the same
+translation authority as an online load.
+
+The Cardinal offline package now contains 18 declared resources, including four
+data resources. The state migration resource is 1,324,067 bytes with SHA-256
+`469264c91ad4dfc850863c2b9fdfbb6b7f316cb88c91a8a85253cbba7c1d8518`.
+The package proof binds the extension mount, its empty server placeholder, the
+resource identity, the active cache receipt, and the absence of private state
+from server HTML and public projection bytes.
+
+The exact Coherence checkpoint passes all 1,074 repository tests, the 6,411-page
+production build, and the application browser suite with 230 passes and 40
+intentional skips. The isolated Chromium proof passes explicit installation,
+atomic replacement and rollback, preserved Coherence caches, cold reading, text
+visibility, search, navigation, exclusions, range requests, state migration
+resource availability, and cleanup. Two clean executions produced the same
+cross-run semantic identity,
+`sha256:29d9666fddb1771300ded73b5e34434aed2f4e7736b70545cdeb792075ce11d4`,
+while retaining distinct exact transport receipts as intended.
+
+The managed local preview is bound to Coherence commit
+`b2bbe1320593fbd1b3aec25f8253f9c7c41d55a9` and candidate digest
+`58de50daebe62132993d5245cd0e7fcec271a53ba28d314aeb445b7237a2df59`.
+It is evidence awaiting author review. It is not approval to push, merge, publish,
+change provider state, or deploy.
+
+## 2026-08-27 executable refresh
+
+The refreshed proof compiles all 9 works, 525 current sections, 3,486 blocks,
+206,448 Publisher words, and 535 raw Reader routes. The raw Reader identity is
+`sha256:7453a8bab44d734451ad6e5a92a54487181538eccc533f1fe68d9e19d845e54d`.
+The known catalog and Publisher text difference remains 4,311 words and is
+reported as a gap, not parity.
+
+The Coherence-owned adapter produces 583 active route plans and preserves all 21
+approved semantic links across 17 block groups. Its evidence identity is
+`sha256:aba6853f41d81838f7d1e82edc47c6601e36703f31cc032e396744a0638a07f6`,
+with Reader identity
+`sha256:461e4843f18b82ae6d7e7dbc1df8fcf5e6998a15dca06fd8165205d85b0a2ed4`
+and application identity
+`sha256:13602c7e3a5fd8b8a25277eac8cab60209f0ea8c7c36c2466bb9a5e428d03932`.
+The adapter closes 142 reviewed route issues. It does not assign the remaining
+107 nested fragment addresses. The raw audit therefore remains at 7,247 known
+issues and the adapted comparison remains at 7,105.
+
+The audio constructor binds 19 immutable checkpoints and 574 historical units.
+It retains 122 clips whose spoken text is exact and withholds 403 incompatible
+clips. It constructs its catalog in memory only. It does not publish audio,
+change the live manifest, contact storage, or claim complete narration parity.
+
+The exact Coherence checkpoint passes all 1,063 repository tests, the 6,411-page
+production build, and the application browser suite with 230 passes and 40
+intentional skips. The isolated real Chromium proof validates explicit offline
+installation, worker lifecycle, atomic replacement and rollback, preserved
+Coherence caches, cold reading, text visibility, search, navigation, exclusions,
+range requests, and cleanup. Two clean runs produced the same cross-run semantic
+identity,
+`sha256:f06e5ed22f0fe3b76bcb050507888a8b94749483776e46e08af22d68bab9e82c`,
+while retaining distinct exact per-run transport receipts as intended.
+
+This evidence leaves current Coherence routes untouched and asserts neither full
+content parity nor route parity. The final host wiring, complete fragment census,
+legacy state acceptance, existing-project preview, and explicit author approval
+remain open. No second Vercel project, database mutation, package publication,
+deployment, or production merge is authorized by this refresh.
+
+## Headline
+
+The first readiness audit made one consequential classification error. It called
+progress, bookmarks, search, preferences, focus, offline reading, and playback
+host retainable and therefore treated them as already preserved.
+
+A thin host can retain those files during migration. That does not make them
+publication-specific. The confirmed product is a complete, opinionated publishing
+application with supported overrides. ADR 0015 therefore assigns generic Reader
+behavior to Publisher's framework-neutral core and official renderer. Coherence
+may temporarily retain its implementations for compatibility or deliberately
+select an override, but Publisher cannot claim parity until its default
+application supplies the behavior.
+
+The current ledger records 70 capabilities: 37 Reader, 18 narration, and 15
+synchronization capabilities.
+
+| Status | Count | Meaning |
+| --- | ---: | --- |
+| 16 preserved | 16 | The target owner currently implements equivalent behavior. |
+| 42 upgraded | 42 | Publisher implements a stronger checked contract. |
+| 12 added | 12 | Publisher adds a capability Coherence did not have as a generic contract. |
+| 0 planned | 0 | No inventoried generic capability remains merely planned. |
+| 0 blocked | 0 | No capability is currently blocked by a named repository issue. |
+
+The source audit also retains the exact 31 Coherence application commits from
+July 25 through August 26 that formed the recent Reader polish sequence. Every
+generic behavior change maps to one or more checked capability IDs. Five changes
+that affect only local Updates, editorial, or admin state remain explicitly
+classified as author owned. Four mixed changes map their generic behavior while
+retaining publication content, checkpoint, overview, continuity, or workbench
+state in Coherence. This commit census is exported beside the parity ledger and
+fails if a reviewed commit or mapped capability disappears.
+
+Target ownership is 30 engine capabilities, 29 official renderer capabilities,
+9 provider capabilities, and 2 author-tooling capabilities. Publication-specific
+state is deliberately excluded from that count rather than mislabeled as generic
+host parity.
+
+## What changed in Coherence
+
+### Reader state and progress
+
+Coherence now has a reactive, private, local-first Reader state system. It
+sanitizes storage, coordinates atomic updates, notifies other tabs, follows
+continuity groups, records opening, scrolling, reading time, returns, manual read,
+automatic read, and audio progress, and merges remote state without decreasing
+monotonic measurements.
+
+One word-weighted progress percentage now feeds the toolbar, work surfaces,
+heatmap, section cards, and recommendations. A completed older revision remains
+historical evidence, while changed content appears as updated until the current
+revision is read.
+
+Publisher's framework-neutral progress and preference primitives now feed the
+first official Reader rail. It records opening, scrolling, and automatic
+completion locally and shows the current section percentage. Progress and full
+bookmark documents now share one reactive renderer store with atomic updates,
+same-tab notification, native cross-tab convergence, and stable server
+snapshots. The renderer now separates one session opening from scroll samples,
+conservatively accumulates visible active reading time, derives returns, shows
+the current section status and metrics, and supports explicit completion of the
+current revision. The framework neutral Reader now derives the shared weighted
+summary, ordered section states, updated-first recommendations, recent reads,
+and continuity-aware bookmark presence from one immutable model. The default
+Progress interface loads a small identity-bound catalog only when opened, then
+renders the publication summary, section map, recommendations, recent reading,
+and reactive saved-passage indicators inside the supported mobile viewport.
+
+### Durable passage bookmarks
+
+Bookmarks now cover exact offsets across one or more rendered passages. They can
+resolve an exact anchor, follow a renamed anchor by content identity, reanchor by
+selected and surrounding text, or report an honest missing or ambiguous state.
+They do not silently choose the first plausible location.
+
+The collection is bounded at 1,000 live bookmarks, supports notes, search,
+virtualized display, readable export, absorbing deletion tombstones, atomic
+remote merge, and accessible single or bulk deletion. Margin markers avoid
+mutating or obscuring prose, and bookmark presence reaches progress, section, and
+search surfaces.
+
+Publisher now implements the generic range, bookmark, reanchoring, merge,
+tombstone, query, readable plain-text export, and bounded remote-projection
+primitives. The default Reader now searches selected text, notes, and context,
+renders an honest empty result, and downloads the complete live collection
+without network access. Single and bulk removal now require labeled modal
+confirmation, deliberate focus movement, and absorbing synchronization
+tombstones. Canonical passage selection now refuses mismatched DOM text and
+cross-section ranges before translating visible UTF-16 offsets into portable
+block anchors. Its viewport-contained capture editor stores an optional private
+note without invalidating the selected range. Exact and uniquely relocated
+ranges now receive reactive margin markers outside the manuscript DOM, including
+deterministic first measurement in background tabs. One shared DOM text
+coordinate system excludes renderer controls from selection offsets, range
+resolution, and measured marker rectangles. Marker positions retain document
+scroll instead of being clamped in viewport coordinates. The complete 1,000-item
+collection now remains searchable and operable while a contained fixed-row
+viewport bounds mounted DOM and layout work. Saved-passage presence now reaches
+progress, current-section margin markers, and search from the same reactive
+private document.
+
+### Preferences and focus
+
+Readers can choose a bounded font scale, font, color treatment, motion behavior,
+highlight visibility, and four focus strengths. Coherence applies preferences
+before paint to avoid a theme flash. Its focus rendering preserves one real text
+occurrence, avoids code and strong text, and preserves the text geometry needed
+by narration timing and assistive technology.
+
+Publisher now treats pure preference state as framework-neutral. The official
+renderer exposes bounded text size, color, motion, highlight, and focus controls,
+with distinct focus widths and a reduced-motion contract. The complete default
+interface now includes the font-family field restricted to the renderer's closed
+publication policy. The Markdown renderer now emits deterministic focus segments
+during server rendering while preserving one exact text occurrence, semantic
+strong and code content, selection ranges, bookmark offsets, and assistive text.
+Publisher now applies one fully validated, publication-scoped preference
+document before body paint. Invalid or oversized storage leaves the server
+defaults untouched. The packed host verifies the actual selected background and
+text scale with hydration scripts blocked. Theme API 2.0 now owns the ordered
+Reader font choices, labels, CSS families, and default. The server default,
+prepaint bootstrap, hydrated settings, and independently packed theme all use
+that same validated policy.
+
+### Search and capability-sliced data
+
+Coherence projects smaller capability-specific Reader artifacts and loads
+bookmark, outline, and breadcrumb data only when a reader opens the related
+surface. Text search includes bookmark state and has deliberate keyboard and empty
+states.
+
+Publisher now projects a Reader-build-bound search artifact with only navigable
+section identity, titles, destinations, plain text, and search fields. Its parser
+rejects identity drift and fabricated folds. Unicode and diacritic handling plus
+original-text snippet offsets improve on Coherence's ASCII fold. The default
+Reader rail fetches that artifact only when search opens and supplies loading,
+failure, no-result, and bounded result states. It queries the latest private
+bookmark document separately and renders saved-passage matches before public
+manuscript results without placing private state in the generated artifact.
+Search, publication progress, and narration are separate bounded artifacts
+fetched only when their interfaces open. Current-page outline and breadcrumbs
+remain small
+server-supplied renderer context rather than a second client download. The
+default section page renders work and section ancestry without JavaScript from
+validated parent identities and canonical destinations. The hydrated contents
+panel shows the same current path and marks its active outline entry.
+
+### Complete offline packages
+
+Downloaded works now include route HTML, Reader data, search, outline,
+breadcrumbs, static assets, images, narration clips, and timing sidecars. A new
+immutable package is staged and verified before activation. The previous complete
+package remains active if replacement fails. Offline navigation uses full
+documents because framework flight responses are not part of the package.
+
+Publisher now projects one strict immutable package per work. Each package binds
+the Reader, renderer, work content, and optional narration catalog, then closes
+over canonical and historical documents, shared Reader artifacts, assets, all
+matching voice clips, timing sidecars, and discovered Next.js dependencies. The
+browser stages and verifies every resource before switching one active metadata
+pointer. A failed replacement leaves the previous complete cache active. The
+generic worker is installed only after an explicit download, leaves framework
+and private traffic alone, and falls back from the network to active packages
+and then its runtime cache. Offline links use full document navigation. Public
+search is scoped to installed works, local bookmarks remain available, and
+cached clips play through temporary revoked blob URLs. The clean packed-host
+Chrome proof exercises the complete disconnected path.
+
+### Narration
+
+The current Reader preserves play, pause, seek, rate, queue, voice choice,
+word-timed highlighting, section navigation, route changes without lost playback,
+offline audio, exact recorded duration, and corpus estimates from measured
+narrator pace. Recent changes also repaired navigation timing and audiobook
+download contrast.
+
+Publisher validates, resolves, and materializes a generic narration catalog and
+its build-bound envelope. The official renderer now fetches that envelope only
+when Listen opens. Its persistent default player supplies play, pause, 15-second
+back and forward jumps, seek, bounded speed, remembered voice choice, ordered
+queue movement, automatic queue continuation, exact declared duration, queue
+position, timed-clip coverage, and unnarrated coverage. One user-authorized media
+element survives clip and route changes. Playback attempt identity prevents a
+stale rejected promise from pausing or reporting failure against a newer clip. A
+strict browser parser refuses stale identity, unsafe URLs,
+duplicate section coverage, malformed statistics, and oversized input. The
+packed-host Chrome proof exercises a real recording and persists the chosen
+voice and speed. When a clip declares timings, playback starts first and then
+requests the derived sidecar with a short bound. The strict parser binds exact
+bytes, section, audio version, voice, spoken-text length, monotonic word ranges,
+alignment quality, and interpolation limits. Existing server-rendered words are
+the only highlight anchors, so the manuscript retains one accessible text
+occurrence. The Chrome proof requires one post-play timing request, an active
+word, and unchanged manuscript text. A closed publication-bound navigation
+intent now starts or resumes one exact narrated section only after its canonical
+destination matches the build-bound progress catalog. The persistent player
+is owned by the root layout, so routed rails keep playback and the open Listen
+panel through current-section and cross-route Next.js navigation. Invalid or
+unready requests retain ordinary link behavior.
+The Chrome proof covers destination mismatch refusal and both navigation cases.
+ADR 0015 supersedes the earlier claim that playback should remain outside the
+engine application. ADR 0045 records the routed playback boundary.
+
+Publisher now exports the exact browser-safe narration word scanner as frozen
+inclusive-start and exclusive-end UTF-16 code-unit ranges. The Next renderer
+uses that same function to create its existing ordered narration anchors. A
+transition host can bind those anchors to an exact section only after proving
+every timing range equals its canonical profile range, dropping the profile's
+`titleWordCount` ranges, proving the exact remaining count, and proving each
+anchor `textContent` equals its corresponding profile text slice. A count match
+without the range and per-word text proofs must fail closed. ADR 0062 records
+this portable boundary.
+
+Per-word timing data does not belong in the reader artifact. It remains in lazy
+narration sidecars bound to the narration catalog and exact Reader build.
+
+Coherence also added immutable per-unit audio checkpoints, selective promotion,
+and a manuscript publication guard. The generic engine should own schemas,
+validation, dry-run planning, exact-base comparison, selected-unit promotion, and
+evidence matching. Checkpoint values, live manifests, provider verification,
+narrator policy, and generated audio remain publication or provider state.
+
+Publisher now owns the checkpoint schema and semantic evidence validator. One
+checkpoint binds the exact Reader build, source revision, catalog, settings,
+adapter, pipeline run, provider, model, narrator, spoken-text hashes, remote audio
+and timing objects, aggregate statistics, and canonical ordered-unit fingerprint.
+Validation is detached and immutable. It never contacts storage or performs
+promotion. ADR 0041 records the boundary.
+
+Publisher now also owns exact-base selective promotion planning. One pure dry run
+requires exact checkpoint coverage, narrator identity, one current clip per
+selected section, a canonical public HTTPS object base, and the caller's exact
+base catalog hash. It replaces only the selected clips, preserves every other
+clip and narrator, validates the candidate, and returns both catalog hashes. It
+does not contact storage or write the live catalog. ADR 0042 records the boundary.
+
+The pure narration publication guard now takes exact base and candidate catalog
+hashes, changed section, audio version, and spoken-text identities, validated
+checkpoints, the current publication and Reader build, and one canonical public
+object base. It checks every current narrator, refuses narrator removal, and
+requires the published URL, format, audio bytes, timing bytes, and duration to
+match immutable evidence exactly. Git comparison and checkpoint discovery remain
+author workflow responsibilities. ADR 0043 records the boundary.
+
+The engine now derives a separate full spoken-text identity from the trimmed
+title and normalized presentation-free body. It returns the exact canonical text
+used by generation, timing, and the renderer profile, while legacy
+`audioVersionId` values remain opaque. Presentation parsing remains adapter owned.
+ADR 0044 records the boundary.
+
+### Synchronization
+
+The current Publisher candidate carries the closed synchronization capability
+vocabulary, public envelope, privacy invariants, and reference Supabase schema.
+The schema preserves local fallback, explicit opt in, row ownership, bounded
+payloads, atomic bookmark merge, absorbing tombstones, and complete reader-data
+deletion.
+
+The official host now owns stable email authentication, session, callback, and
+account deletion paths. Every route returns the same opaque 404 for an
+unsynchronized publication. An author can select a matching provider through
+server-only host configuration. The renderer owns input bounds, safe callback
+redirects, same-origin state changes, and fixed responses. The default Reader
+records versioned opt-in consent, supports email links and code entry, reads the
+session, signs out, and confirms account deletion without removing local reading
+data. The reference Supabase adapter keeps the service-role key server only.
+The provider-neutral server route and reference adapter now transfer remote
+progress, bookmarks, engagement, and consent without exposing a provider SDK or
+accepting reader or publication identity from the browser. The local-first
+browser coordinator now connects the default Reader to the provider-neutral
+route. It debounces local revisions, pauses offline, retries with a bound,
+reconciles the latest local state after each request, refuses schema-ahead
+capabilities independently, and acknowledges engagement events by exact
+identity. The packed-host Chrome proof completes code sign-in and verifies
+progress, bookmarks, consent, and engagement acknowledgement through the real
+Reader interface.
+The reference provider now scopes every stored row, bookmark lock, event
+identity, and retention query by both publication and authenticated reader.
+Existing unscoped rows are preserved under a reserved legacy marker for explicit
+review instead of being guessed into a publication.
+
+### Toolbar, Markdown, and accessibility
+
+The latest Reader standardizes toolbar geometry, keeps menus reachable inside
+desktop and mobile viewports, refines empty states, moves bookmark indicators into
+the margin, improves progress icons, and fixes audiobook download contrast.
+Markdown rendering gained safer hierarchy behavior, heading actions, and
+keyboard-focusable labeled table regions.
+
+The official renderer now supplies one viewport-bounded rail, mobile bottom
+controls, keyboard focus, reduced motion, dark and black reading modes, exact
+adjacent heading copy actions, and labeled horizontally scrollable table regions.
+The server retains the heading and cell text. Hydrated code owns only clipboard
+interaction, while the table wrapper owns only access and scrolling. Bookmark
+margin markers and publication-specific dimensions, icons, copy, palette, and
+branded motion remain theme or publication choices.
+
+## Current Publisher strengths
+
+Publisher already has substantial foundation work that the old audit did not:
+
+- strict publication, content, Reader, audio, and synchronization schemas
+- canonical and declared source layouts
+- trusted source loading and package archive inspection
+- deterministic content compilation and Reader projection
+- exact Reader lookup, navigation, continuity, address, and relocation runtime
+- server-rendered Next pages with no-JavaScript manuscript text
+- fixed linked attribution and attributed error surfaces
+- renderer-owned host templates
+- reader, audio, synchronization, and application artifact materialization
+- transactional author initialization, upgrade, rollback, and mutation policy
+- a reference Supabase synchronization package
+- packed offline consumer and browser proofs
+
+This is no longer the broken source-loader handoff described by the first project
+continuity note. The remaining distance is application parity and Coherence
+adoption, not recovery of the foundation.
+
+## Recently closed gap
+
+### Atomic offline packages
+
+The framework-neutral Reader now emits a bounded per-work package catalog that
+is complete with or without narration. The official renderer supplies visible
+download and update state, dynamic dependency discovery, staged verification,
+atomic activation, retained failure recovery, and a generic network-first
+service worker. The browser proof installs a work, cuts transport, performs a
+cold document load, restricts search to that work, retains bookmarks, plays
+cached audio, applies cached timings, and follows a link through a fresh offline
+document. ADR 0046 records the boundary.
+
+### Updates integration
+
+Publisher now accepts author-owned plain Updates catalogs, validates stable named
+views against Reader route authority, binds the result to one Reader build, and
+serves paginated ordinary and literary views through the generated Next host.
+Coherence still owns Git interpretation, literary path classification, title
+corrections, and its durable snapshot. Migration proof must regenerate that
+catalog at the exact acceptance ref and compare every entry and page.
+
+Multi-section compilation is no longer blocked. Work manifests can now declare
+preorder section structure with durable IDs, hierarchy, routes, continuity, and
+exact Markdown block boundaries. The compiler refuses stale selectors instead of
+deriving public identity from headings. Coherence adoption still needs a reviewed
+manifest generator and byte-for-byte comparison against its current section
+census, but the generic engine contract now exists.
+
+The protocol ceilings remain sufficient for that adoption: 4,999 works, 50,000
+sections, and 10,000 continuity redirects.
+
+### Exact local preview candidate identity
+
+Publisher now captures a versioned, inspectable inventory for every present
+tracked or untracked, nonignored candidate path. Exact file bytes and raw
+symbolic-link targets are bound to the canonical worktree, branch or detached
+state, full commit, and dirty state. Capture rejects unresolved indexes,
+submodules, path ambiguity, special files, unstable descriptor reads, and Git or
+directory changes observed during capture. Saved evidence is authenticated again
+before verification. ADR 0048 records the engine and host-preview boundary.
+
+### Cross-publication theme portability
+
+The canonical packed-host proof now creates, packs, installs, and selects an
+independent publication theme package through author-owned host configuration.
+That theme controls both ordinary Reader pages and every framework error
+surface. The host consumes a small Reader-build-bound public identity artifact
+for client error attribution, and the proof rejects manuscript text in those
+browser chunks. Author initialization also preserves the exact existing package
+manifest while adding managed host files. ADR 0049 records this boundary.
+
+This closes the unrelated-publication gate. The full release rehearsal now uses
+the exact six package candidates in a clean canonical publication, repeats the
+installation from a frozen offline lockfile, and exercises separately packed theme
+and extension overrides without accepting provenance or publishing anything.
+
+### Reversible embedded rendering boundary
+
+The official Next application now exposes one protected server method for a
+staged host transition. `renderEmbeddedPage` accepts only a page issued by the
+same Publisher resolver and returns one opaque React element. It retains the
+validated theme scope, safe server-rendered page body, stable page and manuscript
+identities, Updates and extension route bodies, server slots, isolated client
+mount, publication source link, and mandatory attribution.
+
+The embedded element deliberately omits the Publisher header, Reader rail, skip
+link, main landmark, document shell, layout measure, prepaint, providers, and
+audio host. Coherence can therefore retain its current outer shell, route and
+continuity surfaces, metadata, errors, and browser lifecycle while replacing the
+content renderer in one reversible preview step. The host must paint the exact
+selected Publisher theme canvas behind the transparent embedded root because
+Publisher contrast validation is relative to that canvas. Theme API 2.0 now
+projects the validated base, light, dark, and black palettes through one pure
+read only function. The host can derive that canvas without activating Publisher
+prepaint, providers, stores, or any other Reader lifecycle surface.
+
+This closes the missing content-renderer seam. It does not close Reader lifecycle
+parity. Current progress observation, passage selection and bookmark geometry,
+word timing highlights, legacy paragraph anchors, settings and theme preference
+mapping, offline orchestration, narration persistence, and synchronization still
+need explicit host bridges or accepted Publisher replacements in the Coherence
+candidate. ADR 0060 records the boundary and forbids treating the returned element
+as a component tree for host rearrangement.
+
+## Remaining migration gap
+
+The established-host composition seam now exists. Publisher exposes Reader
+prepaint and provider boundaries without requiring an author application to
+replace its root layout, and the first staged Coherence host confirms that its
+home, Updates, progress, and administrative surfaces can retain the existing
+Coherence shell while work and direct section routes use the Publisher Reader.
+That staged host is useful migration evidence. It is not yet a complete
+acceptance candidate.
+
+The remaining local engineering scope is explicit:
+
+1. Materialize the exact Reader, search, progress, offline, and public identity
+   artifacts as part of the established application's production lifecycle,
+   then serve those bytes from their declared public paths without relying on a
+   previously prepared ignored directory.
+2. Replace the current Coherence and Publisher `/offline-sw.js` collision with
+   one owned worker cutover. The migration must retain the existing application's
+   offline behavior until the Publisher package is installed and must not
+   register two competing workers for the same scope.
+3. Preserve all forty-six Coherence part and chapter index surfaces. Forty-four
+   can migrate to Publisher section-index pages once their exact hierarchy and
+   links are bound. Two paths also own semantic sections, so their index and
+   fragment ownership must be resolved explicitly instead of being inferred
+   from matching URLs.
+4. Connect the established host to Coherence-owned Updates, narration, audio,
+   and synchronization adapters. The staged Reader may not claim those
+   capabilities merely because the generic Publisher contracts exist.
+5. Run the full route, no-JavaScript, state translation, offline, accessibility,
+   administration, and browser acceptance census against one committed local
+   candidate.
+6. Complete author review of that exact candidate, then use the existing
+   Coherence deployment project for a reviewed preview only after the local
+   candidate is approved.
+
+The executable, reversible sequence is recorded in
+[`coherence-adoption-plan.md`](coherence-adoption-plan.md). It is pinned to exact
+Publisher and Coherence commits, names the remaining Coherence-specific adapter
+and full-census acceptance work, preserves the current Coherence
+workbench and provider state, and stops before merge or production deployment.
+Publisher's closed executable bootstrap, separately bounded public state
+projection, Coherence-owned state adapter, exact refusal census, and generic
+offline resource closure are complete in the proof candidate. The embedded
+renderer can replace page-body rendering without duplicating Publisher internals,
+but the host-owned lifecycle bridges above remain acceptance work. A narrow
+happy-path fixture cannot close this gate. The established Coherence host cutover
+described above remains local engineering work. After it is complete, the author
+must review the exact local preview before the candidate may be pushed for an
+ordinary preview through the existing Coherence project. Production remains
+unchanged.
+
+## Material that remains Coherence-owned
+
+Publisher must not absorb:
+
+- manuscripts, voice cards, editorial standards, audits, debt, reviews, or tasks
+- adjudicated continuity ledgers and exact historical mappings
+- live audio manifests and immutable checkpoint records
+- publication Updates history
+- Fish, MLX, bucket, narrator, and model policy
+- credentials, provider project state, or applied database history
+- Coherence storage key names, consent copy, fonts, toolbar copy, art, or palette
+- the complete localhost editorial workbench
+- Volume-specific structural repairs and the nine-volume ontology
+
+Publisher may own generic schemas, validators, algorithms, and interfaces for
+these concerns. It does not own the values that make Coherence itself.
+
+## Dependency order
+
+1. Freeze work, section, block, passage, route, and continuity identity.
+2. Make multi-section compilation produce those identities.
+3. Project capability-sliced client artifacts.
+4. Complete local progress, preferences, bookmarks, ranges, and reactive stores.
+5. Add official renderer controls without weakening server-rendered reading.
+6. Add cross-tab synchronization notifications over the stable server routes.
+7. Add exact-base narration promotion application.
+8. Build offline dependency closure over the final route, Reader, and audio graph.
+9. Prove the Coherence Updates adapter and migration compatibility.
+10. Prove the same contracts with an unrelated second publication.
+
+The foundation portability evidence now includes two neutral publication shapes,
+an independently packed theme, and an independently packed extension. The clean
+host performs a frozen offline reinstall, renders both extension slots, hydrates
+an isolated extension client, contains its deliberate failure, and proves that
+server and client projection data are absent from static browser chunks. This
+closes the generic override proof. It does not replace the separate exact
+Coherence candidate and preview acceptance gates below.
+
+The release rehearsal now binds that portability evidence to the exact six
+publishable package candidates. A clean canonical Field Notes repository installs
+those tarballs, repeats the install offline from its lockfile, runs the shipped
+author lifecycle, builds the official production host, and serves home, work, and
+Updates routes with separately packed theme and extension overrides. Source bytes
+and candidate digests are checked before and after. Provenance acceptance remains
+an independent human gate, so this proof cannot silently turn rehearsal into
+release authorization.
+
+## Coherence acceptance gates
+
+The migration is not accepted until all of these hold:
+
+1. Every current and historical path, redirect, fragment, hierarchy edge, and
+   continuity identity resolves to the same destination and status.
+2. Manuscripts and durable publishing records remain byte-identical through
+   build, preview, validation, upgrade, rollback, and failed transactions.
+3. Manuscript text, navigation, tables, links, and attribution remain useful with
+   JavaScript disabled.
+4. Local reading works without an account or network. Sync remains explicit opt
+   in and isolated by publication and user.
+5. Legacy local state is copied and verified or dual-read during the rollback
+   window. New storage keys include publication identity.
+6. Progress reports one word-weighted percentage across every surface and
+   preserves historical completion through revisions.
+7. Bookmarks pass exact, renamed, reanchored, missing, ambiguous, merge,
+   tombstone, thousand-item, export, and accessibility cases.
+8. Audio identity follows spoken content. Changed narrated sections have matching
+   immutable reviewed audio and timing evidence for every public narrator.
+9. From a cold browser, an installed offline package supports reload, navigation,
+   search, bookmarks, and timed narration. A failed update preserves the prior
+   complete package.
+10. Desktop, 393-pixel, and 320-pixel browser review proves viewport reachability,
+    maximum saved text size, no page or control overflow, at least 44-pixel control
+    height, direct playback access, every secondary action, keyboard focus and
+    Escape behavior, screen-reader behavior, geometry stability, prepaint,
+    reduced motion, and contrast.
+11. Packed consumers and the supported Node matrix prove exact pins,
+    deterministic artifacts, protected source, transactional migration, and
+    rollback.
+12. A second unrelated publication exercises the generic defaults and override
+    contracts.
+13. The exact Coherence candidate passes its repository validation and local
+    preview gate.
+14. The author gives fresh separate approval before merge, database mutation,
+    package release, or production deployment.
+
+The machine-checked inventory lives in
+`tests/coherence-parity-ledger.mjs`. Any future planned capability remains a
+failure of the release claim even when a temporary Coherence implementation works.

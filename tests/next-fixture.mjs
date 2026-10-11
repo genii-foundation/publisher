@@ -38,6 +38,7 @@ export const FIXTURE_ROUTES = Object.freeze({
   publishedWork: "/works/caf%C3%A9+notes",
   sectionOne: "/readings/caf%C3%A9+one",
   sectionTwo: "/readings/plus+two",
+  sectionIndex: "/readings/field-notes/",
   unlistedWork: "/works/quiet-draft",
   updates: "/updates",
 });
@@ -225,6 +226,11 @@ function markdownFor(workId) {
         "## Next",
         "",
         "Second [unsafe link](javascript:alert(1)) with <script>alert(2)</script> text.",
+        "",
+        "| Reading window | Tide height |",
+        "| :--- | ---: |",
+        "| First light | 1.4 m |",
+        "| Late morning | 0.8 m |",
       ].join("\n");
     case "unlisted-notes":
       return "# Quiet Draft\n\nThis route exists without a catalog card.";
@@ -238,10 +244,20 @@ function markdownFor(workId) {
 function createTwoSectionWork(
   compiledWork,
   paragraphFirstSection,
+  composedSectionPage,
+  composedSectionSibling,
 ) {
   const root = compiledWork.sections[0];
   assert.ok(root);
-  assert.equal(root.blocks.length, 4);
+  assert.equal(root.blocks.length, 5);
+  const tableBlock = root.blocks[4];
+  assert.ok(tableBlock);
+  assert.match(tableBlock.markdown, /^\| Reading window \|/u);
+  const classifiedTableBlock = {
+    ...tableBlock,
+    kind: "table",
+    text: "Reading window Tide height First light 1.4 m Late morning 0.8 m",
+  };
   return {
     ...compiledWork,
     sections: [
@@ -253,11 +269,19 @@ function createTwoSectionWork(
           reader: {
             path: FIXTURE_ROUTES.sectionOne,
           },
+          ...(composedSectionPage
+            ? {
+                fragment: {
+                  path: FIXTURE_ROUTES.sectionOne,
+                  anchor: "published-opening",
+                },
+              }
+            : {}),
         },
         activeRouteNames: ["reader"],
         readerLocation: {
           kind: "route",
-          routeName: "reader",
+          routeName: composedSectionPage ? "fragment" : "reader",
         },
         continuity: {
           id: "published-opening",
@@ -274,15 +298,24 @@ function createTwoSectionWork(
         id: "published-closing",
         role: "section",
         title: "Next",
+        ...(composedSectionPage && !composedSectionSibling
+          ? { parentId: "published-opening" }
+          : {}),
         routes: {
-          reader: {
-            path: FIXTURE_ROUTES.sectionTwo,
-          },
+          [composedSectionPage ? "fragment" : "reader"]:
+            composedSectionPage
+              ? {
+                  path: FIXTURE_ROUTES.sectionOne,
+                  anchor: "published-closing",
+                }
+              : {
+                  path: FIXTURE_ROUTES.sectionTwo,
+                },
         },
-        activeRouteNames: ["reader"],
+        activeRouteNames: composedSectionPage ? [] : ["reader"],
         readerLocation: {
           kind: "route",
-          routeName: "reader",
+          routeName: composedSectionPage ? "fragment" : "reader",
         },
         continuity: {
           id: "published-closing",
@@ -291,7 +324,10 @@ function createTwoSectionWork(
           historicalSectionIds: [],
         },
         navigable: true,
-        blocks: root.blocks.slice(2),
+        blocks: [
+          ...root.blocks.slice(2, 4),
+          classifiedTableBlock,
+        ],
       },
     ],
   };
@@ -317,6 +353,7 @@ function createWorkRouteSection(compiledWork) {
 function createReaderLinkFixtures(
   works,
   headingReaderLink,
+  formattedReaderLink,
   unrepresentableReaderLink,
 ) {
   const work = works.find(
@@ -335,9 +372,11 @@ function createReaderLinkFixtures(
   assert.ok(block);
   const selected = headingReaderLink
     ? "Opening"
-    : unrepresentableReaderLink
-      ? "good link"
-      : "First";
+    : formattedReaderLink
+      ? "safe"
+      : unrepresentableReaderLink
+        ? "good link"
+        : "First";
   const start = block.markdown.indexOf(selected);
   assert.notEqual(start, -1);
 
@@ -483,6 +522,8 @@ export async function createFixtureReader(options = {}) {
         ? createTwoSectionWork(
             compiled.work,
             options.paragraphFirstPublishedSection ?? false,
+            options.composedPublishedSectionPage ?? false,
+            options.composedPublishedSectionSibling ?? false,
           )
         : createWorkRouteSection(compiled.work),
     );
@@ -495,12 +536,27 @@ export async function createFixtureReader(options = {}) {
       sourceGraph,
       sources,
       works,
+      ...(options.includeSectionIndex === true
+        ? {
+            sectionIndexes: [
+              {
+                id: "field-notes-index",
+                title: "Field Notes",
+                path: FIXTURE_ROUTES.sectionIndex,
+                workId: "published-notes",
+                sectionIds: ["published-opening", "published-closing"],
+              },
+            ],
+          }
+        : {}),
       links:
-        options.includeReaderLinks === false
+        options.includeReaderLinks === false ||
+          options.composedPublishedSectionPage === true
           ? []
           : createReaderLinkFixtures(
               works,
               options.headingReaderLink ?? false,
+              options.formattedReaderLink ?? false,
               options.unrepresentableReaderLink ?? false,
             ),
     }),

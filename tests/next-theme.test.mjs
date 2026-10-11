@@ -12,13 +12,18 @@ If you wish to allow use of your version of this file only under the terms of th
 */
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
   defaultPublisherNextTheme,
+  projectPublisherNextThemeAppearance,
   resolveDefaultPublisherNextTheme,
   validatePublisherNextThemeInstance,
 } from "../packages/next/dist/theme/index.js";
+import {
+  publisherNextThemeStyle,
+} from "../packages/next/dist/theme/style.js";
 
 function assertValid(result) {
   assert.equal(
@@ -39,6 +44,12 @@ function validThemeInput() {
   );
 }
 
+function legacyThemeInput() {
+  const input = validThemeInput();
+  delete input.tokens.colorSchemes;
+  return input;
+}
+
 test("the default theme resolves a closed immutable token snapshot", () => {
   const resolved = resolveDefaultPublisherNextTheme({
     mode: "dark",
@@ -56,19 +67,128 @@ test("the default theme resolves a closed immutable token snapshot", () => {
       version: "0.1.0-alpha.0",
       rendererCompatibility: ">=0.1.0-alpha.0 <0.2.0",
       kind: "genii.publisher.next-theme",
-      apiVersion: "1.0",
+      apiVersion: "2.0",
     },
   );
 
   const configured = assertValid(
     resolved.implementation.configure(resolved.config),
   );
-  assert.equal(configured.tokens.color.canvas, "#11181A");
+  assert.deepEqual(configured.tokens.color, {
+    canvas: "#11191B",
+    surface: "#182326",
+    text: "#F1F4EF",
+    mutedText: "#B8C3C4",
+    accent: "#86D0E0",
+    focus: "#F0AE54",
+    border: "#3D5055",
+  });
   assert.equal(Object.isFrozen(configured), true);
   assert.equal(Object.isFrozen(configured.tokens), true);
   assert.equal(Object.isFrozen(configured.tokens.color), true);
+  assert.equal(Object.isFrozen(configured.tokens.colorSchemes), true);
+  assert.equal(
+    Object.isFrozen(configured.tokens.colorSchemes.light),
+    true,
+  );
+  assert.deepEqual(configured.tokens.colorSchemes, {
+    light: {
+      canvas: "#F5F7F4",
+      surface: "#FCFDFB",
+      text: "#162225",
+      mutedText: "#526166",
+      accent: "#18586C",
+      focus: "#9A4E00",
+      border: "#C8D0CF",
+    },
+    dark: configured.tokens.color,
+    black: {
+      canvas: "#000000",
+      surface: "#0D1011",
+      text: "#F1F4EF",
+      mutedText: "#B8C3C4",
+      accent: "#86D0E0",
+      focus: "#F0AE54",
+      border: "#3D5055",
+    },
+  });
   assert.equal(Object.isFrozen(configured.tokens.typography), true);
+  assert.equal(
+    Object.isFrozen(configured.tokens.typography.readerFontFamilies),
+    true,
+  );
+  assert.equal(
+    Object.isFrozen(configured.tokens.typography.readerFontFamilies[0]),
+    true,
+  );
+  assert.deepEqual(
+    configured.tokens.typography.readerFontFamilies.map(
+      ({ id, label }) => ({ id, label }),
+    ),
+    [
+      { id: "serif", label: "Serif" },
+      { id: "sans-serif", label: "Sans serif" },
+    ],
+  );
   assert.equal(Object.isFrozen(configured.tokens.layout), true);
+  assert.equal(
+    publisherNextThemeStyle(configured)[
+      "--publisher-reader-default-font-family"
+    ],
+    "Charter, Bitstream Charter, Sitka Text, Cambria, serif",
+  );
+
+  const accented = assertValid(
+    defaultPublisherNextTheme.configure({
+      mode: "dark",
+      accent: "#76D3EA",
+    }),
+  );
+  assert.equal(accented.tokens.color.accent, "#76D3EA");
+  assert.equal(
+    accented.tokens.colorSchemes.dark.accent,
+    "#76D3EA",
+  );
+  assert.equal(
+    accented.tokens.colorSchemes.light.accent,
+    "#18586C",
+  );
+});
+
+test("theme appearance projection preserves legacy one-palette themes", () => {
+  const legacy = assertValid(
+    validatePublisherNextThemeInstance(legacyThemeInput()),
+  );
+  assert.equal(Object.hasOwn(legacy.tokens, "colorSchemes"), false);
+
+  const projection = projectPublisherNextThemeAppearance(legacy);
+  assert.deepEqual(projection, {
+    base: legacy.tokens.color,
+    light: legacy.tokens.color,
+    dark: legacy.tokens.color,
+    black: legacy.tokens.color,
+  });
+  assert.equal(Object.isFrozen(projection), true);
+  for (const palette of Object.values(projection)) {
+    assert.equal(Object.isFrozen(palette), true);
+  }
+});
+
+test("theme appearance projection exposes detached validated scheme palettes", () => {
+  const input = validThemeInput();
+  const validated = assertValid(
+    validatePublisherNextThemeInstance(input),
+  );
+  const projection = projectPublisherNextThemeAppearance(validated);
+
+  assert.equal(projection.base, validated.tokens.color);
+  assert.equal(projection.light, validated.tokens.colorSchemes.light);
+  assert.equal(projection.dark, validated.tokens.colorSchemes.dark);
+  assert.equal(projection.black, validated.tokens.colorSchemes.black);
+  assert.equal(Object.isFrozen(projection), true);
+
+  input.tokens.colorSchemes.black.canvas = "#FFFFFF";
+  assert.equal(projection.black.canvas, "#000000");
 });
 
 test("theme validation rejects extra properties and unsafe CSS values", () => {
@@ -158,6 +278,116 @@ test("theme validation enforces readable color contrast", () => {
   }
 });
 
+test("theme validation requires complete independently valid color schemes", () => {
+  const undefinedSchemes = validThemeInput();
+  undefinedSchemes.tokens.colorSchemes = undefined;
+  const undefinedSchemesResult =
+    validatePublisherNextThemeInstance(undefinedSchemes);
+  assert.equal(undefinedSchemesResult.valid, false);
+  assert.deepEqual(diagnosticCodes(undefinedSchemesResult), [
+    "next.theme.color_schemes.invalid",
+  ]);
+
+  const nullSchemes = validThemeInput();
+  nullSchemes.tokens.colorSchemes = null;
+  const nullSchemesResult =
+    validatePublisherNextThemeInstance(nullSchemes);
+  assert.equal(nullSchemesResult.valid, false);
+  assert.deepEqual(diagnosticCodes(nullSchemesResult), [
+    "next.theme.color_schemes.invalid",
+  ]);
+
+  const partial = validThemeInput();
+  delete partial.tokens.colorSchemes.dark;
+  const partialResult = validatePublisherNextThemeInstance(partial);
+  assert.equal(partialResult.valid, false);
+  assert.deepEqual(diagnosticCodes(partialResult), [
+    "next.theme.color_schemes.invalid",
+  ]);
+
+  const extra = validThemeInput();
+  extra.tokens.colorSchemes.sepia = extra.tokens.colorSchemes.light;
+  const extraResult = validatePublisherNextThemeInstance(extra);
+  assert.equal(extraResult.valid, false);
+  assert.deepEqual(diagnosticCodes(extraResult), [
+    "next.theme.color_schemes.invalid",
+  ]);
+
+  const incomplete = validThemeInput();
+  delete incomplete.tokens.colorSchemes.black.surface;
+  const incompleteResult = validatePublisherNextThemeInstance(incomplete);
+  assert.equal(incompleteResult.valid, false);
+  assert.deepEqual(diagnosticCodes(incompleteResult), [
+    "next.theme.color_scheme.invalid",
+  ]);
+
+  const unreadable = validThemeInput();
+  unreadable.tokens.colorSchemes.dark.text =
+    unreadable.tokens.colorSchemes.dark.canvas;
+  const unreadableResult = validatePublisherNextThemeInstance(unreadable);
+  assert.equal(unreadableResult.valid, false);
+  assert.deepEqual(diagnosticCodes(unreadableResult), [
+    "next.theme.color.contrast",
+  ]);
+  assert.equal(
+    unreadableResult.diagnostics[0].path,
+    "/theme/tokens/colorSchemes/dark/text",
+  );
+});
+
+test("theme validation closes the Reader font policy", () => {
+  const cases = [
+    {
+      code: "next.theme.reader_font_id.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies[1].id = "serif";
+      },
+    },
+    {
+      code: "next.theme.reader_font_default.invalid",
+      mutate(input) {
+        input.tokens.typography.defaultReaderFontFamilyId = "missing";
+      },
+    },
+    {
+      code: "next.theme.reader_font_default.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies = [
+          input.tokens.typography.readerFontFamilies[1],
+        ];
+        input.tokens.typography.defaultReaderFontFamilyId = "sans-serif";
+      },
+    },
+    {
+      code: "next.theme.reader_font_label.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies[1].label = " hidden ";
+      },
+    },
+    {
+      code: "next.theme.reader_font_family.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies[1].family =
+          "serif; display: none";
+      },
+    },
+    {
+      code: "next.theme.reader_fonts.invalid",
+      mutate(input) {
+        input.tokens.typography.readerFontFamilies.length = 3;
+      },
+    },
+  ];
+
+  for (const { code, mutate } of cases) {
+    const input = validThemeInput();
+    mutate(input);
+    const result = validatePublisherNextThemeInstance(input);
+    assert.equal(result.valid, false, code);
+    assert.deepEqual(diagnosticCodes(result), [code]);
+  }
+});
+
 test("theme validation never invokes accessors", () => {
   const input = validThemeInput();
   let getterCalls = 0;
@@ -174,6 +404,21 @@ test("theme validation never invokes accessors", () => {
   assert.equal(getterCalls, 0);
   assert.deepEqual(diagnosticCodes(result), [
     "next.theme.token_group.invalid",
+  ]);
+
+  const schemeInput = validThemeInput();
+  Object.defineProperty(schemeInput.tokens.colorSchemes.black, "text", {
+    enumerable: true,
+    get() {
+      getterCalls += 1;
+      return "#F7F7F7";
+    },
+  });
+  const schemeResult = validatePublisherNextThemeInstance(schemeInput);
+  assert.equal(schemeResult.valid, false);
+  assert.equal(getterCalls, 0);
+  assert.deepEqual(diagnosticCodes(schemeResult), [
+    "next.theme.color_scheme.invalid",
   ]);
 });
 
@@ -244,12 +489,48 @@ test("validated tokens are detached from mutable caller input", () => {
     validatePublisherNextThemeInstance(input),
   );
   const original = result.tokens.color.text;
+  const originalReaderFamily =
+    result.tokens.typography.readerFontFamilies[0].family;
   input.tokens.color.text = "#000000";
   input.tokens.layout.pageGutter = "99rem";
+  input.tokens.typography.readerFontFamilies[0].family = "fantasy";
 
   assert.equal(result.tokens.color.text, original);
   assert.notEqual(
     result.tokens.layout.pageGutter,
     input.tokens.layout.pageGutter,
   );
+  assert.equal(
+    result.tokens.typography.readerFontFamilies[0].family,
+    originalReaderFamily,
+  );
+});
+
+test("theme styles carry validated palettes without fixed alternate colors", () => {
+  const configured = assertValid(
+    defaultPublisherNextTheme.configure({ mode: "dark" }),
+  );
+  const style = publisherNextThemeStyle(configured);
+  assert.equal(style["--publisher-color-light-canvas"], "#F5F7F4");
+  assert.equal(style["--publisher-color-dark-canvas"], "#11191B");
+  assert.equal(style["--publisher-color-black-canvas"], "#000000");
+  assert.equal(style["--publisher-color-black-surface"], "#0D1011");
+
+  const stylesheet = readFileSync(
+    new URL("../packages/next/styles.css", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(
+    stylesheet,
+    /#(?:f5f7f4|fcfdfb|162225|526166|18586c|9a4e00|c8d0cf|11191b|182326|f1f4ef|b8c3c4|86d0e0|f0ae54|3d5055|000000|0d1011)\b/iu,
+  );
+  for (const scheme of ["light", "dark", "black"]) {
+    assert.match(
+      stylesheet,
+      new RegExp(
+        `--publisher-color-canvas: var\\(--publisher-color-${scheme}-canvas\\) !important`,
+        "u",
+      ),
+    );
+  }
 });

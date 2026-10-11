@@ -407,6 +407,25 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     types: "./dist/markdown.d.ts",
     import: "./dist/markdown.js",
   });
+  for (const subpath of [
+    "preferences",
+    "passage-range",
+    "sync",
+    "search",
+    "narration",
+  ]) {
+    assert.deepEqual(readerManifest.exports[`./${subpath}`], {
+      types: `./dist/${subpath}.d.ts`,
+      import: `./dist/${subpath}.js`,
+    });
+  }
+  for (const subpath of ["progress", "bookmarks"]) {
+    assert.deepEqual(readerManifest.exports[`./${subpath}`], {
+      types: `./dist/${subpath}.d.ts`,
+      import: `./dist/${subpath}.js`,
+      default: `./dist/${subpath}.js`,
+    });
+  }
   assert.equal(
     readerManifest.dependencies["mdast-util-from-markdown"],
     "2.0.3",
@@ -844,6 +863,55 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         applyReaderLinksToMarkdown,
         type ReaderBlockMarkdownLink,
       } from "@genii-foundation/publisher-reader/markdown";
+      import {
+        createDefaultReaderPreferences,
+        type ReaderPreferences,
+      } from "@genii-foundation/publisher-reader/preferences";
+      import {
+        createEmptyReaderProgressState,
+        type ReaderProgressState,
+      } from "@genii-foundation/publisher-reader/progress";
+      import {
+        createReaderProgressOverview,
+        type ReaderProgressOverview,
+      } from "@genii-foundation/publisher-reader/progress-overview";
+      import {
+        createReaderProgressCatalog,
+        type ReaderProgressCatalog,
+      } from "@genii-foundation/publisher-reader/progress-catalog";
+      import {
+        validateReaderPassageRange,
+        type ReaderPassageRange,
+      } from "@genii-foundation/publisher-reader/passage-range";
+      import {
+        createEmptyReaderBookmarksState,
+        type ReaderBookmarksState,
+      } from "@genii-foundation/publisher-reader/bookmarks";
+      import {
+        createReaderSyncCoordinatorState,
+        type ReaderSyncCoordinatorState,
+      } from "@genii-foundation/publisher-reader/sync";
+      import {
+        createReaderSearchTerms,
+        type ReaderSearchIndex,
+      } from "@genii-foundation/publisher-reader/search";
+      import {
+        countReaderNarrationWords,
+        createReaderNarrationPreferences,
+        createReaderNarrationSectionTextProfile,
+        createReaderNarrationWordRanges,
+        parseReaderNarrationNavigationIntent,
+        type ReaderNarrationNavigationIntent,
+        type ReaderNarrationPreferences,
+        type ReaderNarrationSectionTextProfile,
+        type ReaderNarrationWordRange,
+      } from "@genii-foundation/publisher-reader/narration";
+      import {
+        createReaderOfflineCatalog,
+        parseReaderOfflineCatalog,
+        serializeReaderOfflineCatalog,
+        type ReaderOfflineCatalog,
+      } from "@genii-foundation/publisher-reader/offline";
 
       declare const input: unknown;
       declare const envelope: PublicationReaderEnvelope;
@@ -868,6 +936,50 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       const linked: ValidationResult<string> =
         applyReaderLinksToMarkdown(block, links);
       declare const resolution: ReaderAddressResolution;
+      const preferences: ReaderPreferences =
+        createDefaultReaderPreferences();
+      const progress: ReaderProgressState =
+        createEmptyReaderProgressState("portable-reader");
+      declare const range: ReaderPassageRange;
+      const rangeValidation = validateReaderPassageRange(range);
+      const bookmarks: ReaderBookmarksState =
+        createEmptyReaderBookmarksState("portable-reader");
+      const overview: ReaderProgressOverview =
+        createReaderProgressOverview(progress, bookmarks, []);
+      const progressCatalog: ReaderProgressCatalog =
+        createReaderProgressCatalog(envelope);
+      const sync: ReaderSyncCoordinatorState =
+        createReaderSyncCoordinatorState("portable-reader");
+      declare const searchIndex: ReaderSearchIndex;
+      const terms: readonly string[] = createReaderSearchTerms("portable");
+      const narration: ReaderNarrationPreferences =
+        createReaderNarrationPreferences();
+      const navigation: ReaderNarrationNavigationIntent = {
+        publicationId: "portable-reader",
+        sectionId: "opening",
+        href: "/opening",
+      };
+      void parseReaderNarrationNavigationIntent(navigation, {
+        publicationId: "portable-reader",
+      });
+      declare const narrationText: ReaderNarrationSectionTextProfile;
+      void createReaderNarrationSectionTextProfile;
+      const narrationWordRanges: readonly ReaderNarrationWordRange[] =
+        createReaderNarrationWordRanges(narrationText.text);
+      const narrationWordCount: number =
+        countReaderNarrationWords(narrationText.text);
+      const offlineCatalog: ReaderOfflineCatalog = createReaderOfflineCatalog({
+        reader: envelope,
+        rendererBuildId: envelope.buildId,
+        catalogHref: "/publication-reader-offline.json",
+        sharedResources: [],
+      });
+      const parsedOfflineCatalog: ReaderOfflineCatalog | null =
+        parseReaderOfflineCatalog(serializeReaderOfflineCatalog(offlineCatalog), {
+          publicationId: envelope.publicationId,
+          readerBuildId: envelope.buildId,
+          rendererBuildId: envelope.buildId,
+        });
       void [
         READER_PROJECTOR_VERSION,
         projected,
@@ -878,6 +990,22 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         address,
         linked,
         resolution,
+        preferences,
+        progress,
+        rangeValidation,
+        bookmarks,
+        overview,
+        progressCatalog,
+        sync,
+        searchIndex,
+        terms,
+        narration,
+        navigation,
+        narrationText,
+        narrationWordRanges,
+        narrationWordCount,
+        offlineCatalog,
+        parsedOfflineCatalog,
       ];
     `;
     await Promise.all([
@@ -931,17 +1059,33 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       },
     );
 
-    const runtimeClosure = await collectModuleClosure(
-      join(installedReaderRoot, "dist", "runtime.js"),
-      installedReaderRoot,
-    );
+    const browserSubpaths = [
+      "runtime",
+      "preferences",
+      "progress",
+      "passage-range",
+      "bookmarks",
+      "sync",
+      "search",
+      "narration",
+      "offline",
+    ];
+    const browserClosures = new Map();
+    for (const subpath of browserSubpaths) {
+      browserClosures.set(
+        subpath,
+        await collectModuleClosure(
+          join(installedReaderRoot, "dist", `${subpath}.js`),
+          installedReaderRoot,
+        ),
+      );
+    }
+    const runtimeClosure = browserClosures.get("runtime");
+    assert.ok(runtimeClosure);
     assert.deepEqual(runtimeClosure.externalSpecifiers, [
       "@genii-foundation/publisher-schema/reader",
       "@genii-foundation/publisher-schema/routes",
     ]);
-    const runtimeSource = runtimeClosure.files
-      .map(({ source }) => source)
-      .join("\n");
     for (const forbidden of [
       "@genii-foundation/publisher-content",
       "node:",
@@ -951,11 +1095,14 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       "process.env",
       "fetch(",
     ]) {
-      assert.equal(
-        runtimeSource.includes(forbidden),
-        false,
-        `Browser runtime closure contains forbidden dependency ${forbidden}.`,
-      );
+      for (const [subpath, closure] of browserClosures) {
+        const source = closure.files.map(({ source }) => source).join("\n");
+        assert.equal(
+          source.includes(forbidden),
+          false,
+          `Browser ${subpath} closure contains forbidden dependency ${forbidden}.`,
+        );
+      }
     }
 
     await rm(installedContentRoot, {
@@ -964,23 +1111,28 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
     });
     assert.equal(await pathExists(installedContentRoot), false);
 
-    const runtimeEntry = join(
-      installedReaderRoot,
-      "dist",
-      "runtime.js",
+    const browserEntries = Object.fromEntries(
+      browserSubpaths.map((subpath) => [
+        subpath,
+        join(installedReaderRoot, "dist", `${subpath}.js`),
+      ]),
     );
     const browserBundle = await buildWithEsbuild({
       absWorkingDir: consumerRoot,
-      entryPoints: [runtimeEntry],
+      entryPoints: browserEntries,
       bundle: true,
       format: "esm",
       logLevel: "silent",
       metafile: true,
+      outdir: join(temporaryRoot, "browser-bundle"),
       platform: "browser",
       treeShaking: true,
       write: false,
     });
-    assert.equal(browserBundle.outputFiles.length, 1);
+    assert.equal(
+      browserBundle.outputFiles.length,
+      browserSubpaths.length,
+    );
     const bundledReferences = [
       ...Object.keys(browserBundle.metafile.inputs),
       ...Object.values(browserBundle.metafile.inputs).flatMap(
@@ -1004,7 +1156,9 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         `Browser bundle retained Node builtin ${reference}.`,
       );
     }
-    const bundledRuntime = browserBundle.outputFiles[0].text;
+    const bundledRuntime = browserBundle.outputFiles
+      .map(({ text }) => text)
+      .join("\n");
     assert.equal(
       bundledRuntime.includes(
         "@genii-foundation/publisher-content",
@@ -1021,6 +1175,42 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
       import {
         createPublicationReaderRuntime,
       } from "@genii-foundation/publisher-reader/runtime";
+      import {
+        createDefaultReaderPreferences,
+      } from "@genii-foundation/publisher-reader/preferences";
+      import {
+        createEmptyReaderProgressState,
+      } from "@genii-foundation/publisher-reader/progress";
+      import {
+        createReaderProgressOverview,
+      } from "@genii-foundation/publisher-reader/progress-overview";
+      import {
+        createReaderProgressCatalog,
+        parseReaderProgressCatalog,
+        serializeReaderProgressCatalog,
+      } from "@genii-foundation/publisher-reader/progress-catalog";
+      import {
+        validateReaderPassageRange,
+      } from "@genii-foundation/publisher-reader/passage-range";
+      import {
+        createEmptyReaderBookmarksState,
+      } from "@genii-foundation/publisher-reader/bookmarks";
+      import {
+        createReaderSyncCoordinatorState,
+      } from "@genii-foundation/publisher-reader/sync";
+      import {
+        createReaderSearchTerms,
+      } from "@genii-foundation/publisher-reader/search";
+      import {
+        createReaderNarrationPreferences,
+        createReaderNarrationWordRanges,
+        readerNarrationTimingHref,
+      } from "@genii-foundation/publisher-reader/narration";
+      import {
+        createReaderOfflineCatalog,
+        parseReaderOfflineCatalog,
+        serializeReaderOfflineCatalog,
+      } from "@genii-foundation/publisher-reader/offline";
 
       const digest = "sha256:" + "0".repeat(64);
       const envelope = {
@@ -1097,6 +1287,73 @@ test("the packed reader rebuilds and proves root, declarations, and content-free
         content: null,
       });
       assert.equal(Object.isFrozen(result.value.envelope), true);
+      assert.equal(createDefaultReaderPreferences().fontScale, 100);
+      assert.equal(
+        createEmptyReaderProgressState("portable-reader").publicationId,
+        "portable-reader",
+      );
+      assert.equal(validateReaderPassageRange(null).valid, false);
+      assert.equal(
+        createEmptyReaderBookmarksState("portable-reader").publicationId,
+        "portable-reader",
+      );
+      assert.equal(
+        createReaderProgressOverview(
+          createEmptyReaderProgressState("portable-reader"),
+          createEmptyReaderBookmarksState("portable-reader"),
+          [],
+        ).aggregate.percent,
+        0,
+      );
+      const progressCatalog = createReaderProgressCatalog(envelope);
+      assert.equal(
+        parseReaderProgressCatalog(
+          serializeReaderProgressCatalog(progressCatalog),
+          { publicationId: "portable-reader", readerBuildId: digest },
+        )?.entries.length,
+        0,
+      );
+      assert.equal(
+        createReaderSyncCoordinatorState("portable-reader").phase,
+        "idle",
+      );
+      assert.deepEqual(createReaderSearchTerms("Portable Reader"), [
+        "portable",
+        "reader",
+      ]);
+      assert.equal(createReaderNarrationPreferences().playbackRate, 1);
+      const narrationRanges = createReaderNarrationWordRanges(
+        "12😀𐐀·3 ka·ra ˈ42",
+      );
+      assert.deepEqual(narrationRanges, [
+        { charStart: 0, charEnd: 2 },
+        { charStart: 4, charEnd: 8 },
+        { charStart: 9, charEnd: 14 },
+        { charStart: 15, charEnd: 18 },
+      ]);
+      assert.equal(Object.isFrozen(narrationRanges), true);
+      assert.equal(Object.isFrozen(narrationRanges[0]), true);
+      assert.equal(readerNarrationTimingHref({
+        href: "/audio/portable.mp3",
+        timingsByteSize: 123,
+      }), "/audio/portable.timings.json");
+      const offlineCatalog = createReaderOfflineCatalog({
+        reader: envelope,
+        rendererBuildId: digest,
+        catalogHref: "/publication-reader-offline.json",
+        sharedResources: [],
+      });
+      assert.equal(
+        parseReaderOfflineCatalog(
+          serializeReaderOfflineCatalog(offlineCatalog),
+          {
+            publicationId: "portable-reader",
+            readerBuildId: digest,
+            rendererBuildId: digest,
+          },
+        )?.packages.length,
+        0,
+      );
       console.log("browser-runtime-ok");
     `;
     const proofOutput = run(

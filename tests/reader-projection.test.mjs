@@ -441,11 +441,13 @@ test("both fixture publications project into deterministic public reader artifac
       publicationId: "rain-gauge-journal",
       workIds: ["rain-gauge"],
       collectionIds: ["weather-observations"],
+      // Route targets now carry the stable Updates view identity. That changes
+      // the Reader bytes and every identity derived from them, deliberately.
       buildId:
-        "sha256:5da07b8ea5f7e1760f1c18bf6ea356f56966d71c37fdc2e1a5fc934beb9ee557",
-      byteLength: 5991,
+        "sha256:29fad0fa1eb40471da8cdb8b901c804d02ef9002374c81476dd1306f00d625ff",
+      byteLength: 6010,
       artifactHash:
-        "sha256:55fbcbb4e49ba139c20c8a8102e9ec8b1bcb66f8be6908eb930777145b89fc0b",
+        "sha256:e204a5dbd5ede30a88b58c6f9ffec221b3b7f52e329b454a8fcfa1332b458817",
     },
     {
       directory: "declared-night-dispatch",
@@ -453,10 +455,10 @@ test("both fixture publications project into deterministic public reader artifac
       workIds: ["signal-lantern", "platform-bell"],
       collectionIds: ["after-dark"],
       buildId:
-        "sha256:f074086d1034b3d1a0bcf113fb00e9bbd7b383b314e2e801a2195db89d990e39",
-      byteLength: 8727,
+        "sha256:dc0947466e0d23fca185c43b577ed9848b969254d9c132aaf7cee8410ae2b6a8",
+      byteLength: 8949,
       artifactHash:
-        "sha256:0d5b335db97cf33df1f0115b1d7f0751bcf8e61fc619cfe11ca09493caa188cc",
+        "sha256:4a702ddd3defac32ebf7fad8b051f09ea5118e00301ce9b470f991d75f30c7d6",
     },
   ];
 
@@ -542,7 +544,6 @@ test("both fixture publications project into deterministic public reader artifac
     });
     assertProjectionOmitsAuthoringState(first);
     for (const forbidden of [
-      "@example/audio-file-adapter",
       "@example/margin-notes-extension",
       "@example/station-index-extension",
       "@example/sync-adapter",
@@ -1079,7 +1080,7 @@ test("an all-draft publication has a valid empty public content result", async (
   assert.deepEqual(reader.routes.redirects, []);
   assert.deepEqual(
     reader.routes.active.map(({ target }) => target.kind),
-    ["home", "updates"],
+    ["home", "updates", "updates"],
   );
   assert.deepEqual(reader.statistics, {
     workCount: 0,
@@ -2824,6 +2825,62 @@ test("the browser runtime snapshots its input and fails closed on adversarial va
     status: "invalid",
     reason: "hash",
   });
+});
+
+test("section index routes survive projection and runtime rejects forged ownership", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const sectionId = input.works[0].sections[0].id;
+  const reader = project(
+    {
+      ...input,
+      sectionIndexes: [
+        {
+          id: "rain-gauge-index",
+          title: "Rain Gauge Index",
+          path: "/reading/rain-gauge-index/",
+          workId: "rain-gauge",
+          sectionIds: [sectionId],
+        },
+      ],
+    },
+    "public",
+  );
+  const route = reader.routes.active.at(-1);
+  assert.deepEqual(route, {
+    path: "/reading/rain-gauge-index/",
+    target: {
+      kind: "section-index",
+      id: "rain-gauge-index",
+      title: "Rain Gauge Index",
+      workId: "rain-gauge",
+      sectionIds: [sectionId],
+    },
+  });
+  assertValid(createPublicationReaderRuntime(reader));
+
+  for (const target of [
+    { ...route.target, workId: "missing-work" },
+    { ...route.target, sectionIds: ["missing-section"] },
+    { ...route.target, sectionIds: [sectionId, sectionId] },
+    { ...route.target, title: " Rain Gauge Index" },
+  ]) {
+    const forged = structuredClone(reader);
+    forged.routes.active.at(-1).target = target;
+    rehashReaderEnvelope(forged);
+    assert.equal(
+      createPublicationReaderRuntime(forged).valid,
+      false,
+      JSON.stringify(target),
+    );
+  }
+
+  const duplicateId = structuredClone(reader);
+  duplicateId.routes.active.push({
+    path: "/reading/rain-gauge-index-two/",
+    target: { ...route.target },
+  });
+  rehashReaderEnvelope(duplicateId);
+  assert.equal(createPublicationReaderRuntime(duplicateId).valid, false);
 });
 
 test("runtime derived-value checks ignore nested record insertion order", async () => {

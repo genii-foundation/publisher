@@ -703,8 +703,10 @@ test("packed content freezes its runtime and proves production and development c
       import {
         compileMarkdownWork,
         compilePublicationContent,
+        createSpokenInputIdentity,
         createPublicationContentArtifact,
         serializePublicationContentEnvelope,
+        validateAudioCheckpoint,
         validatePublicationContentEnvelope,
       } from "@genii-foundation/publisher-content";
       import {
@@ -718,6 +720,18 @@ test("packed content freezes its runtime and proves production and development c
         assert.equal(result.valid, true, JSON.stringify(result.diagnostics));
         return result.value;
       }
+
+      assert.equal(typeof validateAudioCheckpoint, "function");
+      const spokenIdentity = value(createSpokenInputIdentity({
+        sectionId: "sample-work-root",
+        title: " A Neutral Sample ",
+        spokenBody: "The packed   compiler reads this small publication.",
+      }));
+      assert.equal(
+        spokenIdentity.spokenText,
+        "A Neutral Sample\\n\\nThe packed compiler reads this small publication.",
+      );
+      assert.match(spokenIdentity.spokenTextSha256, /^sha256:[a-f0-9]{64}$/);
 
       const publication = value(validatePublicationShape({
         "$schema": "https://publisher.genii.foundation/schemas/publication.schema.json",
@@ -976,12 +990,23 @@ test("packed content freezes its runtime and proves production and development c
     const typeConsumer = `
       import {
         compilePublicationContent,
+        createSpokenInputIdentity,
         createPublicationContentArtifact,
+        planAudioCheckpointPromotion,
         serializePublicationContentEnvelope,
+        validateAudioCheckpoint,
+        validateAudioPublicationGuard,
         validatePublicationContentEnvelope,
+        type AudioCheckpoint,
+        type AudioPublicationGuardInput,
+        type AudioPublicationGuardReport,
+        type AudioPromotionPlan,
+        type AudioPromotionPlanInput,
         type CompilePublicationContentInput,
         type ResolvedExtensionInput,
         type SectionReaderLocationInput,
+        type SpokenInputIdentity,
+        type SpokenInputIdentityInput,
       } from "@genii-foundation/publisher-content";
       import type {
         ExtensionCapability,
@@ -991,6 +1016,10 @@ test("packed content freezes its runtime and proves production and development c
 
       declare const input: CompilePublicationContentInput;
       declare const envelope: PublicationContentEnvelope;
+      declare const checkpoint: AudioCheckpoint;
+      declare const promotionInput: AudioPromotionPlanInput;
+      declare const publicationGuardInput: AudioPublicationGuardInput;
+      declare const spokenInput: SpokenInputIdentityInput;
       const readerLocation: SectionReaderLocationInput = { kind: "work" };
       const capability: ExtensionCapability = "content.project";
       const extension: ResolvedExtensionInput = {
@@ -1003,11 +1032,23 @@ test("packed content freezes its runtime and proves production and development c
         compilePublicationContent(input);
       const validated: ValidationResult<PublicationContentEnvelope> =
         validatePublicationContentEnvelope(envelope);
+      const validatedCheckpoint: ValidationResult<AudioCheckpoint> =
+        validateAudioCheckpoint(checkpoint);
+      const promotion: ValidationResult<AudioPromotionPlan> =
+        planAudioCheckpointPromotion(promotionInput);
+      const publicationGuard: ValidationResult<AudioPublicationGuardReport> =
+        validateAudioPublicationGuard(publicationGuardInput);
+      const spokenIdentity: ValidationResult<SpokenInputIdentity> =
+        createSpokenInputIdentity(spokenInput);
       const serialized: string = serializePublicationContentEnvelope(envelope);
       const artifact = createPublicationContentArtifact(envelope);
       void [
         compiled,
         validated,
+        validatedCheckpoint,
+        promotion,
+        publicationGuard,
+        spokenIdentity,
         serialized,
         artifact,
         readerLocation,

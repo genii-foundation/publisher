@@ -45,8 +45,8 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  buildPublicationReader,
-} from "../packages/publisher/dist/node.js";
+  buildFixturePublicationReader as buildPublicationReader,
+} from "./extension-fixture.mjs";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const executable = join(
@@ -71,10 +71,15 @@ const servable = join(repositoryRoot, "fixtures", "canonical-tide-tables");
 const expectedDigests = Object.freeze({
   "canonical-tide-tables":
     "02989c86def31920e6d4ea753e0bd138",
+  // Extension declarations now bind their exact installed versions, so these
+  // two Reader artifacts moved together. Remeasured on 22.12.0, 24.18.0, and
+  // 26.4.0.
   "canonical-field-notes":
-    "6a7dcd825ae631ce7f86d69360e374ee",
+    "286b93d2f96a39fa1eb652c22bde9027",
   "declared-night-dispatch":
-    "3f2f621289fbb26231edf4d78562ff5d",
+    "5e8a06b01a9845272fb6c97c65f7bff0",
+  "canonical-narrated-tides":
+    "4a26cdd81b0374c8c2ef4140d086a7b0",
 });
 
 for (const [fixture, expected] of Object.entries(expectedDigests)) {

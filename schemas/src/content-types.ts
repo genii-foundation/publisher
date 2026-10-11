@@ -179,7 +179,14 @@ export type ContentRoute =
     }
   | {
       readonly path: string;
-      readonly target: { readonly kind: "updates" };
+      readonly target: {
+        readonly kind: "updates";
+        readonly viewId: string;
+        readonly pagination?: {
+          readonly path: string;
+          readonly pageSize: number;
+        };
+      };
     }
   | {
       readonly path: string;
@@ -202,6 +209,16 @@ export type ContentRoute =
         readonly workId: string;
         readonly sectionId: string;
         readonly routeName: string;
+      };
+    }
+  | {
+      readonly path: string;
+      readonly target: {
+        readonly kind: "section-index";
+        readonly id: string;
+        readonly title: string;
+        readonly workId: string;
+        readonly sectionIds: readonly string[];
       };
     };
 

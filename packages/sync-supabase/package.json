@@ -1,0 +1,53 @@
+{
+  "name": "@genii-foundation/publisher-sync-supabase",
+  "version": "0.1.0-alpha.0",
+  "description": "Reference Supabase schema and server provider for optional GENII Publisher reader synchronization.",
+  "license": "CPAL-1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27"
+  },
+  "files": [
+    "CHANGES.md",
+    "LEGAL",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md",
+    "SOURCE-NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "migrations",
+    "provider.mjs",
+    "scripts/check-release-tag.mjs",
+    "server-entry.mjs",
+    "server.mjs",
+    "third-party-licenses"
+  ],
+  "exports": {
+    ".": "./provider.mjs",
+    "./server": "./server-entry.mjs"
+  },
+  "scripts": {
+    "prepublishOnly": "node ../../provenance/scripts/reject-directory-publish.mjs"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.0",
+    "@supabase/supabase-js": "2.110.0",
+    "server-only": "0.0.1"
+  },
+  "peerDependencies": {
+    "next": "16.3.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/genii-foundation/publisher.git",
+    "directory": "packages/sync-supabase"
+  },
+  "homepage": "https://publisher.genii.foundation",
+  "bugs": {
+    "url": "https://github.com/genii-foundation/publisher/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

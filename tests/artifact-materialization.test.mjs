@@ -44,11 +44,11 @@ import { fileURLToPath } from "node:url";
 
 import {
   ArtifactDestinationError,
-  checkReaderArtifact,
+  checkHostArtifact,
   hashArtifactText,
   resolveArtifactDestination,
   stagedArtifactPathFor,
-  writeReaderArtifact,
+  writeHostArtifact,
 } from "../packages/publisher/dist/node.js";
 import {
   PUBLISHER_HOST_STATE_PATH,
@@ -71,10 +71,10 @@ function host(t) {
   return root;
 }
 
-function destination(hostRoot, readerDataPath, extra = {}) {
+function destination(hostRoot, declaredArtifactPath, extra = {}) {
   return resolveArtifactDestination({
     hostRoot,
-    readerDataPath,
+    declaredArtifactPath,
     rendererManagedPaths: contractPaths,
     ...extra,
   });
@@ -95,7 +95,7 @@ test("a plain host-root path is accepted", (t) => {
 test("a nested path is accepted and its directory is created on write", (t) => {
   const hostRoot = host(t);
   const resolved = destination(hostRoot, "generated/reader/data.json");
-  const written = writeReaderArtifact({
+  const written = writeHostArtifact({
     destination: resolved,
     text: '{"a":1}\n',
   });
@@ -262,11 +262,11 @@ test("an identical artifact is not rewritten", (t) => {
   const resolved = destination(hostRoot, "publication-reader.json");
   const text = '{"reader":true}\n';
 
-  const first = writeReaderArtifact({ destination: resolved, text });
+  const first = writeHostArtifact({ destination: resolved, text });
   assert.equal(first.outcome, "written");
   const stamp = statSync(resolved.absolutePath).mtimeMs;
 
-  const second = writeReaderArtifact({ destination: resolved, text });
+  const second = writeHostArtifact({ destination: resolved, text });
   assert.equal(second.outcome, "current");
   // Not an optimization. A rewritten byte-identical file restarts a watching
   // build tool, which then triggers another build.
@@ -277,8 +277,8 @@ test("an identical artifact is not rewritten", (t) => {
 test("a changed artifact replaces the old one and reports its digest", (t) => {
   const hostRoot = host(t);
   const resolved = destination(hostRoot, "publication-reader.json");
-  writeReaderArtifact({ destination: resolved, text: '{"v":1}\n' });
-  const second = writeReaderArtifact({
+  writeHostArtifact({ destination: resolved, text: '{"v":1}\n' });
+  const second = writeHostArtifact({
     destination: resolved,
     text: '{"v":2}\n',
   });
@@ -291,7 +291,7 @@ test("a changed artifact replaces the old one and reports its digest", (t) => {
 test("a failed write leaves the previous artifact intact and no debris", (t) => {
   const hostRoot = host(t);
   const resolved = destination(hostRoot, "publication-reader.json");
-  writeReaderArtifact({ destination: resolved, text: '{"v":1}\n' });
+  writeHostArtifact({ destination: resolved, text: '{"v":1}\n' });
   assert.deepEqual(readdirSync(hostRoot), ["publication-reader.json"]);
 
   // Make the destination directory unwritable so staging the replacement fails.
@@ -313,7 +313,7 @@ test("a failed write leaves the previous artifact intact and no debris", (t) => 
 
   let threw = false;
   try {
-    writeReaderArtifact({ destination: resolved, text: '{"v":2}\n' });
+    writeHostArtifact({ destination: resolved, text: '{"v":2}\n' });
   } catch {
     threw = true;
   }
@@ -345,20 +345,20 @@ test("checking reports missing, stale, and current distinctly", (t) => {
   const resolved = destination(hostRoot, "publication-reader.json");
   const text = '{"v":1}\n';
 
-  const missing = checkReaderArtifact({ destination: resolved, text });
+  const missing = checkHostArtifact({ destination: resolved, text });
   assert.equal(missing.outcome, "missing");
   assert.equal(missing.actual, null);
   assert.equal(missing.expected, hashArtifactText(text));
 
   writeFileSync(resolved.absolutePath, '{"v":0}\n', "utf8");
-  const stale = checkReaderArtifact({ destination: resolved, text });
+  const stale = checkHostArtifact({ destination: resolved, text });
   assert.equal(stale.outcome, "stale");
   assert.equal(stale.actual, hashArtifactText('{"v":0}\n'));
   assert.notEqual(stale.actual, stale.expected);
 
-  writeReaderArtifact({ destination: resolved, text });
+  writeHostArtifact({ destination: resolved, text });
   assert.equal(
-    checkReaderArtifact({ destination: resolved, text }).outcome,
+    checkHostArtifact({ destination: resolved, text }).outcome,
     "current",
   );
 });
@@ -366,7 +366,7 @@ test("checking reports missing, stale, and current distinctly", (t) => {
 test("checking writes nothing", (t) => {
   const hostRoot = host(t);
   const resolved = destination(hostRoot, "publication-reader.json");
-  checkReaderArtifact({ destination: resolved, text: '{"v":1}\n' });
+  checkHostArtifact({ destination: resolved, text: '{"v":1}\n' });
   assert.equal(existsSync(resolved.absolutePath), false);
   assert.deepEqual(readdirSync(hostRoot), []);
 });
@@ -375,7 +375,7 @@ test("a directory where the artifact belongs reads as missing", (t) => {
   const hostRoot = host(t);
   const resolved = destination(hostRoot, "publication-reader.json");
   mkdirSync(resolved.absolutePath);
-  const checked = checkReaderArtifact({
+  const checked = checkHostArtifact({
     destination: resolved,
     text: '{"v":1}\n',
   });
@@ -401,7 +401,7 @@ test("a staged artifact left by an interrupted build is cleared", (t) => {
   writeFileSync(staged, '{"partial":true}', "utf8");
   assert.ok(existsSync(staged));
 
-  const written = writeReaderArtifact({
+  const written = writeHostArtifact({
     destination: resolved,
     text: '{"v":1}\n',
   });
@@ -423,14 +423,14 @@ test("the already current path clears it too", (t) => {
   const resolved = destination(hostRoot, "publication-reader.json");
   const text = '{"v":1}\n';
   assert.equal(
-    writeReaderArtifact({ destination: resolved, text }).outcome,
+    writeHostArtifact({ destination: resolved, text }).outcome,
     "written",
   );
 
   const staged = stagedArtifactPathFor(resolved);
   writeFileSync(staged, '{"partial":true}', "utf8");
 
-  const second = writeReaderArtifact({ destination: resolved, text });
+  const second = writeHostArtifact({ destination: resolved, text });
   assert.equal(second.outcome, "current", "the artifact is unchanged");
   assert.equal(
     existsSync(staged),

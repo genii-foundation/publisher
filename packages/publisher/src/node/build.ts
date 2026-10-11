@@ -33,32 +33,74 @@ If you wish to allow use of your version of this file only under the terms of th
 // root section rather than renaming it.
 
 import {
+  canonicalizeJson,
   compileMarkdownWork,
 } from "@genii-foundation/publisher-content";
 import type {
-  ResolvedExtensionInput,
   WorkContentInput,
 } from "@genii-foundation/publisher-content";
 import {
   projectPublicationReader,
   serializePublicationReaderEnvelope,
 } from "@genii-foundation/publisher-reader";
+import {
+  createReaderSearchIndex,
+  serializeReaderSearchIndex,
+} from "@genii-foundation/publisher-reader/search";
+import {
+  createReaderProgressCatalog,
+  serializeReaderProgressCatalog,
+} from "@genii-foundation/publisher-reader/progress-catalog";
 import type {
+  ReaderSearchIndex,
+} from "@genii-foundation/publisher-reader/search";
+import type {
+  ReaderProgressCatalog,
+} from "@genii-foundation/publisher-reader/progress-catalog";
+import type {
+  AudioEnvelope,
   Diagnostic,
-  ExtensionReference,
+  JSONValue,
   PublicationContentEnvelope,
-  PublicationManifest,
   PublicationReaderEnvelope,
   ReaderAudience,
+  SyncEnvelope,
+  UpdatesEnvelope,
   ValidationResult,
+  WorkSectionDeclaration,
 } from "@genii-foundation/publisher-schema";
 
 import {
-  PUBLISHER_VERSION,
-} from "../index.js";
+  buildAudioEnvelope,
+  resolvePublicationAudio,
+} from "./audio.js";
+import type {
+  ResolvedPublicationAudio,
+} from "./audio.js";
+import {
+  buildSyncEnvelope,
+  resolvePublicationSync,
+} from "./sync.js";
+import type {
+  ResolvedPublicationSync,
+} from "./sync.js";
+import {
+  buildUpdatesEnvelope,
+  resolvePublicationUpdates,
+} from "./updates.js";
+import type {
+  ResolvedPublicationUpdates,
+} from "./updates.js";
 import {
   compileLoadedPublicationContent,
 } from "./compile.js";
+import {
+  projectPublisherExtensions,
+  resolvePublisherExtensions,
+} from "./extensions.js";
+import type {
+  PublisherExtensionDataEnvelope,
+} from "./extensions.js";
 import {
   invalidResult,
   loaderDiagnostic,
@@ -72,10 +114,10 @@ import type {
 } from "./types.js";
 
 /**
- * The identity the engine gives a work's single markdown section.
+ * The identity the engine gives a work's undeclared single Markdown section.
  *
- * Internal. It participates in route ownership and link resolution but is never
- * part of a URL, so changing it cannot break a published address.
+ * Internal. Publications that declare section structure supply their own durable
+ * IDs instead.
  */
 export function rootSectionIdFor(workId: string): string {
   return `${workId}-root`;
@@ -96,6 +138,154 @@ function buildDiagnostic(
     params,
     documentPath,
   );
+}
+
+/**
+ * Applies durable work-manifest structure to one neutral Markdown block stream.
+ *
+ * Selectors locate boundaries only. IDs, hierarchy, routes, and continuity all
+ * come from the declaration, so changing a heading cannot silently mint a new
+ * public identity.
+ */
+function applyDeclaredMarkdownStructure(
+  work: WorkContentInput,
+  declarations: readonly WorkSectionDeclaration[],
+  manuscriptPath: string,
+): ValidationResult<WorkContentInput> {
+  const sourceBlocks = work.sections[0]?.blocks ?? [];
+  const diagnostics: Diagnostic[] = [];
+  const starts: number[] = [];
+
+  declarations.forEach((declaration, declarationIndex) => {
+    const selector = declaration.start;
+    if (selector.kind === "document") {
+      starts.push(0);
+      return;
+    }
+    const occurrence = selector.occurrence ?? 1;
+    let seen = 0;
+    const blockIndex = sourceBlocks.findIndex((block) => {
+      if (
+        block.kind !== selector.blockKind ||
+        block.text !== selector.text
+      ) {
+        return false;
+      }
+      seen += 1;
+      return seen === occurrence;
+    });
+    if (blockIndex === -1) {
+      diagnostics.push(
+        buildDiagnostic(
+          "build.section_start_missing",
+          `/sections/${declarationIndex}/start`,
+          `Section "${declaration.id}" cannot find its declared ${selector.blockKind} boundary in the manuscript.`,
+          {
+            blockKind: selector.blockKind,
+            occurrence,
+            sectionId: declaration.id,
+            text: selector.text,
+          },
+          manuscriptPath,
+        ),
+      );
+    }
+    starts.push(blockIndex);
+  });
+
+  if (starts[0] !== 0) {
+    diagnostics.push(
+      buildDiagnostic(
+        "build.section_start_orphaned_prefix",
+        "/sections/0/start",
+        "The first declared section must begin at the document or its first Markdown block so no manuscript content is orphaned.",
+        { firstBlockIndex: starts[0] ?? null },
+        manuscriptPath,
+      ),
+    );
+  }
+  starts.forEach((start, index) => {
+    if (index > 0 && start <= (starts[index - 1] ?? -1)) {
+      diagnostics.push(
+        buildDiagnostic(
+          "build.section_start_order_invalid",
+          `/sections/${index}/start`,
+          `Section "${declarations[index]?.id ?? index}" must start after the previous section in manuscript order.`,
+          {
+            previousBlockIndex: starts[index - 1],
+            sectionBlockIndex: start,
+          },
+          manuscriptPath,
+        ),
+      );
+    }
+  });
+  if (diagnostics.length > 0) {
+    return invalidResult(diagnostics);
+  }
+
+  const sections = declarations.map((declaration, index) => {
+    const start = starts[index] ?? 0;
+    const end = starts[index + 1] ?? sourceBlocks.length;
+    const navigable = declaration.navigable ?? true;
+    const route = declaration.route;
+    if (index > 0 && navigable && route === undefined) {
+      diagnostics.push(
+        buildDiagnostic(
+          "build.section_route_missing",
+          `/sections/${index}/route`,
+          `Navigable section "${declaration.id}" needs an explicit route.`,
+          { sectionId: declaration.id },
+          manuscriptPath,
+        ),
+      );
+    }
+    const routes = route === undefined
+      ? {}
+      : { canonical: { path: route } };
+    return {
+      id: declaration.id,
+      role: declaration.role ?? "section",
+      title: declaration.title,
+      ...(declaration.parentId === undefined
+        ? {}
+        : { parentId: declaration.parentId }),
+      routes,
+      activeRouteNames: route === undefined ? [] : ["canonical"],
+      readerLocation: route === undefined
+        ? navigable && index === 0
+          ? { kind: "work" as const }
+          : { kind: "none" as const }
+        : { kind: "route" as const, routeName: "canonical" },
+      continuity: declaration.continuity ?? {
+        id: declaration.id,
+        legacyIds: [],
+        progressGroups: [[declaration.id]],
+        historicalSectionIds: [],
+      },
+      navigable,
+      blocks: sourceBlocks.slice(start, end),
+      ...(declaration.metadata === undefined
+        ? {}
+        : { metadata: declaration.metadata }),
+    };
+  });
+  if (diagnostics.length > 0) {
+    return invalidResult(diagnostics);
+  }
+  return Object.freeze({
+    valid: true as const,
+    value: Object.freeze({
+      workId: work.workId,
+      adapter: Object.freeze({
+        id: "structured-markdown",
+        package: "@genii-foundation/publisher-content",
+        version: work.adapter.version,
+      }),
+      sections: Object.freeze(sections.map((section) => Object.freeze(section))),
+    }),
+    diagnostics: sortAndFreezeDiagnostics([]),
+  });
 }
 
 /**
@@ -199,7 +389,20 @@ export function derivePublicationWorkInputs(
       }
       continue;
     }
-    works.push(compiled.value.work);
+    if (work.manifest.sections === undefined) {
+      works.push(compiled.value.work);
+      continue;
+    }
+    const structured = applyDeclaredMarkdownStructure(
+      compiled.value.work,
+      work.manifest.sections,
+      work.manuscriptPath,
+    );
+    if (!structured.valid) {
+      diagnostics.push(...structured.diagnostics);
+      continue;
+    }
+    works.push(structured.value);
   }
 
   if (diagnostics.length > 0) {
@@ -212,35 +415,13 @@ export function derivePublicationWorkInputs(
   });
 }
 
-/**
- * Extension identities, stamped with the engine version that resolved them.
- *
- * A manifest declares which extension it wants, not which build resolved it, so
- * the version is the engine's own. Reading a version out of the manifest would
- * let a publication claim an extension build that never ran.
- */
-function resolveExtensions(
-  publication: PublicationManifest,
-): readonly ResolvedExtensionInput[] {
-  const declared: readonly ExtensionReference[] =
-    publication.extensions ?? [];
-  return Object.freeze(
-    declared.map((extension) =>
-      Object.freeze({
-        id: extension.id,
-        package: extension.package,
-        version: PUBLISHER_VERSION,
-        capabilities: Object.freeze([...extension.capabilities]),
-      }),
-    ),
-  );
-}
-
 export interface BuildPublicationReaderInput {
   /** Absolute path to the publication root holding the manifest. */
   readonly publicationRoot: string;
   /** Which audience the projection is for. */
   readonly audience: ReaderAudience;
+  /** Explicit author registrations imported by the host, never manifest strings. */
+  readonly extensions?: unknown;
   readonly wordsPerMinute?: number;
 }
 
@@ -249,6 +430,79 @@ export interface BuiltPublicationReader {
   readonly reader: PublicationReaderEnvelope;
   /** Canonical JSON text, exactly as it would be written. */
   readonly text: string;
+  /** Capability-sliced search data bound to this exact Reader build. */
+  readonly search: {
+    readonly index: ReaderSearchIndex;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
+  /** Lightweight section identity and routing data for progress surfaces. */
+  readonly progress: {
+    readonly catalog: ReaderProgressCatalog;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
+  /**
+   * Client-safe publication identity for framework error surfaces.
+   *
+   * This is separate from the Reader envelope so a Client Component can carry
+   * the publication title, language, attribution, and home route without
+   * bundling manuscript blocks. Its build identity is the Reader build identity,
+   * so the two artifacts cannot claim different source snapshots.
+   */
+  readonly publicIdentity: {
+    readonly envelope: {
+      readonly schemaVersion: "1.0";
+      readonly publicationId: PublicationReaderEnvelope["publicationId"];
+      readonly engineVersion: PublicationReaderEnvelope["engineVersion"];
+      readonly buildId: PublicationReaderEnvelope["buildId"];
+      readonly homePath: string;
+      readonly publication: PublicationReaderEnvelope["publication"];
+    };
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
+  /** Build-bound extension projection, present only for declared extensions. */
+  readonly extensions?: {
+    readonly envelope: PublisherExtensionDataEnvelope;
+    readonly text: string;
+  };
+  /**
+   * Cross-checked narration and its artifact, when the publication declares a
+   * catalog.
+   *
+   * Absent when it declares none, rather than present and empty, so that a
+   * publication with no narration cannot be confused with one whose catalog
+   * resolved to nothing.
+   *
+   * The envelope text is produced here rather than by the caller. A caller that
+   * had to re-read the catalog to build it could read a different file than the
+   * one this build cross-checked, and the digest binding the two would then
+   * certify the wrong thing.
+   */
+  readonly audio?: {
+    readonly resolved: ResolvedPublicationAudio;
+    readonly envelope: AudioEnvelope;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
+  /**
+   * What this publication offers to synchronize, when it declares any.
+   *
+   * Absent when it declares none. Nothing here carries provider configuration:
+   * the artifact is served publicly and a config is author-supplied.
+   */
+  readonly sync?: {
+    readonly resolved: ResolvedPublicationSync;
+    readonly envelope: SyncEnvelope;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
+  readonly updates?: {
+    readonly resolved: ResolvedPublicationUpdates;
+    readonly envelope: UpdatesEnvelope;
+    readonly text: string;
+  };
 }
 
 /**
@@ -272,10 +526,18 @@ export async function buildPublicationReader(
     return invalidResult(works.diagnostics);
   }
 
+  const resolvedExtensions = resolvePublisherExtensions(
+    loaded.value.publication,
+    input.extensions ?? Object.freeze([]),
+  );
+  if (!resolvedExtensions.valid) {
+    return invalidResult(resolvedExtensions.diagnostics);
+  }
+
   const content = compileLoadedPublicationContent({
     loaded: loaded.value,
     works: works.value,
-    extensions: resolveExtensions(loaded.value.publication),
+    extensions: resolvedExtensions.value.compilerInputs,
     ...(input.wordsPerMinute === undefined
       ? {}
       : { wordsPerMinute: input.wordsPerMinute }),
@@ -289,6 +551,219 @@ export async function buildPublicationReader(
   });
   if (!reader.valid) {
     return invalidResult(reader.diagnostics);
+  }
+  const extensionProjection = content.value.extensions.length === 0
+    ? undefined
+    : await projectPublisherExtensions({
+        content: content.value,
+        reader: reader.value,
+        registrations: resolvedExtensions.value.registrations,
+      });
+  if (extensionProjection !== undefined && !extensionProjection.valid) {
+    return invalidResult(extensionProjection.diagnostics);
+  }
+  const searchIndex = createReaderSearchIndex(reader.value);
+  const search = Object.freeze({
+    index: searchIndex,
+    text: serializeReaderSearchIndex(searchIndex),
+  });
+  const progressCatalog = createReaderProgressCatalog(reader.value);
+  const progress = Object.freeze({
+    catalog: progressCatalog,
+    text: serializeReaderProgressCatalog(progressCatalog),
+  });
+  const homeRoute = reader.value.routes.active.find(
+    ({ target }) => target.kind === "home",
+  );
+  if (homeRoute === undefined) {
+    return invalidResult([
+      buildDiagnostic(
+        "build.public_identity_home_missing",
+        "/routes/active",
+        "The Reader projection has no active home route for its public identity.",
+        {},
+      ),
+    ]);
+  }
+  const publicIdentityEnvelope = Object.freeze({
+    schemaVersion: "1.0" as const,
+    publicationId: reader.value.publicationId,
+    engineVersion: reader.value.engineVersion,
+    buildId: reader.value.buildId,
+    homePath: homeRoute.path,
+    publication: reader.value.publication,
+  });
+  const publicIdentity = Object.freeze({
+    envelope: publicIdentityEnvelope,
+    text: `${canonicalizeJson(
+      publicIdentityEnvelope as unknown as JSONValue,
+    )}\n`,
+  });
+
+  // Cross-checked against every section the publication compiled, not against
+  // the audience projection. A catalog describes the publication, so narration
+  // for a section this audience does not see is still narration of a section that
+  // exists, and reporting it as unknown would be a false alarm on every public
+  // build of a publication with drafts.
+  let audio: BuiltPublicationReader["audio"];
+  const declaredAudio = loaded.value.publication.audio;
+  const catalog = loaded.value.audioCatalog;
+
+  // Both directions in one place, because the two variables carry one invariant
+  // and splitting them left it unprovable. The loader reads a catalog only because
+  // the manifest declared one, so a disagreement either way is worth a name.
+  if (declaredAudio === undefined) {
+    if (catalog !== undefined) {
+      // An engine defect rather than an author mistake, reported instead of
+      // assumed away.
+      return invalidResult([
+        buildDiagnostic(
+          "build.audio_catalog_undeclared",
+          "/audio/catalog",
+          "A clip catalog was loaded for a publication whose manifest declares none.",
+          {},
+        ),
+      ]);
+    }
+  } else if (catalog === undefined) {
+    // Declared narration with no catalog produced no narration and said nothing,
+    // which is the worst of the three possible behaviours. The adapter is recorded
+    // rather than executed, so a catalog is the only route by which clips reach the
+    // engine, and an author who declared audio and got silence deserves to be told
+    // why rather than left to infer it.
+    return invalidResult([
+      buildDiagnostic(
+        "build.audio_catalog_missing",
+        "/audio/catalog",
+        `This publication declares audio through ${declaredAudio.adapter.package} but names no catalog. The adapter is recorded for provenance and never executed, so a catalog is the only way narration reaches a build. Add audio.catalog, or remove the audio block.`,
+        { adapterPackage: declaredAudio.adapter.package },
+      ),
+    ]);
+  } else {
+    const resolved = resolvePublicationAudio({
+      catalog: catalog.catalog,
+      declaredCatalogPath: catalog.path,
+      sectionIds: works.value.flatMap((work) =>
+        work.sections.map((section) => section.id),
+      ),
+    });
+    if (!resolved.valid) {
+      return invalidResult(resolved.diagnostics);
+    }
+    const envelope = buildAudioEnvelope({
+      audio: resolved.value,
+      adapter: {
+        package: declaredAudio.adapter.package,
+        ...(declaredAudio.adapter.config === undefined
+          ? {}
+          : { config: declaredAudio.adapter.config }),
+      },
+      publicationId: reader.value.publicationId,
+      // The reader artifact's identity, carried rather than recomputed, so both
+      // artifacts of one build agree and a client can tell which is stale.
+      buildId: reader.value.buildId,
+      catalogText: catalog.text,
+    });
+    if (!envelope.valid) {
+      return invalidResult(envelope.diagnostics);
+    }
+    audio = Object.freeze({
+      resolved: resolved.value,
+      envelope: envelope.value.envelope,
+      text: envelope.value.text,
+    });
+  }
+
+  let sync: BuiltPublicationReader["sync"];
+  const declaredSync = loaded.value.publication.sync;
+  if (declaredSync !== undefined) {
+    const resolvedSync = resolvePublicationSync(declaredSync);
+    if (!resolvedSync.valid) {
+      return invalidResult(resolvedSync.diagnostics);
+    }
+    const envelope = buildSyncEnvelope({
+      sync: resolvedSync.value,
+      publicationId: reader.value.publicationId,
+      buildId: reader.value.buildId,
+    });
+    if (!envelope.valid) {
+      return invalidResult(envelope.diagnostics);
+    }
+    sync = Object.freeze({
+      resolved: resolvedSync.value,
+      envelope: envelope.value.envelope,
+      text: envelope.value.text,
+    });
+  }
+
+  let updates: BuiltPublicationReader["updates"];
+  const declaredUpdates = loaded.value.publication.updates;
+  const updatesCatalog = loaded.value.updatesCatalog;
+  const hasUpdatesRoute = loaded.value.publication.routes.updates !== undefined;
+  if (declaredUpdates === undefined) {
+    if (updatesCatalog !== undefined) {
+      return invalidResult([
+        buildDiagnostic(
+          "build.updates_catalog_undeclared",
+          "/updates/catalog",
+          "An Updates catalog was loaded for a publication whose manifest declares none.",
+          {},
+        ),
+      ]);
+    }
+    if (hasUpdatesRoute) {
+      return invalidResult([
+        buildDiagnostic(
+          "build.updates_configuration_missing",
+          "/updates",
+          "This publication declares Updates routes but no Updates catalog. Add the top level updates block and its catalog, or remove the routes.",
+          {},
+        ),
+      ]);
+    }
+  } else if (!hasUpdatesRoute) {
+    return invalidResult([
+      buildDiagnostic(
+        "build.updates_route_missing",
+        "/routes/updates",
+        "This publication declares Updates data but no Updates route can render it.",
+        {},
+      ),
+    ]);
+  } else if (updatesCatalog === undefined) {
+    return invalidResult([
+      buildDiagnostic(
+        "build.updates_catalog_missing",
+        "/updates/catalog",
+        "This publication declares Updates data but its catalog was not loaded.",
+        {},
+      ),
+    ]);
+  } else {
+    const resolvedUpdates = resolvePublicationUpdates({
+      catalog: updatesCatalog.catalog,
+      declaredCatalogPath: updatesCatalog.path,
+      publicationId: reader.value.publicationId,
+      routes: loaded.value.publication.routes,
+    });
+    if (!resolvedUpdates.valid) {
+      return invalidResult(resolvedUpdates.diagnostics);
+    }
+    const updatesEnvelope = buildUpdatesEnvelope({
+      updates: resolvedUpdates.value,
+      adapter: declaredUpdates.adapter,
+      publicationId: reader.value.publicationId,
+      buildId: reader.value.buildId,
+      catalogText: updatesCatalog.text,
+    });
+    if (!updatesEnvelope.valid) {
+      return invalidResult(updatesEnvelope.diagnostics);
+    }
+    updates = Object.freeze({
+      resolved: resolvedUpdates.value,
+      envelope: updatesEnvelope.value.envelope,
+      text: updatesEnvelope.value.text,
+    });
   }
 
   let text: string;
@@ -313,6 +788,15 @@ export async function buildPublicationReader(
       content: content.value,
       reader: reader.value,
       text,
+      search,
+      progress,
+      publicIdentity,
+      ...(extensionProjection === undefined
+        ? {}
+        : { extensions: extensionProjection.value }),
+      ...(audio === undefined ? {} : { audio }),
+      ...(sync === undefined ? {} : { sync }),
+      ...(updates === undefined ? {} : { updates }),
     }),
     diagnostics: sortAndFreezeDiagnostics([]),
   });

@@ -72,6 +72,9 @@ for (const fixture of ["canonical-field-notes", "declared-night-dispatch"]) {
     ]);
     assert.equal(built.status, 0, built.stderr);
     assert.match(built.stdout, /Artifact\s+alpha-reader\.json/u);
+    assert.match(built.stdout, /Identity\s+alpha-public-identity\.json/u);
+    assert.match(built.stdout, /Extensions\s+alpha-extensions\.json/u);
+    assert.match(built.stdout, /Search\s+public\/alpha-search\.json/u);
     assert.match(built.stdout, /Digest\s+sha256:[a-f0-9]{64}/u);
     assert.match(built.stdout, /^Written\.$/mu);
 
@@ -80,6 +83,32 @@ for (const fixture of ["canonical-field-notes", "declared-night-dispatch"]) {
     const parsed = JSON.parse(readFileSync(artifact, "utf8"));
     assert.equal(typeof parsed.publicationId, "string");
     assert.ok(parsed.works.length > 0);
+    const publicIdentity = JSON.parse(
+      readFileSync(join(hostRoot, "alpha-public-identity.json"), "utf8"),
+    );
+    assert.equal(publicIdentity.publicationId, parsed.publicationId);
+    assert.equal(publicIdentity.buildId, parsed.buildId);
+    assert.deepEqual(publicIdentity.publication, parsed.publication);
+    assert.deepEqual(Object.keys(publicIdentity).sort(), [
+      "buildId",
+      "engineVersion",
+      "homePath",
+      "publication",
+      "publicationId",
+      "schemaVersion",
+    ]);
+    assert.equal(Object.hasOwn(publicIdentity, "works"), false);
+    const extensions = JSON.parse(
+      readFileSync(join(hostRoot, "alpha-extensions.json"), "utf8"),
+    );
+    assert.equal(extensions.readerBuildId, parsed.buildId);
+    assert.equal(extensions.extensions.length, 1);
+    const search = JSON.parse(
+      readFileSync(join(hostRoot, "public", "alpha-search.json"), "utf8"),
+    );
+    assert.equal(search.publicationId, parsed.publicationId);
+    assert.equal(search.readerBuildId, parsed.buildId);
+    assert.ok(search.entries.length > 0);
     // Size is reported with digit grouping, the same as every other user-facing
     // number in this project.
     assert.match(built.stdout, /Size\s+[\d,]+ bytes/u);
@@ -101,6 +130,29 @@ test("a second build of unchanged sources reports it is already current", (t) =>
   assert.match(second.stdout, /Already current\. Nothing written\./u);
 });
 
+test("a renderer with no public identity surface keeps the projection optional", (t) => {
+  const hostRoot = host(t, {
+    omitPublicIdentityDataPath: true,
+    capabilities: {
+      routeKinds: ["collection", "home", "section", "updates", "work"],
+      dataArtifacts: ["audio", "extensions", "progress", "search", "sync", "updates"],
+    },
+  });
+  const built = run(hostRoot, [
+    "build",
+    "--renderer",
+    rendererName,
+    "--publication",
+    publication("canonical-field-notes"),
+  ]);
+  assert.equal(built.status, 0, built.stderr);
+  assert.equal(built.stdout.includes("Identity"), false);
+  assert.equal(
+    existsSync(join(hostRoot, "alpha-public-identity.json")),
+    false,
+  );
+});
+
 test("build emits machine readable output on request", (t) => {
   const hostRoot = host(t);
   const built = run(hostRoot, [
@@ -117,6 +169,13 @@ test("build emits machine readable output on request", (t) => {
   assert.equal(report.hostRelativePath, "alpha-reader.json");
   assert.match(report.sha256, /^sha256:[a-f0-9]{64}$/u);
   assert.equal(typeof report.bytes, "number");
+  assert.equal(report.search.outcome, "written");
+  assert.equal(report.search.hostRelativePath, "public/alpha-search.json");
+  assert.equal(report["public-identity"].outcome, "written");
+  assert.equal(
+    report["public-identity"].hostRelativePath,
+    "alpha-public-identity.json",
+  );
 });
 
 test("the artifact a build writes is byte identical across hosts", (t) => {
@@ -136,6 +195,10 @@ test("the artifact a build writes is byte identical across hosts", (t) => {
   assert.equal(
     readFileSync(join(first, "alpha-reader.json"), "utf8"),
     readFileSync(join(second, "alpha-reader.json"), "utf8"),
+  );
+  assert.equal(
+    readFileSync(join(first, "public", "alpha-search.json"), "utf8"),
+    readFileSync(join(second, "public", "alpha-search.json"), "utf8"),
   );
 });
 
@@ -233,6 +296,20 @@ test("a renderer aiming the artifact outside the host is refused", (t) => {
     "host",
     "nothing may be written beside the host root",
   );
+});
+
+test("a renderer without a declared search destination is refused before writing", (t) => {
+  const hostRoot = host(t, { omitSearchDataPath: true });
+  const built = run(hostRoot, [
+    "build",
+    "--renderer",
+    rendererName,
+    "--publication",
+    publication("canonical-field-notes"),
+  ]);
+  assert.equal(built.status, 1);
+  assert.match(built.stderr, /names no path for it/u);
+  assert.equal(existsSync(join(hostRoot, "alpha-reader.json")), false);
 });
 
 test("declared source roots protect the tree with no flag passed", (t) => {

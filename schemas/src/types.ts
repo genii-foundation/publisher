@@ -104,18 +104,294 @@ export interface AudioConfiguration {
   readonly catalog?: string;
 }
 
+export interface UpdatesConfiguration {
+  readonly adapter: PackageReference;
+  readonly catalog: string;
+}
+
+export interface UpdatesCatalogEntry {
+  readonly id: string;
+  readonly title: string;
+  readonly summary?: string;
+  readonly publishedAt?: string;
+  readonly href?: string;
+}
+
+export interface UpdatesCatalogView {
+  readonly id: string;
+  readonly title: string;
+  readonly description?: string;
+  readonly emptyMessage?: string;
+  readonly entries: readonly UpdatesCatalogEntry[];
+}
+
+export interface UpdatesCatalog {
+  readonly $schema?:
+    "https://publisher.genii.foundation/schemas/updates-catalog.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly views: readonly UpdatesCatalogView[];
+}
+
+export interface UpdatesEnvelopeSource {
+  readonly adapter: PackageReference;
+  readonly catalogPath: string;
+  readonly catalogSha256: string;
+}
+
+export interface UpdatesEnvelope {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/updates-envelope.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly engineVersion: string;
+  readonly buildId: string;
+  readonly source: UpdatesEnvelopeSource;
+  readonly views: readonly UpdatesCatalogView[];
+}
+
+export interface AudioClip {
+  readonly sectionId: string;
+  readonly audioVersionId: string;
+  readonly href: string;
+  readonly format?: "mp3" | "opus" | "wav";
+  readonly byteSize?: number;
+  /**
+   * Size of the word timing sidecar beside this clip, or absent when the clip
+   * has no published timings. Presence is the signal; the sidecar URL is derived
+   * from `href` rather than carried, which keeps a catalog spanning thousands of
+   * sections small enough to fetch on a page that may never play audio.
+   */
+  readonly timingsByteSize?: number;
+  readonly durationSeconds?: number;
+}
+
+export interface AudioCatalogVoice {
+  readonly id: string;
+  readonly label: string;
+  readonly provider?: string;
+  readonly model?: string;
+  /**
+   * Clips this voice has recorded, one per section. Named `sections` because
+   * published catalogs already use that name and renaming it would invalidate
+   * every catalog an existing pipeline emits.
+   */
+  readonly sections: readonly AudioClip[];
+}
+
+export interface AudioClipCatalog {
+  readonly $schema?:
+    "https://publisher.genii.foundation/schemas/audio-catalog.schema.json";
+  readonly version: 1;
+  readonly generatedAt?: string;
+  readonly voices: readonly AudioCatalogVoice[];
+}
+
+export interface AudioCheckpointPublishedObject {
+  readonly objectKey: string;
+  readonly byteSize: number;
+  readonly sha256: string;
+}
+
+export interface AudioCheckpointUnit {
+  readonly sectionId: string;
+  readonly audioVersionId: string;
+  readonly spokenTextSha256: string;
+  readonly durationSeconds: number;
+  readonly exactWordCount: number;
+  readonly interpolatedWordCount: number;
+  readonly timingSource: string;
+  readonly audioFormat: "mp3" | "opus" | "wav";
+  readonly audio: AudioCheckpointPublishedObject;
+  readonly timings: AudioCheckpointPublishedObject;
+}
+
+export interface AudioCheckpoint {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/audio-checkpoint.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly checkpointId: string;
+  readonly source: {
+    readonly readerBuildId: string;
+    readonly sourceRevision: string;
+    readonly catalogSha256: string;
+    readonly settingsSha256: string;
+  };
+  readonly pipeline: {
+    readonly adapter: {
+      readonly package: string;
+      readonly version: string;
+    };
+    readonly runId: string;
+    readonly provider: string;
+    readonly model: string;
+  };
+  readonly voice: {
+    readonly id: string;
+    readonly label: string;
+    readonly referenceId?: string;
+  };
+  readonly recordedAt: string;
+  readonly remoteVerifiedAt: string;
+  readonly statistics: {
+    readonly unitCount: number;
+    readonly objectCount: number;
+    readonly durationSeconds: number;
+    readonly audioBytes: number;
+    readonly timingsBytes: number;
+  };
+  readonly unitsSha256: string;
+  readonly units: readonly AudioCheckpointUnit[];
+}
+
+export interface AudioEnvelopeVoice {
+  readonly id: string;
+  readonly label: string;
+  readonly provider?: string;
+  readonly model?: string;
+  /**
+   * Clips this voice has recorded, one per section.
+   *
+   * The source catalog retains its established `sections` property. The built
+   * envelope uses `clips`, matching its closed schema and runtime artifact.
+   */
+  readonly clips: readonly AudioClip[];
+  /** Sections this voice narrates. */
+  readonly narratedSectionCount: number;
+  /** Sections in the publication this voice has no narration for. */
+  readonly unnarratedSectionCount: number;
+}
+
+export interface AudioEnvelopeAdapterRecord {
+  /**
+   * The pipeline that produced this narration, as declared.
+   *
+   * Recorded, never executed and never resolved. The engine reads no code from
+   * it, for the same reason it reads migration edges and host capabilities as
+   * data: a third-party package is not something to run in order to decide what a
+   * publication is. It is here so that reproducing a narration run does not
+   * require guessing which tool made it.
+   */
+  readonly package: string;
+  readonly config?: Readonly<Record<string, JSONValue>>;
+}
+
+export interface AudioEnvelopeSource {
+  readonly adapter: AudioEnvelopeAdapterRecord;
+  readonly catalogPath: string;
+  /**
+   * Digest of the exact catalog text this envelope came from.
+   *
+   * A catalog is not a content source, so it never reaches the reader artifact's
+   * identity. This digest is the only thing binding the two, and without it a
+   * catalog could change with nothing downstream noticing.
+   */
+  readonly catalogSha256: string;
+  readonly generatedAt?: string;
+}
+
+export interface AudioEnvelopeStatistics {
+  readonly voiceCount: number;
+  readonly clipCount: number;
+  readonly sectionCount: number;
+}
+
+export interface AudioEnvelope {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/audio-envelope.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly engineVersion: string;
+  /**
+   * The reader artifact's build identity, carried verbatim.
+   *
+   * Both artifacts of one build agree on it, so a client holding two that
+   * disagree knows one is stale without diffing them.
+   */
+  readonly buildId: string;
+  readonly source: AudioEnvelopeSource;
+  readonly voices: readonly AudioEnvelopeVoice[];
+  readonly statistics: AudioEnvelopeStatistics;
+}
+
+/**
+ * What a reader may choose to synchronize.
+ *
+ * A closed vocabulary. It was an open list of identifiers, which validated
+ * anything: a publication could declare a capability no provider implements and
+ * find out only from a reader whose data never arrived.
+ *
+ * Consent is deliberately not one of these. It is a precondition rather than a
+ * feature, since `consent` is pinned to `opt-in` for every synchronizing
+ * publication, so offering it as a choice would misdescribe it.
+ */
+export type SyncCapability =
+  | "account-deletion"
+  | "bookmarks"
+  | "engagement"
+  | "progress";
+
+export const SYNC_CAPABILITIES: readonly SyncCapability[] = Object.freeze([
+  "account-deletion",
+  "bookmarks",
+  "engagement",
+  "progress",
+]);
+
+export interface SyncEnvelopeProvider {
+  /** The provider a publication declared, recorded and never executed. */
+  readonly package: string;
+}
+
+export interface SyncEnvelope {
+  readonly $schema:
+    "https://publisher.genii.foundation/schemas/sync-envelope.schema.json";
+  readonly schemaVersion: "1.0";
+  readonly publicationId: string;
+  readonly engineVersion: string;
+  readonly buildId: string;
+  /**
+   * Carries no configuration, by construction rather than by convention.
+   *
+   * This artifact is served publicly, and a provider config is author-supplied:
+   * it may hold a project reference, an endpoint, or a key nobody meant to
+   * publish. A rule saying "do not copy the config here" is a rule somebody
+   * eventually forgets, so the type and the schema both make it impossible.
+   */
+  readonly provider: SyncEnvelopeProvider;
+  readonly consent: "opt-in";
+  readonly localFallback: true;
+  readonly capabilities: readonly SyncCapability[];
+}
+
 export interface SyncConfiguration {
   readonly provider: PackageReference;
   readonly consent: "opt-in";
   readonly localFallback: true;
-  readonly capabilities: readonly string[];
+  readonly capabilities: readonly SyncCapability[];
 }
 
 export interface PublicationRoutes {
   readonly home: string;
   readonly work: string;
   readonly collection?: string;
-  readonly updates?: string;
+  /**
+   * A string preserves the compact single-view contract. Publications that
+   * need named or paginated views use explicit declarations instead.
+   */
+  readonly updates?: string | readonly PublicationUpdatesRoute[];
+}
+
+export interface PublicationUpdatesPagination {
+  readonly path: string;
+  readonly pageSize: number;
+}
+
+export interface PublicationUpdatesRoute {
+  readonly id: string;
+  readonly path: string;
+  readonly pagination?: PublicationUpdatesPagination;
 }
 
 export type RedirectStatus = 301 | 302 | 307 | 308;
@@ -155,6 +431,7 @@ export interface PublicationManifest {
   readonly theme?: PackageReference;
   readonly extensions?: readonly ExtensionReference[];
   readonly audio?: AudioConfiguration;
+  readonly updates?: UpdatesConfiguration;
   readonly sync?: SyncConfiguration;
   readonly routes: PublicationRoutes;
   readonly continuity?: ContinuityConfiguration;
@@ -168,6 +445,34 @@ export interface RepositoryRelativePath {
 }
 
 export type SourcePath = string | RepositoryRelativePath;
+
+export type WorkSectionStart =
+  | { readonly kind: "document" }
+  | {
+      readonly kind: "block";
+      readonly blockKind: string;
+      readonly text: string;
+      readonly occurrence?: number;
+    };
+
+export interface WorkSectionContinuity {
+  readonly id: string;
+  readonly legacyIds: readonly string[];
+  readonly progressGroups: readonly (readonly string[])[];
+  readonly historicalSectionIds: readonly string[];
+}
+
+export interface WorkSectionDeclaration {
+  readonly id: string;
+  readonly title: string;
+  readonly role?: string;
+  readonly parentId?: string;
+  readonly route?: string;
+  readonly navigable?: boolean;
+  readonly start: WorkSectionStart;
+  readonly continuity?: WorkSectionContinuity;
+  readonly metadata?: Readonly<Record<string, JSONValue>>;
+}
 
 export interface WorkManifest {
   readonly $schema?:
@@ -184,6 +489,7 @@ export interface WorkManifest {
   readonly route?: string;
   readonly manuscript: SourcePath;
   readonly assets?: SourcePath;
+  readonly sections?: readonly WorkSectionDeclaration[];
   readonly metadata?: Readonly<Record<string, JSONValue>>;
 }
 

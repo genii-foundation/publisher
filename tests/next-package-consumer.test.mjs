@@ -32,7 +32,7 @@ import {
 } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   assertReleaseTag,
@@ -218,7 +218,7 @@ test("Next release lifecycle enforces prerelease and stable npm tags", async () 
 });
 
 test("Next package metadata pins one verified renderer stack", async () => {
-  const [workspaceManifest, workspaceLock, nextManifest] =
+  const [workspaceManifest, workspaceLock, nextManifest, styles] =
     await Promise.all([
       readFile(join(repositoryRoot, "package.json"), "utf8").then(
         JSON.parse,
@@ -227,6 +227,7 @@ test("Next package metadata pins one verified renderer stack", async () => {
         JSON.parse,
       ),
       readFile(join(nextRoot, "package.json"), "utf8").then(JSON.parse),
+      readFile(join(nextRoot, "styles.css"), "utf8"),
     ]);
   assert.equal(
     runNpm(["--version"], { label: "npm version check" }),
@@ -240,7 +241,7 @@ test("Next package metadata pins one verified renderer stack", async () => {
   assert.equal(nextManifest.publishConfig.provenance, true);
   assert.equal(Object.hasOwn(nextManifest.publishConfig, "tag"), false);
   assert.deepEqual(nextManifest.peerDependencies, {
-    next: "16.2.12",
+    next: "16.3.3",
     react: "19.2.8",
     "react-dom": "19.2.8",
   });
@@ -248,6 +249,11 @@ test("Next package metadata pins one verified renderer stack", async () => {
     workspaceManifest.overrides,
     nextManifest.publisherHostOverrides,
   );
+  assert.deepEqual(nextManifest.exports["."], {
+    types: "./dist/index.d.ts",
+    import: "./dist/index.js",
+    default: "./dist/index.js",
+  });
   for (const [packageName, version] of Object.entries({
     ...nextManifest.dependencies,
     ...nextManifest.devDependencies,
@@ -285,6 +291,26 @@ test("Next package metadata pins one verified renderer stack", async () => {
   assert.equal(
     nextManifest.exports["./application-manifest.schema.json"],
     "./application-manifest.schema.json",
+  );
+  assert.match(
+    styles,
+    /\.publisher-root\.publisher-root-embedded\s*\{\s*min-height: 0;\s*display: block;\s*background: transparent;\s*\}/u,
+  );
+  assert.doesNotMatch(
+    styles,
+    /\.publisher-embedded-content\s*\{[^}]*(?:width|margin|padding|background|min-height|max-width)\s*:/u,
+  );
+  assert.doesNotMatch(
+    styles,
+    /html\[data-publisher-reader-motion="reduced"\]\s+\*/u,
+  );
+  assert.match(
+    styles,
+    /html\[data-publisher-reader-motion="reduced"\] \.publisher-root \*::after/u,
+  );
+  assert.match(
+    styles,
+    /html\[data-publisher-reader-motion="reduced"\] \.publisher-reader-audio-host \*::after/u,
   );
 });
 
@@ -333,6 +359,40 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
       label: "packed Next source extraction",
     });
     const extractedRoot = join(rebuildRoot, "package");
+    const [packedTypes, packedClientTypes] = await Promise.all([
+      readFile(
+        join(extractedRoot, "dist", "types.d.ts"),
+        "utf8",
+      ),
+      readFile(
+        join(extractedRoot, "dist", "client", "index.d.ts"),
+        "utf8",
+      ),
+    ]);
+    assert.match(
+      packedTypes,
+      /readonly renderEmbeddedPage: \(page: PublisherNextPage\) => Promise<ReactElement>;/u,
+    );
+    assert.match(
+      packedTypes,
+      /interface PublisherNextThemeAppearanceProjection/u,
+    );
+    assert.match(
+      packedClientTypes,
+      /export \{ publisherReaderTextContent, publisherReaderTextPointForOffset, publisherReaderTextRange, publisherReaderTextVerticalBounds,? \} from "\.\/reader-dom-text\.js";/u,
+    );
+    assert.match(
+      packedClientTypes,
+      /export \{ readPublisherReaderSelection,? \} from "\.\/reader-selection\.js";/u,
+    );
+    assert.match(
+      packedClientTypes,
+      /export type \{ PublisherReaderTextPoint, PublisherReaderTextVerticalBounds,? \} from "\.\/reader-dom-text\.js";/u,
+    );
+    assert.match(
+      packedClientTypes,
+      /export type \{ PublisherReaderSelection,? \} from "\.\/reader-selection\.js";/u,
+    );
     const shippedDist = new Map(
       await Promise.all(
         (await listFiles(join(extractedRoot, "dist"))).map(
@@ -371,6 +431,84 @@ test("packed Next source rebuilds to byte-identical distribution files", async (
         `Packed rebuild changed dist/${distPath}.`,
       );
     }
+    const packedRoot = await import(
+      `${pathToFileURL(join(extractedRoot, "dist", "index.js")).href}?projection-contract`
+    );
+    const packedTheme = await import(
+      `${pathToFileURL(join(extractedRoot, "dist", "theme", "index.js")).href}?appearance-contract`
+    );
+    const packedClient = await import(
+      `${pathToFileURL(join(extractedRoot, "dist", "client", "index.js")).href}?selection-contract`
+    );
+    const packedReaderDomText = await import(
+      pathToFileURL(
+        join(extractedRoot, "dist", "client", "reader-dom-text.js"),
+      ).href
+    );
+    const packedReaderSelection = await import(
+      pathToFileURL(
+        join(extractedRoot, "dist", "client", "reader-selection.js"),
+      ).href
+    );
+    assert.equal(
+      typeof packedRoot.projectPublisherNextThemeAppearance,
+      "function",
+    );
+    assert.equal(
+      packedRoot.projectPublisherNextThemeAppearance,
+      packedTheme.projectPublisherNextThemeAppearance,
+    );
+    assert.equal(
+      packedClient.readPublisherReaderSelection,
+      packedReaderSelection.readPublisherReaderSelection,
+    );
+    for (const name of [
+      "publisherReaderTextContent",
+      "publisherReaderTextPointForOffset",
+      "publisherReaderTextRange",
+      "publisherReaderTextVerticalBounds",
+    ]) {
+      assert.equal(typeof packedClient[name], "function", name);
+      assert.equal(packedClient[name], packedReaderDomText[name], name);
+    }
+    for (const privateName of [
+      "PUBLISHER_READER_TRANSIENT_UI_ATTRIBUTE",
+      "createPublisherReaderTextWalker",
+      "publisherReaderTextClientRects",
+      "publisherReaderTextOffset",
+    ]) {
+      assert.equal(Object.hasOwn(packedClient, privateName), false);
+    }
+    assert.deepEqual(
+      {
+        projectionBytes:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_BYTES,
+        projectionContainers:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_CONTAINERS,
+        projectionDepth:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_DEPTH,
+        projectionEntries:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_PROJECTION_ENTRIES,
+        projectionSchemaVersion:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_PROJECTION_SCHEMA_VERSION,
+        scriptBytes:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SCRIPT_BYTES,
+        sourceBytes:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_SOURCE_BYTES,
+        staticScriptBytes:
+          packedRoot.PUBLISHER_NEXT_READER_STATE_BOOTSTRAP_MAXIMUM_STATIC_SCRIPT_BYTES,
+      },
+      {
+        projectionBytes: 8_388_608,
+        projectionContainers: 100_000,
+        projectionDepth: 64,
+        projectionEntries: 1_000_000,
+        projectionSchemaVersion: "1.0",
+        scriptBytes: 16_777_216,
+        sourceBytes: 32_768,
+        staticScriptBytes: 134_217_728,
+      },
+    );
   } finally {
     await removeOwnedTemporaryRoot(temporaryRoot);
   }

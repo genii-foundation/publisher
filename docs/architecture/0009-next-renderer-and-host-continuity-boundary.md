@@ -19,7 +19,7 @@ Themes, Updates adapters, and future extensions also need clear limits. A nomina
 
 ## Decision
 
-The official initial renderer is one package, `@genii-foundation/publisher-next`. The reference author host pins Node.js 22.12.0, npm 10.9.0, Next.js 16.2.12, React 19.2.8, React DOM 19.2.8, TypeScript 7.0.2, `@types/node` 22.20.1, `@types/react` 19.2.17, and `@types/react-dom` 19.2.3. Other supported Node.js major lines remain separate CI lanes. Author repositories use exact versions and commit their lockfile.
+The official initial renderer is one package, `@genii-foundation/publisher-next`. ADR 0058 supersedes this record's original Next.js 16.2.12 host pin with Next.js 16.3.1. The reference author host pins Node.js 22.12.0, npm 10.9.0, Next.js 16.3.1, React 19.2.8, React DOM 19.2.8, TypeScript 7.0.2, `@types/node` 22.20.1, `@types/react` 19.2.17, and `@types/react-dom` 19.2.3. Other supported Node.js major lines remain separate CI lanes. Author repositories use exact versions and commit their lockfile.
 
 The package:
 
@@ -73,7 +73,7 @@ The supported author API is `createPublicationNextApplication` from the `/server
 
 ADR 0008 grants extension capabilities but does not execute them here. Extension renderer slots, client code, routes, and handlers remain later, separately reviewed surfaces.
 
-Next.js 16.2.12 otherwise resolves PostCSS 8.4.31 and optional sharp 0.34.5, which are covered by high-severity advisories [GHSA-6g55-p6wh-862q](https://github.com/advisories/GHSA-6g55-p6wh-862q), [GHSA-r28c-9q8g-f849](https://github.com/advisories/GHSA-r28c-9q8g-f849), and [GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj). Every consuming root copies `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` into its own `overrides` field and commits the resulting lockfile because dependency-package overrides do not propagate. The required override resolves PostCSS 8.5.24 and sharp 0.35.3.
+The verified Next.js 16.3.1 graph retains the consuming-root security overrides recorded by ADR 0020 and ADR 0058. Every consuming root copies `PUBLISHER_NEXT_REQUIRED_HOST_OVERRIDES` into its own `overrides` field and commits the resulting lockfile because dependency-package overrides do not propagate. The required override resolves Nano ID 3.3.18, PostCSS 8.5.24, and sharp 0.35.3.
 
 The clean packed-host proof performs one clean dependency resolution, a frozen offline `npm ci` reinstall, a production audit with zero vulnerabilities, exact dependency inspection, and real WebP optimization through sharp. This evidence closes the transitive-dependency gate while the exact override remains in force.
 

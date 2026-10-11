@@ -22,6 +22,18 @@ export {
   canonicalizeJson,
 } from "./canonical-json.js";
 export {
+  validateAudioCheckpoint,
+} from "./audio-checkpoint.js";
+export {
+  planAudioCheckpointPromotion,
+} from "./audio-promotion.js";
+export {
+  validateAudioPublicationGuard,
+} from "./audio-publication.js";
+export {
+  createSpokenInputIdentity,
+} from "./spoken-input.js";
+export {
   hashCanonicalJson,
   sha256,
 } from "./hashing.js";
@@ -37,6 +49,20 @@ export {
   DEFAULT_WORDS_PER_MINUTE,
 } from "./types.js";
 export type {
+  AudioPromotionPlan,
+  AudioPromotionPlanInput,
+} from "./audio-promotion.js";
+export type {
+  AudioPublicationEvidenceMatch,
+  AudioPublicationGuardInput,
+  AudioPublicationGuardReport,
+  ChangedSpokenUnit,
+} from "./audio-publication.js";
+export type {
+  SpokenInputIdentity,
+  SpokenInputIdentityInput,
+} from "./spoken-input.js";
+export type {
   CompilationSourceInput,
   CompilationSourceRange,
   CompileMarkdownWorkInput,
@@ -48,6 +74,8 @@ export type {
   MarkdownBlockInput,
   PublicationContentArtifact,
   ResolvedContentAssetInput,
+  ResolvedContentRedirectInput,
+  ResolvedContentSectionIndexInput,
   ResolvedExtensionInput,
   ResolvedContentLinkLocationInput,
   ResolvedContentLinkInput,
@@ -56,6 +84,7 @@ export type {
   WorkContentInput,
 } from "./types.js";
 export type {
+  AudioCheckpoint,
   PublicationContentEnvelope,
   Sha256Digest,
 } from "@genii-foundation/publisher-schema";

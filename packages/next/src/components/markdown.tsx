@@ -22,6 +22,7 @@ import {
   inspectCanonicalRoutePath,
 } from "@genii-foundation/publisher-schema/routes";
 import {
+  createElement,
   Fragment,
   type ReactElement,
   type ReactNode,
@@ -29,6 +30,10 @@ import {
 import ReactMarkdown, {
   type Components,
 } from "react-markdown";
+import {
+  PublisherReaderHeadingAction,
+} from "../client/reader-heading-action.js";
+import { publisherFocusMarkupPlugin } from "./focus-markup.js";
 
 function isSafeOriginRelativeUrl(value: string): boolean {
   if (value.startsWith("#")) {
@@ -64,6 +69,7 @@ export interface PublisherMarkdownBlockProps {
   readonly assetHrefs: ReadonlySet<string>;
   readonly block: ReaderBlock;
   readonly markdown: string;
+  readonly narrationWords?: boolean;
   readonly renderedPath: string;
 }
 
@@ -93,12 +99,265 @@ function safeMarkdownComponents(
   };
 }
 
+function headingHref(block: ReaderBlock): string | null {
+  return block.readerAddress === null
+    ? null
+    : `${block.readerAddress.path}#${block.readerAddress.anchor}`;
+}
+
+function LinkableHeading({
+  block,
+  children,
+  className,
+  identifyBlock,
+  id,
+  level,
+}: {
+  readonly block: ReaderBlock | null;
+  readonly children: ReactNode;
+  readonly className?: string;
+  readonly identifyBlock: boolean;
+  readonly id?: string;
+  readonly level: 1 | 2 | 3 | 4 | 5 | 6;
+}): ReactElement {
+  const heading = createElement(
+    `h${level}`,
+    {
+      ...(className === undefined ? {} : { className }),
+      ...(id === undefined ? {} : { id }),
+      ...(identifyBlock && block !== null
+        ? { "data-publisher-block": block.id }
+        : {}),
+    },
+    children,
+  );
+  if (block === null) return heading;
+  const href = headingHref(block);
+  return href === null ? heading : (
+    <div className="publisher-linkable-heading">
+      {heading}
+      <PublisherReaderHeadingAction
+        href={href}
+        title={block.text}
+      />
+    </div>
+  );
+}
+
+export function PublisherLinkableHeading({
+  block,
+  children,
+  className,
+  id,
+  level,
+}: {
+  readonly block: ReaderBlock | null;
+  readonly children: ReactNode;
+  readonly className?: string;
+  readonly id?: string;
+  readonly level: 1 | 2 | 3 | 4 | 5 | 6;
+}): ReactElement {
+  return (
+    <LinkableHeading
+      block={block}
+      identifyBlock
+      level={level}
+      {...(className === undefined ? {} : { className })}
+      {...(id === undefined ? {} : { id })}
+    >
+      {children}
+    </LinkableHeading>
+  );
+}
+
+function markdownHeadingComponents(
+  block: ReaderBlock,
+): Pick<
+  Components,
+  "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
+> {
+  const heading = (
+    level: 1 | 2 | 3 | 4 | 5 | 6,
+    children: ReactNode,
+  ) => (
+    <LinkableHeading
+      block={block}
+      identifyBlock={false}
+      level={level}
+    >
+      {children}
+    </LinkableHeading>
+  );
+  return {
+    h1: ({ children }) => heading(1, children),
+    h2: ({ children }) => heading(2, children),
+    h3: ({ children }) => heading(3, children),
+    h4: ({ children }) => heading(4, children),
+    h5: ({ children }) => heading(5, children),
+    h6: ({ children }) => heading(6, children),
+  };
+}
+
 function InlineHeading({
   children,
 }: {
   readonly children?: ReactNode;
 }): ReactElement {
   return <Fragment>{children}</Fragment>;
+}
+
+type TableAlignment = "center" | "left" | "right" | undefined;
+
+interface ParsedMarkdownTable {
+  readonly alignments: readonly TableAlignment[];
+  readonly headers: readonly string[];
+  readonly rows: readonly (readonly string[])[];
+}
+
+function tableCells(line: string): readonly string[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) {
+    return null;
+  }
+  return trimmed
+    .slice(1, -1)
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function tableAlignment(cell: string): TableAlignment | null {
+  if (!/^:?-{3,}:?$/u.test(cell)) return null;
+  if (cell.startsWith(":")) {
+    return cell.endsWith(":") ? "center" : "left";
+  }
+  return cell.endsWith(":") ? "right" : undefined;
+}
+
+function parseMarkdownTable(markdown: string): ParsedMarkdownTable | null {
+  const lines = markdown.split("\n");
+  if (lines.length < 2 || lines.length > 4_098) return null;
+  const headers = tableCells(lines[0] ?? "");
+  const separators = tableCells(lines[1] ?? "");
+  if (
+    headers === null ||
+    separators === null ||
+    headers.length < 1 ||
+    headers.length > 128 ||
+    separators.length !== headers.length
+  ) {
+    return null;
+  }
+  const alignments = separators.map(tableAlignment);
+  if (alignments.some((alignment) => alignment === null)) {
+    return null;
+  }
+  const rows: string[][] = [];
+  for (const line of lines.slice(2)) {
+    const cells = tableCells(line);
+    if (cells === null || cells.length !== headers.length) {
+      return null;
+    }
+    rows.push([...cells]);
+  }
+  return {
+    alignments: alignments as readonly TableAlignment[],
+    headers,
+    rows,
+  };
+}
+
+function PublisherMarkdownCell({
+  assetHrefs,
+  markdown,
+  narrationWords,
+}: {
+  readonly assetHrefs: ReadonlySet<string>;
+  readonly markdown: string;
+  readonly narrationWords: boolean;
+}): ReactElement {
+  return (
+    <ReactMarkdown
+      components={{
+        ...safeMarkdownComponents(assetHrefs),
+        p: InlineHeading,
+        h1: InlineHeading,
+        h2: InlineHeading,
+        h3: InlineHeading,
+        h4: InlineHeading,
+        h5: InlineHeading,
+        h6: InlineHeading,
+      }}
+      rehypePlugins={[
+        [publisherFocusMarkupPlugin, { narrationWords }],
+      ]}
+      skipHtml
+      urlTransform={publisherMarkdownUrlTransform}
+    >
+      {markdown}
+    </ReactMarkdown>
+  );
+}
+
+function PublisherMarkdownTable({
+  assetHrefs,
+  block,
+  narrationWords,
+  table,
+}: {
+  readonly assetHrefs: ReadonlySet<string>;
+  readonly block: ReaderBlock;
+  readonly narrationWords: boolean;
+  readonly table: ParsedMarkdownTable;
+}): ReactElement {
+  const captionId = `publisher-table-${block.id}`;
+  const caption = `Table in ${block.text.slice(0, 120)}`;
+  return (
+    <div
+      aria-labelledby={captionId}
+      className="publisher-table-region"
+      role="region"
+      tabIndex={0}
+    >
+      <table>
+        <caption id={captionId}>{caption}</caption>
+        <thead>
+          <tr>
+            {table.headers.map((cell, index) => (
+              <th
+                key={index}
+                scope="col"
+                style={{ textAlign: table.alignments[index] }}
+              >
+                <PublisherMarkdownCell
+                  assetHrefs={assetHrefs}
+                  markdown={cell}
+                  narrationWords={narrationWords}
+                />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, cellIndex) => (
+                <td
+                  key={cellIndex}
+                  style={{ textAlign: table.alignments[cellIndex] }}
+                >
+                  <PublisherMarkdownCell
+                    assetHrefs={assetHrefs}
+                    markdown={cell}
+                    narrationWords={narrationWords}
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export function PublisherMarkdownInline({
@@ -112,6 +371,7 @@ export function PublisherMarkdownInline({
     <ReactMarkdown
       components={{
         ...safeMarkdownComponents(assetHrefs),
+        p: InlineHeading,
         h1: InlineHeading,
         h2: InlineHeading,
         h3: InlineHeading,
@@ -119,6 +379,7 @@ export function PublisherMarkdownInline({
         h5: InlineHeading,
         h6: InlineHeading,
       }}
+      rehypePlugins={[publisherFocusMarkupPlugin]}
       skipHtml
       urlTransform={publisherMarkdownUrlTransform}
     >
@@ -131,25 +392,46 @@ export function PublisherMarkdownBlock({
   assetHrefs,
   block,
   markdown,
+  narrationWords = false,
   renderedPath,
 }: PublisherMarkdownBlockProps): ReactElement {
   const ownedDomId =
     block.readerAddress?.path === renderedPath
       ? block.domId
       : null;
+  const table = block.kind === "table"
+    ? parseMarkdownTable(markdown)
+    : null;
   return (
     <div
       className="publisher-markdown"
       data-publisher-block={block.id}
       {...(ownedDomId === null ? {} : { id: ownedDomId })}
     >
-      <ReactMarkdown
-        components={safeMarkdownComponents(assetHrefs)}
-        skipHtml
-        urlTransform={publisherMarkdownUrlTransform}
-      >
-        {markdown}
-      </ReactMarkdown>
+      {table === null ? (
+        <ReactMarkdown
+          components={{
+            ...safeMarkdownComponents(assetHrefs),
+            ...(block.kind === "heading"
+              ? markdownHeadingComponents(block)
+              : {}),
+          }}
+          rehypePlugins={[
+            [publisherFocusMarkupPlugin, { narrationWords }],
+          ]}
+          skipHtml
+          urlTransform={publisherMarkdownUrlTransform}
+        >
+          {markdown}
+        </ReactMarkdown>
+      ) : (
+        <PublisherMarkdownTable
+          assetHrefs={assetHrefs}
+          block={block}
+          narrationWords={narrationWords}
+          table={table}
+        />
+      )}
     </div>
   );
 }

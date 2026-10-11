@@ -14,6 +14,9 @@ If you wish to allow use of your version of this file only under the terms of th
 import type {
   PublisherNextThemeInstance,
 } from "../types.js";
+import {
+  projectPublisherNextThemeAppearance,
+} from "./appearance.js";
 
 export type PublisherNextThemeStyle = Readonly<
   Record<`--publisher-${string}`, string>
@@ -23,6 +26,13 @@ export function publisherNextThemeStyle(
   theme: PublisherNextThemeInstance,
 ): PublisherNextThemeStyle {
   const { color, typography, layout } = theme.tokens;
+  const appearance = projectPublisherNextThemeAppearance(theme);
+  const defaultReaderFont = typography.readerFontFamilies.find(
+    ({ id }) => id === typography.defaultReaderFontFamilyId,
+  );
+  if (defaultReaderFont === undefined) {
+    throw new TypeError("The validated theme omitted its default Reader font.");
+  }
   return Object.freeze({
     "--publisher-color-canvas": color.canvas,
     "--publisher-color-surface": color.surface,
@@ -31,9 +41,31 @@ export function publisherNextThemeStyle(
     "--publisher-color-accent": color.accent,
     "--publisher-color-focus": color.focus,
     "--publisher-color-border": color.border,
+    "--publisher-color-light-canvas": appearance.light.canvas,
+    "--publisher-color-light-surface": appearance.light.surface,
+    "--publisher-color-light-text": appearance.light.text,
+    "--publisher-color-light-muted-text": appearance.light.mutedText,
+    "--publisher-color-light-accent": appearance.light.accent,
+    "--publisher-color-light-focus": appearance.light.focus,
+    "--publisher-color-light-border": appearance.light.border,
+    "--publisher-color-dark-canvas": appearance.dark.canvas,
+    "--publisher-color-dark-surface": appearance.dark.surface,
+    "--publisher-color-dark-text": appearance.dark.text,
+    "--publisher-color-dark-muted-text": appearance.dark.mutedText,
+    "--publisher-color-dark-accent": appearance.dark.accent,
+    "--publisher-color-dark-focus": appearance.dark.focus,
+    "--publisher-color-dark-border": appearance.dark.border,
+    "--publisher-color-black-canvas": appearance.black.canvas,
+    "--publisher-color-black-surface": appearance.black.surface,
+    "--publisher-color-black-text": appearance.black.text,
+    "--publisher-color-black-muted-text": appearance.black.mutedText,
+    "--publisher-color-black-accent": appearance.black.accent,
+    "--publisher-color-black-focus": appearance.black.focus,
+    "--publisher-color-black-border": appearance.black.border,
     "--publisher-font-body": typography.bodyFamily,
     "--publisher-font-heading": typography.headingFamily,
     "--publisher-font-mono": typography.monoFamily,
+    "--publisher-reader-default-font-family": defaultReaderFont.family,
     "--publisher-font-size": typography.baseSize,
     "--publisher-line-height": String(typography.lineHeight),
     "--publisher-reading-measure": layout.readingMeasure,

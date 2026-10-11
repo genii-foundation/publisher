@@ -17,6 +17,9 @@ import type {
 } from "@genii-foundation/publisher-schema";
 
 import type {
+  PublisherNextReaderFontFamily,
+  PublisherNextThemeColorPalette,
+  PublisherNextThemeColorSchemes,
   PublisherNextThemeInstance,
   PublisherNextThemeTokens,
 } from "../types.js";
@@ -27,6 +30,15 @@ const DIMENSION =
   /^(?:0|[0-9]+(?:\.[0-9]+)?)(?:ch|px|rem)$/u;
 const BASE_SIZE =
   /^(?:0|[0-9]+(?:\.[0-9]+)?)(?:px|rem)$/u;
+const READER_FONT_ID =
+  /^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$))[a-z0-9]+(?:[._-][a-z0-9]+)*$/u;
+const READER_FONT_LABEL = /^[^\u0000-\u001f\u007f]{1,80}$/u;
+const DANGEROUS_READER_FONT_IDS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+const MAXIMUM_READER_FONT_FAMILIES = 8;
 
 function diagnostic(
   code: string,
@@ -48,6 +60,7 @@ function diagnostic(
 function plainDataRecord(
   value: unknown,
   requiredKeys: readonly string[],
+  optionalKeys: readonly string[] = [],
 ):
   | {
       readonly valid: true;
@@ -74,8 +87,11 @@ function plainDataRecord(
     }
     const descriptors = Object.getOwnPropertyDescriptors(value);
     const keys = Object.keys(descriptors).sort();
-    const expected = [...requiredKeys].sort();
-    if (JSON.stringify(keys) !== JSON.stringify(expected)) {
+    const allowed = new Set([...requiredKeys, ...optionalKeys]);
+    if (
+      requiredKeys.some((key) => !keys.includes(key)) ||
+      keys.some((key) => !allowed.has(key))
+    ) {
       return { valid: false, issue: "properties" };
     }
     for (const key of keys) {
@@ -102,6 +118,64 @@ function descriptorValue(
   key: string,
 ): unknown {
   return descriptors[key]?.value;
+}
+
+function plainDataArray(
+  value: unknown,
+  maximumLength: number,
+):
+  | { readonly valid: true; readonly values: readonly unknown[] }
+  | { readonly valid: false; readonly issue: string } {
+  try {
+    if (
+      !Array.isArray(value) ||
+      Object.getPrototypeOf(value) !== Array.prototype ||
+      Object.getOwnPropertySymbols(value).length > 0
+    ) {
+      return { valid: false, issue: "type" };
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(value) as Record<
+      string,
+      PropertyDescriptor
+    >;
+    const lengthDescriptor = descriptors.length;
+    const lengthValue = lengthDescriptor?.value;
+    if (
+      lengthDescriptor === undefined ||
+      typeof lengthValue !== "number" ||
+      !Number.isSafeInteger(lengthValue) ||
+      lengthValue < 1 ||
+      lengthValue > maximumLength
+    ) {
+      return { valid: false, issue: "length" };
+    }
+    const length = lengthValue;
+    const expectedKeys = [
+      ...Array.from({ length }, (_, index) => String(index)),
+      "length",
+    ].sort();
+    if (
+      JSON.stringify(Object.keys(descriptors).sort()) !==
+      JSON.stringify(expectedKeys)
+    ) {
+      return { valid: false, issue: "properties" };
+    }
+    const values: unknown[] = [];
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = descriptors[String(index)];
+      if (
+        descriptor === undefined ||
+        !descriptor.enumerable ||
+        !("value" in descriptor)
+      ) {
+        return { valid: false, issue: "descriptor" };
+      }
+      values.push(descriptor.value);
+    }
+    return { valid: true, values: Object.freeze(values) };
+  } catch {
+    return { valid: false, issue: "uninspectable" };
+  }
 }
 
 function channelToLinear(channel: number): number {
@@ -178,6 +252,127 @@ function isValidLayoutDimension(
   );
 }
 
+const COLOR_KEYS = Object.freeze([
+  "accent",
+  "border",
+  "canvas",
+  "focus",
+  "mutedText",
+  "surface",
+  "text",
+] as const);
+
+function validateColorPalette(
+  descriptors: Readonly<Record<string, PropertyDescriptor>>,
+  path: string,
+): ValidationResult<PublisherNextThemeColorPalette> {
+  const colorEntries = Object.fromEntries(
+    Object.keys(descriptors).map((key) => [
+      key,
+      descriptorValue(descriptors, key),
+    ]),
+  );
+  for (const [key, color] of Object.entries(colorEntries)) {
+    if (typeof color !== "string" || !COLOR.test(color)) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.color.invalid",
+            `${path}/${key}`,
+            "Theme colors must be opaque six-digit hexadecimal values.",
+            "pattern",
+            { value: color },
+          ),
+        ]),
+      });
+    }
+  }
+
+  const canvas = colorEntries.canvas as string;
+  for (const [key, minimum] of [
+    ["text", 4.5],
+    ["mutedText", 4.5],
+    ["accent", 4.5],
+    ["focus", 3],
+  ] as const) {
+    const ratio = contrast(canvas, colorEntries[key] as string);
+    if (ratio < minimum) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.color.contrast",
+            `${path}/${key}`,
+            "Theme colors must preserve readable contrast against the canvas.",
+            "contrast",
+            { minimum, ratio },
+          ),
+        ]),
+      });
+    }
+  }
+  if (
+    contrast(
+      colorEntries.surface as string,
+      colorEntries.text as string,
+    ) < 4.5
+  ) {
+    return Object.freeze({
+      valid: false,
+      diagnostics: Object.freeze([
+        diagnostic(
+          "next.theme.surface.contrast",
+          `${path}/surface`,
+          "The theme surface must preserve readable text contrast.",
+          "contrast",
+          { minimum: 4.5 },
+        ),
+      ]),
+    });
+  }
+  const surface = colorEntries.surface as string;
+  for (const [key, minimum] of [
+    ["mutedText", 4.5],
+    ["accent", 4.5],
+    ["focus", 3],
+  ] as const) {
+    const ratio = contrast(surface, colorEntries[key] as string);
+    if (ratio < minimum) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.surface_color.contrast",
+            `${path}/${key}`,
+            "Theme colors used on surfaces must preserve visible contrast.",
+            "contrast",
+            {
+              background: "surface",
+              minimum,
+              ratio,
+            },
+          ),
+        ]),
+      });
+    }
+  }
+
+  return Object.freeze({
+    valid: true,
+    value: Object.freeze({
+      canvas,
+      surface,
+      text: colorEntries.text as string,
+      mutedText: colorEntries.mutedText as string,
+      accent: colorEntries.accent as string,
+      focus: colorEntries.focus as string,
+      border: colorEntries.border as string,
+    }),
+    diagnostics: Object.freeze([]),
+  });
+}
+
 export function validatePublisherNextThemeInstance(
   value: unknown,
 ): ValidationResult<PublisherNextThemeInstance> {
@@ -203,7 +398,7 @@ export function validatePublisherNextThemeInstance(
     "color",
     "layout",
     "typography",
-  ]);
+  ], ["colorSchemes"]);
   if (!tokens.valid) {
     return Object.freeze({
       valid: false,
@@ -219,26 +414,24 @@ export function validatePublisherNextThemeInstance(
   }
 
   const colorValue = descriptorValue(tokens.descriptors, "color");
+  const colorSchemesValue = descriptorValue(
+    tokens.descriptors,
+    "colorSchemes",
+  );
   const typographyValue = descriptorValue(
     tokens.descriptors,
     "typography",
   );
   const layoutValue = descriptorValue(tokens.descriptors, "layout");
-  const colors = plainDataRecord(colorValue, [
-    "accent",
-    "border",
-    "canvas",
-    "focus",
-    "mutedText",
-    "surface",
-    "text",
-  ]);
+  const colors = plainDataRecord(colorValue, COLOR_KEYS);
   const typography = plainDataRecord(typographyValue, [
     "baseSize",
     "bodyFamily",
+    "defaultReaderFontFamilyId",
     "headingFamily",
     "lineHeight",
     "monoFamily",
+    "readerFontFamilies",
   ]);
   const layout = plainDataRecord(layoutValue, [
     "controlRadius",
@@ -260,96 +453,68 @@ export function validatePublisherNextThemeInstance(
     });
   }
 
-  const colorEntries = Object.fromEntries(
-    Object.keys(colors.descriptors).map((key) => [
-      key,
-      descriptorValue(colors.descriptors, key),
-    ]),
+  const color = validateColorPalette(
+    colors.descriptors,
+    "/theme/tokens/color",
   );
-  for (const [key, color] of Object.entries(colorEntries)) {
-    if (typeof color !== "string" || !COLOR.test(color)) {
-      return Object.freeze({
-        valid: false,
-        diagnostics: Object.freeze([
-          diagnostic(
-            "next.theme.color.invalid",
-            `/theme/tokens/color/${key}`,
-            "Theme colors must be opaque six-digit hexadecimal values.",
-            "pattern",
-            { value: color },
-          ),
-        ]),
-      });
-    }
-  }
+  if (!color.valid) return color;
 
-  const canvas = colorEntries.canvas as string;
-  for (const [key, minimum] of [
-    ["text", 4.5],
-    ["mutedText", 4.5],
-    ["accent", 4.5],
-    ["focus", 3],
-  ] as const) {
-    const ratio = contrast(canvas, colorEntries[key] as string);
-    if (ratio < minimum) {
+  let colorSchemes: PublisherNextThemeColorSchemes | undefined;
+  if (Object.hasOwn(tokens.descriptors, "colorSchemes")) {
+    const inspectedColorSchemes = plainDataRecord(
+      colorSchemesValue,
+      ["black", "dark", "light"],
+    );
+    if (!inspectedColorSchemes.valid) {
       return Object.freeze({
         valid: false,
         diagnostics: Object.freeze([
           diagnostic(
-            "next.theme.color.contrast",
-            `/theme/tokens/color/${key}`,
-            "Theme colors must preserve readable contrast against the canvas.",
-            "contrast",
-            { minimum, ratio },
+            "next.theme.color_schemes.invalid",
+            "/theme/tokens/colorSchemes",
+            "Theme color schemes must declare complete light, dark, and black palettes.",
+            inspectedColorSchemes.issue,
           ),
         ]),
       });
     }
-  }
-  if (
-    contrast(
-      colorEntries.surface as string,
-      colorEntries.text as string,
-    ) < 4.5
-  ) {
-    return Object.freeze({
-      valid: false,
-      diagnostics: Object.freeze([
-        diagnostic(
-          "next.theme.surface.contrast",
-          "/theme/tokens/color/surface",
-          "The theme surface must preserve readable text contrast.",
-          "contrast",
-          { minimum: 4.5 },
-        ),
-      ]),
+    const validatedColorSchemes: Record<
+      keyof PublisherNextThemeColorSchemes,
+      PublisherNextThemeColorPalette
+    > = Object.create(null) as Record<
+      keyof PublisherNextThemeColorSchemes,
+      PublisherNextThemeColorPalette
+    >;
+    for (const scheme of ["light", "dark", "black"] as const) {
+      const inspectedPalette = plainDataRecord(
+        descriptorValue(inspectedColorSchemes.descriptors, scheme),
+        COLOR_KEYS,
+      );
+      if (!inspectedPalette.valid) {
+        return Object.freeze({
+          valid: false,
+          diagnostics: Object.freeze([
+            diagnostic(
+              "next.theme.color_scheme.invalid",
+              `/theme/tokens/colorSchemes/${scheme}`,
+              "Every theme color scheme must use the complete closed palette shape.",
+              inspectedPalette.issue,
+            ),
+          ]),
+        });
+      }
+      const validatedPalette = validateColorPalette(
+        inspectedPalette.descriptors,
+        `/theme/tokens/colorSchemes/${scheme}`,
+      );
+      if (!validatedPalette.valid) return validatedPalette;
+      validatedColorSchemes[scheme] = validatedPalette.value;
+    }
+    colorSchemes = Object.freeze({
+      light: validatedColorSchemes.light,
+      dark: validatedColorSchemes.dark,
+      black: validatedColorSchemes.black,
     });
-  }
-  const surface = colorEntries.surface as string;
-  for (const [key, minimum] of [
-    ["mutedText", 4.5],
-    ["accent", 4.5],
-    ["focus", 3],
-  ] as const) {
-    const ratio = contrast(surface, colorEntries[key] as string);
-    if (ratio < minimum) {
-      return Object.freeze({
-        valid: false,
-        diagnostics: Object.freeze([
-          diagnostic(
-            "next.theme.surface_color.contrast",
-            `/theme/tokens/color/${key}`,
-            "Theme colors used on surfaces must preserve visible contrast.",
-            "contrast",
-            {
-              background: "surface",
-              minimum,
-              ratio,
-            },
-          ),
-        ]),
-      });
-    }
   }
 
   const bodyFamily = descriptorValue(
@@ -382,6 +547,125 @@ export function validatePublisherNextThemeInstance(
         ]),
       });
     }
+  }
+
+  const defaultReaderFontFamilyId = descriptorValue(
+    typography.descriptors,
+    "defaultReaderFontFamilyId",
+  );
+  const readerFontFamiliesValue = descriptorValue(
+    typography.descriptors,
+    "readerFontFamilies",
+  );
+  const readerFontFamilyArray = plainDataArray(
+    readerFontFamiliesValue,
+    MAXIMUM_READER_FONT_FAMILIES,
+  );
+  if (!readerFontFamilyArray.valid) {
+    return Object.freeze({
+      valid: false,
+      diagnostics: Object.freeze([
+        diagnostic(
+          "next.theme.reader_fonts.invalid",
+          "/theme/tokens/typography/readerFontFamilies",
+          "Reader font choices must be one bounded dense plain data array.",
+          readerFontFamilyArray.issue,
+        ),
+      ]),
+    });
+  }
+  const readerFontFamilies: PublisherNextReaderFontFamily[] = [];
+  const readerFontIds = new Set<string>();
+  for (const [index, candidate] of readerFontFamilyArray.values.entries()) {
+    const inspected = plainDataRecord(candidate, [
+      "family",
+      "id",
+      "label",
+    ]);
+    if (!inspected.valid) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.reader_font.invalid",
+            `/theme/tokens/typography/readerFontFamilies/${index}`,
+            "Every Reader font choice must use the complete closed data shape.",
+            inspected.issue,
+          ),
+        ]),
+      });
+    }
+    const id = descriptorValue(inspected.descriptors, "id");
+    const label = descriptorValue(inspected.descriptors, "label");
+    const family = descriptorValue(inspected.descriptors, "family");
+    if (
+      typeof id !== "string" ||
+      id.length > 128 ||
+      !READER_FONT_ID.test(id) ||
+      DANGEROUS_READER_FONT_IDS.has(id) ||
+      readerFontIds.has(id)
+    ) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.reader_font_id.invalid",
+            `/theme/tokens/typography/readerFontFamilies/${index}/id`,
+            "Reader font IDs must be unique portable stable identifiers.",
+            "identity",
+          ),
+        ]),
+      });
+    }
+    if (
+      typeof label !== "string" ||
+      label !== label.trim() ||
+      !READER_FONT_LABEL.test(label)
+    ) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.reader_font_label.invalid",
+            `/theme/tokens/typography/readerFontFamilies/${index}/label`,
+            "Reader font labels must be bounded visible text.",
+            "pattern",
+          ),
+        ]),
+      });
+    }
+    if (typeof family !== "string" || !FONT_FAMILY.test(family)) {
+      return Object.freeze({
+        valid: false,
+        diagnostics: Object.freeze([
+          diagnostic(
+            "next.theme.reader_font_family.invalid",
+            `/theme/tokens/typography/readerFontFamilies/${index}/family`,
+            "Reader font stacks must be bounded CSS family values without control or declaration characters.",
+            "pattern",
+          ),
+        ]),
+      });
+    }
+    readerFontIds.add(id);
+    readerFontFamilies.push(Object.freeze({ id, label, family }));
+  }
+  if (
+    !readerFontIds.has("serif") ||
+    typeof defaultReaderFontFamilyId !== "string" ||
+    !readerFontIds.has(defaultReaderFontFamilyId)
+  ) {
+    return Object.freeze({
+      valid: false,
+      diagnostics: Object.freeze([
+        diagnostic(
+          "next.theme.reader_font_default.invalid",
+          "/theme/tokens/typography/defaultReaderFontFamilyId",
+          "Reader font choices must include serif and name one declared default.",
+          "identity",
+        ),
+      ]),
+    });
   }
 
   const baseSize = descriptorValue(
@@ -453,21 +737,16 @@ export function validatePublisherNextThemeInstance(
   }
 
   const snapshot: PublisherNextThemeTokens = Object.freeze({
-    color: Object.freeze({
-      canvas,
-      surface: colorEntries.surface as string,
-      text: colorEntries.text as string,
-      mutedText: colorEntries.mutedText as string,
-      accent: colorEntries.accent as string,
-      focus: colorEntries.focus as string,
-      border: colorEntries.border as string,
-    }),
+    color: color.value,
+    ...(colorSchemes === undefined ? {} : { colorSchemes }),
     typography: Object.freeze({
       bodyFamily: bodyFamily as string,
       headingFamily: headingFamily as string,
       monoFamily: monoFamily as string,
       baseSize,
       lineHeight,
+      defaultReaderFontFamilyId,
+      readerFontFamilies: Object.freeze(readerFontFamilies),
     }),
     layout: Object.freeze({
       readingMeasure: dimensions.readingMeasure as string,

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/work.schema.json",
+  "schemaVersion": "1.0",
+  "id": "tidal-ledger",
+  "title": "The Tidal Ledger",
+  "language": "en",
+  "publicationState": "published",
+  "route": "/works/tidal-ledger",
+  "manuscript": "manuscript.md",
+  "sections": [
+    {
+      "id": "tidal-ledger-root",
+      "title": "The Tidal Ledger",
+      "role": "division",
+      "start": {
+        "kind": "document"
+      }
+    },
+    {
+      "id": "tidal-ledger-low-water",
+      "title": "Low water",
+      "parentId": "tidal-ledger-root",
+      "route": "/readings/low-water",
+      "start": {
+        "kind": "block",
+        "blockKind": "heading",
+        "text": "Low water"
+      },
+      "continuity": {
+        "id": "tidal-ledger-low-water",
+        "legacyIds": [
+          "tidal-ledger-ebb"
+        ],
+        "progressGroups": [
+          [
+            "tidal-ledger-low-water",
+            "tidal-ledger-ebb"
+          ]
+        ],
+        "historicalSectionIds": [
+          "tidal-ledger-ebb"
+        ]
+      }
+    },
+    {
+      "id": "tidal-ledger-arithmetic",
+      "title": "Arithmetic",
+      "parentId": "tidal-ledger-root",
+      "route": "/readings/arithmetic",
+      "start": {
+        "kind": "block",
+        "blockKind": "heading",
+        "text": "Arithmetic"
+      }
+    }
+  ]
+}

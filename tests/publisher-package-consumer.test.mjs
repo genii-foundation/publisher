@@ -133,7 +133,9 @@ function runNpm(args, options = {}) {
       label,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error && typeof error.message === "string"
+      ? error.message
+      : `${error}`;
     if (looksLikeRegistryFailure(message)) {
       throw new Error(
         `The npm registry could not be reached, so ${label} could not complete. This is a network failure rather than a finding about this package.\n${message}`,
@@ -233,6 +235,7 @@ async function expectedPublisherPackagePaths() {
     "README.md",
     "SOURCE-NOTICE",
     "THIRD_PARTY_NOTICES.md",
+    "third-party-licenses/semver-LICENSE-ISC.txt",
     // The author lifecycle executable ships with the package, because an author
     // runs it out of their own installation.
     ...binaryFiles.map(
@@ -307,6 +310,20 @@ test("Publisher release lifecycle enforces prerelease and stable npm tags", () =
   }
 });
 
+test("Publisher audio source and emitted module remain textual", async () => {
+  for (const path of [
+    join(publisherRoot, "src", "node", "audio.ts"),
+    join(publisherRoot, "dist", "node", "audio.js"),
+  ]) {
+    const bytes = await readFile(path);
+    assert.equal(
+      bytes.includes(0),
+      false,
+      `${packagePath(relative(repositoryRoot, path))} contains a raw NUL byte.`,
+    );
+  }
+});
+
 test("packed Publisher application installs offline and loads an unrelated publication", async () => {
   const [publisherManifest, workspaceManifest] = await Promise.all([
     readFile(join(publisherRoot, "package.json"), "utf8").then(
@@ -335,6 +352,7 @@ test("packed Publisher application installs offline and loads an unrelated publi
     node: "./dist/node.js",
   });
   assert.equal(publisherManifest.devDependencies.esbuild, "0.27.0");
+  assert.equal(publisherManifest.devDependencies["@types/semver"], "7.7.1");
   // Pinned deliberately. The application package's dependency surface is what a
   // consumer installs, so growing it is an edit somebody makes on purpose rather
   // than a thing that happens to them.
@@ -342,6 +360,7 @@ test("packed Publisher application installs offline and loads an unrelated publi
     "@genii-foundation/publisher-content": "0.1.0-alpha.0",
     "@genii-foundation/publisher-reader": "0.1.0-alpha.0",
     "@genii-foundation/publisher-schema": "0.1.0-alpha.0",
+    semver: "7.8.5",
   });
 
   const temporaryRoot = await mkdtemp(
@@ -453,13 +472,19 @@ test("packed Publisher application installs offline and loads an unrelated publi
   type ResolvedPublicationSourceGraph,
 } from "@genii-foundation/publisher";
 import {
+  capturePreviewCandidateIdentity,
   compileLoadedPublicationContent,
   loadPublicationCompilationSources,
+  parsePreviewCandidateIdentity,
   PUBLISHER_SOURCE_LOADER_LIMITS,
+  verifyPreviewCandidateIdentity,
+  type BuiltAudioEnvelope,
+  type CapturePreviewCandidateIdentityInput,
   type CompileLoadedPublicationContentInput,
   type LoadedPublicationCompilationSources,
   type LoadPublicationCompilationSourcesInput,
   type LoadPublicationCompilationSourcesResult,
+  type PreviewCandidateIdentity,
   type PublicationSourceLoaderLimits,
 } from "@genii-foundation/publisher/node";
 
@@ -468,6 +493,17 @@ const input: LoadPublicationCompilationSourcesInput = {
 };
 const pending: Promise<LoadPublicationCompilationSourcesResult> =
   loadPublicationCompilationSources(input);
+const previewPending: Promise<PreviewCandidateIdentity> =
+  capturePreviewCandidateIdentity(({
+    hostRoot: "/absolute/repository",
+  }) satisfies CapturePreviewCandidateIdentityInput);
+declare const preview: PreviewCandidateIdentity;
+const parsedPreview: PreviewCandidateIdentity =
+  parsePreviewCandidateIdentity(preview);
+const verifiedPreview = verifyPreviewCandidateIdentity({
+  hostRoot: "/absolute/repository",
+  expected: parsedPreview,
+});
 const version: string = PUBLISHER_VERSION;
 const limits: PublicationSourceLoaderLimits =
   PUBLISHER_SOURCE_LOADER_LIMITS;
@@ -480,6 +516,11 @@ const source: CompilationSourceInput = {
 };
 declare const publication: PublicationManifest;
 declare const sourceGraph: ResolvedPublicationSourceGraph;
+declare const builtAudio: BuiltAudioEnvelope;
+const firstClipHref: string | undefined =
+  builtAudio.envelope.voices[0]?.clips[0]?.href;
+// @ts-expect-error Audio envelopes expose clips, not catalog sections.
+builtAudio.envelope.voices[0]?.sections;
 // @ts-expect-error Loader snapshots are opaque and cannot be constructed.
 const forged: LoadedPublicationCompilationSources = {
   publication,
@@ -497,10 +538,20 @@ async function useLoaded(): Promise<readonly Diagnostic[]> {
   const validation = compileLoadedPublicationContent({
     loaded,
     works: [],
+    sectionIndexes: [],
   });
   return validation.diagnostics;
 }
-void [version, limits, forged, compiled, useLoaded];
+void [
+  version,
+  limits,
+  firstClipHref,
+  forged,
+  compiled,
+  previewPending,
+  verifiedPreview,
+  useLoaded,
+];
 `,
         "utf8",
       ),
@@ -656,14 +707,19 @@ void loadPublicationCompilationSources;
     await writeFile(
       verifierPath,
       `import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { compileMarkdownWork } from "@genii-foundation/publisher-content";
 import { PUBLISHER_VERSION } from "@genii-foundation/publisher";
 import {
+  capturePreviewCandidateIdentity,
   compileLoadedPublicationContent,
   loadPublicationCompilationSources,
+  parsePreviewCandidateIdentity,
   PUBLISHER_SOURCE_LOADER_LIMITS,
+  verifyPreviewCandidateIdentity,
 } from "@genii-foundation/publisher/node";
 
 assert.equal(PUBLISHER_VERSION, "0.1.0-alpha.0");
@@ -718,9 +774,20 @@ const compiled = compileLoadedPublicationContent({
   loaded: result.value,
   works: [adapted.value.work],
   extensions: resolvedExtensions,
+  sectionIndexes: [{
+    id: "rain-gauge-index",
+    title: "Rain Gauge Index",
+    path: "/reading/rain-gauge-index/",
+    workId: workSource.workId,
+    sectionIds: [adapted.value.work.sections[0].id],
+  }],
 });
 assert.equal(compiled.valid, true, JSON.stringify(compiled.diagnostics));
 assert.equal(compiled.value.engineVersion, PUBLISHER_VERSION);
+assert.equal(
+  compiled.value.routes.active.at(-1).target.kind,
+  "section-index",
+);
 const rejectedOverride = compileLoadedPublicationContent({
   loaded: result.value,
   works: [adapted.value.work],
@@ -732,6 +799,37 @@ assert.equal(
   "publisher.compile_input.invalid",
 );
 assert.equal(JSON.stringify(result).includes(publicationRoot), false);
+const previewRoot = join(import.meta.dirname, "preview-candidate");
+await mkdir(previewRoot);
+await writeFile(join(previewRoot, "candidate.txt"), "packed bytes\\n", "utf8");
+const git = (args) => execFileSync("git", args, {
+  cwd: previewRoot,
+  encoding: "utf8",
+  env: {
+    ...process.env,
+    GIT_AUTHOR_NAME: "Packed Preview",
+    GIT_AUTHOR_EMAIL: "preview@example.test",
+    GIT_COMMITTER_NAME: "Packed Preview",
+    GIT_COMMITTER_EMAIL: "preview@example.test",
+  },
+});
+git(["init", "--quiet", "--initial-branch=main"]);
+git(["add", "candidate.txt"]);
+git(["commit", "--quiet", "-m", "candidate"]);
+const previewIdentity = await capturePreviewCandidateIdentity({
+  hostRoot: previewRoot,
+});
+assert.equal(previewIdentity.branch, "main");
+assert.equal(previewIdentity.dirty, false);
+assert.deepEqual(
+  parsePreviewCandidateIdentity(JSON.parse(JSON.stringify(previewIdentity))),
+  previewIdentity,
+);
+const previewVerification = await verifyPreviewCandidateIdentity({
+  hostRoot: previewRoot,
+  expected: previewIdentity,
+});
+assert.equal(previewVerification.matches, true);
 `,
       "utf8",
     );

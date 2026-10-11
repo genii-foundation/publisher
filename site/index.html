@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="GENII Publisher is a portable, open source publication engine for durable books and reading applications.">
+    <title>GENII Publisher</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Georgia, "Times New Roman", serif;
+        background: #f4f0e8;
+        color: #201d19;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      main,
+      footer {
+        width: min(52rem, calc(100% - 2rem));
+        margin-inline: auto;
+      }
+      main {
+        padding-block: clamp(3rem, 10vw, 7rem) 3rem;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(2.75rem, 9vw, 6rem);
+        font-weight: 500;
+        letter-spacing: -0.04em;
+        line-height: 0.95;
+      }
+      .lede {
+        max-width: 38rem;
+        margin-block: 2rem 3rem;
+        font-size: clamp(1.2rem, 3vw, 1.6rem);
+        line-height: 1.55;
+      }
+      h2 {
+        margin-block: 3rem 1rem;
+        font-size: 1rem;
+        font-family: system-ui, sans-serif;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      p,
+      li {
+        line-height: 1.65;
+      }
+      ul {
+        columns: 2 19rem;
+        padding-left: 1.25rem;
+      }
+      li {
+        break-inside: avoid;
+        margin-bottom: 0.4rem;
+      }
+      a {
+        color: #5d321f;
+        text-decoration-thickness: 0.08em;
+        text-underline-offset: 0.18em;
+      }
+      a:focus-visible {
+        outline: 0.2rem solid #a55a34;
+        outline-offset: 0.2rem;
+      }
+      footer {
+        border-top: 1px solid #b9ad9c;
+        padding-block: 1.5rem 3rem;
+        font-family: system-ui, sans-serif;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>GENII Publisher</h1>
+      <p class="lede">A portable, open source publication engine for durable books, accessible reading, local-first progress, narration, offline use, and optional synchronization.</p>
+
+      <h2>Source and license</h2>
+      <p>GENII Publisher is developed by GENII Foundation and licensed under the Common Public Attribution License 1.0. The complete source is available at <a href="https://github.com/genii-foundation/publisher">github.com/genii-foundation/publisher</a>.</p>
+
+      <h2>Public schemas</h2>
+      <p>Published manifests and generated artifacts use these stable JSON Schema authorities.</p>
+      <ul>
+        <li><a href="/schemas/audio-catalog.schema.json">Audio catalog</a></li>
+        <li><a href="/schemas/audio-checkpoint.schema.json">Audio checkpoint</a></li>
+        <li><a href="/schemas/audio-envelope.schema.json">Audio envelope</a></li>
+        <li><a href="/schemas/collection.schema.json">Collection</a></li>
+        <li><a href="/schemas/content-envelope.schema.json">Content envelope</a></li>
+        <li><a href="/schemas/next-application-manifest.schema.json">Next application manifest</a></li>
+        <li><a href="/schemas/provenance-receipt-1.2.0.schema.json">Provenance receipt 1.2.0</a></li>
+        <li><a href="/schemas/provenance-record-1.2.0.schema.json">Provenance record 1.2.0</a></li>
+        <li><a href="/schemas/publication.schema.json">Publication</a></li>
+        <li><a href="/schemas/reader-envelope.schema.json">Reader envelope</a></li>
+        <li><a href="/schemas/sync-envelope.schema.json">Synchronization envelope</a></li>
+        <li><a href="/schemas/updates-catalog.schema.json">Updates catalog</a></li>
+        <li><a href="/schemas/updates-envelope.schema.json">Updates envelope</a></li>
+        <li><a href="/schemas/work.schema.json">Work</a></li>
+      </ul>
+    </main>
+    <footer>
+      Copyright 2026 GENII Foundation. Published with GENII Publisher.
+    </footer>
+    <template id="source-notice">No alternative license is selected for GENII Publisher Original Code. The alternative-license fields in the required Exhibit A notice below are intentionally unpopulated.
+
+“The contents of this file are subject to the Common Public Attribution License Version 1.0 (the “License”); you may not use this file except in compliance with the License. You may obtain a copy of the License at https://opensource.org/license/cpal-1.0. The License is based on the Mozilla Public License Version 1.1 but Sections 14 and 15 have been added to cover use of software over a computer network and provide for limited attribution for the Original Developer. In addition, Exhibit A has been modified to be consistent with Exhibit B.
+Software distributed under the License is distributed on an “AS IS” basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for the specific language governing rights and limitations under the License.
+The Original Code is GENII Publisher.
+The Original Developer is not the Initial Developer and is __________. If left blank, the Original Developer is the Initial Developer.
+The Initial Developer of the Original Code is GENII Foundation. All portions of the code written by GENII Foundation are Copyright (c) 2026 GENII Foundation. All Rights Reserved.
+Contributor ______________________.
+Alternatively, the contents of this file may be used under the terms of the _____ license (the [___] License), in which case the provisions of [______] License are applicable instead of those above.
+If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”</template>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://publisher.genii.foundation/schemas/work.schema.json",
+  "schemaVersion": "1.0",
+  "id": "first-light",
+  "title": "First Light on the Mudflats",
+  "summary": "What the water leaves behind.",
+  "language": "en",
+  "publicationState": "published",
+  "publishedAt": "2026-05-01T05:40:00Z",
+  "route": "/works/first-light",
+  "manuscript": "manuscript.md",
+  "assets": "assets"
+}

@@ -449,6 +449,8 @@ test("a contract declaring a hostile path is refused", (t) => {
     ".env",
     "node_modules/next/index.js",
     "publisher.config.ts",
+    "publisher.extensions.mjs",
+    "publisher.theme.mjs",
   ]) {
     assert.throws(
       () =>

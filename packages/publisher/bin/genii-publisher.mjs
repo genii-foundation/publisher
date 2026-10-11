@@ -25,7 +25,7 @@ If you wish to allow use of your version of this file only under the terms of th
 // export works with no change here.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import {
   dirname,
   isAbsolute,
@@ -62,19 +62,52 @@ import {
   resolvePublicationProtectedRoots,
 } from "../dist/node/protected-roots.js";
 import {
+  AUDIO_DATA_ARTIFACT,
+  EXTENSION_DATA_ARTIFACT,
+  PROGRESS_DATA_ARTIFACT,
+  PUBLIC_IDENTITY_DATA_ARTIFACT,
+  SEARCH_DATA_ARTIFACT,
+  UPDATES_DATA_ARTIFACT,
+  assertHostCanCarryDataArtifact,
   assertHostCanServe,
   readHostCapabilities,
 } from "../dist/node/host-capabilities.js";
 import {
-  checkReaderArtifact,
+  SYNC_DATA_ARTIFACT,
+} from "../dist/node/sync.js";
+import {
+  checkHostArtifact,
   hashArtifactText,
   resolveArtifactDestination,
   stagedArtifactPathFor,
-  writeReaderArtifact,
+  writeHostArtifact,
 } from "../dist/node/materialize.js";
+import {
+  capturePreviewCandidateIdentity,
+  parsePreviewCandidateIdentity,
+  verifyPreviewCandidateIdentity,
+} from "../dist/node/preview-candidate.js";
 
 const defaultRenderer = "@genii-foundation/publisher-next";
 const journalDirectoryName = join(".publisher", "transaction");
+const maximumPreviewIdentityFileBytes = 64 * 1024 * 1024;
+
+async function loadAuthorExtensionRegistrations(hostRoot) {
+  const registryPath = join(hostRoot, "publisher.extensions.mjs");
+  if (!existsSync(registryPath)) {
+    return Object.freeze([]);
+  }
+  try {
+    const loaded = await import(pathToFileURL(registryPath).href);
+    return loaded.default;
+  } catch (error) {
+    throw new CommandError(
+      `${registryPath} could not be imported.\n${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
 
 const usage = `genii-publisher <command>
 
@@ -88,6 +121,8 @@ Commands
   build           Compile the publication and write the reader artifact.
   status          Report what this host is and what needs doing.
   recover         Restore the baseline left by an interrupted apply.
+  preview identity  Print exact local worktree and candidate byte evidence.
+  preview verify  Compare saved candidate evidence with the current worktree.
 
 Options
   --host <dir>            Host root. Defaults to the working directory.
@@ -106,6 +141,7 @@ Options
   --audience <mode>       public or preview. Defaults to public.
   --check                 Report whether the artifact on disk is current and
                           exit nonzero if it is not. Writes nothing.
+  --identity <file>       Saved preview identity JSON required by preview verify.
   --json                  Emit machine readable output.
   --help                  Show this text.
   --version               Show the application package version.
@@ -129,6 +165,7 @@ function parseArguments(argv) {
     plan: null,
     publication: null,
     audience: "public",
+    identity: null,
     check: false,
     acknowledgeManualSteps: false,
     json: false,
@@ -141,6 +178,7 @@ function parseArguments(argv) {
     ["--plan", "plan"],
     ["--publication", "publication"],
     ["--audience", "audience"],
+    ["--identity", "identity"],
   ]);
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -799,10 +837,12 @@ async function runBuild(options) {
   });
   const { create, module } = await loadHostTemplate(hostRoot, renderer);
   const template = create(hostTemplateInput(hostRoot));
+  const extensions = await loadAuthorExtensionRegistrations(hostRoot);
 
   const built = await buildPublicationReader({
     publicationRoot,
     audience: assertAudience(options.audience),
+    extensions,
   });
   if (!built.valid) {
     if (options.json) {
@@ -838,34 +878,214 @@ async function runBuild(options) {
     return 1;
   }
 
+  const capabilities = readHostCapabilities(module);
+  const carriesPublicIdentity =
+    capabilities?.dataArtifacts.includes(
+      PUBLIC_IDENTITY_DATA_ARTIFACT,
+    ) === true || template.publicIdentityDataPath !== undefined;
+
+  // Every generated artifact beyond the reader artifact, in one list.
+  const extraArtifacts = [
+    carriesPublicIdentity
+      ? {
+          id: PUBLIC_IDENTITY_DATA_ARTIFACT,
+          noun: "public identity",
+          label: "Identity",
+          declaredPath: template.publicIdentityDataPath,
+          text: built.value.publicIdentity.text,
+          detail: [
+            `Publication  ${built.value.publicIdentity.envelope.publicationId}`,
+            `Reader build ${built.value.publicIdentity.envelope.buildId}`,
+          ],
+        }
+      : null,
+    built.value.extensions === undefined
+      ? null
+      : {
+          id: EXTENSION_DATA_ARTIFACT,
+          noun: "extension projections",
+          label: "Extensions",
+          declaredPath: template.extensionDataPath,
+          text: built.value.extensions.text,
+          detail: [
+            `Registered   ${built.value.extensions.envelope.extensions.length.toLocaleString("en-US")}`,
+            `Reader build ${built.value.extensions.envelope.readerBuildId}`,
+          ],
+        },
+    {
+      id: SEARCH_DATA_ARTIFACT,
+      noun: "search index",
+      label: "Search",
+      declaredPath: template.searchDataPath,
+      text: built.value.search.text,
+      detail: [
+        `Sections     ${built.value.search.index.entries.length.toLocaleString("en-US")}`,
+        `Reader build ${built.value.search.index.readerBuildId}`,
+      ],
+    },
+    {
+      id: PROGRESS_DATA_ARTIFACT,
+      noun: "progress catalog",
+      label: "Progress",
+      declaredPath: template.progressDataPath,
+      text: built.value.progress.text,
+      detail: [
+        `Sections     ${built.value.progress.catalog.entries.length.toLocaleString("en-US")}`,
+        `Reader build ${built.value.progress.catalog.readerBuildId}`,
+      ],
+    },
+    built.value.audio === undefined
+      ? null
+      : {
+          id: AUDIO_DATA_ARTIFACT,
+          noun: "narration",
+          label: "Narration",
+          declaredPath: template.audioDataPath,
+          text: built.value.audio.text,
+          detail: [
+            `Voices       ${built.value.audio.resolved.voices.length.toLocaleString("en-US")}`,
+            `Clips        ${built.value.audio.resolved.clipCount.toLocaleString("en-US")}`,
+            // Coverage is reported rather than enforced. A publication part way
+            // through generating narration is a normal state, and this is the line
+            // that tells an author how far through they are.
+            `Coverage     ${describeCoverage(built.value.audio.resolved)}`,
+          ],
+        },
+    built.value.sync === undefined
+      ? null
+      : {
+          id: SYNC_DATA_ARTIFACT,
+          noun: "synchronization",
+          label: "Sync",
+          declaredPath: template.syncDataPath,
+          text: built.value.sync.text,
+          detail: [
+            `Provider     ${built.value.sync.resolved.providerPackage}`,
+            `Capabilities ${built.value.sync.resolved.capabilities.join(", ")}`,
+            "Consent      opt-in, with local reading unaffected",
+          ],
+        },
+    built.value.updates === undefined
+      ? null
+      : {
+          id: UPDATES_DATA_ARTIFACT,
+          noun: "Updates",
+          label: "Updates",
+          declaredPath: template.updatesDataPath,
+          text: built.value.updates.text,
+          detail: [
+            `Views        ${built.value.updates.resolved.views.length.toLocaleString("en-US")}`,
+            `Reader build ${built.value.updates.envelope.buildId}`,
+          ],
+        },
+  ].filter(Boolean);
+
+  // Before anything is written. A publication declaring an artifact against a
+  // renderer with nowhere to put it would otherwise have the file written to a
+  // path of the engine's invention, which the host would never serve.
+  for (const artifact of extraArtifacts) {
+    const carriable = assertHostCanCarryDataArtifact({
+      artifact: artifact.id,
+      capabilities,
+      renderer,
+      declaredPath: artifact.declaredPath,
+    });
+    if (!carriable.valid) {
+      if (options.json) {
+        process.stdout.write(
+          `${JSON.stringify({ valid: false, diagnostics: carriable.diagnostics }, null, 2)}\n`,
+        );
+      } else {
+        process.stderr.write(
+          `${hostRoot} cannot carry this publication's ${artifact.noun}.\n${describeDiagnostics(carriable.diagnostics)}\n`,
+        );
+      }
+      return 1;
+    }
+  }
+
+  const rendererManagedPaths = template.files.map((file) => file.path);
+  const protectedRoots = protectedRootsFor(hostRoot, options);
   const destination = resolveArtifactDestination({
     hostRoot,
-    readerDataPath: template.readerDataPath,
-    rendererManagedPaths: template.files.map((file) => file.path),
-    protectedRoots: protectedRootsFor(hostRoot, options),
+    declaredArtifactPath: template.readerDataPath,
+    rendererManagedPaths,
+    protectedRoots,
   });
+  // Resolved even in check mode, because a renderer aiming an artifact at one of
+  // its own contract files must be refused whether or not this run would write.
+  const resolved = extraArtifacts.map((artifact) => ({
+    ...artifact,
+    destination: resolveArtifactDestination({
+      hostRoot,
+      declaredArtifactPath: artifact.declaredPath,
+      rendererManagedPaths,
+      protectedRoots,
+    }),
+  }));
 
   if (options.check) {
-    const checked = checkReaderArtifact({
-      destination,
-      text: built.value.text,
-    });
+    const checked = checkHostArtifact({ destination, text: built.value.text });
+    const extras = resolved.map((artifact) => ({
+      ...artifact,
+      checked: checkHostArtifact({
+        destination: artifact.destination,
+        text: artifact.text,
+      }),
+    }));
     if (options.json) {
-      process.stdout.write(`${JSON.stringify(checked, null, 2)}\n`);
+      // Additive keys, not a reshape. A consumer reading `outcome` must keep
+      // working whether or not a publication declares these.
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            ...checked,
+            ...Object.fromEntries(
+              extras.map((artifact) => [artifact.id, artifact.checked]),
+            ),
+          },
+          null,
+          2,
+        )}\n`,
+      );
     } else {
       process.stdout.write(
         `${describeCheck(checked, hostRoot, publicationRoot)}\n`,
       );
+      for (const artifact of extras) {
+        process.stdout.write(`${describeCheck(artifact.checked)}\n`);
+      }
     }
-    return checked.outcome === "current" ? 0 : 1;
+    // Stale either way is stale. Reporting only the reader artifact would let a
+    // host ship current prose beside narration of text that no longer exists.
+    return [checked, ...extras.map((artifact) => artifact.checked)].every(
+      (item) => item.outcome === "current",
+    )
+      ? 0
+      : 1;
   }
 
-  const written = writeReaderArtifact({
-    destination,
-    text: built.value.text,
-  });
+  const written = writeHostArtifact({ destination, text: built.value.text });
+  const extras = resolved.map((artifact) => ({
+    ...artifact,
+    written: writeHostArtifact({
+      destination: artifact.destination,
+      text: artifact.text,
+    }),
+  }));
   if (options.json) {
-    process.stdout.write(`${JSON.stringify(written, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          ...written,
+          ...Object.fromEntries(
+            extras.map((artifact) => [artifact.id, artifact.written]),
+          ),
+        },
+        null,
+        2,
+      )}\n`,
+    );
     return 0;
   }
   process.stdout.write(
@@ -877,7 +1097,32 @@ async function runBuild(options) {
         ? "Already current. Nothing written.\n"
         : "Written.\n"),
   );
+  for (const artifact of extras) {
+    process.stdout.write(
+      `\n` +
+        `${artifact.label.padEnd(12)} ${artifact.written.hostRelativePath}\n` +
+        `Digest       ${artifact.written.sha256}\n` +
+        `Size         ${artifact.written.bytes.toLocaleString("en-US")} bytes\n` +
+        `${artifact.detail.join("\n")}\n` +
+        (artifact.written.outcome === "current"
+          ? "Already current. Nothing written.\n"
+          : "Written.\n"),
+    );
+  }
   return 0;
+}
+
+/** Narrated sections against the publication's total, per voice. */
+function describeCoverage(resolved) {
+  if (resolved.voices.length === 0) {
+    return "no voices";
+  }
+  return resolved.voices
+    .map(
+      (voice) =>
+        `${voice.id} ${voice.narratedSectionCount.toLocaleString("en-US")}/${resolved.sectionCount.toLocaleString("en-US")}`,
+    )
+    .join(", ");
 }
 
 function describeDiagnostics(diagnostics) {
@@ -895,8 +1140,13 @@ function describeDiagnostics(diagnostics) {
 
 function describeCheck(checked, hostRoot, publicationRoot) {
   const lines = [];
-  lines.push(`Host         ${hostRoot}`);
-  lines.push(`Publication  ${publicationRoot}`);
+  // Omitted for a second artifact in the same run, which shares the host and
+  // publication already printed above it. Repeating them would read as a second
+  // check of a different publication.
+  if (hostRoot !== undefined) {
+    lines.push(`Host         ${hostRoot}`);
+    lines.push(`Publication  ${publicationRoot}`);
+  }
   lines.push(`Artifact     ${checked.hostRelativePath}`);
   lines.push(`Expected     ${checked.expected}`);
   lines.push(`On disk      ${checked.actual ?? "absent"}`);
@@ -935,6 +1185,8 @@ async function runStatus(options) {
     upgradeAvailable: false,
     artifactTracking: null,
     stagedArtifact: null,
+    dataArtifacts: [],
+    stagedDataArtifacts: [],
     unservable: [],
     conflictedFiles: [],
     artifact: null,
@@ -1001,9 +1253,11 @@ async function runStatus(options) {
       // Artifact currency, when there is a publication to compare against.
       const publicationRoot = resolveHostRoot(options.publication ?? hostRoot);
       if (existsSync(join(publicationRoot, "publication.json"))) {
+        const extensions = await loadAuthorExtensionRegistrations(hostRoot);
         const built = await buildPublicationReader({
           publicationRoot,
           audience: assertAudience(options.audience),
+          extensions,
         });
         if (!built.valid) {
           report.artifact = { outcome: "publicationInvalid" };
@@ -1028,11 +1282,11 @@ async function runStatus(options) {
         } else {
           const destination = resolveArtifactDestination({
             hostRoot,
-            readerDataPath: template.readerDataPath,
+            declaredArtifactPath: template.readerDataPath,
             rendererManagedPaths: template.files.map((file) => file.path),
             protectedRoots: protectedRootsFor(hostRoot, options),
           });
-          const checked = checkReaderArtifact({
+          const checked = checkHostArtifact({
             destination,
             text: built.value.text,
           });
@@ -1051,6 +1305,109 @@ async function runStatus(options) {
             report.actions.push(
               "run build to clear a staged artifact left by an interrupted build, which will otherwise block apply and upgrade",
             );
+          }
+
+          const capabilities = readHostCapabilities(rendererModule ?? {});
+          const carriesPublicIdentity =
+            capabilities?.dataArtifacts.includes(
+              PUBLIC_IDENTITY_DATA_ARTIFACT,
+            ) === true || template.publicIdentityDataPath !== undefined;
+          const extraArtifacts = [
+            carriesPublicIdentity
+              ? {
+                  id: PUBLIC_IDENTITY_DATA_ARTIFACT,
+                  label: "Identity",
+                  declaredPath: template.publicIdentityDataPath,
+                  text: built.value.publicIdentity.text,
+                }
+              : null,
+            built.value.extensions === undefined
+              ? null
+              : {
+                  id: EXTENSION_DATA_ARTIFACT,
+                  label: "Extensions",
+                  declaredPath: template.extensionDataPath,
+                  text: built.value.extensions.text,
+                },
+            {
+              id: SEARCH_DATA_ARTIFACT,
+              label: "Search",
+              declaredPath: template.searchDataPath,
+              text: built.value.search.text,
+            },
+            {
+              id: PROGRESS_DATA_ARTIFACT,
+              label: "Progress",
+              declaredPath: template.progressDataPath,
+              text: built.value.progress.text,
+            },
+            built.value.audio === undefined
+              ? null
+              : {
+                  id: AUDIO_DATA_ARTIFACT,
+                  label: "Narration",
+                  declaredPath: template.audioDataPath,
+                  text: built.value.audio.text,
+                },
+            built.value.sync === undefined
+              ? null
+              : {
+                  id: SYNC_DATA_ARTIFACT,
+                  label: "Sync",
+                  declaredPath: template.syncDataPath,
+                  text: built.value.sync.text,
+                },
+            built.value.updates === undefined
+              ? null
+              : {
+                  id: UPDATES_DATA_ARTIFACT,
+                  label: "Updates",
+                  declaredPath: template.updatesDataPath,
+                  text: built.value.updates.text,
+                },
+          ].filter(Boolean);
+          for (const artifact of extraArtifacts) {
+            const carriable = assertHostCanCarryDataArtifact({
+              artifact: artifact.id,
+              capabilities,
+              renderer: state.renderer,
+              declaredPath: artifact.declaredPath,
+            });
+            if (!carriable.valid) {
+              report.unservable.push(
+                ...carriable.diagnostics.map((item) => item.message),
+              );
+              report.actions.push(
+                `use a renderer that can carry the ${artifact.id} artifact`,
+              );
+              continue;
+            }
+            const extraDestination = resolveArtifactDestination({
+              hostRoot,
+              declaredArtifactPath: artifact.declaredPath,
+              rendererManagedPaths: template.files.map((file) => file.path),
+              protectedRoots: protectedRootsFor(hostRoot, options),
+            });
+            const extraChecked = checkHostArtifact({
+              destination: extraDestination,
+              text: artifact.text,
+            });
+            report.dataArtifacts.push({
+              id: artifact.id,
+              label: artifact.label,
+              ...extraChecked,
+              tracking: null,
+            });
+            if (extraChecked.outcome !== "current") {
+              report.actions.push(`build the ${artifact.id} artifact`);
+            }
+            const extraStaged = stagedArtifactPathFor(extraDestination);
+            if (existsSync(extraStaged)) {
+              report.stagedDataArtifacts.push(extraStaged);
+              report.actions.push(
+                `run build to clear the staged ${artifact.id} artifact left by an interrupted build`,
+              );
+            }
           }
         }
       }
@@ -1084,6 +1441,17 @@ async function runStatus(options) {
       );
     }
   }
+  for (const artifact of report.dataArtifacts) {
+    if (artifact.outcome === "missing") {
+      continue;
+    }
+    artifact.tracking = artifactTracking(hostRoot, artifact.hostRelativePath);
+    if (artifact.tracking === "untrackedAndNotIgnored") {
+      report.actions.push(
+        `decide whether ${artifact.hostRelativePath} is committed or ignored, because upgrade and rollback need a clean tree`,
+      );
+    }
+  }
 
   const receipt = planHostRollback({ hostRoot });
   if (receipt.receipt !== null) {
@@ -1095,7 +1463,8 @@ async function runStatus(options) {
   }
 
   if (options.json) {
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    const output = `${JSON.stringify(report, null, 2)}\n`;
+    process.stdout.write(output);
   } else {
     process.stdout.write(`${describeStatus(report)}\n`);
   }
@@ -1174,10 +1543,30 @@ function describeStatus(report) {
       }`,
     );
   }
+  for (const artifact of report.dataArtifacts) {
+    const tracking =
+      artifact.tracking === null ||
+      artifact.tracking === "tracked" ||
+      artifact.tracking === "noRepository"
+        ? ""
+        : artifact.tracking === "ignored"
+          ? "  (ignored by Git)"
+          : "  (neither committed nor ignored)";
+    lines.push(
+      `${artifact.label.padEnd(12)} ${artifact.hostRelativePath} is ${artifact.outcome}${tracking}`,
+    );
+  }
   if (report.stagedArtifact !== null) {
     lines.push("");
     lines.push("Left by an interrupted build");
     lines.push(`  ${report.stagedArtifact}`);
+  }
+  if (report.stagedDataArtifacts.length > 0) {
+    lines.push("");
+    lines.push("Staged data artifacts left by an interrupted build");
+    for (const path of report.stagedDataArtifacts) {
+      lines.push(`  ${path}`);
+    }
   }
   if (report.unservable.length > 0) {
     lines.push("");
@@ -1273,31 +1662,139 @@ function hostTemplateInput(hostRoot) {
   // Enough for the contract to produce a host. An existing host keeps its own
   // package name so initializing twice does not rename it.
   let hostPackageName = "publication-host";
+  let packageJsonText;
+  let dependencies = {};
+  let devDependencies = {};
+  let overrides = {};
   const manifestPath = join(hostRoot, "package.json");
   if (existsSync(manifestPath)) {
     try {
-      const name = JSON.parse(
-        readFileSync(manifestPath, "utf8"),
-      ).name;
+      packageJsonText = readFileSync(manifestPath, "utf8");
+      const manifest = JSON.parse(packageJsonText);
+      const name = manifest.name;
       if (typeof name === "string" && name.length > 0) {
         hostPackageName = name;
       }
-    } catch {
-      // A manifest that cannot be read is left to the renderer contract's own
-      // defaults rather than guessed at.
+      if (
+        manifest.dependencies !== null &&
+        typeof manifest.dependencies === "object" &&
+        !Array.isArray(manifest.dependencies)
+      ) {
+        dependencies = manifest.dependencies;
+      }
+      if (
+        manifest.devDependencies !== null &&
+        typeof manifest.devDependencies === "object" &&
+        !Array.isArray(manifest.devDependencies)
+      ) {
+        devDependencies = manifest.devDependencies;
+      }
+      if (
+        manifest.overrides !== null &&
+        typeof manifest.overrides === "object" &&
+        !Array.isArray(manifest.overrides)
+      ) {
+        overrides = manifest.overrides;
+      }
+    } catch (error) {
+      throw new CommandError(
+        `${manifestPath} is not usable JSON, so the renderer cannot preserve the installed host package.\n${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
   return {
     hostPackageName,
-    dependencies: {},
-    devDependencies: {},
-    overrides: {},
-    errorIdentity: {},
+    ...(packageJsonText === undefined ? {} : { packageJsonText }),
+    dependencies,
+    devDependencies,
+    overrides,
   };
 }
 
 function enginePackagesFor(template) {
   return { [template.renderer]: template.rendererVersion };
+}
+
+function describePreviewIdentity(identity) {
+  return [
+    `Worktree    ${identity.worktreeRoot}`,
+    `Branch      ${identity.branch ?? "detached HEAD"}`,
+    `Commit      ${identity.commit}`,
+    `State       ${identity.dirty ? "dirty" : "clean"}`,
+    `Candidate   ${identity.candidate.digest}`,
+    `Identity    ${identity.identityDigest}`,
+    `Files       ${identity.candidate.entryCount.toLocaleString("en-US")}`,
+    `Bytes       ${identity.candidate.byteCount.toLocaleString("en-US")}`,
+  ].join("\n");
+}
+
+async function runPreviewIdentity(options) {
+  const identity = await capturePreviewCandidateIdentity({
+    hostRoot: resolveHostRoot(options.host),
+  });
+  process.stdout.write(
+    options.json
+      ? `${JSON.stringify(identity, null, 2)}\n`
+      : `${describePreviewIdentity(identity)}\n`,
+  );
+  return 0;
+}
+
+function readPreviewIdentity(path) {
+  if (path === null) {
+    throw new CommandError(
+      "preview verify requires --identity <file> from preview identity --json.",
+    );
+  }
+  const absolute = resolve(path);
+  let parsed;
+  try {
+    const identityFile = statSync(absolute);
+    if (!identityFile.isFile()) {
+      throw new Error("the evidence path is not a regular file");
+    }
+    if (identityFile.size > maximumPreviewIdentityFileBytes) {
+      throw new Error(
+        `the evidence file exceeds ${maximumPreviewIdentityFileBytes.toLocaleString("en-US")} bytes`,
+      );
+    }
+    const identityText = readFileSync(absolute, "utf8");
+    if (Buffer.byteLength(identityText, "utf8") > maximumPreviewIdentityFileBytes) {
+      throw new Error("the evidence file grew beyond the preview identity limit while being read");
+    }
+    parsed = JSON.parse(identityText);
+  } catch (error) {
+    throw new CommandError(
+      `Could not read preview identity ${absolute}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  return parsePreviewCandidateIdentity(parsed);
+}
+
+async function runPreviewVerify(options) {
+  const verification = await verifyPreviewCandidateIdentity({
+    hostRoot: resolveHostRoot(options.host),
+    expected: readPreviewIdentity(options.identity),
+  });
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(verification, null, 2)}\n`);
+  } else if (verification.matches) {
+    process.stdout.write(
+      `Preview identity matches.\n${describePreviewIdentity(verification.actual)}\n`,
+    );
+  } else {
+    process.stdout.write(
+      `Preview identity is stale.\n` +
+        `Changed     ${verification.mismatches.join(", ")}\n` +
+        `Expected    ${verification.expected.identityDigest}\n` +
+        `Actual      ${verification.actual.identityDigest}\n`,
+    );
+  }
+  return verification.matches ? 0 : 1;
 }
 
 async function main(argv) {
@@ -1331,6 +1828,10 @@ async function main(argv) {
       return await runStatus(options);
     case "recover":
       return runRecover(options);
+    case "preview identity":
+      return await runPreviewIdentity(options);
+    case "preview verify":
+      return await runPreviewVerify(options);
     default:
       throw new CommandError(
         `Unknown command ${JSON.stringify(command)}.\n\n${usage}`,

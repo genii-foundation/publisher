@@ -43,13 +43,11 @@
       ]
     }
   ],
-  "audio": {
+  "updates": {
     "adapter": {
-      "package": "@example/audio-file-adapter",
-      "config": {
-        "mediaRoot": "publication/media/audio"
-      }
-    }
+      "package": "@example/field-notes-updates"
+    },
+    "catalog": "publication/updates.json"
   },
   "routes": {
     "home": "/",

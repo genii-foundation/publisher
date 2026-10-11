@@ -67,6 +67,8 @@ import {
   type PublicationContentArtifact,
   type ResolvedContentAssetInput,
   type ResolvedContentLinkInput,
+  type ResolvedContentRedirectInput,
+  type ResolvedContentSectionIndexInput,
   type SectionContentInput,
   type WorkContentInput,
 } from "./types.js";
@@ -132,6 +134,10 @@ export const CONTENT_COMPILATION_LIMITS = Object.freeze({
   maximumPayloadSourcePaths:
     PUBLICATION_PROTOCOL_LIMITS.maximumPayloadSourcePaths,
   maximumSections: PUBLICATION_PROTOCOL_LIMITS.maximumSections,
+  maximumSectionIndexReferences:
+    PUBLICATION_PROTOCOL_LIMITS.maximumSectionReferences,
+  maximumSectionIndexes:
+    PUBLICATION_PROTOCOL_LIMITS.maximumActiveRoutes,
   maximumSources:
     PUBLICATION_PROTOCOL_LIMITS.maximumCompilationSources,
   maximumWorks: PUBLICATION_PROTOCOL_LIMITS.maximumWorks,
@@ -2116,6 +2122,142 @@ function compileCollections(
   });
 }
 
+function compileSectionIndexes(
+  sectionIndexes: readonly ResolvedContentSectionIndexInput[],
+  works: readonly CompiledWork[],
+  activeRoutes: ContentRoute[],
+  routeOwnerByPath: Map<string, ContentRoute>,
+  diagnostics: Diagnostic[],
+): void {
+  const workById = new Map(works.map((work) => [work.id, work]));
+  const firstIndexById = new Map<string, number>();
+  sectionIndexes.forEach((sectionIndex, index) => {
+    const pointer = `/sectionIndexes/${index}`;
+    validateStableId(sectionIndex.id, `${pointer}/id`, diagnostics);
+    const firstIndex = firstIndexById.get(sectionIndex.id);
+    if (firstIndex !== undefined) {
+      diagnostics.push(
+        diagnostic(
+          "content.section_index.duplicate_id",
+          `${pointer}/id`,
+          `Section index ID "${sectionIndex.id}" is duplicated.`,
+          "uniqueItems",
+          { id: sectionIndex.id, firstIndex, duplicateIndex: index },
+        ),
+      );
+    } else {
+      firstIndexById.set(sectionIndex.id, index);
+    }
+    if (
+      typeof sectionIndex.title !== "string" ||
+      sectionIndex.title.length < 1 ||
+      sectionIndex.title.length > 1_024 ||
+      sectionIndex.title.trim() !== sectionIndex.title
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "content.section_index.title_invalid",
+          `${pointer}/title`,
+          "A section index title must be a nonempty, trimmed string of at most 1,024 UTF-16 code units.",
+          "boundedTitle",
+          {},
+        ),
+      );
+    }
+    const work = workById.get(sectionIndex.workId);
+    if (work === undefined) {
+      diagnostics.push(
+        diagnostic(
+          "content.section_index.work_unknown",
+          `${pointer}/workId`,
+          `Section index "${sectionIndex.id}" references unknown work "${sectionIndex.workId}".`,
+          "knownWork",
+          { id: sectionIndex.id, workId: sectionIndex.workId },
+        ),
+      );
+    }
+    if (sectionIndex.sectionIds.length === 0) {
+      diagnostics.push(
+        diagnostic(
+          "content.section_index.sections_empty",
+          `${pointer}/sectionIds`,
+          `Section index "${sectionIndex.id}" must contain at least one section.`,
+          "minItems",
+          { id: sectionIndex.id },
+        ),
+      );
+    }
+    const sectionById = new Map(
+      work?.sections.map((section) => [section.id, section]) ?? [],
+    );
+    const firstSectionIndexById = new Map<string, number>();
+    sectionIndex.sectionIds.forEach((sectionId, sectionIdIndex) => {
+      validateContentId(
+        sectionId,
+        `${pointer}/sectionIds/${sectionIdIndex}`,
+        diagnostics,
+      );
+      const firstSectionIndex = firstSectionIndexById.get(sectionId);
+      if (firstSectionIndex !== undefined) {
+        diagnostics.push(
+          diagnostic(
+            "content.section_index.section_duplicate",
+            `${pointer}/sectionIds/${sectionIdIndex}`,
+            `Section index "${sectionIndex.id}" lists section "${sectionId}" more than once.`,
+            "uniqueItems",
+            {
+              id: sectionIndex.id,
+              sectionId,
+              firstIndex: firstSectionIndex,
+              duplicateIndex: sectionIdIndex,
+            },
+          ),
+        );
+      } else {
+        firstSectionIndexById.set(sectionId, sectionIdIndex);
+      }
+      const section = sectionById.get(sectionId);
+      if (section === undefined) {
+        diagnostics.push(
+          diagnostic(
+            "content.section_index.section_unknown",
+            `${pointer}/sectionIds/${sectionIdIndex}`,
+            `Section index "${sectionIndex.id}" references section "${sectionId}" outside work "${sectionIndex.workId}".`,
+            "ownedSection",
+            { id: sectionIndex.id, sectionId, workId: sectionIndex.workId },
+          ),
+        );
+      } else if (!section.navigable || section.readerAddress === null) {
+        diagnostics.push(
+          diagnostic(
+            "content.section_index.section_not_navigable",
+            `${pointer}/sectionIds/${sectionIdIndex}`,
+            `Section index "${sectionIndex.id}" references section "${sectionId}" without a Reader destination.`,
+            "navigableSection",
+            { id: sectionIndex.id, sectionId, workId: sectionIndex.workId },
+          ),
+        );
+      }
+    });
+    addActiveRoute(
+      activeRoutes,
+      routeOwnerByPath,
+      {
+        path: sectionIndex.path,
+        target: {
+          kind: "section-index",
+          id: sectionIndex.id,
+          title: sectionIndex.title,
+          workId: sectionIndex.workId,
+          sectionIds: [...sectionIndex.sectionIds],
+        },
+      },
+      `${pointer}/path`,
+      diagnostics,
+    );
+  });
+}
+
 function validateContinuityOwnership(
   works: readonly CompiledWork[],
   diagnostics: Diagnostic[],
@@ -3809,6 +3951,8 @@ function validateCompilationResourceLimits(
   const payloads = input.payloads ?? [];
   const assets = input.assets ?? [];
   const links = input.links ?? [];
+  const resolvedRedirects = input.redirects ?? [];
+  const sectionIndexes = input.sectionIndexes ?? [];
   const publicationCollections =
     input.publication.collections ?? [];
   const publicationExtensions =
@@ -3881,6 +4025,20 @@ function validateCompilationResourceLimits(
       path: "/links",
       resource: "links",
     },
+    {
+      actualItems:
+        (input.publication.continuity?.redirects.length ?? 0) +
+        resolvedRedirects.length,
+      maximumItems: PUBLICATION_PROTOCOL_LIMITS.maximumRedirects,
+      path: "/redirects",
+      resource: "redirects",
+    },
+    {
+      actualItems: sectionIndexes.length,
+      maximumItems: CONTENT_COMPILATION_LIMITS.maximumSectionIndexes,
+      path: "/sectionIndexes",
+      resource: "section indexes",
+    },
   ] as const) {
     pushResourceLimitDiagnostic(
       diagnostics,
@@ -3890,6 +4048,19 @@ function validateCompilationResourceLimits(
       limit.maximumItems,
     );
   }
+  pushResourceLimitDiagnostic(
+    diagnostics,
+    "/sectionIndexes",
+    "section index references",
+    sectionIndexes.reduce(
+      (total, sectionIndex) =>
+        total > Number.MAX_SAFE_INTEGER - sectionIndex.sectionIds.length
+          ? Number.MAX_SAFE_INTEGER
+          : total + sectionIndex.sectionIds.length,
+      0,
+    ),
+    CONTENT_COMPILATION_LIMITS.maximumSectionIndexReferences,
+  );
   if (diagnostics.length > 0) {
     return sortDiagnostics(diagnostics);
   }
@@ -4044,16 +4215,35 @@ function compilePublicationContentInternal(
     diagnostics,
   );
   if (input.publication.routes.updates !== undefined) {
-    addActiveRoute(
-      activeRoutes,
-      routeOwnerByPath,
-      {
-        path: input.publication.routes.updates,
-        target: { kind: "updates" },
-      },
-      "/routes/updates",
-      diagnostics,
-    );
+    const updatesRoutes =
+      typeof input.publication.routes.updates === "string"
+        ? [{ id: "updates", path: input.publication.routes.updates }]
+        : input.publication.routes.updates;
+    updatesRoutes.forEach((updatesRoute, index) => {
+      addActiveRoute(
+        activeRoutes,
+        routeOwnerByPath,
+        {
+          path: updatesRoute.path,
+          target: {
+            kind: "updates",
+            viewId: updatesRoute.id,
+            ...(updatesRoute.pagination === undefined
+              ? {}
+              : {
+                  pagination: {
+                    path: updatesRoute.pagination.path,
+                    pageSize: updatesRoute.pagination.pageSize,
+                  },
+                }),
+          },
+        },
+        typeof input.publication.routes.updates === "string"
+          ? "/routes/updates"
+          : `/routes/updates/${index}/path`,
+        diagnostics,
+      );
+    });
   }
 
   const effectiveWordsPerMinute =
@@ -4078,6 +4268,13 @@ function compilePublicationContentInternal(
     .filter((work): work is CompiledWork => work !== undefined);
   const collections = compileCollections(
     input,
+    activeRoutes,
+    routeOwnerByPath,
+    diagnostics,
+  );
+  compileSectionIndexes(
+    input.sectionIndexes ?? [],
+    works,
     activeRoutes,
     routeOwnerByPath,
     diagnostics,
@@ -4188,9 +4385,10 @@ function compilePublicationContentInternal(
     ),
     wordsPerMinute: effectiveWordsPerMinute,
   };
-  const redirects = (input.publication.continuity?.redirects ?? []).map(
-    (redirect) => ({ ...redirect }),
-  );
+  const redirects: ResolvedContentRedirectInput[] = [
+    ...(input.publication.continuity?.redirects ?? []),
+    ...(input.redirects ?? []),
+  ].map((redirect) => ({ ...redirect }));
   validateCompiledRedirects(
     redirects,
     routeOwnerByPath,
@@ -5528,14 +5726,33 @@ function validateEnvelopeActiveRoutes(
   const updateRoutes = envelope.routes.active.filter(
     (route) => route.target.kind === "updates",
   );
-  if (updateRoutes.length > 1) {
+  const updateViewIds = new Set<string>();
+  for (let index = 0; index < updateRoutes.length; index += 1) {
+    const route = updateRoutes[index];
+    if (route === undefined || route.target.kind !== "updates") {
+      continue;
+    }
+    if (updateViewIds.has(route.target.viewId)) {
+      diagnostics.push(
+        diagnostic(
+          "content.envelope.updates_view_id_duplicate",
+          `/routes/active/${index}/target/viewId`,
+          "Updates view ids must be unique.",
+          "uniqueItems",
+          { viewId: route.target.viewId },
+        ),
+      );
+    }
+    updateViewIds.add(route.target.viewId);
+  }
+  if (updateRoutes.length > 32) {
     diagnostics.push(
       diagnostic(
         "content.envelope.updates_route_count",
         "/routes/active",
-        "A content envelope may contain at most one Updates route.",
+        "A content envelope may contain at most 32 Updates routes.",
         "routeCardinality",
-        { actual: updateRoutes.length, maximum: 1 },
+        { actual: updateRoutes.length, maximum: 32 },
       ),
     );
   }
@@ -5544,9 +5761,7 @@ function validateEnvelopeActiveRoutes(
   if (homeRoutes[0] !== undefined) {
     expected.push(homeRoutes[0]);
   }
-  if (updateRoutes[0] !== undefined) {
-    expected.push(updateRoutes[0]);
-  }
+  expected.push(...updateRoutes);
   for (const work of envelope.works) {
     expected.push({
       path: work.route,
@@ -5578,6 +5793,100 @@ function validateEnvelopeActiveRoutes(
         collectionId: collection.id,
       },
     });
+  }
+  const sectionIndexIds = new Set<string>();
+  for (const [routeIndex, route] of envelope.routes.active.entries()) {
+    if (route.target.kind !== "section-index") {
+      continue;
+    }
+    const target = route.target;
+    const pointer = `/routes/active/${routeIndex}/target`;
+    validateStableId(target.id, `${pointer}/id`, diagnostics);
+    if (sectionIndexIds.has(target.id)) {
+      diagnostics.push(
+        diagnostic(
+          "content.envelope.section_index_id_duplicate",
+          `${pointer}/id`,
+          `Section index ID "${target.id}" appears more than once.`,
+          "uniqueItems",
+          { id: target.id },
+        ),
+      );
+    }
+    sectionIndexIds.add(target.id);
+    if (
+      target.title.length < 1 ||
+      target.title.length > 1_024 ||
+      target.title.trim() !== target.title
+    ) {
+      diagnostics.push(
+        diagnostic(
+          "content.envelope.section_index_title_invalid",
+          `${pointer}/title`,
+          "Section index titles must be nonempty, trimmed strings of at most 1,024 UTF-16 code units.",
+          "boundedTitle",
+          {},
+        ),
+      );
+    }
+    const work = envelope.works.find(({ id }) => id === target.workId);
+    const sectionById = new Map(
+      work?.sections.map((section) => [section.id, section]) ?? [],
+    );
+    const seenSectionIds = new Set<string>();
+    if (target.sectionIds.length === 0) {
+      diagnostics.push(
+        diagnostic(
+          "content.envelope.section_index_sections_empty",
+          `${pointer}/sectionIds`,
+          "A section index must contain at least one section.",
+          "minItems",
+          { id: target.id },
+        ),
+      );
+    }
+    target.sectionIds.forEach((sectionId, sectionIndex) => {
+      validateContentId(
+        sectionId,
+        `${pointer}/sectionIds/${sectionIndex}`,
+        diagnostics,
+      );
+      if (seenSectionIds.has(sectionId)) {
+        diagnostics.push(
+          diagnostic(
+            "content.envelope.section_index_section_duplicate",
+            `${pointer}/sectionIds/${sectionIndex}`,
+            `Section index "${target.id}" contains duplicate section "${sectionId}".`,
+            "uniqueItems",
+            { id: target.id, sectionId },
+          ),
+        );
+      }
+      seenSectionIds.add(sectionId);
+      const section = sectionById.get(sectionId);
+      if (section === undefined) {
+        diagnostics.push(
+          diagnostic(
+            "content.envelope.section_index_section_unknown",
+            `${pointer}/sectionIds/${sectionIndex}`,
+            `Section index "${target.id}" references a section outside work "${target.workId}".`,
+            "ownedSection",
+            { id: target.id, sectionId, workId: target.workId },
+          ),
+        );
+      } else if (!section.navigable || section.readerAddress === null) {
+        diagnostics.push(
+          diagnostic(
+            "content.envelope.section_index_section_not_navigable",
+            `${pointer}/sectionIds/${sectionIndex}`,
+            `Section index "${target.id}" references a section without a Reader destination.`,
+            "navigableSection",
+            { id: target.id, sectionId, workId: target.workId },
+          ),
+        );
+      }
+    });
+    expected.push(route);
   }
   expectDerivedValue(
     envelope.routes.active,

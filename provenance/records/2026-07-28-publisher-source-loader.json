@@ -10,10 +10,16 @@
     "destinationRepository": "https://github.com/genii-foundation/publisher",
     "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
     "destinationPaths": [
+      ".gitattributes",
       ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
       "CHANGES.md",
+      "GOVERNANCE.md",
       "README.md",
+      "SECURITY.md",
       "docs/architecture/",
+      "docs/guides/",
+      "docs/migration/",
       "docs/protocol/",
       "fixtures/",
       "package.json",
@@ -21,16 +27,24 @@
       "packages/next/",
       "packages/publisher/",
       "packages/reader/",
+      "packages/sync-supabase/",
       "provenance/",
       "schemas/CHANGES.md",
       "schemas/README.md",
+      "schemas/audio-catalog.schema.json",
+      "schemas/audio-checkpoint.schema.json",
+      "schemas/audio-envelope.schema.json",
       "schemas/collection.schema.json",
       "schemas/content-envelope.schema.json",
       "schemas/publication.schema.json",
       "schemas/reader-envelope.schema.json",
       "schemas/scripts/build.mjs",
+      "schemas/scripts/check-release-tag.mjs",
       "schemas/scripts/generate-case-folding.mjs",
+      "schemas/src/attribution.ts",
+      "schemas/src/content-types.ts",
       "schemas/src/envelope-resource-limits.ts",
+      "schemas/src/generated-validators.d.ts",
       "schemas/src/index.ts",
       "schemas/src/layout.ts",
       "schemas/src/portable-unicode.ts",
@@ -40,14 +54,19 @@
       "schemas/src/schema-validation.ts",
       "schemas/src/semantic-validation.ts",
       "schemas/src/strict-json.ts",
+      "schemas/src/types.ts",
+      "schemas/sync-envelope.schema.json",
+      "schemas/updates-catalog.schema.json",
+      "schemas/updates-envelope.schema.json",
       "schemas/work.schema.json",
+      "site/",
       "tests/"
     ],
-    "summary": "Records the fresh CPAL implementation of the secure publication source loader, normalized source snapshot boundary, compiler integration, portable path enforcement, resource limits, tests, and supporting governance. Separately licensed Unicode data and license artifacts are excluded into their own preservation record."
+    "summary": "Records the fresh CPAL implementation of the secure publication source loader, normalized source snapshot boundary, compiler and Reader integration, narration, Updates, optional synchronization, public release surfaces, tests, and supporting governance. Separately licensed Unicode data and license artifacts are excluded into their own preservation record."
   },
   "auditedSource": {
     "repository": "https://github.com/genii-foundation/coherence-thesis",
-    "ref": "d000fe50882c4664f96dccdea38b4b370dfb368d",
+    "ref": "c60aa2bca5aa3cc7abf0d9bd661538a247315f59",
     "evidence": [
       {
         "path": "NOTICE",
@@ -78,7 +97,7 @@
       },
       {
         "path": "scripts/manuscripts/io.ts",
-        "sha256": "sha256:3ba438982c829ee036fbdca93c71963fc5dddb71f103bd7d98a608f8084c85e7",
+        "sha256": "sha256:8674b62290186b22486438da4fa8fa67db62907cc8d8ec5969ba135fe9b3f01e",
         "role": "source-code",
         "license": "Apache-2.0",
         "lineStart": 20,
@@ -96,7 +115,7 @@
       },
       {
         "path": "scripts/repository/layout.ts",
-        "sha256": "sha256:a8d32dceb012a22b7576fdc86199be5322b3280abba01418076d8e91b992a39d",
+        "sha256": "sha256:a6051d9b604de432010f011f07d582b9dfbc0b34d267955cc8d9a36969b23a99",
         "role": "source-code",
         "license": "Apache-2.0",
         "lineStart": 86,
@@ -105,12 +124,57 @@
       },
       {
         "path": "scripts/repository/layout.test.ts",
-        "sha256": "sha256:b4c5c560eb16d903c8f5c1f143e8792c7af436fcb95d2a6a4dd195813713f4db",
+        "sha256": "sha256:4d21daae12dd239c7c3cc6078f8e9eeed8c09a8030e5ae05bcdee2c5c692c947",
         "role": "test",
         "license": "Apache-2.0",
         "lineStart": 198,
         "lineEnd": 243,
         "description": "Shows Coherence symlink and duplicate filesystem identity expectations that were observed without copying its tests."
+      },
+      {
+        "path": "src/lib/reader-state.ts",
+        "sha256": "sha256:9b6ba59e364274af1f6e804c873159bd66dcba17aac8c79d1e4d91cf4235343b",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 7,
+        "lineEnd": 86,
+        "description": "Shows current Coherence progress identity, continuity groups, revision hashes, interaction metrics, navigation sources, and persisted schema boundaries inspected before writing the neutral Reader progress model."
+      },
+      {
+        "path": "src/lib/reader-bookmarks.ts",
+        "sha256": "sha256:b9e7dfcba7dba94e0041f879a30107262e70783e7fbc91c75121bae2270a40fe",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 14,
+        "lineEnd": 102,
+        "description": "Shows current Coherence bookmark schema independence, bounded state, tombstones, continuity identity, passage ranges, and hostile-key handling inspected before writing neutral bookmark primitives."
+      },
+      {
+        "path": "src/lib/reader-passage-range.ts",
+        "sha256": "sha256:9b9781bc8b7435d920ddd01e77d5b0eee400d3bc174689784a5948933f056ab5",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 3,
+        "lineEnd": 35,
+        "description": "Shows current Coherence visible-text passage coordinates and content-hash reanchoring behavior inspected before writing the neutral passage range contract."
+      },
+      {
+        "path": "src/lib/reader-preferences.ts",
+        "sha256": "sha256:a8881804eaf91de1eba88888b9dbd522fb8c2a0c1a9e811b0136cbce402c9c50",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 1,
+        "lineEnd": 94,
+        "description": "Shows current Coherence preference dimensions, closed option vocabularies, font size bounds, and default values inspected before writing the neutral preference model."
+      },
+      {
+        "path": "src/components/SearchMenuIsland.tsx",
+        "sha256": "sha256:4a0c525ecca8675d779fbf30f9e1f673e85966d6c0fd28d57222eeebd2d72370",
+        "role": "source-code",
+        "license": "Apache-2.0",
+        "lineStart": 276,
+        "lineEnd": 363,
+        "description": "Shows current Coherence lazy search loading, offline scope, bookmark integration, deterministic scoring, and result limits inspected before writing the neutral search artifact and query engine."
       }
     ]
   },
@@ -168,7 +232,8 @@
       "packages/content/",
       "packages/next/",
       "packages/reader/",
-      "packages/publisher/"
+      "packages/publisher/",
+      "packages/sync-supabase/"
     ],
     "forbiddenPackagePatterns": [
       "The Coherence Thesis",
@@ -195,45 +260,45 @@
   },
   "scans": {
     "performedAt": "2026-07-28T20:32:06Z",
-    "scope": "Draft scan scope covers the current working-tree files declared by this record against the exact audited Coherence ref. Final outcomes require a deterministic receipt bound to the stable destination manifest.",
+    "scope": "Deterministic review covers the declared working-tree destination manifest, the exact audited Coherence ref, all six publishable package candidates, and the scanner runtime closure.",
     "exactBlob": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compare SHA-256 content identities for every audited Coherence blob and every selected destination file.",
-      "evidence": "Pending the stable destination manifest and final audit receipt."
+      "evidence": "The review receipt records zero exact-blob matches."
     },
     "normalizedLine": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compare whitespace-normalized UTF-8 lines containing at least 60 characters.",
-      "evidence": "Pending the stable destination manifest and final audit receipt."
+      "evidence": "The independent Supabase schema and bookmark merge implementation removed the final migration matches, and the deterministic review receipt records zero normalized-line matches."
     },
     "tokenShingle": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compare significant contiguous 16-token code windows after removing comments and literal bodies, normalizing numbers, and requiring at least six distinct nonnumeric identifiers.",
-      "evidence": "Pending the stable destination manifest and final audit receipt."
+      "evidence": "Independent ReaderLink, selection, Supabase event, offline cache, and bookmark geometry implementations removed every significant-token match, and the review receipt records zero matches."
     },
     "ccPhrase": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Compare exact contiguous eight-word windows against the explicitly declared CC-mapped Coherence paths.",
-      "evidence": "Pending the stable destination manifest and final audit receipt."
+      "evidence": "The neutral audio catalog fixture no longer carries publication-specific labels or prose, and the review receipt records zero CC-source matches."
     },
     "packageLeak": {
-      "outcome": "blocked",
+      "outcome": "clear",
       "matchCount": 0,
       "method": "Build every affected publishable package through its full lifecycle in an owned clean workspace with the exact pinned npm CLI, hash and inspect the retained candidate archive, and reject declared Coherence names, paths, URLs, generated output, and durable publication state. An accepted candidate is the exact tarball supplied to publication.",
-      "evidence": "Pending packed archive digests and the final audit receipt."
+      "evidence": "All six retained package candidates passed the package-leak scan. Their receipt hashes are schemas f909ae3c8f9b, content 44967f33db5a, Next ce2aa1f19642, Reader 79405ff7d9f8, Publisher 77a578dfac4d, and Supabase 4e395383374b."
     }
   },
   "review": {
     "decision": "pending",
     "reviewerType": "automated",
     "reviewerId": "publisher-provenance-audit-2026-07-28",
-    "reviewedAt": "2026-07-28T20:32:06Z",
+    "reviewedAt": "2026-08-28T09:01:01Z",
     "releaseApprovalRequired": true,
-    "notes": "This draft records the intended fresh neutral implementation classification, not a formal clean-room claim or legal opinion. It requires final deterministic scans, maintainer review, human release approval, and counsel review before the first 1.0 release."
+    "notes": "Deterministic review now records zero matches in every source scan. This scanner-development receipt is review evidence, not an accepted provenance receipt. A full retained-package audit, maintainer review, human release approval, and counsel review remain required before the first 1.0 release."
   },
   "documentation": {
     "notice": {

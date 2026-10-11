@@ -226,11 +226,12 @@ function emptyReceipt() {
 test("the committed provenance directory is valid", async () => {
   const result = await validateProvenanceDirectory();
 
-  assert.equal(result.count, 3);
+  assert.equal(result.count, 4);
   assert.deepEqual(result.recordNames, [
     "2026-07-28-foundation-extraction.json",
     "2026-07-28-publisher-source-loader.json",
     "2026-07-28-unicode-portability-preservation.json",
+    "2026-08-28-supabase-provider-package.json",
   ]);
 });
 
@@ -246,7 +247,7 @@ test("release mode requires exact candidates, rejects every package-affecting dr
       );
       assert.match(
         error.message,
-        /2026-07-28-foundation-extraction\.json:.*found draft historical record/u,
+        /2026-07-28-foundation-extraction\.json:.*found draft working-tree record/u,
       );
       assert.match(
         error.message,
@@ -294,8 +295,24 @@ test("release mode requires exact candidates, rejects every package-affecting dr
     "node provenance/scripts/prepare-release.mjs",
   );
   assert.equal(
+    workspaceManifest.scripts["release:publish"],
+    "node provenance/scripts/publish-release.mjs",
+  );
+  assert.equal(
     workspaceManifest.scripts["release:verify"],
     "node provenance/scripts/verify-release.mjs",
+  );
+  assert.equal(
+    workspaceManifest.scripts["release:verify-public-surface"],
+    "node provenance/scripts/verify-public-surface.mjs",
+  );
+  assert.equal(
+    workspaceManifest.scripts["site:build"],
+    "node site/scripts/build.mjs",
+  );
+  assert.equal(
+    workspaceManifest.scripts["site:check"],
+    "node site/scripts/check.mjs",
   );
 });
 
@@ -655,6 +672,38 @@ test("receipt validation binds manifest entries and scan counts", () => {
   assert.ok(
     validateReceipt(unverifiedWithEvidence).errors.includes(
       "sources[0].evidence must be empty when verified is false",
+    ),
+  );
+
+  const preservedUnicodeScale = structuredClone(receipt);
+  preservedUnicodeScale.scans.normalizedLine = {
+    outcome: "expected-match",
+    matchCount: 28_043,
+    matches: Array.from({ length: 28_043 }, () => ({
+      source: "https://www.unicode.org/Public/15.1.0/ucd/NormalizationTest.txt:1",
+      destination: "schemas/third-party-data/NormalizationTest-15.1.0.txt:1",
+      fingerprint: "Unicode 15.1 preserved line evidence",
+    })),
+  };
+  assert.deepEqual(validateReceipt(preservedUnicodeScale), {
+    valid: true,
+    errors: [],
+  });
+
+  const excessiveMatches = structuredClone(preservedUnicodeScale);
+  excessiveMatches.scans.normalizedLine.matches = Array.from(
+    { length: 50_001 },
+    () => ({
+      source: "https://www.unicode.org/Public/15.1.0/ucd/NormalizationTest.txt:1",
+      destination: "schemas/third-party-data/NormalizationTest-15.1.0.txt:1",
+      fingerprint: "Unexpectedly unbounded line evidence",
+    }),
+  );
+  excessiveMatches.scans.normalizedLine.matchCount = 50_001;
+  assert.equal(validateReceipt(excessiveMatches).valid, false);
+  assert.ok(
+    validateReceipt(excessiveMatches).errors.some((error) =>
+      error.includes("must NOT have more than 50000 items")
     ),
   );
 });

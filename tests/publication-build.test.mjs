@@ -25,9 +25,9 @@ If you wish to allow use of your version of this file only under the terms of th
 import assert from "node:assert/strict";
 import {
   cpSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -46,10 +46,12 @@ import {
   projectPublicationReader,
 } from "../packages/reader/dist/index.js";
 import {
-  buildPublicationReader,
   derivePublicationWorkInputs,
   rootSectionIdFor,
 } from "../packages/publisher/dist/node.js";
+import {
+  buildFixturePublicationReader as buildPublicationReader,
+} from "./extension-fixture.mjs";
 import {
   loadPublicationCompilationSources,
 } from "../packages/publisher/dist/node/loader.js";
@@ -190,6 +192,86 @@ test("the section identity is derived from the work and is not a route", async (
       );
     }
   }
+});
+
+test("declared Markdown structure preserves durable hierarchy, routes, and continuity", async () => {
+  const publicationRoot = join(fixtureRoot, "canonical-structured-essay");
+  const first = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+  });
+  const second = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+  });
+  assert.ok(first.valid, diagnosticsText(first));
+  assert.ok(second.valid, diagnosticsText(second));
+  assert.equal(first.value.text, second.value.text);
+
+  const work = first.value.content.works[0];
+  assert.ok(work);
+  assert.equal(work.source.adapter.id, "structured-markdown");
+  assert.deepEqual(
+    work.sections.map(({ id, parentId }) => ({ id, parentId })),
+    [
+      { id: "tidal-ledger-root", parentId: null },
+      {
+        id: "tidal-ledger-low-water",
+        parentId: "tidal-ledger-root",
+      },
+      {
+        id: "tidal-ledger-arithmetic",
+        parentId: "tidal-ledger-root",
+      },
+    ],
+  );
+  assert.equal(work.sections[0].blocks.some(({ text }) => text === "Low water"), false);
+  assert.equal(work.sections[1].blocks[0].text, "Low water");
+  assert.equal(work.sections[2].blocks[0].text, "Arithmetic");
+  assert.deepEqual(work.sections[0].childIds, [
+    "tidal-ledger-low-water",
+    "tidal-ledger-arithmetic",
+  ]);
+  assert.deepEqual(work.sections[1].continuity, {
+    id: "tidal-ledger-low-water",
+    legacyIds: ["tidal-ledger-ebb"],
+    progressGroups: [["tidal-ledger-low-water", "tidal-ledger-ebb"]],
+    historicalSectionIds: ["tidal-ledger-ebb"],
+  });
+  assert.deepEqual(
+    first.value.reader.routes.active
+      .filter(({ target }) => target.kind === "section")
+      .map(({ path }) => path),
+    ["/readings/low-water", "/readings/arithmetic"],
+  );
+});
+
+test("a stale declared section boundary refuses the build and names the manuscript", async (t) => {
+  const publicationRoot = scratchFixture(t, "canonical-structured-essay");
+  const manifestPath = join(
+    publicationRoot,
+    "publication",
+    "works",
+    "tidal-ledger",
+    "work.json",
+  );
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  manifest.sections[1].start.text = "A heading that is not present";
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+
+  const result = await buildPublicationReader({
+    publicationRoot,
+    audience: "public",
+  });
+  assert.equal(result.valid, false);
+  assert.ok(
+    result.diagnostics.some(
+      ({ code, documentPath }) =>
+        code === "build.section_start_missing" &&
+        documentPath?.endsWith("manuscript.md"),
+    ),
+    diagnosticsText(result),
+  );
 });
 
 // ----------------------------------------------------------- failures
@@ -550,49 +632,59 @@ test("the audit's engine side claims match the schema and the code", async () =>
     "the audit no longer quotes the redirect cap, so this check is idle",
   );
 
-  // Two features the audit reports as schema definitions with no implementation.
-  // If either grows one, the audit is wrong in a way that changes the plan.
-  for (const [word, pattern] of [
-    ["audio", /\baudio\b/iu],
-    ["sync", /\bsync\b/u],
-  ]) {
-    assert.ok(
-      audit.includes(`### ${word === "audio" ? "4" : "5"}. ${
-        word === "audio" ? "Audio" : "Sync"
-      } is a schema definition and nothing else`),
-      `the audit no longer claims ${word} is unimplemented, so this check is idle`,
-    );
-    const implemented = [
-      join("packages", "next", "src"),
-      join("packages", "reader", "src"),
-      join("packages", "content", "src"),
-    ].some((root) => containsPattern(join(repositoryRoot, root), pattern));
-    assert.equal(
-      implemented,
-      false,
-      `${word} now appears in engine source, so the audit's claim that it is schema only is stale`,
-    );
-  }
-});
+  // Audio and sync were both reported here as schema definitions with nothing
+  // behind them, and this block asserted that they stayed that way. They are being
+  // implemented now, so the tripwire is replaced by checks of what the audit
+  // currently claims. An audit nobody checks decays into folklore, and this one has
+  // already been wrong three times.
 
-/** Whether any TypeScript source under a directory matches a pattern. */
-function containsPattern(root, pattern) {
-  const stack = [root];
-  while (stack.length > 0) {
-    const current = stack.pop();
-    for (const entry of readdirSync(current, { withFileTypes: true })) {
-      const path = join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(path);
-        continue;
-      }
-      if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) {
-        continue;
-      }
-      if (pattern.test(readFileSync(path, "utf8"))) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
+  // The audit says audio has a contract now. A schema file that is not registered
+  // with the validator build validates nothing while still looking present.
+  const catalogSchemaPath = join(
+    repositoryRoot,
+    "schemas",
+    "audio-catalog.schema.json",
+  );
+  assert.ok(
+    existsSync(catalogSchemaPath),
+    "the audit says the catalog has a contract and the schema file is missing",
+  );
+  assert.match(
+    readFileSync(
+      join(repositoryRoot, "schemas", "scripts", "build.mjs"),
+      "utf8",
+    ),
+    /audioCatalogValidator/u,
+    "the catalog schema is not compiled, so the audit overstates what exists",
+  );
+
+  // The correction this audit records: timing data does not enter the reader
+  // artifact. Checking it against the envelope schema is what stops the decision
+  // from being quietly reversed by whoever next needs word timings on a page.
+  const readerEnvelope = JSON.parse(
+    readFileSync(
+      join(repositoryRoot, "schemas", "reader-envelope.schema.json"),
+      "utf8",
+    ),
+  );
+  assert.ok(
+    audit.includes("does not belong in the reader artifact"),
+    "the audit no longer records the timing decision, so this check is idle",
+  );
+  assert.equal(
+    /\b(charStart|startSeconds|wordTimings|timings)\b/u.test(
+      JSON.stringify(readerEnvelope),
+    ),
+    false,
+    "per-word timing data has entered the reader envelope, reversing a recorded decision",
+  );
+
+  // The generic section identifier bound remains an engine contract. Historical
+  // Coherence measurements belonged to the superseded audit and are deliberately
+  // not kept alive as current migration claims.
+  assert.equal(schema.$defs.stableId.maxLength, 128);
+  assert.ok(
+    audit.includes("7e50161cecc0ce6039c36e4738d8c9fc90710e62"),
+    "the audit must name the exact Coherence ref its current measurements use",
+  );
+});

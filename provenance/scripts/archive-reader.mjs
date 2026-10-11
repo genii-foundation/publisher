@@ -50,7 +50,7 @@ import {
 import { dirname, isAbsolute, resolve } from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { createGunzip, crc32 } from "node:zlib";
+import { createInflateRaw, crc32 } from "node:zlib";
 
 import { extract as extractTar } from "tar-stream";
 
@@ -96,6 +96,7 @@ export const PACKED_MANIFEST_PATH = "package/package.json";
 const blockBytes = 512;
 const readChunkBytes = 64 * kibibyte;
 const gzipMagic = Object.freeze([0x1f, 0x8b]);
+const gzipHeaderBytes = 10;
 const gzipTrailerBytes = 8;
 
 // The only member type flags a package archive may contain, as raw header bytes:
@@ -1048,9 +1049,8 @@ export async function readPackageArchive({
     const sha256Digest = createHash("sha256");
     const sha512Digest = createHash("sha512");
     let compressedBytes = 0;
-    // The gzip magic and the final eight bytes are retained so the container's
-    // own framing can be proven to cover the entire file. See the trailer check
-    // after the pipeline for why that matters.
+    // Retain the fixed metadata-free header and trailer independently of the
+    // raw DEFLATE decoder. Optional headers must not carry unscanned data.
     let compressedPrefix = Buffer.alloc(0);
     let compressedTail = Buffer.alloc(0);
 
@@ -1069,11 +1069,11 @@ export async function readPackageArchive({
           );
           return;
         }
-        if (compressedPrefix.length < gzipMagic.length) {
+        if (compressedPrefix.length < gzipHeaderBytes) {
           compressedPrefix = Buffer.concat([
             compressedPrefix,
             bytes,
-          ]).subarray(0, gzipMagic.length);
+          ]).subarray(0, gzipHeaderBytes);
         }
         compressedTail = Buffer.concat([
           compressedTail,
@@ -1280,7 +1280,54 @@ export async function readPackageArchive({
       controller.abort();
     });
 
+    // Feed exactly the framed body to a single-stream decoder. Gunzip accepts
+    // concatenated members and discards optional metadata in later headers.
+    let headerBytesRemaining = gzipHeaderBytes;
+    let headerValidated = false;
+    let framedTail = Buffer.alloc(0);
+    const gzipFraming = new Transform({
+      transform(chunk, _encoding, callback) {
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        const skip = Math.min(headerBytesRemaining, bytes.length);
+        headerBytesRemaining -= skip;
+        if (headerBytesRemaining === 0 && !headerValidated) {
+          if (
+            compressedPrefix[0] !== gzipMagic[0] ||
+            compressedPrefix[1] !== gzipMagic[1]
+          ) {
+            callback(new ArchiveRejection(
+              "Package archive does not begin with a gzip member",
+              resolvedPath,
+            ));
+            return;
+          }
+          if (compressedPrefix[2] !== 8 || compressedPrefix[3] !== 0) {
+            callback(new ArchiveRejection(
+              "Package archive carries unsupported gzip header metadata or compression",
+              resolvedPath,
+            ));
+            return;
+          }
+          headerValidated = true;
+        }
+        const body = Buffer.concat([framedTail, bytes.subarray(skip)]);
+        const emittedBytes = Math.max(0, body.length - gzipTrailerBytes);
+        framedTail = Buffer.from(body.subarray(emittedBytes));
+        callback(null, body.subarray(0, emittedBytes));
+      },
+      flush(callback) {
+        if (headerBytesRemaining !== 0 || framedTail.length !== gzipTrailerBytes) {
+          callback(new ArchiveRejection(
+            "Package archive is too short to carry a gzip header and trailer",
+            resolvedPath,
+          ));
+          return;
+        }
+        callback();
+      },
+    });
     let transportError = null;
+    const decompressor = createInflateRaw();
     const transport = pipeline(
       handle.createReadStream({
         autoClose: false,
@@ -1288,7 +1335,8 @@ export async function readPackageArchive({
         highWaterMark: readChunkBytes,
       }),
       compressedMeter,
-      createGunzip(),
+      gzipFraming,
+      decompressor,
       decompressedMeter,
       auditor,
       parser,
@@ -1351,11 +1399,20 @@ export async function readPackageArchive({
     // and the leak scan never decodes it, yet the receipt attests the digests of
     // the whole file and a consumer recovers the payload with `gunzip`.
     //
-    // The gzip trailer closes this. A member ends with the CRC-32 and the
-    // modulo-2^32 length of its own uncompressed data, so requiring the last
-    // eight bytes of the FILE to describe everything that was decompressed proves
-    // the file is exactly one member ending at end of file. Trailing padding,
-    // trailing garbage, and concatenated members all fail it.
+    // Trailer equality is not framing evidence: an attacker can append a copy
+    // of the benign trailer after hidden bytes. Require the raw decoder to have
+    // consumed the entire body between the one fixed header and final trailer.
+    // This also rejects extra empty members with unscanned header metadata.
+    const framedBodyBytes = compressedBytes - gzipHeaderBytes - gzipTrailerBytes;
+    if (
+      !Number.isSafeInteger(decompressor.bytesWritten) ||
+      decompressor.bytesWritten !== framedBodyBytes
+    ) {
+      throw new ArchiveRejection(
+        `Package archive carries bytes outside its single gzip member: decompressor consumed ${decompressor.bytesWritten} of ${framedBodyBytes} framed compressed bytes`,
+        resolvedPath,
+      );
+    }
     if (
       compressedPrefix.length < gzipMagic.length ||
       compressedPrefix[0] !== gzipMagic[0] ||
@@ -1369,6 +1426,12 @@ export async function readPackageArchive({
     if (compressedTail.length !== gzipTrailerBytes) {
       throw new ArchiveRejection(
         "Package archive is too short to carry a gzip trailer",
+        resolvedPath,
+      );
+    }
+    if (compressedPrefix[2] !== 8 || compressedPrefix[3] !== 0) {
+      throw new ArchiveRejection(
+        "Package archive carries unsupported gzip header metadata or compression",
         resolvedPath,
       );
     }

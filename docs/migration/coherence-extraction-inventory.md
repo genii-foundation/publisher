@@ -6,6 +6,11 @@
 - Audited ref: `origin/main`
 - Audited commit: `654a2c36ba825ee191e67ded3b193ff4e0acde24`
 
+This historical extraction baseline is retained for provenance. Current adoption
+work follows the exact, reversible sequence in
+[`coherence-adoption-plan.md`](coherence-adoption-plan.md) and the refreshed
+capability evidence in [`coherence-readiness.md`](coherence-readiness.md).
+
 ## Purpose
 
 This inventory separates reusable publishing technology from The Coherence Thesis. It records current paths and required boundaries without copying source code, manuscript text, publication data, or assets.

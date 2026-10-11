@@ -210,6 +210,65 @@ test("public compilation accepts only the exact loader-issued snapshot and insta
     }),
   );
   assert.equal(compiled.engineVersion, PUBLISHER_VERSION);
+
+  const resolvedRedirect = {
+    from: "/legacy-rain-gauge/",
+    to: loaded.sourceGraph.works[0].manifest.route,
+    status: 308,
+  };
+  const compiledWithRedirect = assertValid(
+    compileLoadedPublicationContent({
+      loaded,
+      works,
+      extensions,
+      redirects: [resolvedRedirect],
+    }),
+  );
+  assert.deepEqual(
+    compiledWithRedirect.publication.continuity,
+    compiled.publication.continuity,
+  );
+  assert.deepEqual(compiledWithRedirect.routes.redirects, [
+    ...compiled.routes.redirects,
+    resolvedRedirect,
+  ]);
+  assert.notEqual(
+    compiledWithRedirect.hashes.content,
+    compiled.hashes.content,
+  );
+  assert.notEqual(compiledWithRedirect.buildId, compiled.buildId);
+
+  const sectionId = works[0].sections[0].id;
+  const sectionIndex = {
+    id: "rain-gauge-index",
+    title: "Rain Gauge Index",
+    path: "/reading/rain-gauge-index/",
+    workId: works[0].workId,
+    sectionIds: [sectionId],
+  };
+  const compiledWithSectionIndex = assertValid(
+    compileLoadedPublicationContent({
+      loaded,
+      works,
+      extensions,
+      sectionIndexes: [sectionIndex],
+    }),
+  );
+  assert.deepEqual(compiledWithSectionIndex.routes.active.at(-1), {
+    path: sectionIndex.path,
+    target: {
+      kind: "section-index",
+      id: sectionIndex.id,
+      title: sectionIndex.title,
+      workId: sectionIndex.workId,
+      sectionIds: [sectionId],
+    },
+  });
+  assert.notEqual(
+    compiledWithSectionIndex.hashes.content,
+    compiled.hashes.content,
+  );
+  assert.notEqual(compiledWithSectionIndex.buildId, compiled.buildId);
 });
 
 test("the injected filesystem seam cannot mint a trusted compilation snapshot", async () => {

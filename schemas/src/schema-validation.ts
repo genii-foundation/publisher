@@ -18,10 +18,16 @@ import {
   type PublicationEnvelopeKind,
 } from "./envelope-resource-limits.js";
 import {
+  audioCatalogValidator,
+  audioCheckpointValidator,
+  audioEnvelopeValidator,
   collectionValidator,
   contentEnvelopeValidator,
   publicationValidator,
   readerEnvelopeValidator,
+  syncEnvelopeValidator,
+  updatesCatalogValidator,
+  updatesEnvelopeValidator,
   workValidator,
 } from "./generated-validators.js";
 import type {
@@ -29,11 +35,17 @@ import type {
   StandaloneValidateFunction,
 } from "./generated-validators.js";
 import type {
+  AudioClipCatalog,
+  AudioCheckpoint,
+  AudioEnvelope,
   CollectionManifest,
   Diagnostic,
   ManifestByKind,
   ManifestKind,
   PublicationManifest,
+  SyncEnvelope,
+  UpdatesCatalog,
+  UpdatesEnvelope,
   ValidationResult,
   WorkManifest,
 } from "./types.js";
@@ -668,6 +680,65 @@ export function validateReaderEnvelopeShape(
     input,
     "reader",
   );
+}
+
+/**
+ * Validates a published audio clip catalog.
+ *
+ * A source document rather than an engine artifact, so it goes through the
+ * generic snapshot path alongside the manifests instead of the envelope path.
+ * The catalog carries no build identity by design: the engine emits a separate
+ * audio envelope that is bound to a build, and conflating the two would let a
+ * stale catalog claim to describe a publication it predates.
+ */
+export function validateAudioCatalogShape(
+  input: unknown,
+): ValidationResult<AudioClipCatalog> {
+  return validateShape(audioCatalogValidator, input);
+}
+
+/** Validates immutable author lifecycle evidence for one narration checkpoint. */
+export function validateAudioCheckpointShape(
+  input: unknown,
+): ValidationResult<AudioCheckpoint> {
+  return validateShape(audioCheckpointValidator, input);
+}
+
+/**
+ * Validates a materialized audio envelope.
+ *
+ * The engine writes this one, so validating it is validating the engine's own
+ * output. That is the point: an artifact a client fetches should be refused here
+ * rather than at a reader's browser.
+ */
+export function validateAudioEnvelopeShape(
+  input: unknown,
+): ValidationResult<AudioEnvelope> {
+  return validateShape(audioEnvelopeValidator, input);
+}
+
+/**
+ * Validates a materialized sync envelope.
+ *
+ * The engine writes this one and serves it publicly, so refusing a bad shape here
+ * beats discovering it in a browser.
+ */
+export function validateSyncEnvelopeShape(
+  input: unknown,
+): ValidationResult<SyncEnvelope> {
+  return validateShape(syncEnvelopeValidator, input);
+}
+
+export function validateUpdatesCatalogShape(
+  input: unknown,
+): ValidationResult<UpdatesCatalog> {
+  return validateShape(updatesCatalogValidator, input);
+}
+
+export function validateUpdatesEnvelopeShape(
+  input: unknown,
+): ValidationResult<UpdatesEnvelope> {
+  return validateShape(updatesEnvelopeValidator, input);
 }
 
 export function validateManifestShape<K extends ManifestKind>(

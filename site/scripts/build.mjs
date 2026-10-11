@@ -1,0 +1,270 @@
+/*
+No alternative license is selected for GENII Publisher Original Code. The alternative-license fields in the required Exhibit A notice below are intentionally unpopulated.
+
+“The contents of this file are subject to the Common Public Attribution License Version 1.0 (the “License”); you may not use this file except in compliance with the License. You may obtain a copy of the License at https://opensource.org/license/cpal-1.0. The License is based on the Mozilla Public License Version 1.1 but Sections 14 and 15 have been added to cover use of software over a computer network and provide for limited attribution for the Original Developer. In addition, Exhibit A has been modified to be consistent with Exhibit B.
+Software distributed under the License is distributed on an “AS IS” basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the License for the specific language governing rights and limitations under the License.
+The Original Code is GENII Publisher.
+The Original Developer is not the Initial Developer and is __________. If left blank, the Original Developer is the Initial Developer.
+The Initial Developer of the Original Code is GENII Foundation. All portions of the code written by GENII Foundation are Copyright (c) 2026 GENII Foundation. All Rights Reserved.
+Contributor ______________________.
+Alternatively, the contents of this file may be used under the terms of the _____ license (the [___] License), in which case the provisions of [______] License are applicable instead of those above.
+If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
+*/
+
+import { createHash, randomUUID } from "node:crypto";
+import {
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import {
+  publisherPublicLandingSourcePath,
+  publisherPublicSchemaSources,
+  readPublisherPublicSurfaceAuthority,
+} from "../../provenance/scripts/verify-public-surface.mjs";
+
+const defaultRepositoryRoot = realpathSync(
+  fileURLToPath(new URL("../../", import.meta.url)),
+);
+
+function sha256(value) {
+  return `sha256:${createHash("sha256").update(value).digest("hex")}`;
+}
+
+function canonicalJson(value) {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(",")}]`;
+  }
+  if (
+    typeof value === "object" &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
+      .join(",")}}`;
+  }
+  throw new TypeError("The public site manifest must contain JSON data only.");
+}
+
+function prepareOutputParent(repositoryRoot) {
+  const outputParent = join(repositoryRoot, "dist");
+  mkdirSync(outputParent, { recursive: true });
+  const stat = lstatSync(outputParent);
+  if (
+    stat.isSymbolicLink() ||
+    !stat.isDirectory() ||
+    realpathSync(outputParent) !== outputParent
+  ) {
+    throw new Error("The public site output parent must be one real directory.");
+  }
+  return outputParent;
+}
+
+function removeExistingOutput(outputDirectory) {
+  let stat;
+  try {
+    stat = lstatSync(outputDirectory);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    throw new Error("The public site output must be absent or one real directory.");
+  }
+  rmSync(outputDirectory, { recursive: true });
+}
+
+function writeExclusive(path, bytes) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, bytes, { flag: "wx", mode: 0o644 });
+}
+
+function publicSiteReceipt(authority) {
+  const landingOutputPath = "index.html";
+  const schemas = authority.schemas.map((schema, index) => {
+    const publicName = new URL(
+      publisherPublicSchemaSources[index].url,
+    ).pathname.split("/").at(-1);
+    return Object.freeze({
+      bytes: schema.bytes.length,
+      outputPath: `schemas/${publicName}`,
+      sha256: sha256(schema.bytes),
+      sourcePath: schema.sourcePath,
+      url: schema.url,
+    });
+  });
+  const basis = {
+    format: "publisher-public-site-1",
+    landing: {
+      bytes: authority.landingBytes.length,
+      outputPath: landingOutputPath,
+      sha256: sha256(authority.landingBytes),
+      sourcePath: publisherPublicLandingSourcePath,
+    },
+    schemas,
+  };
+  return Object.freeze({
+    ...basis,
+    sha256: sha256(canonicalJson(basis)),
+  });
+}
+
+function assertRealDirectory(path, description) {
+  const stat = lstatSync(path);
+  if (
+    stat.isSymbolicLink() ||
+    !stat.isDirectory() ||
+    realpathSync(path) !== path
+  ) {
+    throw new Error(`${description} must be one real directory.`);
+  }
+}
+
+function assertExactEntryNames(path, expected, description) {
+  const actual = readdirSync(path).sort();
+  const sortedExpected = [...expected].sort();
+  if (
+    actual.length !== sortedExpected.length ||
+    actual.some((name, index) => name !== sortedExpected[index])
+  ) {
+    throw new Error(`${description} has an unexpected file census.`);
+  }
+}
+
+function assertExactFile(path, expectedBytes, description) {
+  const stat = lstatSync(path);
+  if (
+    stat.isSymbolicLink() ||
+    !stat.isFile() ||
+    stat.nlink !== 1 ||
+    stat.size !== expectedBytes.length ||
+    realpathSync(path) !== path ||
+    !readFileSync(path).equals(expectedBytes)
+  ) {
+    throw new Error(`${description} does not match its reviewed source bytes.`);
+  }
+}
+
+export function checkPublisherPublicSite({
+  repositoryRoot = defaultRepositoryRoot,
+} = {}) {
+  const authority = readPublisherPublicSurfaceAuthority({ repositoryRoot });
+  const receipt = publicSiteReceipt(authority);
+  const outputDirectory = join(repositoryRoot, "dist", "public-site");
+  const schemasDirectory = join(outputDirectory, "schemas");
+  assertRealDirectory(outputDirectory, "The public site output");
+  assertRealDirectory(schemasDirectory, "The public site schema output");
+  assertExactEntryNames(
+    outputDirectory,
+    ["index.html", "public-surface-manifest.json", "schemas"],
+    "The public site output",
+  );
+  const schemaNames = receipt.schemas.map(
+    (schema) => schema.outputPath.slice("schemas/".length),
+  );
+  assertExactEntryNames(
+    schemasDirectory,
+    schemaNames,
+    "The public site schema output",
+  );
+  assertExactFile(
+    join(outputDirectory, receipt.landing.outputPath),
+    authority.landingBytes,
+    "The public landing page",
+  );
+  for (const [index, schema] of receipt.schemas.entries()) {
+    assertExactFile(
+      join(outputDirectory, schema.outputPath),
+      authority.schemas[index].bytes,
+      `Public schema ${schema.outputPath}`,
+    );
+  }
+  assertExactFile(
+    join(outputDirectory, "public-surface-manifest.json"),
+    Buffer.from(`${canonicalJson(receipt)}\n`),
+    "The public site manifest",
+  );
+  return Object.freeze({
+    ...receipt,
+    outputDirectory,
+  });
+}
+
+export function buildPublisherPublicSite({
+  repositoryRoot = defaultRepositoryRoot,
+} = {}) {
+  const authority = readPublisherPublicSurfaceAuthority({ repositoryRoot });
+  const receipt = publicSiteReceipt(authority);
+  const outputParent = prepareOutputParent(repositoryRoot);
+  const outputDirectory = join(outputParent, "public-site");
+  const stagingDirectory = join(
+    outputParent,
+    `.public-site-${process.pid}-${randomUUID()}`,
+  );
+  mkdirSync(stagingDirectory, { mode: 0o755 });
+
+  try {
+    writeExclusive(
+      join(stagingDirectory, receipt.landing.outputPath),
+      authority.landingBytes,
+    );
+    for (const [index, schema] of receipt.schemas.entries()) {
+      writeExclusive(
+        join(stagingDirectory, schema.outputPath),
+        authority.schemas[index].bytes,
+      );
+    }
+    writeExclusive(
+      join(stagingDirectory, "public-surface-manifest.json"),
+      `${canonicalJson(receipt)}\n`,
+    );
+    removeExistingOutput(outputDirectory);
+    renameSync(stagingDirectory, outputDirectory);
+    return checkPublisherPublicSite({ repositoryRoot });
+  } catch (error) {
+    rmSync(stagingDirectory, { force: true, recursive: true });
+    throw error;
+  }
+}
+
+export function buildPublisherPublicSiteCli(argv = process.argv.slice(2)) {
+  if (argv.length !== 0) {
+    throw new Error("The public site build accepts no command-line arguments.");
+  }
+  return buildPublisherPublicSite();
+}
+
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  try {
+    const receipt = buildPublisherPublicSiteCli();
+    console.log(
+      `Built the Publisher public site with ${receipt.schemas.length} schema(s).`,
+    );
+    console.log(`Public site receipt: ${receipt.sha256}`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : `${error}`);
+    process.exitCode = 1;
+  }
+}

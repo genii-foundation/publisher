@@ -320,6 +320,9 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "README.md",
       "SOURCE-NOTICE",
       "THIRD_PARTY_NOTICES.md",
+      "audio-catalog.schema.json",
+      "audio-checkpoint.schema.json",
+      "audio-envelope.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",
       "dist/SOURCE-NOTICE",
@@ -327,6 +330,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "package.json",
       "publication.schema.json",
       "reader-envelope.schema.json",
+      "sync-envelope.schema.json",
       ...expectedScriptPaths,
       ...expectedSourcePaths,
       "third-party-data/NormalizationTest-15.1.0.txt",
@@ -335,6 +339,8 @@ test("packed schema tarball installs and works in an offline consumer", async ()
       "third-party-licenses/unicode-15.1.0-LICENSE-MIT.txt",
       "third-party-licenses/unicode-data-LICENSE.txt",
       "tsconfig.json",
+      "updates-catalog.schema.json",
+      "updates-envelope.schema.json",
       "work.schema.json",
     ].sort();
     assert.deepEqual(packedPaths, expectedPackedPaths);
@@ -525,6 +531,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         isCanonicalRoutePath,
         normalizePortableRepositoryText,
         portableRepositoryPathIdentity,
+        validateAudioCheckpointShape,
         validateContentEnvelopeShape,
         validatePublicationShape,
         validateRepositoryRelativePath,
@@ -541,6 +548,7 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         validateReaderEnvelopeShape,
       } from "@genii-foundation/publisher-schema/reader";
       import contentEnvelopeSchema from "@genii-foundation/publisher-schema/content-envelope.schema.json" with { type: "json" };
+      import audioCheckpointSchema from "@genii-foundation/publisher-schema/audio-checkpoint.schema.json" with { type: "json" };
       import readerEnvelopeSchema from "@genii-foundation/publisher-schema/reader-envelope.schema.json" with { type: "json" };
       import workSchema from "@genii-foundation/publisher-schema/work.schema.json" with { type: "json" };
 
@@ -549,6 +557,11 @@ test("packed schema tarball installs and works in an offline consumer", async ()
         "https://publisher.genii.foundation/schemas/work.schema.json",
       );
       assert.equal(typeof validatePublicationShape, "function");
+      assert.equal(typeof validateAudioCheckpointShape, "function");
+      assert.equal(
+        audioCheckpointSchema.$id,
+        "https://publisher.genii.foundation/schemas/audio-checkpoint.schema.json",
+      );
       assert.equal(typeof validateContentEnvelopeShape, "function");
       assert.deepEqual(EXTENSION_CAPABILITIES, [
         "content.project",
@@ -731,10 +744,14 @@ if (
     });
 
     for (const schemaFileName of [
+      "audio-catalog.schema.json",
+      "audio-checkpoint.schema.json",
+      "audio-envelope.schema.json",
       "collection.schema.json",
       "content-envelope.schema.json",
       "publication.schema.json",
       "reader-envelope.schema.json",
+      "sync-envelope.schema.json",
       "work.schema.json",
     ]) {
       await rename(
@@ -745,7 +762,10 @@ if (
     const isolatedRuntimeProof = `
       import assert from "node:assert/strict";
       import {
+        validateAudioCatalogShape,
+        validateAudioEnvelopeShape,
         validateCollectionShape,
+        validateSyncEnvelopeShape,
         validateContentEnvelopeShape,
         validatePublicationShape,
         validateReaderEnvelopeShape,
@@ -765,11 +785,23 @@ if (
         true,
         JSON.stringify(validWork.diagnostics),
       );
+      const validCatalog = validateAudioCatalogShape({
+        version: 1,
+        voices: [],
+      });
+      assert.equal(
+        validCatalog.valid,
+        true,
+        JSON.stringify(validCatalog.diagnostics),
+      );
       for (const result of [
         validatePublicationShape({}),
         validateCollectionShape({}),
         validateContentEnvelopeShape({}),
         validateReaderEnvelopeShape({}),
+        validateAudioCatalogShape({}),
+        validateAudioEnvelopeShape({}),
+        validateSyncEnvelopeShape({}),
       ]) {
         assert.equal(result.valid, false);
         assert.ok(result.diagnostics.length > 0);
@@ -795,6 +827,9 @@ if (
         validateContentEnvelopeShape,
         validatePublicationShape,
         validateReaderEnvelopeShape,
+        type AudioCatalogVoice,
+        type AudioClip,
+        type AudioEnvelopeVoice,
         type CanonicalRoutePathInspection,
         type ExtensionCapability,
         type PublicationContentEnvelope,
@@ -814,8 +849,26 @@ if (
       } from "@genii-foundation/publisher-schema/reader";
 
       declare const publication: PublicationManifest;
+      const catalogVoice: AudioCatalogVoice = {
+        id: "reader-one",
+        label: "Reader One",
+        sections: [],
+      };
+      const envelopeVoice: AudioEnvelopeVoice = {
+        id: "reader-one",
+        label: "Reader One",
+        clips: [],
+        narratedSectionCount: 0,
+        unnarratedSectionCount: 1,
+      };
+      const catalogSections: readonly AudioClip[] = catalogVoice.sections;
+      const envelopeClips: readonly AudioClip[] = envelopeVoice.clips;
+      // @ts-expect-error Audio envelopes expose clips, not catalog sections.
+      envelopeVoice.sections;
+      // @ts-expect-error Audio catalogs retain sections, not envelope clips.
+      catalogVoice.clips;
       const capability: ExtensionCapability = "renderer.slot";
-      void capability;
+      void [capability, catalogSections, envelopeClips];
       void PORTABLE_REPOSITORY_CASE_FOLDING_VERSION;
       void PORTABLE_REPOSITORY_NORMALIZATION_VERSION;
       void normalizePortableRepositoryText("Cafe\\u0301");

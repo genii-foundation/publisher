@@ -465,12 +465,70 @@ test("declared content compiles without canonical path assumptions", async () =>
     [
       "/",
       "/dispatch-log",
+      "/dispatch-log/literary",
       "/dispatch/signal-lantern",
       "/dispatch/platform-bell",
       "/sequences/after-dark",
     ],
   );
   assertValid(validateContentEnvelopeShape(envelope));
+});
+
+test("named Updates views compile as stable Reader route authority", async () => {
+  const input = await loadCompilationInput("declared-night-dispatch");
+  const configured = replacePublication(input, (publication) => {
+    publication.routes.updates = [
+      {
+        id: "all",
+        path: "/dispatch-log",
+        pagination: {
+          path: "/dispatch-log/{page}",
+          pageSize: 5,
+        },
+      },
+      {
+        id: "literary",
+        path: "/dispatch-log/literary",
+        pagination: {
+          path: "/dispatch-log/literary/{page}",
+          pageSize: 5,
+        },
+      },
+    ];
+    return publication;
+  });
+  const envelope = compile(configured);
+  assert.deepEqual(
+    envelope.routes.active
+      .filter(({ target }) => target.kind === "updates")
+      .map(({ path, target }) => ({ path, target })),
+    [
+      {
+        path: "/dispatch-log",
+        target: {
+          kind: "updates",
+          viewId: "all",
+          pagination: {
+            path: "/dispatch-log/{page}",
+            pageSize: 5,
+          },
+        },
+      },
+      {
+        path: "/dispatch-log/literary",
+        target: {
+          kind: "updates",
+          viewId: "literary",
+          pagination: {
+            path: "/dispatch-log/literary/{page}",
+            pageSize: 5,
+          },
+        },
+      },
+    ],
+  );
+  assertValid(validateContentEnvelopeShape(envelope));
+  assertValid(validatePublicationContentEnvelope(envelope));
 });
 
 test("source and work input ordering do not affect deterministic output", async () => {
@@ -1632,6 +1690,56 @@ test("compiler rejects oversized aggregate inputs before content work", async (t
       resource: "links",
     },
     {
+      name: "manifest and resolved redirects",
+      change: {
+        publication: {
+          ...input.publication,
+          continuity: {
+            redirects: [
+              {
+                from: "/manifest-redirect/",
+                to: firstWork.route,
+                status: 308,
+              },
+            ],
+          },
+        },
+        redirects: new Array(
+          PUBLICATION_PROTOCOL_LIMITS.maximumRedirects,
+        ),
+      },
+      maximum: PUBLICATION_PROTOCOL_LIMITS.maximumRedirects,
+      path: "/redirects",
+      resource: "redirects",
+    },
+    {
+      name: "section indexes",
+      change: {
+        sectionIndexes: new Array(
+          CONTENT_COMPILATION_LIMITS.maximumSectionIndexes + 1,
+        ),
+      },
+      maximum: CONTENT_COMPILATION_LIMITS.maximumSectionIndexes,
+      path: "/sectionIndexes",
+      resource: "section indexes",
+    },
+    {
+      name: "section index references",
+      change: {
+        sectionIndexes: [
+          {
+            sectionIds: new Array(
+              CONTENT_COMPILATION_LIMITS.maximumSectionIndexReferences + 1,
+            ),
+          },
+        ],
+      },
+      maximum:
+        CONTENT_COMPILATION_LIMITS.maximumSectionIndexReferences,
+      path: "/sectionIndexes",
+      resource: "section index references",
+    },
+    {
       name: "extensions",
       change: {
         extensions: new Array(
@@ -1781,49 +1889,54 @@ test("envelope validation rejects aggregate collection membership before relatio
   ]);
 });
 
-test("compiler rejects reserved host configuration in asset and extension source roles", async () => {
-  const reservedPath = "publisher.config.ts";
-  for (const role of ["asset", "extension"]) {
-    const input = await loadCompilationInput(
-      "canonical-field-notes",
-    );
-    const reservedSource = {
-      path: reservedPath,
-      role,
-      ...(role === "asset"
-        ? { entityId: "rain-gauge" }
-        : { entityId: "station-index" }),
-      mediaType: "application/json",
-      contents: "{}",
-      rawBytes: textBytes("{}"),
-    };
-    const result = compilePublicationContent({
-      ...input,
-      sources: [...input.sources, reservedSource],
-      ...(role === "extension"
-        ? {
-            payloads: [
-              {
-                id: "reserved-host-config",
-                extensionId: "station-index",
-                schema:
-                  "https://example.invalid/schemas/reserved.json",
-                sourcePaths: [reservedPath],
-                data: {},
-              },
-            ],
-          }
-        : {}),
-    });
-    assert.equal(result.valid, false, role);
-    assert.ok(
-      result.diagnostics.some(
-        ({ code, params }) =>
-          code === "content.source.path_reserved" &&
-          params.role === role,
-      ),
-      `${role}: ${validationMessage(result)}`,
-    );
+test("compiler rejects reserved host integration code in asset and extension source roles", async () => {
+  for (const reservedPath of [
+    "publisher.config.ts",
+    "publisher.extensions.mjs",
+    "publisher.theme.mjs",
+  ]) {
+    for (const role of ["asset", "extension"]) {
+      const input = await loadCompilationInput(
+        "canonical-field-notes",
+      );
+      const reservedSource = {
+        path: reservedPath,
+        role,
+        ...(role === "asset"
+          ? { entityId: "rain-gauge" }
+          : { entityId: "station-index" }),
+        mediaType: "application/json",
+        contents: "{}",
+        rawBytes: textBytes("{}"),
+      };
+      const result = compilePublicationContent({
+        ...input,
+        sources: [...input.sources, reservedSource],
+        ...(role === "extension"
+          ? {
+              payloads: [
+                {
+                  id: "reserved-host-config",
+                  extensionId: "station-index",
+                  schema:
+                    "https://example.invalid/schemas/reserved.json",
+                  sourcePaths: [reservedPath],
+                  data: {},
+                },
+              ],
+            }
+          : {}),
+      });
+      assert.equal(result.valid, false, role);
+      assert.ok(
+        result.diagnostics.some(
+          ({ code, params }) =>
+            code === "content.source.path_reserved" &&
+            params.role === role,
+        ),
+        `${role}: ${validationMessage(result)}`,
+      );
+    }
   }
 });
 
@@ -2787,6 +2900,135 @@ test("redirects resolve through adapter routes and reject final collisions", asy
     diagnosticCodes(result).has("content.redirect.active_route_source"),
     validationMessage(result),
   );
+});
+
+test("resolved redirects bind adapter routes without rewriting manifest authority", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const routed = replaceWork(input, "rain-gauge", (work) => ({
+    ...work,
+    sections: [
+      {
+        ...work.sections[0],
+        routes: { canonical: { path: "/reading/rain-gauge/" } },
+        activeRouteNames: ["canonical"],
+      },
+    ],
+  }));
+  const withoutResolvedRedirect = compile(routed);
+  const resolvedRedirect = {
+    from: "/legacy-rain-gauge/",
+    to: "/reading/rain-gauge/",
+    status: 308,
+  };
+  const withResolvedRedirect = compile({
+    ...routed,
+    redirects: [resolvedRedirect],
+  });
+
+  assert.deepEqual(
+    withResolvedRedirect.publication.continuity,
+    withoutResolvedRedirect.publication.continuity,
+  );
+  assert.deepEqual(withResolvedRedirect.routes.redirects, [
+    ...withoutResolvedRedirect.routes.redirects,
+    resolvedRedirect,
+  ]);
+  assert.notEqual(
+    withResolvedRedirect.hashes.content,
+    withoutResolvedRedirect.hashes.content,
+  );
+  assert.notEqual(
+    withResolvedRedirect.buildId,
+    withoutResolvedRedirect.buildId,
+  );
+
+  const duplicateSource = compilePublicationContent({
+    ...replacePublication(routed, (publication) => ({
+      ...publication,
+      continuity: { redirects: [resolvedRedirect] },
+    })),
+    redirects: [resolvedRedirect],
+  });
+  assert.equal(duplicateSource.valid, false);
+  assert.ok(
+    diagnosticCodes(duplicateSource).has(
+      "content.redirect.duplicate_source",
+    ),
+    validationMessage(duplicateSource),
+  );
+
+  const unresolvedTarget = compilePublicationContent({
+    ...routed,
+    redirects: [
+      {
+        from: "/legacy-missing/",
+        to: "/reading/missing/",
+        status: 308,
+      },
+    ],
+  });
+  assert.equal(unresolvedTarget.valid, false);
+  assert.ok(
+    diagnosticCodes(unresolvedTarget).has(
+      "content.redirect.internal_target_unresolved",
+    ),
+    validationMessage(unresolvedTarget),
+  );
+});
+
+test("resolved section indexes own aggregate routes and validate ordered section membership", async () => {
+  const input = await loadCompilationInput("canonical-field-notes");
+  const sectionId = input.works[0].sections[0].id;
+  const sectionIndex = {
+    id: "rain-gauge-index",
+    title: "Rain Gauge Index",
+    path: "/reading/rain-gauge-index/",
+    workId: "rain-gauge",
+    sectionIds: [sectionId],
+  };
+  const envelope = compile({
+    ...input,
+    sectionIndexes: [sectionIndex],
+    redirects: [
+      {
+        from: "/legacy-rain-gauge-index/",
+        to: sectionIndex.path,
+        status: 308,
+      },
+    ],
+  });
+
+  assert.deepEqual(envelope.routes.active.at(-1), {
+    path: sectionIndex.path,
+    target: {
+      kind: "section-index",
+      id: sectionIndex.id,
+      title: sectionIndex.title,
+      workId: sectionIndex.workId,
+      sectionIds: [sectionId],
+    },
+  });
+  assert.deepEqual(envelope.routes.redirects.at(-1), {
+    from: "/legacy-rain-gauge-index/",
+    to: sectionIndex.path,
+    status: 308,
+  });
+  assertValid(validateContentEnvelopeShape(envelope));
+
+  for (const candidate of [
+    { ...sectionIndex, sectionIds: [] },
+    { ...sectionIndex, sectionIds: [sectionId, sectionId] },
+    { ...sectionIndex, sectionIds: ["missing-section"] },
+    { ...sectionIndex, workId: "missing-work" },
+    { ...sectionIndex, title: " Rain Gauge Index" },
+    { ...sectionIndex, path: input.publication.routes.home },
+  ]) {
+    const result = compilePublicationContent({
+      ...input,
+      sectionIndexes: [candidate],
+    });
+    assert.equal(result.valid, false, JSON.stringify(candidate));
+  }
 });
 
 test("redirect loops and unresolved internal targets are rejected after compilation", async () => {

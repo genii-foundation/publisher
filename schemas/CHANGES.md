@@ -2,6 +2,110 @@
 
 This file records changes to GENII Publisher covered code as required by CPAL 1.0 Section 3.3. Contributors must append a dated summary. Do not rewrite prior entries.
 
+## 2026-09-08, GENII Foundation
+
+- Raised the exact Next.js host and provider peer pin to 16.3.3 and the consuming-root Sharp override to 0.35.4 after the live packed production audit rejected the previous stack. Updated templates, notices, and exact runtime assertions together. Validation remains required before release.
+
+## 2026-09-07, GENII Foundation
+
+- Bound archive acceptance to the decompressor's consumed compressed-byte count, rejecting hidden tails even when they repeat a valid gzip trailer, with adversarial single-chunk and cross-chunk regression tests.
+- Required a single metadata-free gzip member around the exact decoded package archive, rejecting unscanned optional headers and empty-member concatenation bypasses.
+- Updated the build-only fast-uri dependency from 3.1.5 to 3.1.7 to address the current URI normalization advisories without changing the published schema runtime dependencies.
+- Began a fresh completion audit that separates local validation, optional browser evidence, migration acceptance, and public release gates.
+- Updated the packed-host browser fixture to declare alternate theme palettes and verify its custom near-black canvas before hydration.
+
+## 2026-08-30, GENII Foundation
+
+- Added a narrow server-only embedded page renderer that preserves Publisher theme scope, safe content, extension ordering, publication source availability, and mandatory attribution inside a host-owned transition shell.
+- Recorded the opaque element, exact host canvas, shell ownership, and Reader lifecycle limits required for a reversible Coherence migration preview.
+- Added optional complete light, dark, and black Theme 2.0 palettes with independent validation and a legacy base-palette fallback.
+- Replaced fixed alternate Reader colors with a pure frozen theme appearance projection usable by full and embedded hosts without activating Reader lifecycle behavior.
+- Exposed the canonical narration scanner as frozen UTF-16 code unit word ranges and bound word counts to the same scanner.
+- Reused the public narration ranges in Next word markup and documented exact section, count, and text-slice verification for host timing bindings.
+- Exposed the canonical Reader selection adapter and text coordinate primitives through the public Next client entry without adding a second DOM coordinate implementation.
+- Documented the exact section identity, transient interface exclusion, null conditions, coordinate basis, private helper boundary, and packed consumer proof for established hosts.
+
+## 2026-08-29, GENII Foundation
+
+- Corrected the Coherence migration readiness boundary after the first established-host preview exposed the remaining artifact, worker, aggregate-route, and author-adapter cutover work.
+- Exposed a composable Publisher Reader document shell for established applications that retain author-owned routes and layout.
+- Bound every recent Coherence application commit to explicit Publisher capability parity or an author-owned disposition.
+- Added an independent public-site artifact check that binds the complete output census, manifest, and file bytes to repository authority.
+- Added a compact, hash-bound full-audit summary mode for human review without weakening or replacing the exact receipt candidate.
+- Added a fast deterministic provenance coverage gate to ordinary validation and bound the repository governance and security policies to the live source-loader audit scope.
+
+## 2026-08-28, GENII Foundation
+
+- Added a validated, read-only provenance review summary that exposes every record's exact lifecycle gates without issuing receipts or granting acceptance.
+- Added repository governance and security policies, including the truthful pre-release support boundary and the missing private reporting and GitHub security controls as first-release blockers.
+- Recorded the dated public DNS, GitHub workflow, and repository environment blockers without treating checked-in release machinery as configured external state.
+- Refreshed the generic Reader parity census through the current Coherence source authority and classified the only newer application change as author-owned editorial workbench behavior.
+- Bound the migration readiness record to the refreshed status-only Coherence candidate and its exact local preview while retaining the prior executable proof checkpoint.
+- Refreshed the reversible Coherence migration authority against the exact state migration extension, immutable offline resource, two clean semantic browser proofs, full repository validation, and managed local preview candidate without authorizing publication, merge, provider mutation, or deployment.
+- Corrected the public package map so narration and Updates are documented as capability boundaries across the implemented packages rather than nonexistent wrapper packages.
+- Replaced publication-specific prose and provider labels in the neutral audio catalog schema fixture, eliminating every creative-content provenance match while retaining the unresolved source-code review boundary.
+- Hardened ReaderLink range validation so a shorter nested range cannot hide a later overlap with an earlier, wider range.
+- Made Reader selection quote assembly immutable while preserving exact boundary trimming and multi-block text order.
+- Centralized the Supabase engagement event database projection and bound every stored field through an exact server-provider test.
+- Bounded offline metadata enumeration by the Reader package ceiling, centralized resilient cache cleanup, preserved redirected response metadata explicitly, and made the cache test double retain real cloned responses.
+- Centralized Reader text range and vertical-bound measurement for bookmark markers, with one guarded layout-shift observer boundary.
+- Reworked the remaining generic framework, release, site, Reader, provider, and test expressions so the deterministic source review now isolates all normalized-line matches to the six Supabase migrations.
+- Rebuilt the Supabase migration boundary with named reader constraints, authenticated-only ownership policies, explicit privilege declarations, and one internal bookmark decision primitive shared by baseline and publication-scoped merges, clearing every remaining source match.
+
+## 2026-08-27, GENII Foundation
+
+- Added a closed generic section-index route target with bounded ordered section membership.
+- Refreshed the reversible Coherence adoption and readiness evidence against the current Publisher candidate and Coherence source baseline, including exact static, browser, offline, route-gap, and audio-withholding receipts without authorizing migration or release.
+- Added a bounded, read-only public release surface verifier that binds the attributed landing page and every reviewed public schema URL to exact repository bytes without weakening offline archive preparation or reverification.
+- Added a provider-neutral static public site artifact with the attributed landing page, exact reviewed schemas, and a deterministic deployment manifest.
+- Added a manual tagged OIDC release workflow that retains and reverifies exact archives under the pinned preparation toolchain, then uses token-free npm 11.5.1 on Node 24 for identity-checked publication.
+
+## 2026-08-20, GENII Foundation
+
+- Corrected the public audio envelope voice declaration to expose `clips`, matching the closed schema and runtime artifact, while preserving `sections` in source audio catalogs.
+
+## 2026-08-19, GENII Foundation
+
+- Added a separately bounded, immutable, Reader-build-bound public state projection for publication-owned legacy translation evidence, with an independent total static HTML transport limit.
+- Advanced the Next application manifest to 1.2 with an exact optional Reader state projection descriptor.
+- Bound projection serialization and bootstrap source generation to trusted renderer intrinsics so adapter callbacks cannot replace counted or executable bytes.
+- Raised the real lifecycle package proof's machine-time allowance above observed clean-install variance without changing its package or integrity assertions.
+- Refreshed Coherence Reader parity through its narrow-phone toolbar correction and hardened the official Reader against 320-pixel page overflow at maximum text size.
+- Added closed extension request handlers with build-bound owned paths, exact methods, bounded detached requests, validated responses, and packed-host proof.
+- Hardened Reader parity with persistent audiobook transport, 15-second jumps, stale playback isolation, and transient interface-free bookmark coordinates and geometry.
+- Reserved author-owned `publisher.extensions.mjs` from every publication source role.
+- Added explicit author extension registration, exact installed extension identity, build-time `content.project` invocation, and Reader-build-bound extension artifacts.
+- Added official Next server extension slots with narrow page context, grant enforcement, deterministic application identity, and an independently packed extension proof.
+- Added one isolated official Next client extension mount with browser projection boundaries, hydrated interaction proof, and engine-owned failure containment.
+- Added declarative extension pages with narrow build projection, explicit compatible host adapters, exact static routing, and engine-owned shell and attribution.
+- Added explicit author-owned theme selection and a separately packaged canonical-host proof across ordinary and framework error surfaces.
+- Added a Reader-build-bound public identity artifact so client error chunks retain exact publication attribution and theme without manuscript data.
+- Added a build-bound browser narration projection and a lazy persistent default player with voice memory, rate, seek, queue, duration, and real packed-host playback proof.
+- Added strict lazy narration timing sidecars and existing-text word highlighting without delaying playback or duplicating manuscript text.
+- Added a vendor-neutral immutable narration checkpoint schema and semantic evidence validator for author promotion and publication guards.
+- Added exact-base selective narration promotion planning that preserves unselected clips and narrators.
+- Added a narration publication guard that requires exact reviewed evidence for every changed spoken unit and public narrator.
+- Added deterministic spoken-input identity shared by narration generation, timing, and publication evidence.
+
+## 2026-08-18, GENII Foundation
+
+- Added atomic reactive progress and bookmark state with same-tab and cross-tab Reader convergence.
+- Connected the default Reader to provider-neutral local-first synchronization and proved its authenticated browser transfer through the packed host.
+- Added the backward-compatible named and paginated Updates route contract as the first part of generated-host Updates integration.
+- Added author-owned Updates catalogs, Reader-build-bound envelopes, generated-host materialization, named view rendering, and static pagination without executing authoring adapters.
+- Added conservative Reader progress sessions with one opening per visit, visible active reading time, return counts, revision status, and explicit completion.
+- Added readable bookmark export plus accessible confirmed removal with synchronization tombstones.
+- Added contextual Reader breadcrumbs, complete bounded settings, and bookmark-aware search.
+- Added canonical passage selection with optional private notes and reactive margin markers outside the manuscript DOM.
+- Added a virtualized Reader bookmark collection that keeps all 1,000 supported saved passages searchable and operable with bounded browser layout work.
+- Added server rendered focus markup that preserves one exact manuscript text occurrence, semantic emphasis, selection ranges, bookmark offsets, and assistive text.
+- Added one browser safe progress overview for weighted completion, section states, recent reading, recommendations, and continuity aware bookmark presence.
+- Added a lazy Reader-build-bound progress catalog plus publication map, recommendations, recent reading, and reactive saved-passage indicators in the default Reader.
+
+## 2026-08-13, GENII Foundation
+
+- Added optional preorder section declarations to work manifests, with durable identities, hierarchy, routes, continuity, and exact Markdown block boundary selectors.
+
 ## 2026-07-27, GENII Foundation
 
 - Established the public repository, product boundary, licensing foundation, and framework-neutral publication protocol.

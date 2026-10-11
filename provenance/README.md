@@ -45,6 +45,32 @@ npm run provenance:validate
 
 The command validates every JSON file under `provenance/records/` and every referenced receipt. For accepted working-tree records, it also recomputes current Git coverage, the full destination manifest, deletion tombstones, the current scanner runtime closure identity, installed-input hashes, package archives, package leakage, and package scan exclusions. Package reconstruction runs through the exact npm CLI that invoked the workspace command. It does not fetch source repositories, publish rights documents, or modify source.
 
+For one deterministic human review summary, run:
+
+```bash
+npm run provenance:review
+npm --silent run provenance:review -- --json
+```
+
+The command validates the same committed directory first, then reports each
+record's status, classification, package scope, review identity, final manifest
+and receipt presence, scan outcomes, exact review notes, and remaining lifecycle
+gates. It writes nothing. It does not fetch evidence, issue a receipt, accept a
+record, grant release approval, or replace maintainer and counsel review.
+
+Every ordinary validation also runs the fast working-tree coverage gate:
+
+```bash
+npm run provenance:coverage
+```
+
+The command validates the committed ledger, resolves the one shared destination
+base ref, and requires every changed tracked or nonignored path to belong to at
+least one working-tree record. It also rejects a declared destination scope that
+selects no changed path. It does not scan source repositories, build packages,
+issue receipts, or write files. The full audit repeats the same coverage check
+before doing its more expensive source, package, and regeneration work.
+
 Release preparation requires at least one working-tree record, requires every provenance record that names a publishable package root to be accepted, and requires an explicit empty output directory outside the repository. Every current publishable package root must also remain covered by an accepted working-tree record:
 
 ```bash
@@ -62,7 +88,21 @@ npm run release:verify -- \
   --manifest /absolute/path/to/empty-release-directory/release-manifest.json
 ```
 
-Direct package-directory publication is forbidden by every publishable package. The trusted release workflow may publish only the exact tarball paths named by the freshly reverified manifest. npm uploads a tarball input without rerunning the package-directory lifecycle, so this path sends the same bytes that passed provenance. A regression fixture gives its directory publication a failing `prepublishOnly` hook, then proves that `npm publish --dry-run <candidate.tgz>` succeeds with the candidate's exact integrity, shasum, and file inventory. The workflow must never rerun `npm pack`, rebuild a package, or substitute another archive between verification and `npm publish <exact-tarball-path>`. `release:verify` is deliberately inert and never publishes. The repository still lacks an authorized trusted-publishing workflow, so public release remains blocked until that separate credential-bound path exists and invokes verification immediately before each exact archive upload. Package lifecycle scripts remain defense in depth. Publishing with scripts disabled, publishing an arbitrary tarball, or bypassing the trusted workflow can evade local guards, so npm publishing credentials must remain bound to that workflow.
+The trusted workflow must also verify the public attribution and schema surface before uploading anything:
+
+```bash
+npm run site:build
+npm run site:check
+npm run release:verify-public-surface
+```
+
+The site build accepts no arguments and writes one provider-neutral artifact under `dist/public-site`. It copies the exact landing page and reviewed schemas, then records their deterministic manifest. The site check accepts no arguments and independently requires the complete output census, manifest, and every file byte to match the current repository authority. The network gate accepts no arguments, writes no files, follows no redirects, bounds every response, and requires the deployed landing page and all reviewed public schema URLs to serve byte-identical repository sources. It is intentionally separate from archive preparation and reverification so those local provenance gates remain offline and repeatable.
+
+Direct package-directory publication is forbidden by every publishable package. The trusted release workflow may publish only the exact tarball paths named by the freshly reverified manifest. npm uploads a tarball input without rerunning the package-directory lifecycle, so this path sends the same bytes that passed provenance. A regression fixture gives its directory publication a failing `prepublishOnly` hook, then proves that `npm publish --dry-run <candidate.tgz>` succeeds with the candidate's exact integrity, shasum, and file inventory. The workflow must never rerun `npm pack`, rebuild a package, or substitute another archive between verification and `npm publish <exact-tarball-path>`. `release:verify` is deliberately inert and never publishes.
+
+The manual `.github/workflows/publish.yml` workflow is the only repository publication path. It requires a `v<package-version>` Git tag, the protected `npm-publish` environment, GitHub OIDC, and no npm bearer token. Preparation and reverification use the repository pins, Node 22.12 and npm 10.9. The final upload step switches to Node 24 and npm 11.5.1 because npm trusted publishing requires npm 11.5.1 or newer. `release:publish` independently rechecks the complete package census, current names and versions, archive size, SHA-256, SHA-512 integrity, SHA-1 shasum, exact workflow identity, exact tag, token-free npm configuration, and OIDC environment before sequential upload. Every npm package must separately configure its trusted publisher to repository `genii-foundation/publisher`, workflow `publish.yml`, and environment `npm-publish`. Until that external configuration, environment protection, provenance acceptance, and public web surface exist, the workflow is intentionally blocked.
+
+Package publication is not transactional. If npm accepts one immutable version and a later package upload fails, stop. Preserve the retained workflow artifact and diagnose the failed package. Never rebuild or try to replace the accepted version.
 
 ## Scanner identity
 
@@ -90,14 +130,25 @@ npm run provenance:audit -- \
   --source https://github.com/node-unicode/node-unicode-data=/path/to/node-unicode-data \
   --artifact https://www.unicode.org/Public/15.1.0/ucd/UnicodeData.txt=/path/to/UnicodeData.txt \
   --artifact https://www.unicode.org/Public/15.1.0/ucd/NormalizationTest.txt=/path/to/NormalizationTest.txt \
-  --artifact https://www.unicode.org/license.txt=schemas/third-party-licenses/unicode-data-LICENSE.txt
+  --artifact https://www.unicode.org/license.txt=schemas/third-party-licenses/unicode-data-LICENSE.txt \
+  --summary
 ```
 
 The command fails if a changed or deleted path has no working-tree record, a declared scope selects no changed path, or a working-tree manifest is empty. It hashes every selected present file and records deterministic tombstones for deletions. It verifies source refs, evidence, and exact installed dependency files; runs exact-blob, normalized-line, significant-token, CC-phrase, and package-leak scans; executes declared read-only regeneration checks; and builds each publishable package through its complete lifecycle.
 
+`--summary` returns one compact, immutable review projection. Each record binds
+the SHA-256 hash of the exact full receipt bytes, destination manifest, scanner,
+scan outcomes and counts, package archives, installed inputs, exclusions, and
+verification command results. It omits individual scan matches and manifest
+entries. The summary is not a receipt, cannot be combined with receipt emission,
+and grants no review or release authority. Omit the flag to inspect the complete
+receipt candidate on standard output.
+
 Candidate preparation resolves the absolute `npm_execpath` and `npm_node_execpath` supplied by the invoking workspace command, verifies the exact npm version pinned by the root manifest, copies only the tracked and nonignored working-tree source into an owned temporary workspace, installs the locked workspace offline with scripts disabled, and packs packages in dependency order. Ignored build output and package-local dependency staging never enter from the source checkout. Content and Reader therefore contribute their rebuilt output and complete staged dependency closures to the candidate archive before scanning. The source checkout is read-only throughout this process.
 
 Text scans fail closed when a non-binary file exceeds the byte limit, contains NUL, is not valid UTF-8, or cannot be extracted from a package archive. Only a fixed list of binary file extensions may bypass text decoding. Every such exclusion records the document hash and exact scans skipped. Exact-blob comparison still covers the bytes.
+
+Each scan retains at most 50,000 exact matches. This bound is high enough to record every long-line match in the preserved Unicode 15.1 data while still rejecting an unexpectedly unbounded comparison result.
 
 ## Package archive reading
 

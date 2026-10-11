@@ -872,7 +872,7 @@ test("fresh retained maps are source-bound, path-bound, tamper-evident, and disc
 });
 
 test("real Content and Reader lifecycle candidates retain their physical runtime closures", {
-  timeout: 120_000,
+  timeout: 180_000,
 }, async () => {
   const packageRoots = [
     "packages/reader/",

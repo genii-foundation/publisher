@@ -19,6 +19,26 @@ export {
   PublisherNextFrameworkErrorPage,
   PublisherNextGlobalErrorPage,
 } from "./error.js";
+export {
+  PublisherReaderRail,
+} from "./reader-rail.js";
+export {
+  createPublisherReaderStore,
+  usePublisherReaderStore,
+} from "./reader-store.js";
+export {
+  PUBLISHER_READER_NARRATION_NAVIGATION_EVENT,
+  requestPublisherReaderNarrationNavigation,
+} from "./reader-narration-navigation.js";
+export {
+  publisherReaderTextContent,
+  publisherReaderTextPointForOffset,
+  publisherReaderTextRange,
+  publisherReaderTextVerticalBounds,
+} from "./reader-dom-text.js";
+export {
+  readPublisherReaderSelection,
+} from "./reader-selection.js";
 export type {
   CreatePublisherNextErrorIdentityInput,
   PublisherNextErrorIdentity,
@@ -28,3 +48,24 @@ export type {
   PublisherNextErrorPageProps,
   PublisherNextFrameworkErrorPageProps,
 } from "./error.js";
+export type {
+  PublisherReaderOutlineEntry,
+  PublisherReaderRailProps,
+} from "./reader-rail.js";
+export type {
+  CreatePublisherReaderStoreOptions,
+  PublisherReaderStore,
+  PublisherReaderStoreChangeSource,
+  PublisherReaderStoreEnvironment,
+  PublisherReaderStoreSignal,
+} from "./reader-store.js";
+export type {
+  ReaderNarrationNavigationIntent,
+} from "./reader-narration-navigation.js";
+export type {
+  PublisherReaderTextPoint,
+  PublisherReaderTextVerticalBounds,
+} from "./reader-dom-text.js";
+export type {
+  PublisherReaderSelection,
+} from "./reader-selection.js";

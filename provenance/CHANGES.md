@@ -2,6 +2,28 @@
 
 This file records changes to the migration provenance system.
 
+## 2026-08-29, GENII Foundation
+
+- Added a fail-closed local verifier for the complete public-site deployment artifact.
+- Added a compact full-audit summary that hashes each exact receipt candidate and retains every bounded review outcome without emitting or accepting a receipt.
+- Added the repository governance and security policies to the live Publisher source-loader provenance scope so the complete release-sensitive working tree remains auditable.
+
+## 2026-08-28, GENII Foundation
+
+- Added a validated, read-only provenance review summary that exposes every record's exact lifecycle gates without issuing receipts or granting acceptance.
+- Removed copied creative fixture content from the Publisher source-loader record scope and regenerated the deterministic audit with zero CC-source phrase matches.
+- Replaced one inherited adjacent-range scan with a stricter independent interval-boundary algorithm, reducing significant source-token matches without weakening diagnostics.
+- Replaced inherited mutable quote-part rewriting with an independent immutable selection projection, removing the remaining selection-token matches.
+- Replaced inherited synchronization row construction with a declarative database projection and exact contract proof, removing the synchronization-token matches.
+- Reworked offline cache enumeration, response copying, rollback, and its browser test double, then centralized bookmark range geometry and layout observation, eliminating every remaining significant-token match.
+- Reworked the remaining generic framework, release, site, Reader, provider, and test expressions, leaving exactly 53 normalized-line matches confined to the six Supabase migrations.
+- Rebuilt the remaining Supabase schema and bookmark merge expression around independently named constraints, role-scoped policies, explicit grants, and one internal record decision primitive, leaving every deterministic source scan clear.
+- Converted the original foundation draft into a live working-tree audit, separated its fresh package scope from the preserved Unicode boundary, and produced clear retained-archive scan evidence for Content, Reader, and Next.
+
+## 2026-08-27, GENII Foundation
+
+- Added exact retained-archive publication checks and a token-free, tagged GitHub OIDC workflow boundary without granting publication authority to local verification.
+
 ## 2026-07-28, GENII Foundation
 
 - Added the closed provenance record schema and validator.

@@ -1,0 +1,341 @@
+{
+  "schemaVersion": "1.0.0",
+  "sourceCheckpoint": "06a9e59a02664ed3362fbd69b24774ca7d45ee07",
+  "note": "Historical checkpoint evidence. Record performedAt fields are not fresh scan timestamps. Raw logs omitted. Provenance records remain draft.",
+  "runtimeMatrix": [
+    {
+      "node": "22.12.0",
+      "npm": "10.9.0",
+      "platform": "darwin",
+      "chromeEnabled": true,
+      "tests": 1145,
+      "passed": 1143,
+      "skipped": 2,
+      "failed": 0
+    },
+    {
+      "node": "24.18.0",
+      "npm": "10.9.0",
+      "platform": "darwin",
+      "chromeEnabled": true,
+      "tests": 1145,
+      "passed": 1143,
+      "skipped": 2,
+      "failed": 0
+    },
+    {
+      "node": "26.4.0",
+      "npm": "10.9.0",
+      "platform": "darwin",
+      "chromeEnabled": true,
+      "tests": 1145,
+      "passed": 1143,
+      "skipped": 2,
+      "failed": 0
+    }
+  ],
+  "logs": [
+    {
+      "name": "next-security-node22-final-validation.log",
+      "bytes": 205419,
+      "sha256": "c74a8a04752b321a9eb592758659fdae281930302b7ae0254177f0884ce09e52"
+    },
+    {
+      "name": "next-security-node24-validation.log",
+      "bytes": 91500,
+      "sha256": "f6b87a90e378f903774b26849e31be1818f5da2a5945a8a3072897322ebead34"
+    },
+    {
+      "name": "next-security-node26-validation.log",
+      "bytes": 91508,
+      "sha256": "211ba3f68da7a59f7de62367844acee3ac86be0ccc23469ae99142d734834475"
+    },
+    {
+      "name": "next-security-provenance-audit.log",
+      "bytes": 9586,
+      "sha256": "4f6814c00427aff20247d0dcf877d8a60ab1a7c5a9d6d5cfe49df7ed16d8c9d1"
+    }
+  ],
+  "auditSummary": {
+    "schemaVersion": "1.0.0",
+    "receiptCount": 4,
+    "records": [
+      {
+        "recordId": "2026-07-28-foundation-extraction",
+        "performedAt": "2026-07-28T18:45:00Z",
+        "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
+        "receiptSha256": "sha256:1e7750b8d9833663a9a8b068c98da68d7ce67683dc4973223d33550a6c400d14",
+        "stableClaimsSha256": "sha256:c9c1ee5ff4855c8756edda1fa3b127d88e6f6acf699682d16b2afb8d06e77f8a",
+        "destinationManifest": {
+          "entryCount": 77,
+          "deletedCount": 0,
+          "sha256": "sha256:9fbc1b4f838bb4ee97fcb11d58c557e225385e46b6bd7ec6a4a318f9dfbc6d50"
+        },
+        "scanner": {
+          "algorithm": "sha256-scanner-runtime-closure-v1",
+          "sha256": "sha256:fdd766499845a2f9d8ff9da5bd07ae25ab3b567b586a13142a27015d425870c1",
+          "fileCount": 162
+        },
+        "sourceCount": 2,
+        "verifiedSourceCount": 2,
+        "scans": {
+          "exactBlob": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "normalizedLine": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "tokenShingle": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "ccPhrase": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "packageLeak": {
+            "outcome": "clear",
+            "matchCount": 0
+          }
+        },
+        "packageArchives": [
+          {
+            "root": "packages/content/",
+            "sha256": "sha256:44967f33db5a2a7846187aa350bf6020d93469e228eff3b31e4cb2a84c38e246",
+            "fileCount": 8322
+          },
+          {
+            "root": "packages/reader/",
+            "sha256": "sha256:fa23c7c361e2bbbeca5d1505edb3a2507d7cf43634fb06187dc73dfe14d7a0ef",
+            "fileCount": 549
+          },
+          {
+            "root": "packages/next/",
+            "sha256": "sha256:22926d76793a5405ed42f5762a03064d7001bd382561863c6e993b20d482b09c",
+            "fileCount": 130
+          }
+        ],
+        "installedInputCount": 0,
+        "scanExclusionCount": 17,
+        "verificationCommands": []
+      },
+      {
+        "recordId": "2026-07-28-publisher-source-loader",
+        "performedAt": "2026-07-28T20:32:06Z",
+        "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
+        "receiptSha256": "sha256:eb19383bada4149277781b1db29874247e6ee74e5ffdbe4d6b0432dff29e3e1d",
+        "stableClaimsSha256": "sha256:627ccbe335a28b2df1db873f0f315e67a06659903dcb7e5befb87424384fb57e",
+        "destinationManifest": {
+          "entryCount": 380,
+          "deletedCount": 0,
+          "sha256": "sha256:e1f5a3d724b8e5cf4822534f6af50f4227b9d737abce717f50bba079069673a8"
+        },
+        "scanner": {
+          "algorithm": "sha256-scanner-runtime-closure-v1",
+          "sha256": "sha256:fdd766499845a2f9d8ff9da5bd07ae25ab3b567b586a13142a27015d425870c1",
+          "fileCount": 162
+        },
+        "sourceCount": 2,
+        "verifiedSourceCount": 2,
+        "scans": {
+          "exactBlob": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "normalizedLine": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "tokenShingle": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "ccPhrase": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "packageLeak": {
+            "outcome": "clear",
+            "matchCount": 0
+          }
+        },
+        "packageArchives": [
+          {
+            "root": "schemas/",
+            "sha256": "sha256:71e5734c0260aa79468d617de13705cc83228b99615e485bce985539c108ac82",
+            "fileCount": 79
+          },
+          {
+            "root": "packages/content/",
+            "sha256": "sha256:44967f33db5a2a7846187aa350bf6020d93469e228eff3b31e4cb2a84c38e246",
+            "fileCount": 8322
+          },
+          {
+            "root": "packages/next/",
+            "sha256": "sha256:22926d76793a5405ed42f5762a03064d7001bd382561863c6e993b20d482b09c",
+            "fileCount": 130
+          },
+          {
+            "root": "packages/reader/",
+            "sha256": "sha256:fa23c7c361e2bbbeca5d1505edb3a2507d7cf43634fb06187dc73dfe14d7a0ef",
+            "fileCount": 549
+          },
+          {
+            "root": "packages/publisher/",
+            "sha256": "sha256:c26f226388dee2ac57c7d1d8b04d5264126c9dacec5fa5acda59a71d6a3e2d22",
+            "fileCount": 89
+          },
+          {
+            "root": "packages/sync-supabase/",
+            "sha256": "sha256:71a58157e316d9608380a507a31014cae522690817df8029644481a1e21c1505",
+            "fileCount": 23
+          }
+        ],
+        "installedInputCount": 0,
+        "scanExclusionCount": 17,
+        "verificationCommands": []
+      },
+      {
+        "recordId": "2026-07-28-unicode-portability-preservation",
+        "performedAt": "2026-07-28T20:32:06Z",
+        "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
+        "receiptSha256": "sha256:dd8b3db37773b0d4e34a71e93f275687a10deb1755dae032045fa3bce8f19ee9",
+        "stableClaimsSha256": "sha256:15e50f66c692485b588def01fb78505efbd33da56eef32f4b5d748b29c2439d7",
+        "destinationManifest": {
+          "entryCount": 14,
+          "deletedCount": 0,
+          "sha256": "sha256:69ba92be90b40c8b4243e26cda694d3c4b3c069809d41e98e77f8de64a15ae84"
+        },
+        "scanner": {
+          "algorithm": "sha256-scanner-runtime-closure-v1",
+          "sha256": "sha256:fdd766499845a2f9d8ff9da5bd07ae25ab3b567b586a13142a27015d425870c1",
+          "fileCount": 162
+        },
+        "sourceCount": 6,
+        "verifiedSourceCount": 6,
+        "scans": {
+          "exactBlob": {
+            "outcome": "expected-match",
+            "matchCount": 4
+          },
+          "normalizedLine": {
+            "outcome": "expected-match",
+            "matchCount": 28043
+          },
+          "tokenShingle": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "ccPhrase": {
+            "outcome": "not-applicable",
+            "matchCount": 0
+          },
+          "packageLeak": {
+            "outcome": "clear",
+            "matchCount": 0
+          }
+        },
+        "packageArchives": [
+          {
+            "root": "schemas/",
+            "sha256": "sha256:71e5734c0260aa79468d617de13705cc83228b99615e485bce985539c108ac82",
+            "fileCount": 79
+          }
+        ],
+        "installedInputCount": 6,
+        "scanExclusionCount": 0,
+        "verificationCommands": [
+          {
+            "argv": [
+              "node",
+              "schemas/scripts/generate-case-folding.mjs"
+            ],
+            "exitCode": 0,
+            "stdoutSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderrSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          {
+            "argv": [
+              "node",
+              "tests/unicode-generation.test.mjs",
+              "--provenance-verification"
+            ],
+            "exitCode": 0,
+            "stdoutSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "stderrSha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        ]
+      },
+      {
+        "recordId": "2026-08-28-supabase-provider-package",
+        "performedAt": "2026-08-28T08:16:56Z",
+        "destinationBaseRef": "2116921e5bf079aceff25575fa9932d2f41c05e8",
+        "receiptSha256": "sha256:91b2eab56f4f0351255ddd75d9cc896629cc9948a2d3ba083211e17ce5833247",
+        "stableClaimsSha256": "sha256:9ba37a0f02f6762ce75c45e70af9b6408f081ff55fdfd93333a05e3f59d4ec62",
+        "destinationManifest": {
+          "entryCount": 43,
+          "deletedCount": 0,
+          "sha256": "sha256:5d9d2ce446f09060a62e102f6ed30d12c24fc9bd55d3b37a6c4487907150cb33"
+        },
+        "scanner": {
+          "algorithm": "sha256-scanner-runtime-closure-v1",
+          "sha256": "sha256:fdd766499845a2f9d8ff9da5bd07ae25ab3b567b586a13142a27015d425870c1",
+          "fileCount": 162
+        },
+        "sourceCount": 2,
+        "verifiedSourceCount": 2,
+        "scans": {
+          "exactBlob": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "normalizedLine": {
+            "outcome": "expected-match",
+            "matchCount": 62
+          },
+          "tokenShingle": {
+            "outcome": "clear",
+            "matchCount": 0
+          },
+          "ccPhrase": {
+            "outcome": "expected-match",
+            "matchCount": 1
+          },
+          "packageLeak": {
+            "outcome": "clear",
+            "matchCount": 0
+          }
+        },
+        "packageArchives": [
+          {
+            "root": "packages/sync-supabase/",
+            "sha256": "sha256:71a58157e316d9608380a507a31014cae522690817df8029644481a1e21c1505",
+            "fileCount": 23
+          }
+        ],
+        "installedInputCount": 0,
+        "scanExclusionCount": 17,
+        "verificationCommands": []
+      }
+    ]
+  },
+  "handoffValidation": {
+    "date": "2026-09-21",
+    "sourceCheckpoint": "06a9e59a02664ed3362fbd69b24774ca7d45ee07",
+    "uncommittedChanges": "Handoff documentation only",
+    "node": "22.12.0",
+    "chromeEnabled": true,
+    "exitCode": 0,
+    "tests": 1145,
+    "passed": 1143,
+    "skipped": 2,
+    "failed": 0,
+    "log": {
+      "name": "handoff-validation.log",
+      "bytes": 205360,
+      "sha256": "d5ddbc6a6e3518ca13039a38baa5c35047bb84f042161d7dcf796433a336b331"
+    }
+  }
+}

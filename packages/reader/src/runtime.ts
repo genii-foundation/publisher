@@ -1024,6 +1024,44 @@ function validateRouteTarget(
           ),
         );
       }
+      return;
+    }
+    case "section-index": {
+      const target = route.target;
+      const work = indexes.workById.get(target.workId);
+      const sectionIds = new Set<string>();
+      const validSections = target.sectionIds.every((sectionId) => {
+        if (sectionIds.has(sectionId)) {
+          return false;
+        }
+        sectionIds.add(sectionId);
+        const match = indexes.sectionByLocation.get(
+          locationKey(target.workId, sectionId),
+        );
+        return match !== undefined &&
+          match.section.navigable &&
+          match.section.readerAddress !== null;
+      });
+      if (
+        work === undefined ||
+        !STABLE_ID.test(target.id) ||
+        target.title.length < 1 ||
+        target.title.length > 1_024 ||
+        target.title.trim() !== target.title ||
+        target.sectionIds.length === 0 ||
+        !validSections
+      ) {
+        diagnostics.push(
+          diagnostic(
+            "reader.runtime.route_section_index_invalid",
+            pointer,
+            "Active section index route must reference one known work and a nonempty ordered set of its unique sections.",
+            "ownedSectionIndexRoute",
+            { route },
+          ),
+        );
+      }
+      return;
     }
   }
 }
@@ -1033,6 +1071,7 @@ function indexRoutes(
   indexes: RuntimeIndexes,
   diagnostics: Diagnostic[],
 ): void {
+  const sectionIndexIds = new Set<string>();
   envelope.routes.active.forEach((route, routeIndex) => {
     const path = `/routes/active/${routeIndex}/path`;
     pushCanonicalPathDiagnostic(route.path, path, diagnostics);
@@ -1050,6 +1089,20 @@ function indexRoutes(
       indexes.routeByPath.set(route.path, route);
     }
     validateRouteTarget(route, routeIndex, indexes, diagnostics);
+    if (route.target.kind === "section-index") {
+      if (sectionIndexIds.has(route.target.id)) {
+        diagnostics.push(
+          diagnostic(
+            "reader.runtime.section_index_id_duplicate",
+            `/routes/active/${routeIndex}/target/id`,
+            `Section index ID "${route.target.id}" appears more than once.`,
+            "uniqueItems",
+            { id: route.target.id },
+          ),
+        );
+      }
+      sectionIndexIds.add(route.target.id);
+    }
   });
 
   const homeRoutes = envelope.routes.active.filter(
@@ -1069,14 +1122,33 @@ function indexRoutes(
   const updateRoutes = envelope.routes.active.filter(
     ({ target }) => target.kind === "updates",
   );
-  if (updateRoutes.length > 1) {
+  const updateViewIds = new Set<string>();
+  for (let index = 0; index < updateRoutes.length; index += 1) {
+    const route = updateRoutes[index];
+    if (route === undefined || route.target.kind !== "updates") {
+      continue;
+    }
+    if (updateViewIds.has(route.target.viewId)) {
+      diagnostics.push(
+        diagnostic(
+          "reader.runtime.updates_view_id_duplicate",
+          `/routes/active/${index}/target/viewId`,
+          "Updates view ids must be unique.",
+          "uniqueItems",
+          { viewId: route.target.viewId },
+        ),
+      );
+    }
+    updateViewIds.add(route.target.viewId);
+  }
+  if (updateRoutes.length > 32) {
     diagnostics.push(
       diagnostic(
         "reader.runtime.updates_route_count",
         "/routes/active",
-        "A reader envelope may contain at most one Updates route.",
+        "A reader envelope may contain at most 32 Updates routes.",
         "routeCardinality",
-        { actual: updateRoutes.length, maximum: 1 },
+        { actual: updateRoutes.length, maximum: 32 },
       ),
     );
   }
@@ -1085,9 +1157,7 @@ function indexRoutes(
   if (homeRoutes[0] !== undefined) {
     expected.push(homeRoutes[0]);
   }
-  if (updateRoutes[0] !== undefined) {
-    expected.push(updateRoutes[0]);
-  }
+  expected.push(...updateRoutes);
   for (const work of envelope.works) {
     expected.push({
       path: work.route,
@@ -1120,6 +1190,11 @@ function indexRoutes(
       },
     });
   }
+  expected.push(
+    ...envelope.routes.active.filter(
+      (route) => route.target.kind === "section-index",
+    ),
+  );
   expectDerivedValue(
     envelope.routes.active,
     expected,

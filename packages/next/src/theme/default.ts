@@ -23,6 +23,7 @@ import {
 import type {
   PublisherNextJsonObject,
   PublisherNextTheme,
+  PublisherNextThemeColorPalette,
   PublisherNextThemeInstance,
   PublisherNextThemeTokens,
   ResolvedPublisherNextTheme,
@@ -31,16 +32,34 @@ import {
   validatePublisherNextThemeInstance,
 } from "./validation.js";
 
+const LIGHT_COLOR: PublisherNextThemeColorPalette = Object.freeze({
+  canvas: "#F5F7F4",
+  surface: "#FCFDFB",
+  text: "#162225",
+  mutedText: "#526166",
+  accent: "#18586C",
+  focus: "#9A4E00",
+  border: "#C8D0CF",
+});
+
+const DARK_COLOR: PublisherNextThemeColorPalette = Object.freeze({
+  canvas: "#11191B",
+  surface: "#182326",
+  text: "#F1F4EF",
+  mutedText: "#B8C3C4",
+  accent: "#86D0E0",
+  focus: "#F0AE54",
+  border: "#3D5055",
+});
+
+const BLACK_COLOR: PublisherNextThemeColorPalette = Object.freeze({
+  ...DARK_COLOR,
+  canvas: "#000000",
+  surface: "#0D1011",
+});
+
 const LIGHT_TOKENS: PublisherNextThemeTokens = Object.freeze({
-  color: Object.freeze({
-    canvas: "#F7F4ED",
-    surface: "#FFFFFF",
-    text: "#182326",
-    mutedText: "#4C5A5E",
-    accent: "#005A6E",
-    focus: "#8A3500",
-    border: "#C5CDCE",
-  }),
+  color: LIGHT_COLOR,
   typography: Object.freeze({
     bodyFamily:
       "Charter, Bitstream Charter, Sitka Text, Cambria, serif",
@@ -50,6 +69,21 @@ const LIGHT_TOKENS: PublisherNextThemeTokens = Object.freeze({
       "SFMono-Regular, Consolas, Liberation Mono, monospace",
     baseSize: "1.0625rem",
     lineHeight: 1.72,
+    defaultReaderFontFamilyId: "serif",
+    readerFontFamilies: Object.freeze([
+      Object.freeze({
+        id: "serif",
+        label: "Serif",
+        family:
+          "Charter, Bitstream Charter, Sitka Text, Cambria, serif",
+      }),
+      Object.freeze({
+        id: "sans-serif",
+        label: "Sans serif",
+        family:
+          "Avenir Next, Avenir, Segoe UI, Helvetica Neue, sans-serif",
+      }),
+    ]),
   }),
   layout: Object.freeze({
     readingMeasure: "68ch",
@@ -60,15 +94,7 @@ const LIGHT_TOKENS: PublisherNextThemeTokens = Object.freeze({
 });
 
 const DARK_TOKENS: PublisherNextThemeTokens = Object.freeze({
-  color: Object.freeze({
-    canvas: "#11181A",
-    surface: "#192225",
-    text: "#F1EEE4",
-    mutedText: "#BAC4C6",
-    accent: "#76D3EA",
-    focus: "#F5B942",
-    border: "#405055",
-  }),
+  color: DARK_COLOR,
   typography: LIGHT_TOKENS.typography,
   layout: LIGHT_TOKENS.layout,
 });
@@ -139,12 +165,18 @@ function configureDefaultTheme(
       "The default theme accent must be a color string.",
     );
   }
+  const color = {
+    ...base.color,
+    accent,
+  };
   return validatePublisherNextThemeInstance({
     tokens: {
       ...base,
-      color: {
-        ...base.color,
-        accent,
+      color,
+      colorSchemes: {
+        light: mode === "light" ? color : LIGHT_COLOR,
+        dark: mode === "dark" ? color : DARK_COLOR,
+        black: BLACK_COLOR,
       },
     },
   });

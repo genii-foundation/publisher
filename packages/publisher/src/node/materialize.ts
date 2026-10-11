@@ -11,7 +11,13 @@ Alternatively, the contents of this file may be used under the terms of the ____
 If you wish to allow use of your version of this file only under the terms of the [____] License and not to allow others to use your version of this file under the CPAL, indicate your decision by deleting the provisions above and replace them with the notice and other provisions required by the [___] License. If you do not delete the provisions above, a recipient may use your version of this file under either the CPAL or the [___] License.”
 */
 
-// Writing the reader artifact into a host.
+// Writing a generated artifact into a host.
+//
+// This began as the reader artifact's writer and is now shared, because narration
+// needs the same guarantees and a second copy of an atomic writer is a second
+// place for the staged-file bug to come back. Nothing here knows what the bytes
+// mean: a caller supplies a renderer-declared path and text, and gets an atomic
+// write or a refusal.
 //
 // This does not go through the lifecycle transaction, and the reason is a real
 // distinction rather than convenience. The transaction exists to protect files an
@@ -76,7 +82,7 @@ export interface ArtifactDestinationInput {
   /** Absolute, canonical host root. */
   readonly hostRoot: string;
   /** Host-relative path the renderer declares for its reader data. */
-  readonly readerDataPath: string;
+  readonly declaredArtifactPath: string;
   /** Paths the renderer's host contract owns. */
   readonly rendererManagedPaths: readonly string[];
   /** Roots holding publication sources or durable state. */
@@ -103,7 +109,7 @@ export function resolveArtifactDestination(
     );
   }
   const hostRoot = resolve(input.hostRoot);
-  const declared = input.readerDataPath;
+  const declared = input.declaredArtifactPath;
 
   if (typeof declared !== "string" || declared.length === 0) {
     throw new ArtifactDestinationError(
@@ -222,7 +228,7 @@ export interface ArtifactWriteResult {
  * modification time stable, so a watching build tool does not rebuild in a loop
  * because the publisher rewrote a byte-identical file.
  */
-export function writeReaderArtifact(input: {
+export function writeHostArtifact(input: {
   readonly destination: ArtifactDestination;
   readonly text: string;
 }): ArtifactWriteResult {
@@ -316,7 +322,7 @@ export interface ArtifactCheckResult {
  * is current, which is the only way a repository that commits generated output
  * can tell whether it was regenerated.
  */
-export function checkReaderArtifact(input: {
+export function checkHostArtifact(input: {
   readonly destination: ArtifactDestination;
   readonly text: string;
 }): ArtifactCheckResult {
