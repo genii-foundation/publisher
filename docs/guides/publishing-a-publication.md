@@ -494,3 +494,51 @@ what happened from you.
 
 You never need `--renderer` after initializing. Every command reads the renderer
 your host recorded, and naming a different one is refused rather than obeyed.
+
+## Narration and synchronization
+
+Both are optional, both are declared in `publication.json`, and both produce a file a
+client fetches rather than anything the server renders.
+
+Narration needs a clip catalog. Declaring `audio` without one is refused, because the
+adapter is recorded for provenance and never executed, so a catalog is the only way
+clips reach a build:
+
+```json
+"audio": {
+  "adapter": { "package": "your-narration-pipeline" },
+  "catalog": "publication/audio/catalog.json"
+}
+```
+
+The build cross-checks every clip against the sections the publication actually has,
+reports coverage per voice, and writes the narration envelope beside the reader
+artifact. `build --check` then fails if either goes stale, so prose and narration
+cannot drift apart unnoticed.
+
+The engine does not decide when narration is out of date. A clip's version token is
+your pipeline's, composed however that pipeline composes it, and the engine treats it
+as opaque. Regenerate the catalog when prose changes and the engine will publish what
+you regenerated.
+
+Synchronization declares a provider and what a reader may choose to synchronize:
+
+```json
+"sync": {
+  "provider": { "package": "your-sync-provider" },
+  "consent": "opt-in",
+  "localFallback": true,
+  "capabilities": ["progress", "bookmarks"]
+}
+```
+
+The capability list is closed: `progress`, `bookmarks`, `engagement`,
+`account-deletion`. Consent is not among them, because it is pinned to `opt-in` for
+every synchronizing publication rather than being something a reader turns on.
+
+Provider configuration stays out of the published file. The artifact a client fetches
+carries the provider's package name and nothing else, so a project reference or a key
+in your config never leaves the repository.
+
+Two routes are still yours to wire, an authentication callback and account deletion.
+Both determine public URLs and both wait on a decision recorded in ADR 0014.

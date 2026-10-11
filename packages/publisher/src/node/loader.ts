@@ -30,6 +30,7 @@ import {
   portableRepositorySegmentIdentity,
   resolvePublicationSourcesForContentCompilation,
   STRICT_JSON_DIAGNOSTIC_CODES,
+  validateAudioCatalogShape,
   validateCollectionShape,
   validatePublicationPreflight,
   validatePublicationShape,
@@ -67,6 +68,7 @@ import {
   PUBLISHER_SOURCE_LOADER_LIMITS,
 } from "./types.js";
 import type {
+  LoadedAudioCatalog,
   LoadedPublicationCompilationSources,
   LoadPublicationCompilationSourcesInput,
 } from "./types.js";
@@ -911,6 +913,7 @@ async function captureTextSource(
   input: {
     readonly logicalPath: string;
     readonly role:
+      | "audio-catalog"
       | "collection-manifest"
       | "manuscript"
       | "publication-manifest"
@@ -1298,6 +1301,7 @@ function successfulResult(
   publication: PublicationManifest,
   sourceGraph: ResolvedPublicationSourceGraph,
   sources: readonly CompilationSourceInput[],
+  audioCatalog?: LoadedAudioCatalog,
 ): ValidationResult<LoadedPublicationCompilationSources> {
   const frozenPublication = freezeStructuredValue(publication);
   const frozenSourceGraph = freezeStructuredValue(sourceGraph);
@@ -1305,6 +1309,12 @@ function successfulResult(
     publication: frozenPublication,
     sourceGraph: frozenSourceGraph,
     sources: Object.freeze(sources),
+    // Absent rather than present and empty when no catalog is declared. A
+    // publication with no narration and a publication whose catalog failed to
+    // resolve must not look alike to anything downstream.
+    ...(audioCatalog === undefined
+      ? {}
+      : { audioCatalog: freezeStructuredValue(audioCatalog) }),
   }) as LoadedPublicationCompilationSources;
   return Object.freeze({
     valid: true as const,
@@ -1364,7 +1374,8 @@ async function loadWithFileSystem(
     const sourceFileCount =
       1 +
       publication.works.length * 2 +
-      (publication.collections?.length ?? 0);
+      (publication.collections?.length ?? 0) +
+      (publication.audio?.catalog === undefined ? 0 : 1);
     if (
       sourceFileCount >
       PUBLISHER_SOURCE_LOADER_LIMITS.maximumSourceFiles
@@ -1500,6 +1511,46 @@ async function loadWithFileSystem(
         }),
       );
     }
+
+    // Captured last, so that a catalog problem is reported against a publication
+    // whose works and manuscripts have already resolved. An author who has both a
+    // broken manuscript and a broken catalog should hear about the manuscript.
+    let audioCatalog: LoadedAudioCatalog | undefined;
+    const declaredCatalogPath = publication.audio?.catalog;
+    if (declaredCatalogPath !== undefined) {
+      const captured = await captureTextSource(state, fileSystem, {
+        logicalPath: declaredCatalogPath,
+        role: "audio-catalog",
+        mediaType: JSON_MEDIA_TYPE,
+        maximumBytes:
+          PUBLISHER_SOURCE_LOADER_LIMITS.maximumAudioCatalogBytes,
+      });
+      const shaped = validateAudioCatalogShape(parseJson(captured));
+      if (!shaped.valid) {
+        return invalidResult(
+          attachDocumentPath(shaped.diagnostics, declaredCatalogPath),
+        );
+      }
+      const { contents } = captured.source;
+      if (typeof contents !== "string") {
+        return invalidResult([
+          loaderDiagnostic(
+            "loader.audio_catalog.not_text",
+            "/audio/catalog",
+            `The clip catalog at ${declaredCatalogPath} did not load as text.`,
+            "textSource",
+            { logicalPath: declaredCatalogPath },
+            declaredCatalogPath,
+          ),
+        ]);
+      }
+      audioCatalog = {
+        path: declaredCatalogPath,
+        catalog: shaped.value,
+        text: contents,
+      };
+    }
+
     await finalIdentityPass(state, fileSystem);
 
     return successfulResult(
@@ -1517,6 +1568,7 @@ async function loadWithFileSystem(
           freezeSource(source),
         ),
       ],
+      audioCatalog,
     );
   } catch (error) {
     if (error instanceof LoaderFailure) {

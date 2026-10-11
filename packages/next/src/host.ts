@@ -49,6 +49,34 @@ export const PUBLISHER_NEXT_ROUTE_SEGMENT_DIRECTORY = "[...segments]";
 export const PUBLISHER_NEXT_READER_DATA_PATH =
   "publication-reader.json";
 
+/**
+ * Host-relative location of the narration envelope.
+ *
+ * Under `public/` because a client fetches it, once and lazily, rather than the
+ * server importing it. That placement is why adding narration changes no
+ * generated file: Next serves `public/` with no configuration, so unlike the
+ * reader artifact there is nothing to import and no host file to edit.
+ *
+ * A measured catalog is 278 KB for 551 clips. That is unremarkable for a file
+ * requested when a reader presses play, and unacceptable inside a payload every
+ * page loads, which is what carrying it in the reader artifact would have meant.
+ */
+export const PUBLISHER_NEXT_AUDIO_DATA_PATH =
+  "public/publication-audio.json";
+
+/**
+ * Host-relative location of the sync envelope.
+ *
+ * Under `public/` for the same reason narration is: a client fetches it and the
+ * server never imports it, so adding it changes no generated file.
+ *
+ * It carries no provider configuration. That is enforced by the artifact's schema
+ * rather than by anything here, because this path is public and a config is
+ * author-supplied.
+ */
+export const PUBLISHER_NEXT_SYNC_DATA_PATH =
+  "public/publication-sync.json";
+
 export interface PublisherNextHostCapabilities {
   /**
    * Route target kinds the generated host can serve.
@@ -58,6 +86,15 @@ export interface PublisherNextHostCapabilities {
    * than at server startup.
    */
   readonly routeKinds: readonly string[];
+  /**
+   * Generated data artifacts, beyond the reader artifact, this host has somewhere
+   * to put and something to serve them with.
+   *
+   * Read as optional by the engine so that a renderer predating this field still
+   * resolves. Absent therefore means none, which is the same rule the rest of this
+   * declaration follows: an absent claim is refused rather than assumed.
+   */
+  readonly dataArtifacts: readonly string[];
 }
 
 /**
@@ -80,6 +117,7 @@ export interface PublisherNextHostCapabilities {
 export const PUBLISHER_NEXT_HOST_CAPABILITIES: PublisherNextHostCapabilities =
   Object.freeze({
     routeKinds: Object.freeze(["home", "work", "collection", "section"]),
+    dataArtifacts: Object.freeze(["audio", "sync"]),
   });
 
 export interface PublisherNextHostMigration {
@@ -133,6 +171,15 @@ export interface PublisherNextHostTemplate {
   readonly renderer: string;
   readonly rendererVersion: string;
   readonly readerDataPath: string;
+  /**
+   * Where the narration envelope belongs, when this renderer can serve one.
+   *
+   * Optional in the shape the engine reads, because a renderer predating
+   * narration declares none and must keep working.
+   */
+  readonly audioDataPath?: string;
+  /** Where the sync envelope belongs, when this renderer can serve one. */
+  readonly syncDataPath?: string;
   readonly files: readonly PublisherNextHostFile[];
 }
 
@@ -445,6 +492,8 @@ export function createPublisherNextHostTemplate(
     renderer: PUBLISHER_NEXT_HOST_RENDERER,
     rendererVersion: PUBLISHER_NEXT_VERSION,
     readerDataPath: PUBLISHER_NEXT_READER_DATA_PATH,
+    audioDataPath: PUBLISHER_NEXT_AUDIO_DATA_PATH,
+    syncDataPath: PUBLISHER_NEXT_SYNC_DATA_PATH,
     files: Object.freeze(
       files.map((file) => Object.freeze({ ...file })),
     ),

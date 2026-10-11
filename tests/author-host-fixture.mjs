@@ -97,17 +97,31 @@ export function installRenderer(
     contractVersion = "0.1.0",
     version = "1.0.0",
     readerDataPath,
+    audioDataPath,
+    omitAudioDataPath = false,
+    syncDataPath,
+    omitSyncDataPath = false,
     files,
     migrations = [],
     omitMigrations = false,
     capabilities = {
       routeKinds: ["collection", "home", "section", "updates", "work"],
+      dataArtifacts: ["audio", "sync"],
     },
     omitCapabilities = false,
   } = {},
 ) {
   const short = name.split("/").pop();
   const artifactPath = readerDataPath ?? `${short}-reader.json`;
+  // A stub renderer claims support for narration by default, so it needs a place
+  // to put it. Declaring the capability without a path is a renderer defect the
+  // engine refuses, and omitAudioDataPath exists so that case stays testable.
+  const audioPath = omitAudioDataPath
+    ? undefined
+    : (audioDataPath ?? `public/${short}-audio.json`);
+  const syncPath = omitSyncDataPath
+    ? undefined
+    : (syncDataPath ?? `public/${short}-sync.json`);
   const declared =
     files ??
     [
@@ -152,6 +166,15 @@ export function installRenderer(
       `    renderer: ${JSON.stringify(name)},`,
       `    rendererVersion: ${JSON.stringify(version)},`,
       `    readerDataPath: ${JSON.stringify(artifactPath)},`,
+      // Omitted entirely when the caller gives none, so a renderer with no place
+      // for narration is expressible. Declaring it as undefined would be a
+      // different claim from not declaring it at all.
+      ...(audioPath === undefined
+        ? []
+        : [`    audioDataPath: ${JSON.stringify(audioPath)},`]),
+      ...(syncPath === undefined
+        ? []
+        : [`    syncDataPath: ${JSON.stringify(syncPath)},`]),
       "    files: [",
       '      { path: "package.json", contents: JSON.stringify({ name: input.hostPackageName }, null, 2) + "\\n" },',
       `      ...${JSON.stringify(declared)},`,
@@ -162,7 +185,12 @@ export function installRenderer(
     ].join("\n"),
     "utf8",
   );
-  return { artifactPath, generatedPath: `${short}-app.js` };
+  return {
+    artifactPath,
+    audioDataPath: audioPath,
+    syncDataPath: syncPath,
+    generatedPath: `${short}-app.js`,
+  };
 }
 
 export function planHashFrom(stdout) {

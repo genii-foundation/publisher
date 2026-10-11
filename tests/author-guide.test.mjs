@@ -27,7 +27,8 @@ If you wish to allow use of your version of this file only under the terms of th
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, readdirSync, realpathSync } from "node:fs";
+import { join } from "node:path";
 
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -278,3 +279,41 @@ function guideMentionsAsArtifact(digest) {
   const line = guide.slice(guide.lastIndexOf("\n", index) + 1, index);
   return /^(Digest|On disk)\s+$/u.test(line);
 }
+
+// ------------------------------------------- the decision index is complete
+
+// Same principle as the guide above, applied to decision records. ADR 0013 was
+// written, accepted, and never listed, so the index silently stopped being the
+// way to find decisions. An unlisted record is one a contributor reads the code
+// without.
+//
+// This lives here rather than in its own file because it is the same claim the
+// rest of this file makes: a document that promises something is checked against
+// what is true.
+
+test("every architecture decision appears in the index", () => {
+  const architectureRoot = fileURLToPath(
+    new URL("../docs/architecture/", import.meta.url),
+  );
+  const index = readFileSync(join(architectureRoot, "README.md"), "utf8");
+  const records = readdirSync(architectureRoot)
+    .filter((name) => /^\d{4}-.*\.md$/u.test(name))
+    .sort();
+
+  assert.ok(records.length > 0, "no decision records found, so this checks nothing");
+  for (const record of records) {
+    assert.ok(
+      index.includes(`(./${record})`),
+      `${record} is not linked from docs/architecture/README.md`,
+    );
+  }
+
+  // And the reverse, so a link to a record that was renamed or removed is caught
+  // rather than left as a dead entry.
+  for (const [, linked] of index.matchAll(/\(\.\/(\d{4}-[^)]+\.md)\)/gu)) {
+    assert.ok(
+      records.includes(linked),
+      `docs/architecture/README.md links ${linked}, which does not exist`,
+    );
+  }
+});

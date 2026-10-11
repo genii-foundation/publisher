@@ -441,11 +441,18 @@ test("both fixture publications project into deterministic public reader artifac
       publicationId: "rain-gauge-journal",
       workIds: ["rain-gauge"],
       collectionIds: ["weather-observations"],
+      // The build identity moved when this fixture stopped declaring an audio
+      // adapter it never used, because identity covers the source manifest.
+      //
+      // byteLength deliberately did not move, and that is worth keeping in view:
+      // removing narration configuration changed the build identity and not one
+      // byte of the serialized reader envelope. Narration never enters the reader
+      // artifact, and this is that claim measured rather than asserted.
       buildId:
-        "sha256:5da07b8ea5f7e1760f1c18bf6ea356f56966d71c37fdc2e1a5fc934beb9ee557",
+        "sha256:0664cc455e6f1f3526d1a495f0b1ab565dca8c1e575ca99f42a99f8e3a63cc80",
       byteLength: 5991,
       artifactHash:
-        "sha256:55fbcbb4e49ba139c20c8a8102e9ec8b1bcb66f8be6908eb930777145b89fc0b",
+        "sha256:91d733b9f7023059a811cddb9831a7f7a532eeb7593ffdd22b99d23191079e3a",
     },
     {
       directory: "declared-night-dispatch",
@@ -542,7 +549,6 @@ test("both fixture publications project into deterministic public reader artifac
     });
     assertProjectionOmitsAuthoringState(first);
     for (const forbidden of [
-      "@example/audio-file-adapter",
       "@example/margin-notes-extension",
       "@example/station-index-extension",
       "@example/sync-adapter",

@@ -1,0 +1,23 @@
+{
+  "name": "@genii-foundation/publisher-sync-supabase",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reference Supabase schema for GENII Publisher reader synchronization. Not published: the server routes a provider needs are an open decision.",
+  "license": "CPAL-1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0 <23 || >=24.0.0 <25 || >=26.0.0 <27"
+  },
+  "exports": {
+    ".": "./provider.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/genii-foundation/publisher.git",
+    "directory": "packages/sync-supabase"
+  },
+  "homepage": "https://publisher.genii.foundation",
+  "bugs": {
+    "url": "https://github.com/genii-foundation/publisher/issues"
+  }
+}

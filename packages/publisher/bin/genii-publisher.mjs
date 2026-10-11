@@ -62,15 +62,20 @@ import {
   resolvePublicationProtectedRoots,
 } from "../dist/node/protected-roots.js";
 import {
+  AUDIO_DATA_ARTIFACT,
+  assertHostCanCarryDataArtifact,
   assertHostCanServe,
   readHostCapabilities,
 } from "../dist/node/host-capabilities.js";
 import {
-  checkReaderArtifact,
+  SYNC_DATA_ARTIFACT,
+} from "../dist/node/sync.js";
+import {
+  checkHostArtifact,
   hashArtifactText,
   resolveArtifactDestination,
   stagedArtifactPathFor,
-  writeReaderArtifact,
+  writeHostArtifact,
 } from "../dist/node/materialize.js";
 
 const defaultRenderer = "@genii-foundation/publisher-next";
@@ -838,34 +843,150 @@ async function runBuild(options) {
     return 1;
   }
 
+  // Every generated artifact beyond the reader artifact, in one list. Two of these
+  // exist now and the branch was already duplicated once; a third copy would be
+  // where they quietly diverge.
+  const extraArtifacts = [
+    built.value.audio === undefined
+      ? null
+      : {
+          id: AUDIO_DATA_ARTIFACT,
+          noun: "narration",
+          label: "Narration",
+          declaredPath: template.audioDataPath,
+          text: built.value.audio.text,
+          detail: [
+            `Voices       ${built.value.audio.resolved.voices.length.toLocaleString("en-US")}`,
+            `Clips        ${built.value.audio.resolved.clipCount.toLocaleString("en-US")}`,
+            // Coverage is reported rather than enforced. A publication part way
+            // through generating narration is a normal state, and this is the line
+            // that tells an author how far through they are.
+            `Coverage     ${describeCoverage(built.value.audio.resolved)}`,
+          ],
+        },
+    built.value.sync === undefined
+      ? null
+      : {
+          id: SYNC_DATA_ARTIFACT,
+          noun: "synchronization",
+          label: "Sync",
+          declaredPath: template.syncDataPath,
+          text: built.value.sync.text,
+          detail: [
+            `Provider     ${built.value.sync.resolved.providerPackage}`,
+            `Capabilities ${built.value.sync.resolved.capabilities.join(", ")}`,
+            "Consent      opt-in, with local reading unaffected",
+          ],
+        },
+  ].filter(Boolean);
+
+  // Before anything is written. A publication declaring an artifact against a
+  // renderer with nowhere to put it would otherwise have the file written to a
+  // path of the engine's invention, which the host would never serve.
+  const capabilities = readHostCapabilities(module);
+  for (const artifact of extraArtifacts) {
+    const carriable = assertHostCanCarryDataArtifact({
+      artifact: artifact.id,
+      capabilities,
+      renderer,
+      declaredPath: artifact.declaredPath,
+    });
+    if (!carriable.valid) {
+      if (options.json) {
+        process.stdout.write(
+          `${JSON.stringify({ valid: false, diagnostics: carriable.diagnostics }, null, 2)}\n`,
+        );
+      } else {
+        process.stderr.write(
+          `${hostRoot} cannot carry this publication's ${artifact.noun}.\n${describeDiagnostics(carriable.diagnostics)}\n`,
+        );
+      }
+      return 1;
+    }
+  }
+
+  const rendererManagedPaths = template.files.map((file) => file.path);
+  const protectedRoots = protectedRootsFor(hostRoot, options);
   const destination = resolveArtifactDestination({
     hostRoot,
-    readerDataPath: template.readerDataPath,
-    rendererManagedPaths: template.files.map((file) => file.path),
-    protectedRoots: protectedRootsFor(hostRoot, options),
+    declaredArtifactPath: template.readerDataPath,
+    rendererManagedPaths,
+    protectedRoots,
   });
+  // Resolved even in check mode, because a renderer aiming an artifact at one of
+  // its own contract files must be refused whether or not this run would write.
+  const resolved = extraArtifacts.map((artifact) => ({
+    ...artifact,
+    destination: resolveArtifactDestination({
+      hostRoot,
+      declaredArtifactPath: artifact.declaredPath,
+      rendererManagedPaths,
+      protectedRoots,
+    }),
+  }));
 
   if (options.check) {
-    const checked = checkReaderArtifact({
-      destination,
-      text: built.value.text,
-    });
+    const checked = checkHostArtifact({ destination, text: built.value.text });
+    const extras = resolved.map((artifact) => ({
+      ...artifact,
+      checked: checkHostArtifact({
+        destination: artifact.destination,
+        text: artifact.text,
+      }),
+    }));
     if (options.json) {
-      process.stdout.write(`${JSON.stringify(checked, null, 2)}\n`);
+      // Additive keys, not a reshape. A consumer reading `outcome` must keep
+      // working whether or not a publication declares these.
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            ...checked,
+            ...Object.fromEntries(
+              extras.map((artifact) => [artifact.id, artifact.checked]),
+            ),
+          },
+          null,
+          2,
+        )}\n`,
+      );
     } else {
       process.stdout.write(
         `${describeCheck(checked, hostRoot, publicationRoot)}\n`,
       );
+      for (const artifact of extras) {
+        process.stdout.write(`${describeCheck(artifact.checked)}\n`);
+      }
     }
-    return checked.outcome === "current" ? 0 : 1;
+    // Stale either way is stale. Reporting only the reader artifact would let a
+    // host ship current prose beside narration of text that no longer exists.
+    return [checked, ...extras.map((artifact) => artifact.checked)].every(
+      (item) => item.outcome === "current",
+    )
+      ? 0
+      : 1;
   }
 
-  const written = writeReaderArtifact({
-    destination,
-    text: built.value.text,
-  });
+  const written = writeHostArtifact({ destination, text: built.value.text });
+  const extras = resolved.map((artifact) => ({
+    ...artifact,
+    written: writeHostArtifact({
+      destination: artifact.destination,
+      text: artifact.text,
+    }),
+  }));
   if (options.json) {
-    process.stdout.write(`${JSON.stringify(written, null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          ...written,
+          ...Object.fromEntries(
+            extras.map((artifact) => [artifact.id, artifact.written]),
+          ),
+        },
+        null,
+        2,
+      )}\n`,
+    );
     return 0;
   }
   process.stdout.write(
@@ -877,7 +998,32 @@ async function runBuild(options) {
         ? "Already current. Nothing written.\n"
         : "Written.\n"),
   );
+  for (const artifact of extras) {
+    process.stdout.write(
+      `\n` +
+        `${artifact.label.padEnd(12)} ${artifact.written.hostRelativePath}\n` +
+        `Digest       ${artifact.written.sha256}\n` +
+        `Size         ${artifact.written.bytes.toLocaleString("en-US")} bytes\n` +
+        `${artifact.detail.join("\n")}\n` +
+        (artifact.written.outcome === "current"
+          ? "Already current. Nothing written.\n"
+          : "Written.\n"),
+    );
+  }
   return 0;
+}
+
+/** Narrated sections against the publication's total, per voice. */
+function describeCoverage(resolved) {
+  if (resolved.voices.length === 0) {
+    return "no voices";
+  }
+  return resolved.voices
+    .map(
+      (voice) =>
+        `${voice.id} ${voice.narratedSectionCount.toLocaleString("en-US")}/${resolved.sectionCount.toLocaleString("en-US")}`,
+    )
+    .join(", ");
 }
 
 function describeDiagnostics(diagnostics) {
@@ -895,8 +1041,13 @@ function describeDiagnostics(diagnostics) {
 
 function describeCheck(checked, hostRoot, publicationRoot) {
   const lines = [];
-  lines.push(`Host         ${hostRoot}`);
-  lines.push(`Publication  ${publicationRoot}`);
+  // Omitted for a second artifact in the same run, which shares the host and
+  // publication already printed above it. Repeating them would read as a second
+  // check of a different publication.
+  if (hostRoot !== undefined) {
+    lines.push(`Host         ${hostRoot}`);
+    lines.push(`Publication  ${publicationRoot}`);
+  }
   lines.push(`Artifact     ${checked.hostRelativePath}`);
   lines.push(`Expected     ${checked.expected}`);
   lines.push(`On disk      ${checked.actual ?? "absent"}`);
@@ -1028,11 +1179,11 @@ async function runStatus(options) {
         } else {
           const destination = resolveArtifactDestination({
             hostRoot,
-            readerDataPath: template.readerDataPath,
+            declaredArtifactPath: template.readerDataPath,
             rendererManagedPaths: template.files.map((file) => file.path),
             protectedRoots: protectedRootsFor(hostRoot, options),
           });
-          const checked = checkReaderArtifact({
+          const checked = checkHostArtifact({
             destination,
             text: built.value.text,
           });

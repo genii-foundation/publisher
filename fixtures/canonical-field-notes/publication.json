@@ -43,14 +43,6 @@
       ]
     }
   ],
-  "audio": {
-    "adapter": {
-      "package": "@example/audio-file-adapter",
-      "config": {
-        "mediaRoot": "publication/media/audio"
-      }
-    }
-  },
   "routes": {
     "home": "/",
     "work": "/works/{workId}",

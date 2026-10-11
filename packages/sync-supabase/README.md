@@ -1,0 +1,82 @@
+# Reference Supabase synchronization schema
+
+The database half of reader synchronization: tables, row level security, bounds,
+retention, grants, and one function that takes a lock.
+
+## Why this is not published
+
+A provider needs two server routes, an authentication callback and an account
+deletion endpoint, and how a host acquires them is an open decision recorded in
+ADR 0014 and tracked in issue #19. `init` deliberately does not know the
+publication, so the host contract cannot generate routes conditioned on whether a
+publication declares synchronization.
+
+Publishing a provider whose handlers cannot be mounted would ship something nobody
+can use. So this package is private, carries no dependencies, and contains only the
+part that is already correct and already valuable: the schema.
+
+Promoting it is mechanical once the route question is answered. It then gains
+`@supabase/supabase-js` and `@supabase/ssr` as peer dependencies, the clients, the
+handlers, and the publishing ceremony every other package here carries.
+
+## What the migrations encode, and why each part matters
+
+None of the following is incidental. A provider that recreated these tables without
+them would present the same interface and be a downgrade.
+
+**Row level security on every table, with ownership as the policy.** A reader may
+read and write their own row and no other. Without it the anonymous key reaches
+every row in the table.
+
+**Explicit Data API grants, with anonymous access revoked.** Row level security is
+not trusted alone. When automatic table exposure is off, the API still needs table
+privileges, and an unauthenticated reader is kept out by revocation rather than by
+the absence of a policy.
+
+**A pinned, empty `search_path` on every function.** A function that resolves
+unqualified names through a caller-controlled search path can be made to call
+something else entirely. Every function here sets `search_path = ''` and fully
+qualifies its references.
+
+**Size bounds on every blob and every text column.** A self-registered account
+reaches these tables with the public anonymous key, so the client's own limits are
+not a security boundary. The bounds are generous against measured real data and
+finite against an attacker.
+
+**Retention on the append-only event log.** Events are capped per reader and the
+oldest trimmed on insert, so one account cannot grow the table without bound.
+
+**A merge function that takes a lock.** Bookmarks are one row per reader holding a
+document. A whole-row upsert loses changes when two devices read the same row and
+write different sets. The function creates or locks the caller's row, merges each
+incoming record while holding that lock, and returns the merged document, so
+concurrent calls observe one another instead of replacing one another. Rolling it
+back means restoring the lost-update race and is not a harmless permissions change.
+
+**Tombstones rather than absence.** A deletion travels between devices as a record.
+Without that, whichever device still holds a live copy resurrects what another
+device deleted.
+
+## Capabilities
+
+Keyed to the engine's closed vocabulary, so a publication declaring a capability
+gets the table that serves it:
+
+| Capability | Table | Shape |
+| --- | --- | --- |
+| `progress` | `reader_progress` | one row per reader, a document |
+| `bookmarks` | `reader_bookmarks` | one row per reader, a document with tombstones, merged under a lock |
+| `engagement` | `reader_engagement_events` | append only, per-reader retention |
+| `account-deletion` | none | a function that removes every row a reader owns |
+
+Consent is not a capability. It is a precondition, pinned to opt-in for every
+synchronizing publication, and it has a table because the grant has to be recorded
+somewhere.
+
+## Applying it
+
+```bash
+supabase db push
+```
+
+Migrations are ordered by filename and are written to be re-runnable.

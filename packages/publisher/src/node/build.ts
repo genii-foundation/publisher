@@ -44,18 +44,34 @@ import {
   serializePublicationReaderEnvelope,
 } from "@genii-foundation/publisher-reader";
 import type {
+  AudioEnvelope,
   Diagnostic,
   ExtensionReference,
   PublicationContentEnvelope,
   PublicationManifest,
   PublicationReaderEnvelope,
   ReaderAudience,
+  SyncEnvelope,
   ValidationResult,
 } from "@genii-foundation/publisher-schema";
 
 import {
   PUBLISHER_VERSION,
 } from "../index.js";
+import {
+  buildAudioEnvelope,
+  resolvePublicationAudio,
+} from "./audio.js";
+import type {
+  ResolvedPublicationAudio,
+} from "./audio.js";
+import {
+  buildSyncEnvelope,
+  resolvePublicationSync,
+} from "./sync.js";
+import type {
+  ResolvedPublicationSync,
+} from "./sync.js";
 import {
   compileLoadedPublicationContent,
 } from "./compile.js";
@@ -249,6 +265,37 @@ export interface BuiltPublicationReader {
   readonly reader: PublicationReaderEnvelope;
   /** Canonical JSON text, exactly as it would be written. */
   readonly text: string;
+  /**
+   * Cross-checked narration and its artifact, when the publication declares a
+   * catalog.
+   *
+   * Absent when it declares none, rather than present and empty, so that a
+   * publication with no narration cannot be confused with one whose catalog
+   * resolved to nothing.
+   *
+   * The envelope text is produced here rather than by the caller. A caller that
+   * had to re-read the catalog to build it could read a different file than the
+   * one this build cross-checked, and the digest binding the two would then
+   * certify the wrong thing.
+   */
+  readonly audio?: {
+    readonly resolved: ResolvedPublicationAudio;
+    readonly envelope: AudioEnvelope;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
+  /**
+   * What this publication offers to synchronize, when it declares any.
+   *
+   * Absent when it declares none. Nothing here carries provider configuration:
+   * the artifact is served publicly and a config is author-supplied.
+   */
+  readonly sync?: {
+    readonly resolved: ResolvedPublicationSync;
+    readonly envelope: SyncEnvelope;
+    /** Canonical JSON text, exactly as it would be written. */
+    readonly text: string;
+  };
 }
 
 /**
@@ -291,6 +338,102 @@ export async function buildPublicationReader(
     return invalidResult(reader.diagnostics);
   }
 
+  // Cross-checked against every section the publication compiled, not against
+  // the audience projection. A catalog describes the publication, so narration
+  // for a section this audience does not see is still narration of a section that
+  // exists, and reporting it as unknown would be a false alarm on every public
+  // build of a publication with drafts.
+  let audio: BuiltPublicationReader["audio"];
+  const declaredAudio = loaded.value.publication.audio;
+  const catalog = loaded.value.audioCatalog;
+
+  // Both directions in one place, because the two variables carry one invariant
+  // and splitting them left it unprovable. The loader reads a catalog only because
+  // the manifest declared one, so a disagreement either way is worth a name.
+  if (declaredAudio === undefined) {
+    if (catalog !== undefined) {
+      // An engine defect rather than an author mistake, reported instead of
+      // assumed away.
+      return invalidResult([
+        buildDiagnostic(
+          "build.audio_catalog_undeclared",
+          "/audio/catalog",
+          "A clip catalog was loaded for a publication whose manifest declares none.",
+          {},
+        ),
+      ]);
+    }
+  } else if (catalog === undefined) {
+    // Declared narration with no catalog produced no narration and said nothing,
+    // which is the worst of the three possible behaviours. The adapter is recorded
+    // rather than executed, so a catalog is the only route by which clips reach the
+    // engine, and an author who declared audio and got silence deserves to be told
+    // why rather than left to infer it.
+    return invalidResult([
+      buildDiagnostic(
+        "build.audio_catalog_missing",
+        "/audio/catalog",
+        `This publication declares audio through ${declaredAudio.adapter.package} but names no catalog. The adapter is recorded for provenance and never executed, so a catalog is the only way narration reaches a build. Add audio.catalog, or remove the audio block.`,
+        { adapterPackage: declaredAudio.adapter.package },
+      ),
+    ]);
+  } else {
+    const resolved = resolvePublicationAudio({
+      catalog: catalog.catalog,
+      declaredCatalogPath: catalog.path,
+      sectionIds: works.value.flatMap((work) =>
+        work.sections.map((section) => section.id),
+      ),
+    });
+    if (!resolved.valid) {
+      return invalidResult(resolved.diagnostics);
+    }
+    const envelope = buildAudioEnvelope({
+      audio: resolved.value,
+      adapter: {
+        package: declaredAudio.adapter.package,
+        ...(declaredAudio.adapter.config === undefined
+          ? {}
+          : { config: declaredAudio.adapter.config }),
+      },
+      publicationId: reader.value.publicationId,
+      // The reader artifact's identity, carried rather than recomputed, so both
+      // artifacts of one build agree and a client can tell which is stale.
+      buildId: reader.value.buildId,
+      catalogText: catalog.text,
+    });
+    if (!envelope.valid) {
+      return invalidResult(envelope.diagnostics);
+    }
+    audio = Object.freeze({
+      resolved: resolved.value,
+      envelope: envelope.value.envelope,
+      text: envelope.value.text,
+    });
+  }
+
+  let sync: BuiltPublicationReader["sync"];
+  const declaredSync = loaded.value.publication.sync;
+  if (declaredSync !== undefined) {
+    const resolvedSync = resolvePublicationSync(declaredSync);
+    if (!resolvedSync.valid) {
+      return invalidResult(resolvedSync.diagnostics);
+    }
+    const envelope = buildSyncEnvelope({
+      sync: resolvedSync.value,
+      publicationId: reader.value.publicationId,
+      buildId: reader.value.buildId,
+    });
+    if (!envelope.valid) {
+      return invalidResult(envelope.diagnostics);
+    }
+    sync = Object.freeze({
+      resolved: resolvedSync.value,
+      envelope: envelope.value.envelope,
+      text: envelope.value.text,
+    });
+  }
+
   let text: string;
   try {
     text = serializePublicationReaderEnvelope(reader.value);
@@ -313,6 +456,8 @@ export async function buildPublicationReader(
       content: content.value,
       reader: reader.value,
       text,
+      ...(audio === undefined ? {} : { audio }),
+      ...(sync === undefined ? {} : { sync }),
     }),
     diagnostics: sortAndFreezeDiagnostics([]),
   });

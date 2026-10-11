@@ -25,9 +25,9 @@ If you wish to allow use of your version of this file only under the terms of th
 import assert from "node:assert/strict";
 import {
   cpSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
-  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -550,49 +550,60 @@ test("the audit's engine side claims match the schema and the code", async () =>
     "the audit no longer quotes the redirect cap, so this check is idle",
   );
 
-  // Two features the audit reports as schema definitions with no implementation.
-  // If either grows one, the audit is wrong in a way that changes the plan.
-  for (const [word, pattern] of [
-    ["audio", /\baudio\b/iu],
-    ["sync", /\bsync\b/u],
-  ]) {
+  // Audio and sync were both reported here as schema definitions with nothing
+  // behind them, and this block asserted that they stayed that way. They are being
+  // implemented now, so the tripwire is replaced by checks of what the audit
+  // currently claims. An audit nobody checks decays into folklore, and this one has
+  // already been wrong three times.
+
+  // The audit says audio has a contract now. A schema file that is not registered
+  // with the validator build validates nothing while still looking present.
+  const catalogSchemaPath = join(
+    repositoryRoot,
+    "schemas",
+    "audio-catalog.schema.json",
+  );
+  assert.ok(
+    existsSync(catalogSchemaPath),
+    "the audit says the catalog has a contract and the schema file is missing",
+  );
+  assert.match(
+    readFileSync(
+      join(repositoryRoot, "schemas", "scripts", "build.mjs"),
+      "utf8",
+    ),
+    /audioCatalogValidator/u,
+    "the catalog schema is not compiled, so the audit overstates what exists",
+  );
+
+  // The correction this audit records: timing data does not enter the reader
+  // artifact. Checking it against the envelope schema is what stops the decision
+  // from being quietly reversed by whoever next needs word timings on a page.
+  const readerEnvelope = JSON.parse(
+    readFileSync(
+      join(repositoryRoot, "schemas", "reader-envelope.schema.json"),
+      "utf8",
+    ),
+  );
+  assert.ok(
+    audit.includes("does not belong in the reader artifact"),
+    "the audit no longer records the timing decision, so this check is idle",
+  );
+  assert.equal(
+    /\b(charStart|startSeconds|wordTimings|timings)\b/u.test(
+      JSON.stringify(readerEnvelope),
+    ),
+    false,
+    "per-word timing data has entered the reader envelope, reversing a recorded decision",
+  );
+
+  // The section identifier bound the audit measures Coherence against.
+  assert.equal(schema.$defs.stableId.maxLength, 128);
+  for (const quoted of ["128 character", "142 characters", "682 distinct"]) {
     assert.ok(
-      audit.includes(`### ${word === "audio" ? "4" : "5"}. ${
-        word === "audio" ? "Audio" : "Sync"
-      } is a schema definition and nothing else`),
-      `the audit no longer claims ${word} is unimplemented, so this check is idle`,
-    );
-    const implemented = [
-      join("packages", "next", "src"),
-      join("packages", "reader", "src"),
-      join("packages", "content", "src"),
-    ].some((root) => containsPattern(join(repositoryRoot, root), pattern));
-    assert.equal(
-      implemented,
-      false,
-      `${word} now appears in engine source, so the audit's claim that it is schema only is stale`,
+      audit.includes(quoted),
+      `the audit no longer quotes ${quoted}, so its measurement cannot be traced`,
     );
   }
 });
 
-/** Whether any TypeScript source under a directory matches a pattern. */
-function containsPattern(root, pattern) {
-  const stack = [root];
-  while (stack.length > 0) {
-    const current = stack.pop();
-    for (const entry of readdirSync(current, { withFileTypes: true })) {
-      const path = join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(path);
-        continue;
-      }
-      if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) {
-        continue;
-      }
-      if (pattern.test(readFileSync(path, "utf8"))) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
